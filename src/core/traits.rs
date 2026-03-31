@@ -114,6 +114,56 @@ pub trait Summarizer: Send + Sync {
 }
 
 // ============================================================
+// Retriever Trait
+// ============================================================
+
+/// A retriever finds relevant content in a document tree.
+///
+/// Implementations can use different strategies:
+/// - LLM-based navigation (tree traversal)
+/// - MCTS (Monte Carlo Tree Search)
+/// - Beam search
+/// - Vector similarity
+///
+/// # Example
+///
+/// ```rust
+/// use vectorless::core::{Retriever, DocumentTree, Result};
+/// use vectorless::retriever::RetrieveOptions;
+/// use async_trait::async_trait;
+///
+/// struct MyRetriever;
+///
+/// #[async_trait]
+/// impl Retriever for MyRetriever {
+///     async fn retrieve(&self, tree: &DocumentTree, query: &str, options: &RetrieveOptions) -> Result<Vec<String>> {
+///         // Return relevant content
+///         Ok(vec!["Relevant content".to_string()])
+///     }
+/// }
+/// ```
+#[async_trait]
+pub trait Retriever: Send + Sync {
+    /// Retrieve relevant content for a query.
+    ///
+    /// # Arguments
+    ///
+    /// * `tree` - The document tree to search
+    /// * `query` - The user's question
+    /// * `options` - Retrieval options
+    ///
+    /// # Returns
+    ///
+    /// A list of relevant content strings.
+    async fn retrieve(
+        &self,
+        tree: &DocumentTree,
+        query: &str,
+        options: &crate::retriever::RetrieveOptions,
+    ) -> Result<Vec<String>>;
+}
+
+// ============================================================
 // Configuration Types
 // ============================================================
 
