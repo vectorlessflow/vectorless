@@ -49,6 +49,7 @@ pub enum ConfigError {
 /// let config = Config::default();
 /// ```
 #[derive(Debug, Default)]
+#[allow(dead_code)]
 pub struct ConfigLoader {
     /// Configuration file path.
     file: Option<PathBuf>,
@@ -62,6 +63,7 @@ pub struct ConfigLoader {
 
 /// A single configuration override.
 #[derive(Debug)]
+#[allow(dead_code)]
 enum ConfigOverride {
     /// Override a specific field by path.
     Field { path: String, value: String },

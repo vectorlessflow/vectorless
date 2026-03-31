@@ -28,6 +28,9 @@ anyhow = "1.0"
 # HTTP client (for LLM API calls)
 reqwest = { version = "0.12", features = ["json"] }
 
+# OpenAI client
+async-openai = { version = "0.34", features = ["completions"]}
+
 # UUID
 uuid = { version = "1.10", features = ["v4", "serde"] }
 

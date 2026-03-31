@@ -51,8 +51,10 @@
 pub mod core;
 pub mod config;
 pub mod document;
+pub mod summarizer;
 
 // Re-exports for convenience
 pub use core::{DocumentTree, NodeId, TreeNode, Error, Result};
-pub use config::{Config, ConfigLoader, ConfigError};
+pub use config::{Config, ConfigLoader, ConfigError, SummaryConfig};
 pub use document::{DocumentParser, DocumentFormat, MarkdownParser, RawNode, ParseResult};
+pub use summarizer::{summarize, LlmError};
