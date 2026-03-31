@@ -14,7 +14,7 @@
 //! # Example
 //!
 //! ```rust
-//! use vectorless::tree::{DocumentTree, TreeNode, NodeId};
+//! use vectorless::core::{DocumentTree, TreeNode, NodeId};
 //!
 //! // Create a new tree
 //! let mut tree = DocumentTree::new("Root", "Root content");
