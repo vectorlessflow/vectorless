@@ -50,7 +50,9 @@
 
 pub mod core;
 pub mod config;
+pub mod document;
 
 // Re-exports for convenience
 pub use core::{DocumentTree, NodeId, TreeNode, Error, Result};
 pub use config::{Config, ConfigLoader, ConfigError};
+pub use document::{DocumentParser, DocumentFormat, MarkdownParser, RawNode, ParseResult};
