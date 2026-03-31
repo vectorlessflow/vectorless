@@ -56,13 +56,17 @@ pub mod indexer;
 pub mod storage;
 pub mod client;
 pub mod retriever;
+pub mod registry;
+pub mod ranking;
 
 // Re-exports for convenience
 pub use core::{DocumentTree, NodeId, TreeNode, Error, Result, Retriever};
-pub use config::{Config, ConfigLoader, ConfigError, SummaryConfig};
+pub use config::{Config, ConfigLoader, SummaryConfig, RetrievalConfig};
 pub use document::{DocumentParser, DocumentFormat, MarkdownParser, RawNode, ParseResult};
 pub use summarizer::{summarize, LlmError};
 pub use indexer::TreeBuilder;
 pub use storage::{Workspace, PersistedDocument, DocumentMeta as StorageDocumentMeta};
 pub use client::{Vectorless, VectorlessBuilder, IndexedDocument, DocumentInfo};
 pub use retriever::{LlmNavigator, RetrieveOptions, RetrievalResult, ContextBuilder};
+pub use registry::{ParserRegistry, SummarizerRegistry, RetrieverRegistry};
+pub use ranking::{Scorer, Merger, ScoredResult, ScoringStrategy, MergeStrategy};
