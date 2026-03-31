@@ -1,0 +1,67 @@
+[package]
+name = "vectorless"
+version = "0.1.0"
+edition = "2024"
+authors = ["zTgx <beautifularea@gmail.com>"]
+description = "Hierarchical, Reasoning-Native Document Intelligence Engine"
+license = "Apache-2.0"
+repository = "https://github.com/zTgx/vectorless"
+keywords = ["rag", "document", "retrieval", "indexing", "llm"]
+categories = ["text-processing", "data-structures", "algorithms"]
+readme = "README.md"
+
+[dependencies]
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+async-trait = "0.1"
+futures = "0.3"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Error handling
+thiserror = "2"
+anyhow = "1.0"
+
+# HTTP client (for LLM API calls)
+reqwest = { version = "0.12", features = ["json"] }
+
+# UUID
+uuid = { version = "1.10", features = ["v4", "serde"] }
+
+# Time
+chrono = { version = "0.4", default-features = false, features = ["serde", "clock"] }
+
+# Logging
+tracing = "0.1"
+
+# Text processing
+regex = "1.10"
+
+# PDF parsing
+pdf-extract = "0.7"
+
+# Markdown parsing
+pulldown-cmark = "0.11"
+
+[dev-dependencies]
+# Testing
+tempfile = "3.10"
+
+# Benchmarking
+criterion = "0.5"
+
+[[bench]]
+name = "bench"
+harness = false
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
+
+[profile.bench]
+inherits = "release"
+debug = true

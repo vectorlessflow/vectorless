@@ -1,0 +1,51 @@
+# Build artifacts
+/target/
+Cargo.lock
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Logs
+logs/
+*.log
+
+# Data directories
+data/
+workspace/
+*.db
+*.sqlite
+
+# Test artifacts
+test_output/
+temp/
+
+# Documentation
+docs/_build/
+
+# Benchmarks
+.criterion/
+
+# Coverage
+coverage/
+*.profraw
+*.profdata
+
+# Misc
+config.toml
+
