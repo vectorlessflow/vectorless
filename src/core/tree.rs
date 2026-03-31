@@ -6,8 +6,10 @@
 
 use crate::TreeNode;
 use indextree::Arena;
+use serde::{Serialize, Deserialize};
 use crate::core::node::NodeId;
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DocumentTree {
     /// The underlying arena storing all nodes.
     arena: Arena<TreeNode>,
