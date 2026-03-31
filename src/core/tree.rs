@@ -2,6 +2,12 @@
 ///
 /// This structure provides better memory locality and simpler
 /// lifetime management compared to `Rc<RefCell<PageNode>`.
+/// 
+
+use crate::TreeNode;
+use indextree::Arena;
+use crate::core::node::NodeId;
+
 pub struct DocumentTree {
     /// The underlying arena storing all nodes.
     arena: Arena<TreeNode>,

@@ -49,6 +49,8 @@
 //! - [`client`] — High-level API
 
 pub mod core;
+pub mod config;
 
 // Re-exports for convenience
 pub use core::{DocumentTree, NodeId, TreeNode, Error, Result};
+pub use config::{Config, ConfigLoader, ConfigError};

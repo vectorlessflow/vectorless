@@ -30,7 +30,7 @@
 //! }
 //! ```
 
-use indextree::{Arena, NodeId as IndexTreeNodeId};
+use indextree::{NodeId as IndexTreeNodeId};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
@@ -39,7 +39,7 @@ use std::fmt;
 /// This is a newtype wrapper around indextree's NodeId to provide
 /// better type safety and domain-specific semantics.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct NodeId(IndexTreeNodeId);
+pub struct NodeId(pub IndexTreeNodeId);
 
 // Implement traits for interoperability
 impl fmt::Display for NodeId {

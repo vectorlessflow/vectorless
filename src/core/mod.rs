@@ -15,7 +15,6 @@ mod tree;
 mod types;
 
 pub use error::{Error, Result};
-pub use node::TreeNode;
-pub use tree::{DocumentTree, NodeId};
+pub use node::{NodeId, TreeNode};
+pub use tree::DocumentTree;
 pub use traits::*;
-pub use types::*;
