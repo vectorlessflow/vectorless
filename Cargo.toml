@@ -52,6 +52,10 @@ tempfile = "3.10"
 # Benchmarking
 criterion = "0.5"
 
+indextree = { version = "4.8.0", features = ["deser"] }
+lru = "0.12"
+
+
 [[bench]]
 name = "bench"
 harness = false
