@@ -7,6 +7,8 @@
 //! - [`TreeNode`] - A node in the document tree
 //! - [`DocumentTree`] - Arena-based tree structure
 //! - [`NodeId`] - Unique identifier for tree nodes
+//! - [`StructureNode`] - JSON export format for tree nodes
+//! - [`DocumentStructure`] - JSON export format for document structure
 
 mod error;
 mod node;
@@ -16,5 +18,5 @@ mod types;
 
 pub use error::{Error, Result};
 pub use node::{NodeId, TreeNode};
-pub use tree::DocumentTree;
+pub use tree::{DocumentStructure, DocumentTree, StructureNode};
 pub use traits::*;

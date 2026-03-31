@@ -144,8 +144,8 @@ pub struct IndexOptions {
     /// Indexing mode.
     pub mode: IndexMode,
 
-    /// Whether to generate summaries.
-    pub summarize: bool,
+    /// Whether to generate summaries using LLM.
+    pub generate_summaries: bool,
 
     /// Whether to include node text in the tree.
     pub include_text: bool,
@@ -161,11 +161,30 @@ impl Default for IndexOptions {
     fn default() -> Self {
         Self {
             mode: IndexMode::Auto,
-            summarize: true,
+            generate_summaries: false, // Disabled by default, requires API key
             include_text: true,
             generate_ids: true,
-            generate_description: true,
+            generate_description: false,
         }
+    }
+}
+
+impl IndexOptions {
+    /// Create new index options with defaults.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Enable summary generation.
+    pub fn with_summaries(mut self) -> Self {
+        self.generate_summaries = true;
+        self
+    }
+
+    /// Enable document description generation.
+    pub fn with_description(mut self) -> Self {
+        self.generate_description = true;
+        self
     }
 }
 

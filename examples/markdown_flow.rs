@@ -4,26 +4,23 @@
 //! Complete Markdown processing flow example.
 //!
 //! This example demonstrates the full pipeline:
-//! 1. Parse a Markdown document
-//! 2. Build a document tree
-//! 3. Retrieve relevant content (simulated)
-//! 4. Score and rank results
-//! 5. Build final context
+//! 1. Create a Vectorless client
+//! 2. Index a Markdown document
+//! 3. Show document structure in JSON format
+//! 4. Query the document
 //!
 //! # Usage
 //!
 //! ```bash
+//! # Without summaries (default)
 //! cargo run --example markdown_flow
+//!
+//! # With summary generation (requires OPENAI_API_KEY)
+//! OPENAI_API_KEY=sk-... cargo run --example markdown_flow
 //! ```
 
-use vectorless::{
-    DocumentParser, MarkdownParser,
-    TreeBuilder,
-    RetrieveOptions, RetrievalResult, Retriever,
-    Scorer, Merger, ScoringStrategy, MergeStrategy,
-    ContextBuilder,
-    LlmNavigator,
-};
+use vectorless::VectorlessBuilder;
+use vectorless::client::IndexOptions;
 
 /// Sample markdown content for demonstration.
 const SAMPLE_MARKDOWN: &str = r#"
@@ -82,7 +79,8 @@ use vectorless::{LlmNavigator, RetrieveOptions};
 
 let retriever = LlmNavigator::with_defaults();
 let options = RetrieveOptions::new()
-    .with_top_k(5);
+    .with_top_k(5)
+    .with_min_score(0.5);
 
 let results = retriever.retrieve(&tree, "What is vectorless?", &options).await?;
 ```
@@ -110,124 +108,94 @@ See the API documentation for detailed information about each function and type.
 
 #[tokio::main]
 async fn main() -> vectorless::core::Result<()> {
-    println!("=== Markdown Processing Flow Example ===\n");
+    println!("=== Vectorless Markdown Flow Example ===\n");
 
-    // Step 1: Parse the Markdown document
-    println!("Step 1: Parsing Markdown document...");
-    let parser = MarkdownParser::new();
-    let parse_result = parser.parse(SAMPLE_MARKDOWN).await?;
+    // Step 1: Create a Vectorless client (no API key needed - LLM config is automatic)
+    println!("Step 1: Creating Vectorless client...");
 
-    println!("  - Document name: {}", parse_result.meta.name);
-    println!("  - Nodes extracted: {}", parse_result.nodes.len());
+    let mut client = VectorlessBuilder::new()
+        .build()
+        .map_err(|e| vectorless::core::Error::Config(e.to_string()))?;
+
+    println!("  - Client created successfully");
     println!();
 
-    // Step 2: Build the document tree
-    println!("Step 2: Building document tree...");
-    let tree_builder = TreeBuilder::new()
-        .with_root_title("Project Documentation")
-        .with_root_content("This document describes the vectorless library.");
+    // Step 2: Index the sample Markdown document
+    println!("Step 2: Indexing Markdown document...");
 
-    let tree = tree_builder.build_with_ids(parse_result.nodes);
+    // Write sample content to a temp file
+    let temp_dir = tempfile::tempdir()?;
+    let md_path = temp_dir.path().join("sample.md");
+    tokio::fs::write(&md_path, SAMPLE_MARKDOWN).await?;
 
-    println!("  - Total nodes: {}", tree.node_count());
+    // Check if we should generate summaries (requires API key)
+    println!("  - API key detected, generating summaries...");
+    let options = IndexOptions::new().with_summaries();
+    let doc_id = client.index_with_options(&md_path, options).await?;
 
-    // Print tree structure
-    fn print_tree(tree: &vectorless::DocumentTree, node_id: vectorless::NodeId, indent: usize) {
-        if let Some(node) = tree.get(node_id) {
-            let prefix = "  ".repeat(indent);
-            println!("{}- {} (depth: {})", prefix, node.title, node.depth);
-            for child_id in tree.children(node_id) {
-                print_tree(tree, child_id, indent + 1);
-            }
+    println!("  - Document indexed successfully");
+    println!("  - Document ID: {}", doc_id);
+    println!();
+
+    // Step 3: Show document structure in JSON format
+    println!("Step 3: Document structure (JSON):");
+    println!();
+
+    match client.get_structure(&doc_id) {
+        Ok(tree) => {
+            // Export to JSON format (PageIndex compatible)
+            let structure = tree.to_structure_json("sample.md");
+            let json = serde_json::to_string_pretty(&structure)
+                .unwrap_or_else(|_| "Failed to serialize".to_string());
+            println!("{}", json);
+        }
+        Err(e) => {
+            println!("  - Error getting structure: {}", e);
         }
     }
-
-    println!("  - Tree structure:");
-    print_tree(&tree, tree.root(), 2);
     println!();
 
-    // Step 3: Retrieve relevant content
-    println!("Step 3: Retrieving relevant content...");
-    let retriever = LlmNavigator::with_defaults();
-    let options = RetrieveOptions::new()
-        .with_top_k(3);
+    // Step 4: Query the document
+    println!("Step 4: Querying the document...");
 
-    let query = "What are the key features of vectorless?";
-    println!("  - Query: \"{}\"", query);
+    let queries = vec![
+        "What are the key features?",
+        "How do I configure the library?",
+        "What modules are available?",
+    ];
 
-    let results: Vec<String> = retriever.retrieve(&tree, query, &options).await?;
-    println!("  - Results found: {}", results.len());
-    println!();
+    for query in queries {
+        println!("  Query: \"{}\"", query);
 
-    // Step 4: Convert to RetrievalResult format for scoring
-    println!("Step 4: Converting results for scoring...");
-
-    let retrieval_results: Vec<RetrievalResult> = results.iter()
-        .filter_map(|content: &String| {
-            let lines: Vec<&str> = content.lines().collect();
-            if lines.is_empty() {
-                return None;
+        match client.query(&doc_id, query).await {
+            Ok(result) => {
+                if result.content.is_empty() {
+                    println!("    - No relevant content found");
+                } else {
+                    println!("    - Found relevant content:");
+                    // Print first 200 chars
+                    let preview = if result.content.len() > 200 {
+                        format!("{}...", &result.content[..200])
+                    } else {
+                        result.content.clone()
+                    };
+                    for line in preview.lines().take(5) {
+                        println!("      {}", line);
+                    }
+                }
             }
-            let title = lines[0].trim_start_matches('#').trim().to_string();
-            Some(RetrievalResult::new(title)
-                .with_content(content.clone())
-                .with_score(0.5))
-        })
-        .collect();
-
-    println!("  - Converted {} results", retrieval_results.len());
-    println!();
-
-    // Step 5: Score and rank results
-    println!("Step 5: Scoring and ranking results...");
-
-    let scorer = Scorer::new()
-        .with_strategy(ScoringStrategy::Combined)
-        .with_tf_weight(0.3)
-        .with_position_weight(0.2);
-
-    let scored = scorer.score(&retrieval_results, query);
-    println!("  - Scored {} results", scored.len());
-
-    for (i, result) in scored.iter().enumerate() {
-        println!("    {}. {} (score: {:.3})", i + 1, result.result.title, result.score);
+            Err(e) => {
+                println!("    - Error: {}", e);
+            }
+        }
+        println!();
     }
-    println!();
 
-    // Step 6: Merge and deduplicate
-    println!("Step 6: Merging and deduplicating...");
-    let merger = Merger::new()
-        .with_strategy(MergeStrategy::DeduplicateTitle)
-        .with_min_score(0.3)
-        .with_max_results(5);
+    // Step 5: Cleanup
+    println!("Step 5: Cleanup...");
 
-    let merged = merger.merge(scored);
-    println!("  - Merged results: {}", merged.len());
-
-    for (i, result) in merged.iter().enumerate() {
-        println!("    {}. {} (score: {:.3})", i + 1, result.result.title, result.score);
-    }
-    println!();
-
-    // Step 7: Build final context
-    println!("Step 7: Building final context...");
-
-    // Extract RetrievalResult from ScoredResult
-    let final_results: Vec<RetrievalResult> = merged.into_iter()
-        .map(|s| s.result)
-        .collect();
-
-    let context_builder = ContextBuilder::new()
-        .with_max_tokens(2000)
-        .with_titles(true)
-        .with_content(true);
-
-    let context = context_builder.build(&final_results);
-    println!("  - Context length: {} characters", context.len());
-    println!();
-
-    println!("=== Final Context ===");
-    println!("{}", context);
+    client.remove(&doc_id)?;
+    println!("  - Document removed");
 
     println!("\n=== Example Complete ===");
     Ok(())

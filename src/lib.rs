@@ -60,7 +60,7 @@ pub mod registry;
 pub mod ranking;
 
 // Re-exports for convenience
-pub use core::{DocumentTree, NodeId, TreeNode, Error, Result, Retriever};
+pub use core::{DocumentTree, DocumentStructure, NodeId, StructureNode, TreeNode, Error, Result, Retriever};
 pub use config::{Config, ConfigLoader, SummaryConfig, RetrievalConfig};
 pub use document::{DocumentParser, DocumentFormat, MarkdownParser, RawNode, ParseResult};
 pub use summarizer::{summarize, LlmError};

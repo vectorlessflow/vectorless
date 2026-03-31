@@ -100,11 +100,27 @@ pub struct SummaryConfig {
 }
 
 pub fn default_summary_model() -> String {
-    "glm-5-flash".to_string()
+    // Auto-detect based on available API keys
+    // if std::env::var("OPENAI_API_KEY").is_ok() {
+    //     "gpt-4o-mini".to_string()
+    // } else if std::env::var("ANTHROPIC_API_KEY").is_ok() {
+    //     "claude-3-haiku-20240307".to_string()
+    // } else {
+    //     "glm-5".to_string()
+    // }
+
+    "glm-5".to_string()
 }
 
 pub fn default_summary_endpoint() -> String {
-    "https://api.z.ai/api/paas/v4".to_string()
+    // Auto-detect based on available API keys
+    if std::env::var("OPENAI_API_KEY").is_ok() {
+        "https://api.openai.com/v1".to_string()
+    } else if std::env::var("AZURE_OPENAI_ENDPOINT").is_ok() {
+        std::env::var("AZURE_OPENAI_ENDPOINT").unwrap_or_default()
+    } else {
+        "https://api.z.ai/api/coding/paas/v4".to_string()
+    }
 }
 
 pub fn default_summary_max_tokens() -> usize {
@@ -156,11 +172,25 @@ pub struct RetrievalConfig {
 }
 
 pub fn default_retrieval_model() -> String {
-    "glm-5".to_string()
+    // Auto-detect based on available API keys
+    if std::env::var("OPENAI_API_KEY").is_ok() {
+        "gpt-4o".to_string()
+    } else if std::env::var("ANTHROPIC_API_KEY").is_ok() {
+        "claude-3-sonnet-20240229".to_string()
+    } else {
+        "glm-5".to_string()
+    }
 }
 
 pub fn default_retrieval_endpoint() -> String {
-    "https://api.z.ai/api/paas/v4".to_string()
+    // Auto-detect based on available API keys
+    if std::env::var("OPENAI_API_KEY").is_ok() {
+        "https://api.openai.com/v1".to_string()
+    } else if std::env::var("AZURE_OPENAI_ENDPOINT").is_ok() {
+        std::env::var("AZURE_OPENAI_ENDPOINT").unwrap_or_default()
+    } else {
+        "https://api.z.ai/api/paas/v4".to_string()
+    }
 }
 
 pub fn default_retrieval_max_tokens() -> usize {

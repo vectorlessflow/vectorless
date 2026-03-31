@@ -2,12 +2,40 @@
 ///
 /// This structure provides better memory locality and simpler
 /// lifetime management compared to `Rc<RefCell<PageNode>`.
-/// 
+///
 
 use crate::TreeNode;
 use indextree::Arena;
 use serde::{Serialize, Deserialize};
 use crate::core::node::NodeId;
+
+/// JSON structure for exporting document tree (matches PageIndex format).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StructureNode {
+    /// Node title.
+    pub title: String,
+    /// Unique node identifier.
+    pub node_id: String,
+    /// Starting line number (1-based).
+    pub start_index: usize,
+    /// Ending line number (1-based).
+    pub end_index: usize,
+    /// Generated summary (optional).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub summary: Option<String>,
+    /// Child nodes.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub nodes: Vec<StructureNode>,
+}
+
+/// Document structure for JSON export.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DocumentStructure {
+    /// Document name.
+    pub doc_name: String,
+    /// Tree structure.
+    pub structure: Vec<StructureNode>,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DocumentTree {
@@ -27,6 +55,8 @@ impl DocumentTree {
             content: content.to_string(),
             summary: String::new(),
             depth: 0,
+            start_index: 1,
+            end_index: 1,
             start_page: None,
             end_page: None,
             node_id: None,
@@ -79,6 +109,8 @@ impl DocumentTree {
             content: content.to_string(),
             summary: String::new(),
             depth: parent_depth + 1,
+            start_index: 1,
+            end_index: 1,
             start_page: None,
             end_page: None,
             node_id: None,
@@ -177,6 +209,14 @@ impl DocumentTree {
         }
     }
 
+    /// Set line indices for a node.
+    pub fn set_line_indices(&mut self, id: NodeId, start: usize, end: usize) {
+        if let Some(node) = self.get_mut(id) {
+            node.start_index = start;
+            node.end_index = end;
+        }
+    }
+
     /// Get page range for a node.
     pub fn page_range(&self, id: NodeId) -> Option<(usize, usize)> {
         let node = self.get(id)?;
@@ -213,6 +253,70 @@ impl DocumentTree {
         if let Some(node) = self.get_mut(id) {
             node.token_count = Some(count);
         }
+    }
+
+    /// Export the tree structure to JSON format (PageIndex compatible).
+    pub fn to_structure_json(&self, doc_name: &str) -> DocumentStructure {
+        let structure = self.build_structure_nodes(self.root_id);
+        DocumentStructure {
+            doc_name: doc_name.to_string(),
+            structure,
+        }
+    }
+
+    /// Recursively build structure nodes starting from the given node.
+    fn build_structure_nodes(&self, node_id: NodeId) -> Vec<StructureNode> {
+        let children = self.children(node_id);
+        children.into_iter().enumerate().map(|(idx, child_id)| {
+            self.node_to_structure(child_id, idx)
+        }).collect()
+    }
+
+    /// Convert a single node to StructureNode format.
+    fn node_to_structure(&self, node_id: NodeId, _idx: usize) -> StructureNode {
+        let node = self.get(node_id).cloned().unwrap_or_default();
+        let children = self.children(node_id);
+
+        StructureNode {
+            title: node.title,
+            node_id: node.node_id.clone().unwrap_or_else(|| format!("{:04}", _idx)),
+            start_index: node.start_index,
+            end_index: node.end_index,
+            summary: if node.summary.is_empty() { None } else { Some(node.summary) },
+            nodes: children.into_iter().enumerate().map(|(i, c)| self.node_to_structure(c, i)).collect(),
+        }
+    }
+
+    /// Generate summaries for all nodes using the provided summarizer.
+    ///
+    /// This method traverses the tree and generates summaries for each node
+    /// that has content.
+    pub async fn generate_summaries<F, Fut>(&mut self, mut summarizer: F) -> Result<(), Box<dyn std::error::Error + Send + Sync>>
+    where
+        F: FnMut(String) -> Fut,
+        Fut: std::future::Future<Output = Result<String, Box<dyn std::error::Error + Send + Sync>>>,
+    {
+        let node_ids: Vec<NodeId> = self.traverse();
+        eprintln!("[DEBUG] generate_summaries called for {} nodes", node_ids.len());
+        for node_id in node_ids {
+            if let Some(node) = self.get(node_id).cloned() {
+                if !node.content.is_empty() {
+                    eprintln!("[DEBUG] Generating summary for node: {} (content length: {})", node.title, node.content.len());
+                    match summarizer(node.content.clone()).await {
+                        Ok(summary) => {
+                            eprintln!("[DEBUG] Summary generated for {}: {}", node.title, &summary[..std::cmp::min(50, summary.len())]);
+                            self.set_summary(node_id, &summary);
+                        }
+                        Err(e) => {
+                            eprintln!("[WARN] Failed to generate summary for node '{}': {}", node.title, e);
+                        }
+                    }
+                } else {
+                    eprintln!("[DEBUG] Skipping node {} (no content)", node.title);
+                }
+            }
+        }
+        Ok(())
     }
 
 }

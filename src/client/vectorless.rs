@@ -197,11 +197,24 @@ impl Vectorless {
         let builder = TreeBuilder::new()
             .with_root_title(&result.meta.name);
 
-        let tree = if options.generate_ids {
+        let mut tree = if options.generate_ids {
             builder.build_with_ids(result.nodes)
         } else {
             builder.build(result.nodes)
         };
+
+        // Generate summaries if requested
+        if options.generate_summaries {
+            info!("Generating summaries for document: {}", doc_id);
+            let config = self.config.summary.clone();
+            tree.generate_summaries(move |text: String| {
+                let cfg = config.clone();
+                async move {
+                    crate::summarizer::summarize(&cfg, &text).await
+                        .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
+                }
+            }).await.map_err(|e| Error::Summarization(e.to_string()))?;
+        }
 
         // Create indexed document
         let mut doc = IndexedDocument::new(doc_id, DocumentFormat::Markdown)
@@ -331,13 +344,38 @@ impl Vectorless {
 
     /// Query a document.
     ///
-    /// Note: This requires the retriever module to be implemented.
-    pub async fn query(&self, doc_id: &str, _question: &str) -> Result<QueryResult> {
-        let _doc = self.documents.get(doc_id)
+    /// Uses LLM-based navigation to find relevant content.
+    pub async fn query(&self, doc_id: &str, question: &str) -> Result<QueryResult> {
+        let doc = self.documents.get(doc_id)
             .ok_or_else(|| Error::DocumentNotFound(format!("Document not found: {}", doc_id)))?;
 
-        // TODO: Implement retrieval once retriever module is ready
-        Err(Error::Parse("Query not yet implemented. The retriever module is required.".to_string()))
+        let tree = doc.tree.as_ref()
+            .ok_or_else(|| Error::Parse("Document tree not loaded".to_string()))?;
+
+        // Use LLM navigator for retrieval
+        use crate::core::Retriever;
+
+        let retriever = crate::retriever::LlmNavigator::with_defaults();
+        let options = crate::retriever::RetrieveOptions::new()
+            .with_top_k(3)
+            .with_content(true)
+            .with_summaries(true);
+
+        let results: Vec<String> = retriever.retrieve(tree, question, &options).await?;
+
+        // Build content from results
+        let content = if results.is_empty() {
+            String::new()
+        } else {
+            results.join("\n\n---\n\n")
+        };
+
+        Ok(QueryResult {
+            doc_id: doc_id.to_string(),
+            node_ids: vec![],  // Node IDs not available in current API
+            content,
+            score: 1.0,
+        })
     }
 
     // ============================================================

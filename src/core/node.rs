@@ -89,6 +89,14 @@ pub struct TreeNode {
     #[serde(default)]
     pub depth: usize,
 
+    /// Starting line number (1-based).
+    #[serde(default)]
+    pub start_index: usize,
+
+    /// Ending line number (1-based).
+    #[serde(default)]
+    pub end_index: usize,
+
     /// Starting page number (1-based, if applicable).
     pub start_page: Option<usize>,
 
@@ -112,6 +120,8 @@ impl Default for TreeNode {
             content: String::new(),
             summary: String::new(),
             depth: 0,
+            start_index: 1,
+            end_index: 1,
             start_page: None,
             end_page: None,
             node_id: None,

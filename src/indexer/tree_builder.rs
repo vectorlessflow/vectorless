@@ -66,6 +66,9 @@ impl TreeBuilder {
             let content = if raw.content.is_empty() { "" } else { &raw.content };
             let node_id = tree.add_child(parent_id, &raw.title, content);
 
+            // Set line indices from raw node
+            tree.set_line_indices(node_id, raw.line_start, raw.line_end);
+
             // Update page boundaries if available
             if let Some(page) = raw.page {
                 tree.set_page_boundaries(node_id, page, page);
@@ -105,7 +108,7 @@ impl TreeBuilder {
 
     fn assign_recursive(&self, tree: &mut DocumentTree, node_id: NodeId, counter: &mut usize) {
         *counter += 1;
-        let id_str = format!("node-{:04}", counter);
+        let id_str = format!("{:04}", counter);
         tree.set_node_id(node_id, &id_str);
 
         // Process children
