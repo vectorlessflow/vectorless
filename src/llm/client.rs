@@ -1,7 +1,7 @@
 // Copyright (c) 2026 vectorless developers
 // SPDX-License-Identifier: Apache-2.0
 
-//! Unified LLM client with retry support.
+//! Unified LLM client with retry and concurrency support.
 
 use async_openai::{
     config::OpenAIConfig,
@@ -14,17 +14,20 @@ use async_openai::{
 };
 use serde::de::DeserializeOwned;
 use std::borrow::Cow;
+use std::sync::Arc;
 use tracing::{debug, instrument};
 
 use super::config::LlmConfig;
 use super::error::{LlmError, LlmResult};
 use super::retry::with_retry;
+use crate::concurrency::ConcurrencyController;
 
 /// Unified LLM client.
 ///
 /// This client provides:
 /// - Unified interface for all LLM operations
 /// - Automatic retry with exponential backoff
+/// - Rate limiting and concurrency control
 /// - JSON response parsing
 /// - Error classification
 ///
@@ -54,15 +57,26 @@ use super::retry::with_retry;
 /// # Ok(())
 /// # }
 /// ```
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct LlmClient {
     config: LlmConfig,
+    concurrency: Option<Arc<ConcurrencyController>>,
+}
+
+impl std::fmt::Debug for LlmClient {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("LlmClient")
+            .field("model", &self.config.model)
+            .field("endpoint", &self.config.endpoint)
+            .field("concurrency", &self.concurrency.as_ref().map(|c| format!("{:?}", c)))
+            .finish()
+    }
 }
 
 impl LlmClient {
     /// Create a new LLM client with the given configuration.
     pub fn new(config: LlmConfig) -> Self {
-        Self { config }
+        Self { config, concurrency: None }
     }
 
     /// Create a client with default configuration.
@@ -75,14 +89,47 @@ impl LlmClient {
         Self::new(LlmConfig::new(model))
     }
 
+    /// Add concurrency control to the client.
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// use vectorless::llm::LlmClient;
+    /// use vectorless::concurrency::{ConcurrencyController, ConcurrencyConfig};
+    ///
+    /// let config = ConcurrencyConfig::new()
+    ///     .with_max_concurrent_requests(10)
+    ///     .with_requests_per_minute(500);
+    ///
+    /// let client = LlmClient::for_model("gpt-4o-mini")
+    ///     .with_concurrency(ConcurrencyController::new(config));
+    /// ```
+    pub fn with_concurrency(mut self, controller: ConcurrencyController) -> Self {
+        self.concurrency = Some(Arc::new(controller));
+        self
+    }
+
+    /// Add concurrency control from an existing Arc.
+    pub fn with_shared_concurrency(mut self, controller: Arc<ConcurrencyController>) -> Self {
+        self.concurrency = Some(controller);
+        self
+    }
+
     /// Get the configuration.
     pub fn config(&self) -> &LlmConfig {
         &self.config
     }
 
+    /// Get the concurrency controller (if any).
+    pub fn concurrency(&self) -> Option<&ConcurrencyController> {
+        self.concurrency.as_deref()
+    }
+
     /// Complete a prompt with system and user messages.
     ///
-    /// This method includes automatic retry with exponential backoff.
+    /// This method includes:
+    /// - Automatic rate limiting (if configured)
+    /// - Automatic retry with exponential backoff
     #[instrument(skip(self, system, user), fields(model = %self.config.model))]
     pub async fn complete(&self, system: &str, user: &str) -> LlmResult<String> {
         with_retry(&self.config.retry, || async {
@@ -150,6 +197,13 @@ impl LlmClient {
 
     /// Single completion attempt (no retry).
     async fn complete_once(&self, system: &str, user: &str) -> LlmResult<String> {
+        // Acquire concurrency permit (rate limiter + semaphore)
+        let _permit = if let Some(ref cc) = self.concurrency {
+            Some(cc.acquire().await)
+        } else {
+            None
+        };
+
         let api_key = self.config.get_api_key()
             .ok_or_else(|| LlmError::Config(
                 "No API key found. Set OPENAI_API_KEY environment variable.".to_string()
@@ -204,6 +258,13 @@ impl LlmClient {
         user: &str,
         max_tokens: u16,
     ) -> LlmResult<String> {
+        // Acquire concurrency permit
+        let _permit = if let Some(ref cc) = self.concurrency {
+            Some(cc.acquire().await)
+        } else {
+            None
+        };
+
         let api_key = self.config.get_api_key()
             .ok_or_else(|| LlmError::Config(
                 "No API key found. Set OPENAI_API_KEY environment variable.".to_string()
@@ -351,5 +412,16 @@ mod tests {
     fn test_client_creation() {
         let client = LlmClient::for_model("gpt-4o");
         assert_eq!(client.config.model, "gpt-4o");
+    }
+
+    #[test]
+    fn test_client_with_concurrency() {
+        use crate::concurrency::ConcurrencyConfig;
+
+        let controller = ConcurrencyController::new(ConcurrencyConfig::conservative());
+        let client = LlmClient::for_model("gpt-4o-mini")
+            .with_concurrency(controller);
+
+        assert!(client.concurrency.is_some());
     }
 }

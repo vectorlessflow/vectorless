@@ -36,6 +36,10 @@ chrono = { version = "0.4", default-features = false, features = ["serde", "cloc
 # Logging
 tracing = "0.1"
 
+# Rate limiting
+governor = "0.6"
+nonzero_ext = "0.3"
+
 # Text processing
 regex = "1.10"
 
