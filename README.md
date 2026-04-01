@@ -53,7 +53,6 @@ Add to `Cargo.toml`:
 ```toml
 [dependencies]
 vectorless = "0.1"
-tokio = { version = "1", features = ["full"] }
 ```
 
 ## API Overview
