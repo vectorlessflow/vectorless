@@ -88,7 +88,7 @@ impl MarkdownParser {
     }
 
     /// Extract header nodes from Markdown lines.
-    fn extract_header_nodes(&self, lines: &[Vec<&str>) -> Vec<RawNode> {
+    fn extract_header_nodes(&self, lines: &[&str]) -> Vec<RawNode> {
         let header_re = Regex::new(r"^(#{1,6})\s+(.+)$").unwrap();
         let code_block_re = Regex::new(r"^```").unwrap();
         let mut nodes = Vec::new();
@@ -118,7 +118,7 @@ impl MarkdownParser {
                     nodes.push(RawNode {
                         title,
                         level,
-                        line_num,
+                        line_start: line_num,
                         line_end: line_num, // Will be updated later
                         content: String::new(),
                         page: None,
@@ -135,32 +135,29 @@ impl MarkdownParser {
     /// Extract text content for each node.
     fn extract_node_text(&self, nodes: &mut [RawNode], lines: &[&str]) {
         for i in 0..nodes.len() {
-        let start_line = nodes[i].line_start - 1; // Convert to 0-based
+            let start_line = nodes[i].line_start - 1; // Convert to 0-based
 
-        // Find end position: next same-level or higher-level header
-        let end_line = if i + 1 < nodes.len() {
-            nodes[i + 1].line_start - 1
-        } else {
-            lines.len()
-        };
+            // Find end position: next same-level or higher-level header
+            let end_line = if i + 1 < nodes.len() {
+                nodes[i + 1].line_start - 1
+            } else {
+                lines.len()
+            };
 
-        // Extract text (including the header line)
-        let text: String = lines[start_line..end_line].join("\n");
-        nodes[i].content = text;
-        nodes[i].line_end = end_line;
-    }
-}
-
-}
-
-impl MarkdownParser {
-    /// Estimate token count (approximately 1 token per 4 characters).
-    fn estimate_tokens(&self, text: &str) -> usize {
-        if text.is_empty() {
-            return 0;
+            // Extract text (including the header line)
+            let text: String = lines[start_line..end_line].join("\n");
+            nodes[i].content = text;
+            nodes[i].line_end = end_line;
         }
-        (text.len() / 4).max(1)
     }
+}
+
+/// Estimate token count (approximately 1 token per 4 characters).
+pub fn estimate_tokens(text: &str) -> usize {
+    if text.is_empty() {
+        return 0;
+    }
+    (text.len() / 4).max(1)
 }
 
 #[async_trait]
@@ -202,3 +199,89 @@ impl DocumentParser for MarkdownParser {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_parse_simple() {
+        let parser = MarkdownParser::new();
+        let content = "# Title\n\nContent here.";
+        let result = parser.parse(content).await.unwrap();
+
+        assert_eq!(result.node_count(), 1);
+        assert_eq!(result.nodes[0].title, "Title");
+        assert_eq!(result.nodes[0].level, 1);
+    }
+
+    #[tokio::test]
+    async fn test_parse_nested() {
+        let parser = MarkdownParser::new();
+        let content = r#"
+# Main
+
+## Section 1
+
+Content 1.
+
+## Section 2
+
+Content 2.
+"#;
+        let result = parser.parse(content).await.unwrap();
+
+        assert!(result.node_count() >= 3);
+    }
+
+    #[tokio::test]
+    async fn test_parse_code_blocks() {
+        let parser = MarkdownParser::new();
+        let content = r#"
+# Code Example
+
+```rust
+fn main() {
+    println!("Hello");
+}
+```
+"#;
+        let result = parser.parse(content).await.unwrap();
+
+        // Should not parse # inside code block as header
+        assert_eq!(result.node_count(), 1);
+        assert_eq!(result.nodes[0].title, "Code Example");
+    }
+
+    #[tokio::test]
+    async fn test_skip_headers_in_code_blocks() {
+        let parser = MarkdownParser::new();
+        let content = r#"
+# Title 1
+
+Content before code.
+
+```
+# This is not a header
+# Also not a header
+```
+
+## Title 1.1
+
+Content after code.
+"#;
+
+        let result = parser.parse(content).await.unwrap();
+
+        assert_eq!(result.node_count(), 2);
+        assert_eq!(result.nodes[0].title, "Title 1");
+        assert_eq!(result.nodes[1].title, "Title 1.1");
+    }
+
+    #[test]
+    fn test_estimate_tokens() {
+        assert_eq!(estimate_tokens(""), 0);
+        assert_eq!(estimate_tokens("hi"), 1);
+        assert_eq!(estimate_tokens("hello world"), 1);
+        assert_eq!(estimate_tokens(&"a".repeat(100)), 25);
+    }
+}

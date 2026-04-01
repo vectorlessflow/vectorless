@@ -7,13 +7,12 @@
 //! API keys are automatically detected from environment variables.
 
 use async_openai::{
-    types::completions::CreateCompletionRequestArgs,
+    types::chat::{ChatCompletionRequestSystemMessage, ChatCompletionRequestUserMessage, CreateChatCompletionRequestArgs},
     Client,
     config::OpenAIConfig,
     error::OpenAIError,
 };
 use thiserror::Error;
-
 use crate::config::SummaryConfig;
 
 /// LLM error types.
@@ -86,27 +85,36 @@ pub async fn summarize(
 
     let truncated = if text.len() > 8000 { &text[..8000] } else { text };
 
-    let prompt = format!(
-        "Summarize the following in 2-3 sentences. Be specific and factual. Do not add anything not in the text.\n\n{}",
-        truncated
-    );
-    println!("prompt: {:?}", prompt);
-
-    let request = CreateCompletionRequestArgs::default()
+    let request = CreateChatCompletionRequestArgs::default()
         .model(&config.model)
-        .prompt(&prompt)
-        .max_tokens(200u16)
+        .messages(
+            [
+                // System message: define the task and behavior
+                ChatCompletionRequestSystemMessage::from(
+                    "You are a helpful assistant that summarizes text concisely and accurately. \
+                     Summarize the user's text in 2-3 sentences. Be specific and factual. \
+                     Do not add anything not in the original text."
+                ).into(),
+                // User message: the actual content to summarize
+                ChatCompletionRequestUserMessage::from(truncated).into(),
+            ]
+        )
+        .temperature(1.0)
         .build()
         .map_err(|e| LlmError::Request(e.to_string()))?;
 
-    let response = client.completions().create(request).await?;
+    println!("LLM request: {:?}", request);
+
+    let response = client.chat().create(request).await?;
     println!("response: {:?}", response);
 
     let content = response
         .choices
         .first()
-        .map(|c| c.text.trim().to_string())
+        .map(|choice| choice.message.content.clone())
         .unwrap_or_default();
 
-    Ok(content)
+    println!("LLM response: {:?}", content);
+
+    content.ok_or_else(|| LlmError::Api("LLM returned no content".to_string()))
 }

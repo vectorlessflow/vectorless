@@ -213,11 +213,12 @@ impl LlmNavigator {
             }
         };
 
-        // Build prompt for LLM
-        let prompt = self.build_navigation_prompt(query, current_title, child_info);
+        // Build prompts for LLM
+        let system_prompt = self.build_system_prompt();
+        let user_prompt = self.build_user_prompt(query, current_title, child_info);
 
         // Call LLM
-        match self.call_llm(api_key, &prompt).await {
+        match self.call_llm(api_key, &system_prompt, &user_prompt).await {
             Ok(response) => {
                 self.parse_navigation_response(&response, child_info.len())
             }
@@ -228,8 +229,16 @@ impl LlmNavigator {
         }
     }
 
-    /// Build the navigation prompt for the LLM.
-    fn build_navigation_prompt(
+    /// Build the system prompt for navigation.
+    fn build_system_prompt(&self) -> String {
+        "You are a document navigation assistant. \
+         Given a user query and available document sections, decide which section to explore. \
+         Respond with ONLY a single number (0 for current section, 1-N for subsection) or \"all\". \
+         Do not include any explanation or additional text.".to_string()
+    }
+
+    /// Build the user prompt for navigation (actual content).
+    fn build_user_prompt(
         &self,
         query: &str,
         current_title: &str,
@@ -242,9 +251,7 @@ impl LlmNavigator {
             .join("\n");
 
         format!(
-            r#"You are a document navigation assistant. Given a user query and available document sections, decide which section to explore.
-
-User Query: {}
+            r#"User Query: {}
 
 Current Section: {}
 
@@ -254,8 +261,7 @@ Available Subsections:
 Instructions:
 - If the current section directly answers the query, respond with "0"
 - If a subsection is more relevant, respond with the subsection number (1-{})
-- If multiple sections might be relevant, respond with "all"
-- Respond with ONLY the number or "all", nothing else."#,
+- If multiple sections might be relevant, respond with "all""#,
             query,
             current_title,
             sections,
@@ -263,10 +269,10 @@ Instructions:
         )
     }
 
-    /// Call the LLM API.
-    async fn call_llm(&self, api_key: &str, prompt: &str) -> Result<String> {
+    /// Call the LLM API with system and user prompts.
+    async fn call_llm(&self, api_key: &str, system_prompt: &str, user_prompt: &str) -> Result<String> {
         use async_openai::{
-            types::completions::CreateCompletionRequestArgs,
+            types::chat::{ChatCompletionRequestSystemMessage, ChatCompletionRequestUserMessage, CreateChatCompletionRequestArgs},
             Client,
             config::OpenAIConfig,
         };
@@ -276,26 +282,34 @@ Instructions:
             .with_api_base(&self.config.endpoint);
 
         let client = Client::with_config(openai_config);
+        let truncated = if user_prompt.len() > 8000 { &user_prompt[..8000] } else { user_prompt };
 
-        let request = CreateCompletionRequestArgs::default()
+        let request = CreateChatCompletionRequestArgs::default()
             .model(&self.config.model)
-            .prompt(prompt)
+            .messages(
+                [
+                    // System message: define the role and behavior
+                    ChatCompletionRequestSystemMessage::from(system_prompt).into(),
+                    // User message: the actual navigation task
+                    ChatCompletionRequestUserMessage::from(truncated).into(),
+                ]
+            )
             .max_tokens(10u16)  // We only need a short response
             .temperature(self.config.temperature)
             .build()
             .map_err(|e| Error::Retrieval(format!("Failed to build request: {}", e)))?;
 
-        let response = client.completions().create(request).await
+        let response = client.chat().create(request).await
             .map_err(|e| Error::Retrieval(format!("LLM API error: {}", e)))?;
 
         let content = response
             .choices
             .first()
-            .map(|c| c.text.trim().to_string())
+            .map(|choice| choice.message.content.clone())
             .unwrap_or_default();
 
-        debug!("LLM response: {}", content);
-        Ok(content)
+        debug!("LLM response: {:?}", content);
+        content.ok_or_else(|| Error::Retrieval("LLM returned no content".to_string()))
     }
 
     /// Parse the LLM navigation response.
