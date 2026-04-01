@@ -3,6 +3,7 @@
 
 //! Builder pattern for creating Vectorless clients.
 
+use std::cell::RefCell;
 use std::path::PathBuf;
 
 use crate::config::{Config, ConfigLoader};
@@ -132,11 +133,13 @@ impl VectorlessBuilder {
                 .map_err(|e| BuildError::Config(e.to_string()))?
         };
 
-        // Open workspace if specified
+        // Open workspace: prefer explicit path, fallback to config
         let workspace = if let Some(path) = &self.workspace {
-            Some(Workspace::open(path).map_err(|e| BuildError::Workspace(e.to_string()))?)
+            Some(RefCell::new(Workspace::open(path).map_err(|e| BuildError::Workspace(e.to_string()))?))
         } else {
-            None
+            // Use workspace_dir from config
+            Some(RefCell::new(Workspace::open(&config.storage.workspace_dir)
+                .map_err(|e| BuildError::Workspace(e.to_string()))?))
         };
 
         // Initialize retriever registry and set default from config

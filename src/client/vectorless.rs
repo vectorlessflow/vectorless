@@ -35,6 +35,7 @@
 //! # }
 //! ```
 
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::path::Path;
 
@@ -60,7 +61,7 @@ pub struct Vectorless {
     pub(crate) config: Config,
 
     /// Optional workspace for persistence.
-    pub(crate) workspace: Option<Workspace>,
+    pub(crate) workspace: Option<RefCell<Workspace>>,
 
     /// In-memory document cache.
     pub(crate) documents: HashMap<String, IndexedDocument>,
@@ -145,8 +146,9 @@ impl Vectorless {
         };
 
         // Save to workspace if configured
-        if let Some(ref workspace) = self.workspace {
-            self.save_to_workspace(workspace, &indexed)?;
+        if let Some(ref workspace_cell) = self.workspace {
+            let mut workspace = workspace_cell.borrow_mut();
+            self.save_to_workspace(&mut workspace, &indexed)?;
         }
 
         // Cache in memory
@@ -158,7 +160,7 @@ impl Vectorless {
     }
 
     /// Save an indexed document to the workspace.
-    fn save_to_workspace(&self, _workspace: &Workspace, indexed: &IndexedDocument) -> Result<()> {
+    fn save_to_workspace(&self, workspace: &mut Workspace, indexed: &IndexedDocument) -> Result<()> {
         let tree = indexed.tree.as_ref()
             .ok_or_else(|| Error::Parse("Document tree not generated".to_string()))?;
 
@@ -177,9 +179,8 @@ impl Vectorless {
             doc.add_page(page.page, &page.content);
         }
 
-        // Note: workspace.add() would need &mut self, so we need to adjust
-        // For now, just log that we would save
-        info!("Would save document {} to workspace", indexed.id);
+        workspace.add(&doc)?;
+        info!("Saved document {} to workspace", indexed.id);
 
         Ok(())
     }
@@ -437,8 +438,10 @@ impl Vectorless {
 
     /// Load a document from the workspace.
     pub fn load(&mut self, doc_id: &str) -> Result<bool> {
-        let workspace = self.workspace.as_mut()
+        let workspace_cell = self.workspace.as_ref()
             .ok_or_else(|| Error::Parse("No workspace configured".to_string()))?;
+
+        let mut workspace = workspace_cell.borrow_mut();
 
         if !workspace.contains(doc_id) {
             return Ok(false);
@@ -462,8 +465,8 @@ impl Vectorless {
     pub fn remove(&mut self, doc_id: &str) -> Result<bool> {
         let existed = self.documents.remove(doc_id).is_some();
 
-        if let Some(ref mut workspace) = self.workspace {
-            workspace.remove(doc_id)?;
+        if let Some(ref workspace_cell) = self.workspace {
+            workspace_cell.borrow_mut().remove(doc_id)?;
         }
 
         Ok(existed)
