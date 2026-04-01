@@ -6,7 +6,7 @@
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-1.85%2B-orange.svg)](https://www.rust-lang.org/)
 
-A hierarchical, reasoning-native document intelligence engine.
+A hierarchical, reasoning-native document intelligence engine. no vector db, no embeddings. 
 
 > ⭐ **Star us on [GitHub](https://github.com/vectorlessflow/vectorless)** — it helps the project grow!
 
@@ -29,6 +29,9 @@ vectorless = "0.1"
 ```
 
 * Create `vectorless.toml` in your project root (auto-detected):
+```shell
+cp config.example.toml vectorless.toml
+```
 
 ```rust
 use vectorless::client::{Vectorless, VectorlessBuilder};
