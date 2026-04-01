@@ -78,12 +78,16 @@ pub struct Vectorless {
 impl Vectorless {
     /// Create a new client with default configuration.
     pub fn new() -> Result<Self> {
+        let config = Config::default();
+        let retriever_registry = RetrieverRegistry::with_defaults();
+        // Set default retriever from config
+        retriever_registry.set_default(config.retrieval.retriever_type.clone());
         Ok(Self {
-            config: Config::default(),
+            config,
             workspace: None,
             documents: HashMap::new(),
             parser_registry: ParserRegistry::with_defaults(),
-            retriever_registry: RetrieverRegistry::with_defaults(),
+            retriever_registry,
             summarizer_registry: SummarizerRegistry::default(),
         })
     }
@@ -357,7 +361,7 @@ impl Vectorless {
 
     /// Query a document.
     ///
-    /// Uses LLM-based navigation to find relevant content.
+    /// Uses the retriever type configured in `RetrievalConfig`.
     pub async fn query(&self, doc_id: &str, question: &str) -> Result<QueryResult> {
         let doc = self.documents.get(doc_id)
             .ok_or_else(|| Error::DocumentNotFound(format!("Document not found: {}", doc_id)))?;
@@ -365,26 +369,55 @@ impl Vectorless {
         let tree = doc.tree.as_ref()
             .ok_or_else(|| Error::Parse("Document tree not loaded".to_string()))?;
 
-        // Use retriever registry for retrieval
-        let options = crate::retriever::RetrieveOptions::new()
-            .with_top_k(3)
+        // Build retrieve options from config
+        let retrieve_options = crate::retriever::RetrieveOptions::new()
+            .with_top_k(self.config.retrieval.top_k)
             .with_content(true)
             .with_summaries(true);
 
-        let results: Vec<String> = self.retriever_registry.retrieve(tree, question, &options).await?;
+        // Use retriever type from config
+        let retriever_type = self.config.retrieval.retriever_type.clone();
+        let results = self.retriever_registry.retrieve_with(retriever_type, tree, question, &retrieve_options).await?;
 
-        // Build content from results
-        let content = if results.is_empty() {
+        // Extract node IDs and build content from results
+        let node_ids: Vec<String> = results.iter()
+            .filter_map(|r| r.node_id.clone())
+            .collect();
+
+        let content_parts: Vec<String> = results.iter()
+            .map(|r| {
+                let mut parts = vec![format!("## {}", r.title)];
+
+                if let Some(ref summary) = r.summary {
+                    parts.push(format!("Summary: {}", summary));
+                }
+
+                if let Some(ref content) = r.content {
+                    parts.push(content.clone());
+                }
+
+                parts.join("\n\n")
+            })
+            .collect();
+
+        let content = if content_parts.is_empty() {
             String::new()
         } else {
-            results.join("\n\n---\n\n")
+            content_parts.join("\n\n---\n\n")
+        };
+
+        // Calculate average score
+        let avg_score = if results.is_empty() {
+            1.0
+        } else {
+            results.iter().map(|r| r.score).sum::<f32>() / results.len() as f32
         };
 
         Ok(QueryResult {
             doc_id: doc_id.to_string(),
-            node_ids: vec![],  // Node IDs not available in current API
+            node_ids,
             content,
-            score: 1.0,
+            score: avg_score,
         })
     }
 

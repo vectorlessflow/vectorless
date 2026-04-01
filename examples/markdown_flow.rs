@@ -86,9 +86,7 @@ async fn main() -> vectorless::core::Result<()> {
     println!("Step 4: Querying the document...");
 
     let queries = vec![
-        "What are the key features?",
-        "How do I configure the library?",
-        "What modules are available?",
+        "What is this project about?",
     ];
 
     for query in queries {

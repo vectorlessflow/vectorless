@@ -136,9 +136,9 @@ pub trait Summarizer: Send + Sync {
 ///
 /// #[async_trait]
 /// impl Retriever for MyRetriever {
-///     async fn retrieve(&self, tree: &DocumentTree, query: &str, options: &RetrieveOptions) -> Result<Vec<String>> {
+///     async fn retrieve(&self, tree: &DocumentTree, query: &str, options: &RetrieveOptions) -> Result<Vec<RetrievalResult>> {
 ///         // Return relevant content
-///         Ok(vec!["Relevant content".to_string()])
+///         Ok(vec![RetrievalResult::new("Relevant content")])
 ///     }
 /// }
 /// ```
@@ -154,13 +154,13 @@ pub trait Retriever: Send + Sync {
     ///
     /// # Returns
     ///
-    /// A list of relevant content strings.
+    /// A list of retrieval results with content, scores, and metadata.
     async fn retrieve(
         &self,
         tree: &DocumentTree,
         query: &str,
         options: &crate::retriever::RetrieveOptions,
-    ) -> Result<Vec<String>>;
+    ) -> Result<Vec<crate::retriever::RetrievalResult>>;
 }
 
 // ============================================================

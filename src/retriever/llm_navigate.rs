@@ -403,32 +403,11 @@ impl Retriever for LlmNavigator {
         tree: &DocumentTree,
         query: &str,
         options: &RetrieveOptions,
-    ) -> Result<Vec<String>> {
+    ) -> Result<Vec<RetrievalResult>> {
         info!("Retrieving content for query: {}", query);
-
         let results = self.navigate(tree, query, options).await?;
-
-        // Convert results to content strings
-        let contents: Vec<String> = results
-            .into_iter()
-            .filter_map(|r| {
-                if r.content.is_some() || r.summary.is_some() {
-                    let mut text = format!("## {}\n", r.title);
-                    if let Some(summary) = &r.summary {
-                        text.push_str(&format!("Summary: {}\n", summary));
-                    }
-                    if let Some(content) = &r.content {
-                        text.push_str(&format!("\n{}\n", content));
-                    }
-                    Some(text)
-                } else {
-                    None
-                }
-            })
-            .collect();
-
-        info!("Retrieved {} results", contents.len());
-        Ok(contents)
+        info!("Retrieved {} results", results.len());
+        Ok(results)
     }
 }
 

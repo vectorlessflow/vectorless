@@ -11,25 +11,26 @@ use std::sync::{Arc, RwLock};
 
 use crate::core::{Retriever, DocumentTree, Result, Error};
 use crate::retriever::{RetrieveOptions, LlmNavigator};
+use crate::config::RetrieverType;
 
 /// Type alias for retriever factory functions.
 type RetrieverFactory = Box<dyn Fn() -> Box<dyn Retriever> + Send + Sync>;
 
 /// Registry for retrieval strategies.
 pub struct RetrieverRegistry {
-    /// Registered retriever factories by name.
-    factories: Arc<RwLock<HashMap<String, RetrieverFactory>>>,
-    /// Default retriever name.
-    default_name: Arc<RwLock<String>>,
+    /// Registered retriever factories by type.
+    factories: Arc<RwLock<HashMap<RetrieverType, RetrieverFactory>>>,
+    /// Default retriever type.
+    default_type: Arc<RwLock<RetrieverType>>,
 }
 
 impl std::fmt::Debug for RetrieverRegistry {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let binding = self.factories.read().unwrap();
-        let names: Vec<_> = binding.keys().collect();
-        let default_binding = self.default_name.read().unwrap();
+        let types: Vec<_> = binding.keys().collect();
+        let default_binding = self.default_type.read().unwrap();
         f.debug_struct("RetrieverRegistry")
-            .field("names", &names)
+            .field("types", &types)
             .field("default", &*default_binding)
             .finish()
     }
@@ -40,7 +41,7 @@ impl RetrieverRegistry {
     pub fn new() -> Self {
         Self {
             factories: Arc::new(RwLock::new(HashMap::new())),
-            default_name: Arc::new(RwLock::new("llm_navigate".to_string())),
+            default_type: Arc::new(RwLock::new(RetrieverType::default())),
         }
     }
 
@@ -53,49 +54,49 @@ impl RetrieverRegistry {
 
     /// Register default retrievers.
     pub fn register_defaults(&self) {
-        self.register("llm_navigate", || {
+        self.register(RetrieverType::LlmNavigate, || {
             Box::new(LlmNavigator::with_defaults())
         });
     }
 
-    /// Register a retriever factory.
-    pub fn register<F>(&self, name: &str, factory: F)
+    /// Register a retriever factory by type.
+    pub fn register<F>(&self, retriever_type: RetrieverType, factory: F)
     where
         F: Fn() -> Box<dyn Retriever> + Send + Sync + 'static,
     {
         let mut factories = self.factories.write().unwrap();
-        factories.insert(name.to_string(), Box::new(factory));
+        factories.insert(retriever_type, Box::new(factory));
     }
 
-    /// Get a retriever by name.
-    pub fn get(&self, name: &str) -> Option<Box<dyn Retriever>> {
+    /// Get a retriever by type.
+    pub fn get(&self, retriever_type: RetrieverType) -> Option<Box<dyn Retriever>> {
         let factories = self.factories.read().unwrap();
-        factories.get(name).map(|f| f())
+        factories.get(&retriever_type).map(|f| f())
     }
 
     /// Get the default retriever.
     pub fn get_default(&self) -> Box<dyn Retriever> {
-        let default_name = self.default_name.read().unwrap().clone();
-        self.get(&default_name)
+        let default_type = *self.default_type.read().unwrap();
+        self.get(default_type)
             .unwrap_or_else(|| Box::new(LlmNavigator::with_defaults()))
     }
 
-    /// Set the default retriever name.
-    pub fn set_default(&self, name: &str) {
-        let mut default_name = self.default_name.write().unwrap();
-        *default_name = name.to_string();
+    /// Set the default retriever type.
+    pub fn set_default(&self, retriever_type: RetrieverType) {
+        let mut default_type = self.default_type.write().unwrap();
+        *default_type = retriever_type;
     }
 
-    /// List registered retriever names.
-    pub fn list(&self) -> Vec<String> {
+    /// List registered retriever types.
+    pub fn list(&self) -> Vec<RetrieverType> {
         let factories = self.factories.read().unwrap();
-        factories.keys().cloned().collect()
+        factories.keys().copied().collect()
     }
 
     /// Check if a retriever is registered.
-    pub fn has(&self, name: &str) -> bool {
+    pub fn has(&self, retriever_type: RetrieverType) -> bool {
         let factories = self.factories.read().unwrap();
-        factories.contains_key(name)
+        factories.contains_key(&retriever_type)
     }
 
     /// Retrieve content from a document tree.
@@ -104,21 +105,21 @@ impl RetrieverRegistry {
         tree: &DocumentTree,
         query: &str,
         options: &RetrieveOptions,
-    ) -> Result<Vec<String>> {
+    ) -> Result<Vec<crate::retriever::RetrievalResult>> {
         let retriever = self.get_default();
         retriever.retrieve(tree, query, options).await
     }
 
-    /// Retrieve content using a specific retriever.
+    /// Retrieve content using a specific retriever type.
     pub async fn retrieve_with(
         &self,
-        name: &str,
+        retriever_type: RetrieverType,
         tree: &DocumentTree,
         query: &str,
         options: &RetrieveOptions,
-    ) -> Result<Vec<String>> {
-        let retriever = self.get(name)
-            .ok_or_else(|| Error::Retrieval(format!("Retriever not found: {}", name)))?;
+    ) -> Result<Vec<crate::retriever::RetrievalResult>> {
+        let retriever = self.get(retriever_type)
+            .ok_or_else(|| Error::Retrieval(format!("Retriever not found: {:?}", retriever_type)))?;
         retriever.retrieve(tree, query, options).await
     }
 }
@@ -136,13 +137,13 @@ mod tests {
     #[test]
     fn test_registry_defaults() {
         let registry = RetrieverRegistry::with_defaults();
-        assert!(registry.has("llm_navigate"));
+        assert!(registry.has(RetrieverType::LlmNavigate));
     }
 
     #[test]
     fn test_list_retrievers() {
         let registry = RetrieverRegistry::with_defaults();
         let retrievers = registry.list();
-        assert!(retrievers.contains(&"llm_navigate".to_string()));
+        assert!(retrievers.contains(&RetrieverType::LlmNavigate));
     }
 }

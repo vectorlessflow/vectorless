@@ -190,6 +190,7 @@ fn merge_config(base: Config, other: Config) -> Config {
             } else {
                 base.retrieval.top_k
             },
+            retriever_type: other.retrieval.retriever_type,
         },
         storage: StorageConfig {
             data_dir: if other.storage.data_dir != default_data_dir() {

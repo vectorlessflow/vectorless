@@ -224,9 +224,6 @@ pub fn thin_raw_nodes(nodes: &[RawNode], config: &ThinningConfig) -> Vec<bool> {
 
 /// Ensure each parent keeps at least one direct child.
 fn ensure_min_children(nodes: &[RawNode], keep: &mut [bool]) {
-    // Find root level (lowest non-zero level or level 1)
-    let min_level = nodes.iter().map(|n| n.level).filter(|&l| l > 0).min().unwrap_or(1);
-
     // For each potential parent, ensure at least one child is kept
     for i in 0..nodes.len() {
         let children = find_direct_children_indices(i, nodes);
@@ -236,7 +233,7 @@ fn ensure_min_children(nodes: &[RawNode], keep: &mut [bool]) {
             let has_kept_child = children.iter().any(|&c| keep[c]);
 
             if !has_kept_child {
-                // Keep the first child with the most content
+                // Keep the child with the most content
                 let best_child = children
                     .iter()
                     .max_by_key(|&&c| nodes[c].total_token_count.unwrap_or(0))
