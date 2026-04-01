@@ -108,15 +108,16 @@ fn should_retry(error: &LlmError, config: &RetryConfig) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::atomic::{AtomicU32, Ordering};
 
     #[tokio::test]
     async fn test_retry_success_on_second_attempt() {
         let config = RetryConfig::new().with_max_attempts(3);
-        let mut attempts = 0;
+        let attempts = AtomicU32::new(0);
 
         let result = with_retry(&config, || async {
-            attempts += 1;
-            if attempts < 2 {
+            let current = attempts.fetch_add(1, Ordering::SeqCst) + 1;
+            if current < 2 {
                 Err(LlmError::Timeout("timeout".to_string()))
             } else {
                 Ok("success")
@@ -124,34 +125,34 @@ mod tests {
         }).await;
 
         assert_eq!(result.unwrap(), "success");
-        assert_eq!(attempts, 2);
+        assert_eq!(attempts.load(Ordering::SeqCst), 2);
     }
 
     #[tokio::test]
     async fn test_retry_max_attempts_reached() {
         let config = RetryConfig::new().with_max_attempts(2);
-        let mut attempts = 0;
+        let attempts = AtomicU32::new(0);
 
         let result: LlmResult<String> = with_retry(&config, || async {
-            attempts += 1;
+            attempts.fetch_add(1, Ordering::SeqCst);
             Err(LlmError::Timeout("timeout".to_string()))
         }).await;
 
         assert!(matches!(result, Err(LlmError::RetryExhausted { .. })));
-        assert_eq!(attempts, 2);
+        assert_eq!(attempts.load(Ordering::SeqCst), 2);
     }
 
     #[tokio::test]
     async fn test_non_retryable_error_fails_immediately() {
         let config = RetryConfig::new().with_max_attempts(3);
-        let mut attempts = 0;
+        let attempts = AtomicU32::new(0);
 
         let result: LlmResult<String> = with_retry(&config, || async {
-            attempts += 1;
+            attempts.fetch_add(1, Ordering::SeqCst);
             Err(LlmError::Config("bad config".to_string()))
         }).await;
 
         assert!(matches!(result, Err(LlmError::Config(_))));
-        assert_eq!(attempts, 1); // Should only try once
+        assert_eq!(attempts.load(Ordering::SeqCst), 1); // Should only try once
     }
 }
