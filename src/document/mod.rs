@@ -10,13 +10,13 @@
 //! # Supported Formats
 //!
 //! - **Markdown** - Full support via [`MarkdownParser`]
-//! - **PDF** - Planned (placeholder)
+//! - **PDF** - Full support via [`PdfParser`] with TOC extraction
 //! - **HTML** - Planned (placeholder)
 //! - **DOCX** - Planned (placeholder)
 //!
 //! # Example
 //!
-//! ```rust
+//! ```rust,no_run
 //! use vectorless::document::{DocumentParser, MarkdownParser, DocumentFormat};
 //!
 //! # #[tokio::main]
@@ -39,7 +39,12 @@
 mod types;
 mod parser;
 mod markdown;
-mod pdf;
+
+// PDF parsing module
+pub mod pdf;
+
+// TOC processing module
+pub mod toc;
 
 // Placeholder modules for future implementations
 mod html;

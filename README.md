@@ -8,6 +8,8 @@
 
 A hierarchical, reasoning-native document intelligence engine.
 
+> ⭐ **Star us on [GitHub](https://github.com/vectorlessflow/vectorless)** — it helps the project grow!
+
 ## Features
 
 - **Tree-based indexing** — Documents are organized as hierarchical trees, not flat vectors
@@ -66,6 +68,10 @@ Early development. Core functionality works:
 - ✅ Workspace persistence with LRU cache
 - 🚧 PDF/HTML/DOCX parsing
 - 🚧 Additional retriever strategies
+
+## Contributing
+
+⭐ If you find this project useful, please consider giving it a star on [GitHub](https://github.com/vectorlessflow/vectorless) — it helps others discover it and supports ongoing development.
 
 ## License
 

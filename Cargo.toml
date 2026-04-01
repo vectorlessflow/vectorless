@@ -44,7 +44,13 @@ indextree = { version = "4.8.0", features = ["deser"] }
 
 # LRU cache
 lru = "0.12"
+
+# PDF processing
 pdf-extract = "0.10.0"
+lopdf = "0.34"
+
+# Random number generation (for sampling)
+rand = "0.8"
 
 [dev-dependencies]
 tempfile = "3.10"

@@ -75,6 +75,92 @@ impl Default for IndexerConfig {
     }
 }
 
+/// Generic LLM configuration.
+///
+/// Used for TOC processing, verification, and repair operations.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LlmConfig {
+    /// Model name (e.g., "gpt-4o-mini", "claude-3-haiku").
+    #[serde(default = "default_llm_model")]
+    pub model: String,
+
+    /// API endpoint.
+    #[serde(default = "default_llm_endpoint")]
+    pub endpoint: String,
+
+    /// API key (prefer environment variables).
+    #[serde(default)]
+    pub api_key: Option<String>,
+
+    /// Maximum tokens for responses.
+    #[serde(default = "default_llm_max_tokens")]
+    pub max_tokens: usize,
+
+    /// Temperature for generation.
+    #[serde(default = "default_temperature")]
+    pub temperature: f32,
+}
+
+fn default_llm_model() -> String {
+    "gpt-4o-mini".to_string()
+}
+
+fn default_llm_endpoint() -> String {
+    std::env::var("OPENAI_API_BASE")
+        .or_else(|_| std::env::var("OPENAI_BASE_URL"))
+        .or_else(|_| std::env::var("AZURE_OPENAI_ENDPOINT"))
+        .unwrap_or_else(|_| "https://api.openai.com/v1".to_string())
+}
+
+fn default_llm_max_tokens() -> usize {
+    1000
+}
+
+impl Default for LlmConfig {
+    fn default() -> Self {
+        Self {
+            model: default_llm_model(),
+            endpoint: default_llm_endpoint(),
+            api_key: None,
+            max_tokens: default_llm_max_tokens(),
+            temperature: default_temperature(),
+        }
+    }
+}
+
+impl LlmConfig {
+    /// Create a new LLM config with defaults.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Set the model.
+    pub fn with_model(mut self, model: impl Into<String>) -> Self {
+        self.model = model.into();
+        self
+    }
+
+    /// Set the endpoint.
+    pub fn with_endpoint(mut self, endpoint: impl Into<String>) -> Self {
+        self.endpoint = endpoint.into();
+        self
+    }
+
+    /// Set the API key.
+    pub fn with_api_key(mut self, api_key: impl Into<String>) -> Self {
+        self.api_key = Some(api_key.into());
+        self
+    }
+
+    /// Get the API key from config or environment.
+    pub fn get_api_key(&self) -> Option<String> {
+        self.api_key.clone()
+            .or_else(|| std::env::var("OPENAI_API_KEY").ok())
+            .or_else(|| std::env::var("ANTHROPIC_API_KEY").ok())
+            .or_else(|| std::env::var("AZURE_OPENAI_API_KEY").ok())
+    }
+}
+
 /// Summary model configuration (for indexing/summarization).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SummaryConfig {
