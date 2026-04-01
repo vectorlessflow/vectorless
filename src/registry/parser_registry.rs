@@ -10,7 +10,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
 use crate::core::{DocumentParser, Result, Error};
-use crate::document::{DocumentFormat, MarkdownParser, ParseResult};
+use crate::document::{DocumentFormat, MarkdownParser, PdfParser, ParseResult};
 use std::path::Path;
 
 /// Type alias for parser factory functions.
@@ -52,6 +52,7 @@ impl ParserRegistry {
     /// Register default parsers.
     pub fn register_defaults(&self) {
         self.register("markdown", || Box::new(MarkdownParser::new()));
+        self.register("pdf", || Box::new(PdfParser::new()));
     }
 
     /// Register a parser factory by name.
@@ -154,5 +155,13 @@ mod tests {
         let registry = ParserRegistry::new(); // Empty registry
         let parser = registry.get(DocumentFormat::Pdf);
         assert!(parser.is_none());
+    }
+
+    #[test]
+    fn test_pdf_parser_registered() {
+        let registry = ParserRegistry::with_defaults();
+        assert!(registry.supports(DocumentFormat::Pdf));
+        let parser = registry.get(DocumentFormat::Pdf);
+        assert!(parser.is_some());
     }
 }

@@ -17,10 +17,7 @@ use crate::core::{DocumentParser, Result};
 pub fn get_parser(format: DocumentFormat) -> Option<Box<dyn DocumentParser>> {
     match format {
         DocumentFormat::Markdown => Some(Box::new(super::markdown::MarkdownParser::new())),
-        DocumentFormat::Pdf => {
-            // TODO: Implement PDF parser
-            None
-        }
+        DocumentFormat::Pdf => Some(Box::new(super::pdf::PdfParser::new())),
         DocumentFormat::Html => {
             // TODO: Implement HTML parser
             None

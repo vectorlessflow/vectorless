@@ -132,10 +132,8 @@ impl Vectorless {
 
         // Parse based on format
         let indexed = match format {
-            DocumentFormat::Markdown => self.index_markdown(&doc_id, &path, &options).await?,
-            DocumentFormat::Pdf => {
-                return Err(Error::Parse("PDF indexing not yet implemented".to_string()));
-            }
+            DocumentFormat::Markdown => self.index_document(&doc_id, &path, &options, DocumentFormat::Markdown).await?,
+            DocumentFormat::Pdf => self.index_document(&doc_id, &path, &options, DocumentFormat::Pdf).await?,
             DocumentFormat::Html => {
                 return Err(Error::Parse("HTML parsing not yet implemented".to_string()));
             }
@@ -201,12 +199,13 @@ impl Vectorless {
         }
     }
 
-    /// Index a Markdown file.
-    async fn index_markdown(
+    /// Index a document file (Markdown, PDF, etc).
+    async fn index_document(
         &self,
         doc_id: &str,
         path: &Path,
         options: &IndexOptions,
+        format: DocumentFormat,
     ) -> Result<IndexedDocument> {
         // Use registry to get parser
         let result = self.parser_registry.parse_file(path).await?;
@@ -235,11 +234,18 @@ impl Vectorless {
         }
 
         // Create indexed document
-        let mut doc = IndexedDocument::new(doc_id, DocumentFormat::Markdown)
+        let mut doc = IndexedDocument::new(doc_id, format)
             .with_name(&result.meta.name)
             .with_source_path(path)
             .with_line_count(result.meta.line_count)
             .with_tree(tree);
+
+        // Add page count for PDF
+        if format == DocumentFormat::Pdf {
+            if let Some(page_count) = result.meta.page_count {
+                doc = doc.with_page_count(page_count);
+            }
+        }
 
         if options.generate_description {
             if let Some(desc) = result.meta.description {

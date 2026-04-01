@@ -39,9 +39,9 @@
 mod types;
 mod parser;
 mod markdown;
+mod pdf;
 
 // Placeholder modules for future implementations
-mod pdf;
 mod html;
 mod docx;
 
@@ -66,3 +66,4 @@ pub use parser::{
 
 // Re-export concrete parsers
 pub use markdown::{MarkdownParser, MarkdownConfig};
+pub use pdf::PdfParser;
