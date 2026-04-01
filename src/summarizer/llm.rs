@@ -79,8 +79,6 @@ pub async fn summarize(
     let openai_config = OpenAIConfig::new()
         .with_api_key(api_key)
         .with_api_base(&api_base);
-    println!("open ai config: {:?}", config);
-
     let client = Client::with_config(openai_config);
 
     let truncated = if text.len() > 8000 { &text[..8000] } else { text };
