@@ -7,6 +7,7 @@ use std::path::PathBuf;
 
 use crate::config::{Config, ConfigLoader};
 use crate::storage::Workspace;
+use crate::registry::{ParserRegistry, RetrieverRegistry, SummarizerRegistry};
 
 use super::Vectorless;
 
@@ -142,6 +143,9 @@ impl VectorlessBuilder {
             config,
             workspace,
             documents: std::collections::HashMap::new(),
+            parser_registry: ParserRegistry::with_defaults(),
+            retriever_registry: RetrieverRegistry::with_defaults(),
+            summarizer_registry: SummarizerRegistry::default(),
         })
     }
 }

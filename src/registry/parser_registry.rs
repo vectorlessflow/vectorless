@@ -10,20 +10,24 @@ use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
 use crate::core::{DocumentParser, Result, Error};
-use crate::document::{DocumentFormat, MarkdownParser};
+use crate::document::{DocumentFormat, MarkdownParser, ParseResult};
+use std::path::Path;
+
+/// Type alias for parser factory functions.
+type ParserFactory = Box<dyn Fn() -> Box<dyn DocumentParser> + Send + Sync>;
 
 /// Registry for document parsers.
 ///
 /// Parsers can be registered by format and retrieved at runtime.
 pub struct ParserRegistry {
-    /// Registered parsers by format.
-    parsers: Arc<RwLock<HashMap<DocumentFormat, Box<dyn DocumentParser>>>>,
+    /// Registered parser factories by format.
+    factories: Arc<RwLock<HashMap<DocumentFormat, ParserFactory>>>,
 }
 
 impl std::fmt::Debug for ParserRegistry {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let parsers = self.parsers.read().unwrap();
-        let formats: Vec<_> = parsers.keys().collect();
+        let factories = self.factories.read().unwrap();
+        let formats: Vec<_> = factories.keys().collect();
         f.debug_struct("ParserRegistry")
             .field("formats", &formats)
             .finish()
@@ -34,7 +38,7 @@ impl ParserRegistry {
     /// Create a new empty registry.
     pub fn new() -> Self {
         Self {
-            parsers: Arc::new(RwLock::new(HashMap::new())),
+            factories: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
@@ -47,53 +51,52 @@ impl ParserRegistry {
 
     /// Register default parsers.
     pub fn register_defaults(&self) {
-        self.register(Box::new(MarkdownParser::new()));
+        self.register("markdown", || Box::new(MarkdownParser::new()));
     }
 
-    /// Register a parser.
-    pub fn register(&self, parser: Box<dyn DocumentParser>) {
+    /// Register a parser factory by name.
+    pub fn register<F>(&self, name: &str, factory: F)
+    where
+        F: Fn() -> Box<dyn DocumentParser> + Send + Sync + 'static,
+    {
+        // Create a temporary parser to get the format
+        let parser = factory();
         let format = parser.format();
-        let mut parsers = self.parsers.write().unwrap();
-        parsers.insert(format, parser);
+
+        let mut factories = self.factories.write().unwrap();
+        factories.insert(format, Box::new(factory));
+
+        // Also store by name for convenience
+        let _ = name; // Name is for documentation purposes
     }
 
     /// Get a parser by format.
     pub fn get(&self, format: DocumentFormat) -> Option<Box<dyn DocumentParser>> {
-        let parsers = self.parsers.read().unwrap();
-        // Clone is not possible for trait objects, so we return a reference
-        // For now, we'll create new instances for known formats
-        match format {
-            DocumentFormat::Markdown => Some(Box::new(MarkdownParser::new())),
-            _ => None,
-        }
+        let factories = self.factories.read().unwrap();
+        factories.get(&format).map(|f| f())
     }
 
     /// Check if a format is supported.
     pub fn supports(&self, format: DocumentFormat) -> bool {
-        let parsers = self.parsers.read().unwrap();
-        parsers.contains_key(&format) || matches!(format, DocumentFormat::Markdown)
+        let factories = self.factories.read().unwrap();
+        factories.contains_key(&format)
     }
 
     /// List supported formats.
     pub fn supported_formats(&self) -> Vec<DocumentFormat> {
-        let parsers = self.parsers.read().unwrap();
-        let mut formats: Vec<DocumentFormat> = parsers.keys().copied().collect();
-        // Ensure Markdown is always included
-        if !formats.contains(&DocumentFormat::Markdown) {
-            formats.push(DocumentFormat::Markdown);
-        }
-        formats
+        let factories = self.factories.read().unwrap();
+        factories.keys().copied().collect()
     }
 
     /// Parse content using the appropriate parser.
-    pub async fn parse(&self, content: &str, format: DocumentFormat) -> Result<crate::document::ParseResult> {
+    pub async fn parse(&self, content: &str, format: DocumentFormat) -> Result<ParseResult> {
         let parser = self.get(format)
             .ok_or_else(|| Error::Parse(format!("Unsupported format: {:?}", format)))?;
         parser.parse(content).await
     }
 
     /// Parse a file using the appropriate parser.
-    pub async fn parse_file(&self, path: &std::path::Path) -> Result<crate::document::ParseResult> {
+    pub async fn parse_file(&self, path: &Path) -> Result<ParseResult> {
         let ext = path.extension()
             .and_then(|e| e.to_str())
             .ok_or_else(|| Error::Parse("Could not determine file extension".to_string()))?;
@@ -107,9 +110,9 @@ impl ParserRegistry {
     /// Parse a file with a specific format.
     pub async fn parse_file_as(
         &self,
-        path: &std::path::Path,
+        path: &Path,
         format: DocumentFormat,
-    ) -> Result<crate::document::ParseResult> {
+    ) -> Result<ParseResult> {
         let parser = self.get(format)
             .ok_or_else(|| Error::Parse(format!("Unsupported format: {:?}", format)))?;
         parser.parse_file(path).await
@@ -134,8 +137,22 @@ mod tests {
 
     #[test]
     fn test_supported_formats() {
-        let registry = ParserRegistry::new();
+        let registry = ParserRegistry::with_defaults();
         let formats = registry.supported_formats();
         assert!(formats.contains(&DocumentFormat::Markdown));
+    }
+
+    #[test]
+    fn test_get_parser() {
+        let registry = ParserRegistry::with_defaults();
+        let parser = registry.get(DocumentFormat::Markdown);
+        assert!(parser.is_some());
+    }
+
+    #[test]
+    fn test_unsupported_format() {
+        let registry = ParserRegistry::new(); // Empty registry
+        let parser = registry.get(DocumentFormat::Pdf);
+        assert!(parser.is_none());
     }
 }

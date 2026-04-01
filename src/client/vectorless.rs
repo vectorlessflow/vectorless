@@ -43,9 +43,10 @@ use tracing::info;
 
 use crate::config::Config;
 use crate::core::{DocumentTree, Result, Error};
-use crate::document::{DocumentFormat, MarkdownParser, DocumentParser};
+use crate::document::DocumentFormat;
 use crate::indexer::TreeBuilder;
 use crate::storage::{Workspace, PersistedDocument, DocumentMeta as StorageMeta};
+use crate::registry::{ParserRegistry, RetrieverRegistry, SummarizerRegistry};
 
 use super::types::{IndexedDocument, IndexMode, IndexOptions, DocumentInfo, QueryResult};
 
@@ -63,6 +64,15 @@ pub struct Vectorless {
 
     /// In-memory document cache.
     pub(crate) documents: HashMap<String, IndexedDocument>,
+
+    /// Parser registry.
+    pub(crate) parser_registry: ParserRegistry,
+
+    /// Retriever registry.
+    pub(crate) retriever_registry: RetrieverRegistry,
+
+    /// Summarizer registry.
+    pub(crate) summarizer_registry: SummarizerRegistry,
 }
 
 impl Vectorless {
@@ -72,6 +82,9 @@ impl Vectorless {
             config: Config::default(),
             workspace: None,
             documents: HashMap::new(),
+            parser_registry: ParserRegistry::with_defaults(),
+            retriever_registry: RetrieverRegistry::with_defaults(),
+            summarizer_registry: SummarizerRegistry::default(),
         })
     }
 
@@ -190,8 +203,8 @@ impl Vectorless {
         path: &Path,
         options: &IndexOptions,
     ) -> Result<IndexedDocument> {
-        let parser = MarkdownParser::new();
-        let result = parser.parse_file(path).await?;
+        // Use registry to get parser
+        let result = self.parser_registry.parse_file(path).await?;
 
         // Build tree
         let builder = TreeBuilder::new()
@@ -352,16 +365,13 @@ impl Vectorless {
         let tree = doc.tree.as_ref()
             .ok_or_else(|| Error::Parse("Document tree not loaded".to_string()))?;
 
-        // Use LLM navigator for retrieval
-        use crate::core::Retriever;
-
-        let retriever = crate::retriever::LlmNavigator::with_defaults();
+        // Use retriever registry for retrieval
         let options = crate::retriever::RetrieveOptions::new()
             .with_top_k(3)
             .with_content(true)
             .with_summaries(true);
 
-        let results: Vec<String> = retriever.retrieve(tree, question, &options).await?;
+        let results: Vec<String> = self.retriever_registry.retrieve(tree, question, &options).await?;
 
         // Build content from results
         let content = if results.is_empty() {
