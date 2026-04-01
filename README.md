@@ -1,5 +1,7 @@
 # Vectorless
 
+![Vectorless](docs/logo-horizontal.svg)
+
 [![Crates.io](https://img.shields.io/crates/v/vectorless.svg)](https://crates.io/crates/vectorless)
 [![Downloads](https://img.shields.io/crates/d/vectorless.svg)](https://crates.io/crates/vectorless)
 [![Documentation](https://docs.rs/vectorless/badge.svg)](https://docs.rs/vectorless)

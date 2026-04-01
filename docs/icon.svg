@@ -1,0 +1,24 @@
+<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="iconGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#3b82f6"/>
+      <stop offset="100%" style="stop-color:#1d4ed8"/>
+    </linearGradient>
+  </defs>
+
+  <!-- V shape with tree structure -->
+  <path d="M 12 12 L 32 32 L 52 12" stroke="url(#iconGradient)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+
+  <!-- Root node -->
+  <circle cx="32" cy="32" r="5" fill="url(#iconGradient)"/>
+
+  <!-- Navigation path -->
+  <path d="M 32 32 L 22 48 L 16 56" stroke="#10b981" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+
+  <!-- Result node -->
+  <circle cx="16" cy="56" r="3" fill="#10b981"/>
+
+  <!-- Branch hints -->
+  <circle cx="12" cy="12" r="4" fill="#60a5fa"/>
+  <circle cx="52" cy="12" r="4" fill="#60a5fa"/>
+</svg>

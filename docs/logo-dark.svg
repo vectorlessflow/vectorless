@@ -1,0 +1,42 @@
+<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="darkGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#60a5fa"/>
+      <stop offset="100%" style="stop-color:#3b82f6"/>
+    </linearGradient>
+    <linearGradient id="darkPathGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#34d399"/>
+      <stop offset="100%" style="stop-color:#10b981"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Dark background -->
+  <rect width="200" height="200" rx="24" fill="#0f172a"/>
+
+  <!-- V shape with tree structure -->
+  <path d="M 40 50 L 100 100 L 160 50" stroke="url(#darkGradient)" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+
+  <!-- Root node -->
+  <circle cx="100" cy="100" r="10" fill="url(#darkGradient)"/>
+
+  <!-- Navigation path -->
+  <path d="M 100 100 L 70 130 L 50 160"
+        stroke="url(#darkPathGradient)"
+        stroke-width="4"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        fill="none"/>
+
+  <!-- Result node -->
+  <circle cx="50" cy="160" r="6" fill="url(#darkPathGradient)"/>
+
+  <!-- Branch nodes -->
+  <circle cx="40" cy="50" r="8" fill="#93c5fd"/>
+  <circle cx="160" cy="50" r="8" fill="#93c5fd"/>
+
+  <!-- Small branch hints -->
+  <line x1="70" y1="75" x2="55" y2="65" stroke="#93c5fd" stroke-width="2" stroke-linecap="round"/>
+  <line x1="130" y1="75" x2="145" y2="65" stroke="#93c5fd" stroke-width="2" stroke-linecap="round"/>
+  <circle cx="55" cy="65" r="3" fill="#93c5fd"/>
+  <circle cx="145" cy="65" r="3" fill="#93c5fd"/>
+</svg>
