@@ -1,0 +1,70 @@
+<svg viewBox="0 0 800 400" xmlns="http://www.w3.org/2000/svg" font-family="system-ui, -apple-system, sans-serif">
+  <!-- Document Tree -->
+  <rect x="20" y="20" width="280" height="360" rx="8" fill="#f8fafc" stroke="#e2e8f0" stroke-width="2"/>
+  <text x="30" y="50" font-size="14" font-weight="600" fill="#1e293b">Document Tree</text>
+
+  <!-- Root -->
+  <rect x="40" y="70" width="240" height="32" rx="4" fill="#3b82f6"/>
+  <text x="50" y="91" font-size="12" fill="white">Root: Technical Manual</text>
+
+  <!-- Level 1 nodes -->
+  <rect x="60" y="115" width="200" height="28" rx="4" fill="#60a5fa"/>
+  <text x="70" y="134" font-size="11" fill="white">Chapter 1: Introduction</text>
+
+  <rect x="60" y="150" width="200" height="28" rx="4" fill="#60a5fa"/>
+  <text x="70" y="169" font-size="11" fill="white">Chapter 2: Architecture</text>
+
+  <!-- Level 2 nodes -->
+  <rect x="80" y="190" width="160" height="24" rx="4" fill="#93c5fd"/>
+  <text x="90" y="207" font-size="10" fill="#1e40af">2.1 System Design</text>
+
+  <rect x="80" y="220" width="160" height="24" rx="4" fill="#93c5fd"/>
+  <text x="90" y="237" font-size="10" fill="#1e40af">2.2 Implementation</text>
+
+  <rect x="60" y="255" width="200" height="28" rx="4" fill="#60a5fa"/>
+  <text x="70" y="274" font-size="11" fill="white">Chapter 3: API Reference</text>
+
+  <!-- Token counts -->
+  <text x="240" y="207" font-size="9" fill="#64748b">300 tok</text>
+  <text x="240" y="237" font-size="9" fill="#64748b">450 tok</text>
+
+  <!-- Arrow -->
+  <path d="M 320 200 L 380 200" stroke="#3b82f6" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="335" y="190" font-size="10" fill="#64748b">Query</text>
+
+  <!-- LLM Navigator -->
+  <rect x="400" y="80" width="180" height="240" rx="8" fill="#1e293b"/>
+  <text x="420" y="110" font-size="14" font-weight="600" fill="white">LLM Navigator</text>
+
+  <rect x="420" y="130" width="140" height="40" rx="4" fill="#374151"/>
+  <text x="430" y="148" font-size="10" fill="#9ca3af">Step 1:</text>
+  <text x="430" y="162" font-size="10" fill="white">"Which chapter?"</text>
+
+  <rect x="420" y="180" width="140" height="40" rx="4" fill="#374151"/>
+  <text x="430" y="198" font-size="10" fill="#9ca3af">Step 2:</text>
+  <text x="430" y="212" font-size="10" fill="white">"Which section?"</text>
+
+  <rect x="420" y="230" width="140" height="40" rx="4" fill="#059669"/>
+  <text x="430" y="248" font-size="10" fill="#a7f3d0">Step 3:</text>
+  <text x="430" y="262" font-size="10" fill="white">Return content</text>
+
+  <!-- Arrow to result -->
+  <path d="M 580 200 L 620 200" stroke="#059669" stroke-width="2" marker-end="url(#arrow-green)"/>
+
+  <!-- Result -->
+  <rect x="640" y="140" width="140" height="120" rx="8" fill="#f0fdf4" stroke="#86efac" stroke-width="2"/>
+  <text x="660" y="170" font-size="12" font-weight="600" fill="#166534">Result</text>
+  <text x="660" y="195" font-size="10" fill="#15803d">Section 2.1</text>
+  <text x="660" y="210" font-size="10" fill="#15803d">System Design</text>
+  <text x="660" y="235" font-size="9" fill="#64748b">+ context</text>
+
+  <!-- Arrow markers -->
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L9,3 z" fill="#3b82f6"/>
+    </marker>
+    <marker id="arrow-green" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L9,3 z" fill="#059669"/>
+    </marker>
+  </defs>
+</svg>
