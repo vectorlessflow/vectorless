@@ -101,18 +101,12 @@ pub async fn summarize(
         .build()
         .map_err(|e| LlmError::Request(e.to_string()))?;
 
-    println!("LLM request: {:?}", request);
-
     let response = client.chat().create(request).await?;
-    println!("response: {:?}", response);
-
     let content = response
         .choices
         .first()
         .map(|choice| choice.message.content.clone())
         .unwrap_or_default();
-
-    println!("LLM response: {:?}", content);
 
     content.ok_or_else(|| LlmError::Api("LLM returned no content".to_string()))
 }

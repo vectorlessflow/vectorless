@@ -3,7 +3,7 @@
 [![Crates.io](https://img.shields.io/crates/v/vectorless.svg)](https://crates.io/crates/vectorless)
 [![Documentation](https://docs.rs/vectorless/badge.svg)](https://docs.rs/vectorless)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![Rust](https://img.shields.io/badge/rust-1.75%2B-orange.svg)](https://www.rust-lang.org/)
+[![Rust](https://img.shields.io/badge/rust-1.85%2B-orange.svg)](https://www.rust-lang.org/)
 
 A hierarchical, reasoning-native document intelligence engine.
 
