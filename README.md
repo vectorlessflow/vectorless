@@ -1,4 +1,3 @@
-# Vectorless
 
 ![Vectorless](docs/logo-horizontal.svg)
 
