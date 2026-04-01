@@ -76,3 +76,31 @@ enabled = true
 
 # Enable semaphore-based concurrency limiting
 semaphore_enabled = true
+
+[fallback]
+# Enable graceful degradation when LLM calls fail
+enabled = true
+
+# Fallback models in priority order
+# When primary model fails, system tries these in order
+models = ["gpt-4o-mini", "glm-4-flash"]
+
+# Fallback endpoints (optional)
+# When primary endpoint fails, system tries these in order
+# endpoints = [
+#     "https://api.openai.com/v1",
+#     "https://api.z.ai/api/paas/v4"
+# ]
+
+# Behavior on rate limit error (429)
+# Options: retry, fallback, retry_then_fallback, fail
+on_rate_limit = "retry_then_fallback"
+
+# Behavior on timeout error
+# Options: retry, fallback, retry_then_fallback, fail
+on_timeout = "retry_then_fallback"
+
+# Behavior when all attempts fail
+# Options: return_error, return_cache, return_default
+# return_default requires a value field
+on_all_failed = "return_error"

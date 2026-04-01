@@ -28,6 +28,10 @@ pub struct Config {
     /// Concurrency control configuration.
     #[serde(default)]
     pub concurrency: ConcurrencyConfig,
+
+    /// Fallback/error recovery configuration.
+    #[serde(default)]
+    pub fallback: FallbackConfig,
 }
 
 impl Default for Config {
@@ -38,6 +42,7 @@ impl Default for Config {
             retrieval: RetrievalConfig::default(),
             storage: StorageConfig::default(),
             concurrency: ConcurrencyConfig::default(),
+            fallback: FallbackConfig::default(),
         }
     }
 }
@@ -439,5 +444,128 @@ impl ConcurrencyConfig {
 impl From<ConcurrencyConfig> for crate::concurrency::ConcurrencyConfig {
     fn from(config: ConcurrencyConfig) -> Self {
         config.to_runtime_config()
+    }
+}
+
+/// Fallback behavior when encountering errors.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FallbackBehavior {
+    /// Only retry with the same model/endpoint.
+    Retry,
+    /// Immediately switch to fallback model/endpoint.
+    Fallback,
+    /// Retry first, then fallback if still failing.
+    RetryThenFallback,
+    /// Fail immediately without retry or fallback.
+    Fail,
+}
+
+impl Default for FallbackBehavior {
+    fn default() -> Self {
+        Self::RetryThenFallback
+    }
+}
+
+/// Behavior when all fallback attempts fail.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum OnAllFailedBehavior {
+    /// Return the error to the caller.
+    ReturnError,
+    /// Try to return cached result if available.
+    ReturnCache,
+    /// Return a default value.
+    ReturnDefault { value: String },
+}
+
+impl Default for OnAllFailedBehavior {
+    fn default() -> Self {
+        Self::ReturnError
+    }
+}
+
+/// Fallback configuration for error recovery.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FallbackConfig {
+    /// Whether fallback is enabled.
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+
+    /// Fallback models in priority order.
+    /// Example: ["gpt-4o", "gpt-4o-mini", "glm-4-flash"]
+    #[serde(default)]
+    pub models: Vec<String>,
+
+    /// Fallback endpoints in priority order.
+    /// Example: ["https://api.openai.com/v1", "https://api.z.ai/api/paas/v4"]
+    #[serde(default)]
+    pub endpoints: Vec<String>,
+
+    /// Behavior on rate limit error (429).
+    #[serde(default)]
+    pub on_rate_limit: FallbackBehavior,
+
+    /// Behavior on timeout error.
+    #[serde(default)]
+    pub on_timeout: FallbackBehavior,
+
+    /// Behavior when all attempts fail.
+    #[serde(default)]
+    pub on_all_failed: OnAllFailedBehavior,
+}
+
+impl Default for FallbackConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            models: vec![
+                "gpt-4o-mini".to_string(),
+                "glm-4-flash".to_string(),
+            ],
+            endpoints: vec![],
+            on_rate_limit: FallbackBehavior::RetryThenFallback,
+            on_timeout: FallbackBehavior::RetryThenFallback,
+            on_all_failed: OnAllFailedBehavior::ReturnError,
+        }
+    }
+}
+
+impl FallbackConfig {
+    /// Create a new fallback config with defaults.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Disable fallback entirely.
+    pub fn disabled() -> Self {
+        Self {
+            enabled: false,
+            ..Self::default()
+        }
+    }
+
+    /// Set fallback models.
+    pub fn with_models(mut self, models: Vec<String>) -> Self {
+        self.models = models;
+        self
+    }
+
+    /// Set fallback endpoints.
+    pub fn with_endpoints(mut self, endpoints: Vec<String>) -> Self {
+        self.endpoints = endpoints;
+        self
+    }
+
+    /// Set behavior on rate limit.
+    pub fn with_on_rate_limit(mut self, behavior: FallbackBehavior) -> Self {
+        self.on_rate_limit = behavior;
+        self
+    }
+
+    /// Set behavior on timeout.
+    pub fn with_on_timeout(mut self, behavior: FallbackBehavior) -> Self {
+        self.on_timeout = behavior;
+        self
     }
 }

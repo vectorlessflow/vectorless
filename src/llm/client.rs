@@ -19,6 +19,7 @@ use tracing::{debug, instrument};
 
 use super::config::LlmConfig;
 use super::error::{LlmError, LlmResult};
+use super::fallback::FallbackChain;
 use super::retry::with_retry;
 use crate::concurrency::ConcurrencyController;
 
@@ -30,6 +31,7 @@ use crate::concurrency::ConcurrencyController;
 /// - Rate limiting and concurrency control
 /// - JSON response parsing
 /// - Error classification
+/// - Graceful fallback on errors
 ///
 /// # Example
 ///
@@ -61,6 +63,7 @@ use crate::concurrency::ConcurrencyController;
 pub struct LlmClient {
     config: LlmConfig,
     concurrency: Option<Arc<ConcurrencyController>>,
+    fallback: Option<Arc<FallbackChain>>,
 }
 
 impl std::fmt::Debug for LlmClient {
@@ -69,6 +72,7 @@ impl std::fmt::Debug for LlmClient {
             .field("model", &self.config.model)
             .field("endpoint", &self.config.endpoint)
             .field("concurrency", &self.concurrency.as_ref().map(|c| format!("{:?}", c)))
+            .field("fallback_enabled", &self.fallback.is_some())
             .finish()
     }
 }
@@ -76,7 +80,11 @@ impl std::fmt::Debug for LlmClient {
 impl LlmClient {
     /// Create a new LLM client with the given configuration.
     pub fn new(config: LlmConfig) -> Self {
-        Self { config, concurrency: None }
+        Self {
+            config,
+            concurrency: None,
+            fallback: None,
+        }
     }
 
     /// Create a client with default configuration.
@@ -115,6 +123,30 @@ impl LlmClient {
         self
     }
 
+    /// Add fallback chain for error recovery.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use vectorless::llm::{LlmClient, FallbackChain, FallbackConfig};
+    ///
+    /// let fallback = FallbackConfig::default();
+    /// let client = LlmClient::for_model("gpt-4o")
+    ///     .with_fallback(FallbackChain::new(fallback));
+    ///
+    /// assert!(client.fallback().is_some());
+    /// ```
+    pub fn with_fallback(mut self, chain: FallbackChain) -> Self {
+        self.fallback = Some(Arc::new(chain));
+        self
+    }
+
+    /// Add fallback chain from an existing Arc.
+    pub fn with_shared_fallback(mut self, chain: Arc<FallbackChain>) -> Self {
+        self.fallback = Some(chain);
+        self
+    }
+
     /// Get the configuration.
     pub fn config(&self) -> &LlmConfig {
         &self.config
@@ -123,6 +155,11 @@ impl LlmClient {
     /// Get the concurrency controller (if any).
     pub fn concurrency(&self) -> Option<&ConcurrencyController> {
         self.concurrency.as_deref()
+    }
+
+    /// Get the fallback chain (if any).
+    pub fn fallback(&self) -> Option<&FallbackChain> {
+        self.fallback.as_deref()
     }
 
     /// Complete a prompt with system and user messages.

@@ -213,10 +213,26 @@ fn merge_config(base: Config, other: Config) -> Config {
             enabled: other.concurrency.enabled,
             semaphore_enabled: other.concurrency.semaphore_enabled,
         },
+        fallback: FallbackConfig {
+            enabled: other.fallback.enabled,
+            models: if !other.fallback.models.is_empty() {
+                other.fallback.models.clone()
+            } else {
+                base.fallback.models.clone()
+            },
+            endpoints: if !other.fallback.endpoints.is_empty() {
+                other.fallback.endpoints.clone()
+            } else {
+                base.fallback.endpoints.clone()
+            },
+            on_rate_limit: other.fallback.on_rate_limit,
+            on_timeout: other.fallback.on_timeout,
+            on_all_failed: other.fallback.on_all_failed,
+        },
     }
 }
 
-use super::types::{IndexerConfig, SummaryConfig, RetrievalConfig, StorageConfig, ConcurrencyConfig};
+use super::types::{IndexerConfig, SummaryConfig, RetrievalConfig, StorageConfig, ConcurrencyConfig, FallbackConfig};
 use super::types::{
     default_subsection_threshold, default_max_segment_tokens, default_max_summary_tokens,
     default_summary_model, default_summary_endpoint, default_summary_max_tokens, default_temperature,

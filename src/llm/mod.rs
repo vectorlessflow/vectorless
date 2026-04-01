@@ -68,8 +68,10 @@ mod config;
 mod retry;
 mod client;
 mod pool;
+mod fallback;
 
 pub use error::{LlmError, LlmResult};
 pub use config::{LlmConfig, RetryConfig, LlmConfigs};
 pub use client::LlmClient;
 pub use pool::LlmPool;
+pub use fallback::{FallbackChain, FallbackConfig, FallbackResult, FallbackStep};
