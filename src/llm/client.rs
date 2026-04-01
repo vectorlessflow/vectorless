@@ -173,7 +173,7 @@ impl LlmClient {
                 ChatCompletionRequestSystemMessage::from(system).into(),
                 ChatCompletionRequestUserMessage::from(truncated).into(),
             ])
-            .max_tokens(self.config.max_tokens as u16)
+            // .max_tokens(self.config.max_tokens as u16)
             .temperature(self.config.temperature)
             .build()
             .map_err(|e| LlmError::Request(format!("Failed to build request: {}", e)))?;
