@@ -36,5 +36,5 @@ pub use crate::config::IndexerConfig;
 // Re-export main types
 pub use incremental::{IncrementalIndexer, DiffResult, diff_trees};
 pub use merger::{merge_adjacent_small_nodes, merge_children_into_parent};
-pub use thinner::{thin_tree, subtree_token_count};
+pub use thinner::{ThinningConfig, ThinningConfigBuilder, calculate_total_tokens, thin_raw_nodes, thin_tree, subtree_token_count};
 pub use tree_builder::TreeBuilder;

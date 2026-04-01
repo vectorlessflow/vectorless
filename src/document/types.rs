@@ -59,7 +59,7 @@ pub struct RawNode {
     /// Title or heading of this node.
     pub title: String,
 
-    /// Text content of this node.
+    /// Text content of this node (including all children's content).
     pub content: String,
 
     /// Level in the hierarchy (0 = root, 1 = top-level section, etc.).
@@ -74,8 +74,12 @@ pub struct RawNode {
     /// Page number for PDF documents (1-based).
     pub page: Option<usize>,
 
-    /// Estimated token count for this node.
+    /// Estimated token count for this node's own content.
     pub token_count: Option<usize>,
+
+    /// Total token count including all children (recursive, computed by thinner).
+    #[serde(default)]
+    pub total_token_count: Option<usize>,
 }
 
 impl Default for RawNode {
@@ -88,6 +92,7 @@ impl Default for RawNode {
             line_end: 1,
             page: None,
             token_count: None,
+            total_token_count: None,
         }
     }
 }

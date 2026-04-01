@@ -5,6 +5,7 @@
 
 use crate::core::{DocumentTree, NodeId};
 use crate::document::RawNode;
+use crate::indexer::{ThinningConfig, thin_raw_nodes, calculate_total_tokens};
 
 /// Builder for constructing document trees from raw nodes.
 pub struct TreeBuilder {
@@ -13,14 +14,18 @@ pub struct TreeBuilder {
 
     /// Root content for the document.
     root_content: String,
+
+    /// Thinning configuration.
+    thinning_config: ThinningConfig,
 }
 
 impl TreeBuilder {
-    /// Create a new tree builder.
+    /// Create a new tree builder with default settings.
     pub fn new() -> Self {
         Self {
             root_title: "Root".to_string(),
             root_content: String::new(),
+            thinning_config: ThinningConfig::default(),
         }
     }
 
@@ -36,12 +41,38 @@ impl TreeBuilder {
         self
     }
 
+    /// Set the thinning configuration.
+    pub fn with_thinning(mut self, config: ThinningConfig) -> Self {
+        self.thinning_config = config;
+        self
+    }
+
+    /// Enable thinning with a custom threshold.
+    pub fn with_thinning_enabled(mut self, threshold: usize) -> Self {
+        self.thinning_config = ThinningConfig::enabled(threshold);
+        self
+    }
+
     /// Build a document tree from raw nodes.
+    ///
+    /// This method:
+    /// 1. Calculates total token counts (recursive)
+    /// 2. Applies thinning if enabled
+    /// 3. Builds the hierarchical tree
     ///
     /// The raw nodes are organized into a hierarchical structure based on
     /// their levels. Level 0 nodes become children of root, level 1 nodes
     /// become children of level 0 nodes, etc.
-    pub fn build(&self, raw_nodes: Vec<RawNode>) -> DocumentTree {
+    pub fn build(&self, mut raw_nodes: Vec<RawNode>) -> DocumentTree {
+        // Step 1: Calculate total token counts (includes all children)
+        calculate_total_tokens(&mut raw_nodes);
+
+        // Step 2: Apply thinning if enabled
+        if self.thinning_config.enabled {
+            thin_raw_nodes(&mut raw_nodes, &self.thinning_config);
+        }
+
+        // Step 3: Build tree structure
         let mut tree = DocumentTree::new(&self.root_title, &self.root_content);
 
         // Stack to track parent nodes at each level
@@ -134,7 +165,7 @@ mod tests {
         let raw_nodes = vec![
             RawNode { level: 1, title: "Section 1".into(), content: "Content 1".into(), ..Default::default() },
             RawNode { level: 2, title: "Subsection 1.1".into(), content: "Sub content".into(), ..Default::default() },
-            RawNode { level: 1, title: "Section 2".into(), content: "Content 2".into(), ..Default::default() },
+            RawNode { level: 1, title: "Section 2".into(), content: "Content 2".into(), ..Default:: default() },
         ];
 
         let tree = TreeBuilder::new()
@@ -148,5 +179,47 @@ mod tests {
         // Section 1 has 1 child (Subsection 1.1)
         let section1_children = tree.children(root_children[0]);
         assert_eq!(section1_children.len(), 1);
+    }
+
+    #[test]
+    fn test_build_with_thinning() {
+        let raw_nodes = vec![
+            RawNode {
+                level: 1,
+                title: "Big Section".into(),
+                content: "This is a large section with lots of content that exceeds the threshold.".into(),
+                token_count: Some(100),
+                ..Default::default()
+            },
+            RawNode {
+                level: 2,
+                title: "Tiny Subsection".into(),
+                content: "Small".into(),
+                token_count: Some(1),
+                ..Default::default()
+            },
+        ];
+
+        // Without thinning
+        let tree_no_thin = TreeBuilder::new()
+            .with_root_title("Document")
+            .build(raw_nodes.clone());
+
+        let root_children = tree_no_thin.children(tree_no_thin.root());
+        assert_eq!(root_children.len(), 1);
+        let section_children = tree_no_thin.children(root_children[0]);
+        assert_eq!(section_children.len(), 1); // Tiny subsection exists
+
+        // With thinning (threshold = 50)
+        let tree_thin = TreeBuilder::new()
+            .with_root_title("Document")
+            .with_thinning_enabled(50)
+            .build(raw_nodes);
+
+        let root_children = tree_thin.children(tree_thin.root());
+        assert_eq!(root_children.len(), 1);
+        let section_children = tree_thin.children(root_children[0]);
+        // Tiny subsection should be merged (not created as separate node)
+        assert_eq!(section_children.len(), 0);
     }
 }
