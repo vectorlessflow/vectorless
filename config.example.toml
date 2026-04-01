@@ -61,3 +61,18 @@ temperature = 0.0
 # ├── {doc_id_1}.json      # Document 1
 # └── {doc_id_2}.json      # Document 2
 workspace_dir = "./workspace"
+
+[concurrency]
+# Maximum concurrent LLM API calls
+# This limits how many requests can be in-flight at the same time
+max_concurrent_requests = 10
+
+# Rate limit: requests per minute
+# This is a soft limit using token bucket algorithm
+requests_per_minute = 500
+
+# Enable rate limiting (token bucket)
+enabled = true
+
+# Enable semaphore-based concurrency limiting
+semaphore_enabled = true

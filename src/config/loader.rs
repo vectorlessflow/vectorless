@@ -199,15 +199,29 @@ fn merge_config(base: Config, other: Config) -> Config {
                 base.storage.workspace_dir
             },
         },
+        concurrency: ConcurrencyConfig {
+            max_concurrent_requests: if other.concurrency.max_concurrent_requests != default_max_concurrent_requests() {
+                other.concurrency.max_concurrent_requests
+            } else {
+                base.concurrency.max_concurrent_requests
+            },
+            requests_per_minute: if other.concurrency.requests_per_minute != default_requests_per_minute() {
+                other.concurrency.requests_per_minute
+            } else {
+                base.concurrency.requests_per_minute
+            },
+            enabled: other.concurrency.enabled,
+            semaphore_enabled: other.concurrency.semaphore_enabled,
+        },
     }
 }
 
-use super::types::{IndexerConfig, SummaryConfig, RetrievalConfig, StorageConfig};
+use super::types::{IndexerConfig, SummaryConfig, RetrievalConfig, StorageConfig, ConcurrencyConfig};
 use super::types::{
     default_subsection_threshold, default_max_segment_tokens, default_max_summary_tokens,
     default_summary_model, default_summary_endpoint, default_summary_max_tokens, default_temperature,
     default_retrieval_model, default_retrieval_endpoint, default_retrieval_max_tokens, default_top_k,
-    default_workspace_dir,
+    default_workspace_dir, default_max_concurrent_requests, default_requests_per_minute,
 };
 
 /// Apply environment variable overrides to the configuration.
@@ -260,8 +274,13 @@ mod tests {
     fn test_default_config() {
         let config = Config::default();
         assert_eq!(config.indexer.subsection_threshold, 300);
-        assert_eq!(config.summary.model, "glm-5-flash");
+        assert_eq!(config.summary.model, "glm-5");
         assert_eq!(config.retrieval.model, "glm-5");
+        // Test concurrency defaults
+        assert_eq!(config.concurrency.max_concurrent_requests, 10);
+        assert_eq!(config.concurrency.requests_per_minute, 500);
+        assert!(config.concurrency.enabled);
+        assert!(config.concurrency.semaphore_enabled);
     }
 
     #[test]
