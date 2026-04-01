@@ -62,6 +62,7 @@ pub mod client;
 pub mod retriever;
 pub mod registry;
 pub mod ranking;
+pub mod token;
 
 // Re-exports for convenience
 pub use core::{DocumentTree, DocumentStructure, NodeId, StructureNode, TreeNode, Error, Result, Retriever};
@@ -76,3 +77,4 @@ pub use client::{Vectorless, VectorlessBuilder, IndexedDocument, DocumentInfo};
 pub use retriever::{LlmNavigator, RetrieveOptions, RetrievalResult, ContextBuilder};
 pub use registry::{ParserRegistry, SummarizerRegistry, RetrieverRegistry};
 pub use ranking::{Scorer, Merger, ScoredResult, ScoringStrategy, MergeStrategy};
+pub use token::{estimate_tokens, estimate_tokens_fast};

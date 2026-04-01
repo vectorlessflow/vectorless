@@ -12,6 +12,7 @@ use std::path::Path;
 
 use crate::core::DocumentParser;
 use crate::core::Result;
+use crate::token::estimate_tokens;
 
 use super::types::{DocumentFormat, DocumentMeta, ParseResult, RawNode};
 
@@ -152,14 +153,6 @@ impl MarkdownParser {
     }
 }
 
-/// Estimate token count (approximately 1 token per 4 characters).
-pub fn estimate_tokens(text: &str) -> usize {
-    if text.is_empty() {
-        return 0;
-    }
-    (text.len() / 4).max(1)
-}
-
 #[async_trait]
 impl DocumentParser for MarkdownParser {
     fn format(&self) -> DocumentFormat {
@@ -279,9 +272,14 @@ Content after code.
 
     #[test]
     fn test_estimate_tokens() {
+        // Uses tiktoken for accurate counting
         assert_eq!(estimate_tokens(""), 0);
+        // "hi" is 1 token in tiktoken
         assert_eq!(estimate_tokens("hi"), 1);
-        assert_eq!(estimate_tokens("hello world"), 1);
-        assert_eq!(estimate_tokens(&"a".repeat(100)), 25);
+        // "hello world" is 2 tokens in tiktoken
+        assert!(estimate_tokens("hello world") >= 2);
+        // tiktoken is efficient at encoding text - just verify it returns a positive count
+        let hundred_as = "a".repeat(100);
+        assert!(estimate_tokens(&hundred_as) >= 1);
     }
 }

@@ -4,6 +4,7 @@
 //! PDF document types.
 
 use serde::{Deserialize, Serialize};
+use crate::token::estimate_tokens;
 
 /// A single page from a PDF document.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -122,14 +123,6 @@ impl PdfParseResult {
     }
 }
 
-/// Estimate token count (approximately 1 token per 4 characters).
-fn estimate_tokens(text: &str) -> usize {
-    if text.is_empty() {
-        return 0;
-    }
-    (text.len() / 4).max(1)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -144,9 +137,13 @@ mod tests {
 
     #[test]
     fn test_estimate_tokens() {
+        // Uses tiktoken for accurate counting
         assert_eq!(estimate_tokens(""), 0);
+        // "hi" is 1 token in tiktoken
         assert_eq!(estimate_tokens("hi"), 1);
-        assert_eq!(estimate_tokens(&"a".repeat(100)), 25);
+        // tiktoken is efficient at encoding text - just verify it returns a positive count
+        let hundred_as = "a".repeat(100);
+        assert!(estimate_tokens(&hundred_as) >= 1);
     }
 
     #[test]

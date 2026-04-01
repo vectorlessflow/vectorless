@@ -315,6 +315,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "requires OPENAI_API_KEY environment variable"]
     fn test_no_toc() {
         let detector = TocDetector::with_defaults();
 
