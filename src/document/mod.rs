@@ -46,8 +46,7 @@ pub mod pdf;
 // TOC processing module
 pub mod toc;
 
-// Placeholder modules for future implementations
-mod html;
+// DOCX parsing module
 mod docx;
 
 // Re-export main types
