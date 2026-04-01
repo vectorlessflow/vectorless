@@ -4,7 +4,7 @@
 //! Storage module for persisting document indices.
 //!
 //! This module provides:
-//! - **Workspace** — A directory-based document collection manager
+//! - **Workspace** — A directory-based document collection manager with LRU cache
 //! - **Persistence** — Save/load document trees and metadata
 //!
 //! # Example
@@ -22,7 +22,7 @@
 //! let doc = PersistedDocument::new(meta, tree);
 //! workspace.add(&doc)?;
 //!
-//! // Load it back
+//! // Load it back (uses LRU cache)
 //! let loaded = workspace.load("doc-1")?.unwrap();
 //! ```
 
@@ -40,4 +40,4 @@ pub use persistence::{
     load_index,
 };
 
-pub use workspace::Workspace;
+pub use workspace::{Workspace, DocumentMetaEntry};

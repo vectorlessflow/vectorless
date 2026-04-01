@@ -193,15 +193,10 @@ fn merge_config(base: Config, other: Config) -> Config {
             retriever_type: other.retrieval.retriever_type,
         },
         storage: StorageConfig {
-            data_dir: if other.storage.data_dir != default_data_dir() {
-                other.storage.data_dir
+            workspace_dir: if other.storage.workspace_dir != default_workspace_dir() {
+                other.storage.workspace_dir
             } else {
-                base.storage.data_dir
-            },
-            index_dir: if other.storage.index_dir != default_index_dir() {
-                other.storage.index_dir
-            } else {
-                base.storage.index_dir
+                base.storage.workspace_dir
             },
         },
     }
@@ -212,7 +207,7 @@ use super::types::{
     default_subsection_threshold, default_max_segment_tokens, default_max_summary_tokens,
     default_summary_model, default_summary_endpoint, default_summary_max_tokens, default_temperature,
     default_retrieval_model, default_retrieval_endpoint, default_retrieval_max_tokens, default_top_k,
-    default_data_dir, default_index_dir,
+    default_workspace_dir,
 };
 
 /// Apply environment variable overrides to the configuration.
@@ -240,11 +235,8 @@ fn apply_env_overrides(mut config: Config, prefix: &str) -> Config {
     }
 
     // Storage overrides
-    if let Ok(data_dir) = std::env::var(format!("{}_DATA_DIR", prefix)) {
-        config.storage.data_dir = PathBuf::from(data_dir);
-    }
-    if let Ok(index_dir) = std::env::var(format!("{}_INDEX_DIR", prefix)) {
-        config.storage.index_dir = PathBuf::from(index_dir);
+    if let Ok(workspace_dir) = std::env::var(format!("{}_WORKSPACE_DIR", prefix)) {
+        config.storage.workspace_dir = PathBuf::from(workspace_dir);
     }
 
     // Common API key fallback

@@ -71,7 +71,7 @@ impl DocumentMeta {
 }
 
 /// A persisted document index containing tree and metadata.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PersistedDocument {
     /// Document metadata.
     pub meta: DocumentMeta,

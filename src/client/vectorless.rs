@@ -437,7 +437,7 @@ impl Vectorless {
 
     /// Load a document from the workspace.
     pub fn load(&mut self, doc_id: &str) -> Result<bool> {
-        let workspace = self.workspace.as_ref()
+        let workspace = self.workspace.as_mut()
             .ok_or_else(|| Error::Parse("No workspace configured".to_string()))?;
 
         if !workspace.contains(doc_id) {

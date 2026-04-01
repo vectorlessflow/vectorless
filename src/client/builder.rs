@@ -139,12 +139,16 @@ impl VectorlessBuilder {
             None
         };
 
+        // Initialize retriever registry and set default from config
+        let retriever_registry = RetrieverRegistry::with_defaults();
+        retriever_registry.set_default(config.retrieval.retriever_type);
+
         Ok(Vectorless {
             config,
             workspace,
             documents: std::collections::HashMap::new(),
             parser_registry: ParserRegistry::with_defaults(),
-            retriever_registry: RetrieverRegistry::with_defaults(),
+            retriever_registry,
             summarizer_registry: SummarizerRegistry::default(),
         })
     }

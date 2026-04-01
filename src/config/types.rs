@@ -244,28 +244,27 @@ impl Default for RetrievalConfig {
 /// Storage configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StorageConfig {
-    /// Data directory for cached documents.
-    #[serde(default = "default_data_dir")]
-    pub data_dir: PathBuf,
-
-    /// Index directory for saved indices.
-    #[serde(default = "default_index_dir")]
-    pub index_dir: PathBuf,
+    /// Workspace directory for persisted documents.
+    ///
+    /// Structure:
+    /// ```text
+    /// workspace/
+    /// ├── _meta.json           # Lightweight index
+    /// ├── {doc_id_1}.json      # Document 1
+    /// └── {doc_id_2}.json      # Document 2
+    /// ```
+    #[serde(default = "default_workspace_dir")]
+    pub workspace_dir: PathBuf,
 }
 
-pub fn default_data_dir() -> PathBuf {
-    PathBuf::from("./data")
-}
-
-pub fn default_index_dir() -> PathBuf {
-    PathBuf::from("./indices")
+pub fn default_workspace_dir() -> PathBuf {
+    PathBuf::from("./workspace")
 }
 
 impl Default for StorageConfig {
     fn default() -> Self {
         Self {
-            data_dir: default_data_dir(),
-            index_dir: default_index_dir(),
+            workspace_dir: default_workspace_dir(),
         }
     }
 }
