@@ -21,6 +21,15 @@ A hierarchical, reasoning-native document intelligence engine.
 
 ## Quick Start
 
+* Add to `Cargo.toml`:
+
+```toml
+[dependencies]
+vectorless = "0.1"
+```
+
+* Create `vectorless.toml` in your project root (auto-detected):
+
 ```rust
 use vectorless::client::{Vectorless, VectorlessBuilder};
 
@@ -40,37 +49,6 @@ async fn main() -> vectorless::core::Result<()> {
 
     Ok(())
 }
-```
-
-## Configuration
-
-Create `vectorless.toml` in your project root (auto-detected):
-
-## Installation
-
-Add to `Cargo.toml`:
-
-```toml
-[dependencies]
-vectorless = "0.1"
-```
-
-## API Overview
-
-```rust
-// Indexing
-let doc_id = client.index("./doc.pdf").await?;
-let doc_id = client.index("./notes.md").await?;
-
-// Query
-let result = client.query(&doc_id, "question").await?;
-println!("Score: {}", result.score);
-println!("Nodes: {:?}", result.node_ids);
-
-// Document management
-let docs = client.list_documents();
-let tree = client.get_structure(&doc_id)?;
-client.remove(&doc_id)?;
 ```
 
 ## Contributing

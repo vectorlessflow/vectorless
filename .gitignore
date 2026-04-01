@@ -48,4 +48,6 @@ coverage/
 
 # Misc
 config.toml
-
+vectorless.toml
+config.toml
+.vectorless.toml
