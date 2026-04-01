@@ -1,20 +1,20 @@
 [package]
 name = "vectorless"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 authors = ["zTgx <beautifularea@gmail.com>"]
-description = "Hierarchical, Reasoning-Native Document Intelligence Engine"
+description = "Hierarchical, reasoning-native document intelligence engine"
 license = "Apache-2.0"
-repository = "https://github.com/zTgx/vectorless"
+repository = "https://github.com/vectorlessflow/vectorless"
 keywords = ["rag", "document", "retrieval", "indexing", "llm"]
 categories = ["text-processing", "data-structures", "algorithms"]
 readme = "README.md"
+exclude = ["samples/", "docs/"]
 
 [dependencies]
 # Async runtime
 tokio = { version = "1", features = ["full"] }
 async-trait = "0.1"
-futures = "0.3"
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
@@ -23,12 +23,8 @@ toml = "0.8"
 
 # Error handling
 thiserror = "2"
-anyhow = "1.0"
 
-# HTTP client (for LLM API calls)
-reqwest = { version = "0.12", features = ["json"] }
-
-# OpenAI client
+# OpenAI-compatible API client
 async-openai = { version = "0.34", features = ["chat-completion"]}
 
 # UUID
@@ -46,22 +42,12 @@ regex = "1.10"
 # Tree data structure
 indextree = { version = "4.8.0", features = ["deser"] }
 
-# PDF parsing
-pdf-extract = "0.7"
-
-# Markdown parsing
-pulldown-cmark = "0.11"
+# LRU cache
 lru = "0.12"
 
 [dev-dependencies]
-# Testing
 tempfile = "3.10"
-
-# Benchmarking
 criterion = "0.5"
-
-lru = "0.12"
-
 
 [[bench]]
 name = "bench"
