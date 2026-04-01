@@ -58,7 +58,7 @@ impl TocDetector {
     /// Create a new TOC detector.
     pub fn new(config: TocDetectorConfig) -> Self {
         let llm_client = if config.use_llm_fallback {
-            Some(LlmClient::new(config.llm_config.clone()))
+            Some(LlmClient::new(config.llm_config.clone().into()))
         } else {
             None
         };

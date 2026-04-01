@@ -45,7 +45,7 @@ pub struct PageAssigner {
 impl PageAssigner {
     /// Create a new page assigner.
     pub fn new(config: PageAssignerConfig) -> Self {
-        let client = LlmClient::new(config.llm_config.clone());
+        let client = LlmClient::new(config.llm_config.clone().into());
         Self { config, client }
     }
 

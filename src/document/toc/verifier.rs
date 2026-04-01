@@ -45,7 +45,7 @@ pub struct IndexVerifier {
 impl IndexVerifier {
     /// Create a new verifier.
     pub fn new(config: VerifierConfig) -> Self {
-        let client = LlmClient::new(config.llm_config.clone());
+        let client = LlmClient::new(config.llm_config.clone().into());
         Self { config, client }
     }
 

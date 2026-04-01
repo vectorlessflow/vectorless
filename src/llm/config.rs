@@ -310,6 +310,49 @@ impl Default for LlmConfigs {
     }
 }
 
+// ============================================================================
+// Conversion from old config types (for backward compatibility)
+// ============================================================================
+
+impl From<crate::config::LlmConfig> for LlmConfig {
+    fn from(old: crate::config::LlmConfig) -> Self {
+        Self {
+            model: old.model,
+            endpoint: old.endpoint,
+            api_key: old.api_key,
+            max_tokens: old.max_tokens,
+            temperature: old.temperature,
+            retry: RetryConfig::default(),
+        }
+    }
+}
+
+impl From<crate::config::SummaryConfig> for LlmConfig {
+    fn from(old: crate::config::SummaryConfig) -> Self {
+        Self {
+            model: old.model,
+            endpoint: old.endpoint,
+            api_key: old.api_key,
+            max_tokens: old.max_tokens,
+            temperature: old.temperature,
+            retry: RetryConfig::default(),
+        }
+    }
+}
+
+impl From<crate::config::RetrievalConfig> for LlmConfig {
+    fn from(old: crate::config::RetrievalConfig) -> Self {
+        Self {
+            model: old.model,
+            endpoint: old.endpoint,
+            api_key: old.api_key,
+            max_tokens: old.max_tokens,
+            temperature: old.temperature,
+            retry: RetryConfig::default(),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

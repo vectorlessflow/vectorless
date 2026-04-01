@@ -43,7 +43,7 @@ pub struct TocParser {
 impl TocParser {
     /// Create a new TOC parser.
     pub fn new(config: TocParserConfig) -> Self {
-        let client = LlmClient::new(config.llm_config.clone());
+        let client = LlmClient::new(config.llm_config.clone().into());
         Self { config, client }
     }
 

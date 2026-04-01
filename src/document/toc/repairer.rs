@@ -45,7 +45,7 @@ pub struct IndexRepairer {
 impl IndexRepairer {
     /// Create a new repairer.
     pub fn new(config: RepairerConfig) -> Self {
-        let client = LlmClient::new(config.llm_config.clone());
+        let client = LlmClient::new(config.llm_config.clone().into());
         Self { config, client }
     }
 

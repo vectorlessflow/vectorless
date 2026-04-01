@@ -7,7 +7,7 @@
 //! compatibility with existing TOC code.
 
 // Re-export from unified llm module
-pub use crate::llm::{LlmClient, LlmConfig, LlmError, LlmResult};
+pub use crate::llm::LlmClient;
 
 #[cfg(test)]
 mod tests {
