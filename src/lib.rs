@@ -40,6 +40,7 @@
 //! The crate is organized into the following modules:
 //!
 //! - [`core`] — Core types: TreeNode, DocumentTree, NodeId
+//! - [`llm`] — Unified LLM client with retry support
 //! - [`document`] — Document parsing: Markdown, PDF, HTML
 //! - [`indexer`] — Index building: tree construction, thinning, merging
 //! - [`summarizer`] — Summary generation
@@ -50,6 +51,7 @@
 
 pub mod core;
 pub mod config;
+pub mod llm;
 pub mod document;
 pub mod summarizer;
 pub mod indexer;
@@ -62,8 +64,9 @@ pub mod ranking;
 // Re-exports for convenience
 pub use core::{DocumentTree, DocumentStructure, NodeId, StructureNode, TreeNode, Error, Result, Retriever};
 pub use config::{Config, ConfigLoader, SummaryConfig, RetrievalConfig};
+pub use llm::{LlmClient, LlmConfig, LlmConfigs, LlmError, LlmPool, RetryConfig};
 pub use document::{DocumentParser, DocumentFormat, MarkdownParser, RawNode, ParseResult};
-pub use summarizer::{summarize, LlmError};
+pub use summarizer::{summarize};
 pub use indexer::TreeBuilder;
 pub use storage::{Workspace, PersistedDocument, DocumentMeta as StorageDocumentMeta};
 pub use client::{Vectorless, VectorlessBuilder, IndexedDocument, DocumentInfo};

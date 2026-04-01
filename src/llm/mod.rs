@@ -1,0 +1,75 @@
+// Copyright (c) 2026 vectorless developers
+// SPDX-License-Identifier: Apache-2.0
+
+//! Unified LLM client module.
+//!
+//! This module provides a unified interface for all LLM operations across the codebase:
+//! - **Summarization** — Generating document summaries
+//! - **Retrieval** — Document tree navigation
+//! - **TOC Processing** — Table of contents extraction
+//!
+//! # Features
+//!
+//! - Unified configuration with purpose-specific presets
+//! - Automatic retry with exponential backoff
+//! - JSON response parsing
+//! - Unified error handling
+//!
+//! # Architecture
+//!
+//! ```text
+//! ┌─────────────────────────────────────────────────────────────────┐
+//! │                        LlmPool                                   │
+//! │                                                                  │
+//! │   ┌─────────────┐  ┌─────────────┐  ┌─────────────┐            │
+//! │   │   summary   │  │  retrieval  │  │     toc     │            │
+//! │   │  LlmClient  │  │  LlmClient  │  │  LlmClient  │            │
+//! │   └──────┬──────┘  └──────┬──────┘  └──────┬──────┘            │
+//! │          │                │                │                   │
+//! │          └────────────────┼────────────────┘                   │
+//! │                           │                                    │
+//! │                           ▼                                    │
+//! │               ┌─────────────────────┐                          │
+//! │               │   async-openai      │                          │
+//! │               └─────────────────────┘                          │
+//! └─────────────────────────────────────────────────────────────────┘
+//! ```
+//!
+//! # Example
+//!
+//! ```rust,no_run
+//! use vectorless::llm::{LlmPool, LlmConfig, RetryConfig};
+//!
+//! # #[tokio::main]
+//! # async fn main() -> vectorless::llm::LlmResult<()> {
+//! // Create a pool with default configurations
+//! let pool = LlmPool::from_defaults();
+//!
+//! // Use summary client
+//! let summary = pool.summary().complete(
+//!     "You summarize text concisely.",
+//!     "Long text to summarize..."
+//! ).await?;
+//!
+//! // Use retrieval client with JSON output
+//! #[derive(serde::Deserialize)]
+//! struct NavDecision { section: usize }
+//! let decision: NavDecision = pool.retrieval().complete_json(
+//!     "You navigate documents.",
+//!     "Find section about X..."
+//! ).await?;
+//!
+//! # Ok(())
+//! # }
+//! ```
+
+mod error;
+mod config;
+mod retry;
+mod client;
+mod pool;
+
+pub use error::{LlmError, LlmResult};
+pub use config::{LlmConfig, RetryConfig, LlmConfigs};
+pub use client::LlmClient;
+pub use pool::LlmPool;
