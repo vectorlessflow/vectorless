@@ -10,7 +10,7 @@ use crate::config::LlmConfig;
 use crate::core::Result;
 use crate::document::pdf::PdfPage;
 
-use super::llm_client::LlmClient;
+use crate::llm::LlmClient;
 use super::types::{ErrorType, TocEntry, VerificationError, VerificationReport};
 
 /// Verifier configuration.

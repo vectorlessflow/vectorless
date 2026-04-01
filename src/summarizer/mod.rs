@@ -12,4 +12,7 @@ mod llm;
 pub use crate::core::SummarizerConfig;
 
 // Re-export LLM utilities
-pub use llm::{summarize, LlmError};
+pub use llm::summarize;
+
+// Re-export LlmError from unified llm module for backward compatibility
+pub use crate::llm::LlmError;

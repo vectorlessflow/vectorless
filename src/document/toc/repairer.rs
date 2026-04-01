@@ -9,7 +9,7 @@ use crate::config::LlmConfig;
 use crate::core::Result;
 use crate::document::pdf::PdfPage;
 
-use super::llm_client::LlmClient;
+use crate::llm::LlmClient;
 use super::types::{TocEntry, VerificationError, VerificationReport};
 use super::verifier::IndexVerifier;
 

@@ -9,7 +9,7 @@ use tracing::debug;
 use crate::config::LlmConfig;
 use crate::core::Result;
 
-use super::llm_client::LlmClient;
+use crate::llm::LlmClient;
 use super::types::TocDetection;
 use crate::document::pdf::PdfPage;
 

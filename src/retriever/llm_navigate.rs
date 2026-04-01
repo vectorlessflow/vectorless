@@ -10,7 +10,8 @@ use async_trait::async_trait;
 use tracing::{debug, info, warn};
 
 use crate::config::RetrievalConfig;
-use crate::core::{DocumentTree, NodeId, Result, Error, Retriever};
+use crate::core::{DocumentTree, NodeId, Result, Retriever};
+use crate::llm::LlmClient;
 
 use super::{RetrieveOptions, RetrievalResult, NavigationDecision};
 
@@ -22,12 +23,15 @@ use super::{RetrieveOptions, RetrievalResult, NavigationDecision};
 pub struct LlmNavigator {
     /// Retrieval configuration.
     config: RetrievalConfig,
+    /// LLM client.
+    client: LlmClient,
 }
 
 impl LlmNavigator {
     /// Create a new LLM navigator.
     pub fn new(config: RetrievalConfig) -> Self {
-        Self { config }
+        let client = LlmClient::new(config.clone().into());
+        Self { config, client }
     }
 
     /// Create with default configuration.
@@ -204,21 +208,22 @@ impl LlmNavigator {
         }
 
         // Check if API key is configured
-        let api_key = match &self.config.api_key {
-            Some(key) if !key.is_empty() => key,
-            _ => {
-                // Fallback to keyword matching if no API key
-                debug!("No API key configured, using keyword matching");
-                return self.keyword_navigation(query, child_info).await;
-            }
-        };
+        let has_api_key = self.config.api_key.is_some()
+            || std::env::var("OPENAI_API_KEY").is_ok()
+            || std::env::var("ANTHROPIC_API_KEY").is_ok();
+
+        if !has_api_key {
+            // Fallback to keyword matching if no API key
+            debug!("No API key configured, using keyword matching");
+            return self.keyword_navigation(query, child_info).await;
+        }
 
         // Build prompts for LLM
         let system_prompt = self.build_system_prompt();
         let user_prompt = self.build_user_prompt(query, current_title, child_info);
 
-        // Call LLM
-        match self.call_llm(api_key, &system_prompt, &user_prompt).await {
+        // Call LLM using unified client
+        match self.client.complete(&system_prompt, &user_prompt).await {
             Ok(response) => {
                 self.parse_navigation_response(&response, child_info.len())
             }
@@ -267,49 +272,6 @@ Instructions:
             sections,
             child_info.len()
         )
-    }
-
-    /// Call the LLM API with system and user prompts.
-    async fn call_llm(&self, api_key: &str, system_prompt: &str, user_prompt: &str) -> Result<String> {
-        use async_openai::{
-            types::chat::{ChatCompletionRequestSystemMessage, ChatCompletionRequestUserMessage, CreateChatCompletionRequestArgs},
-            Client,
-            config::OpenAIConfig,
-        };
-
-        let openai_config = OpenAIConfig::new()
-            .with_api_key(api_key)
-            .with_api_base(&self.config.endpoint);
-
-        let client = Client::with_config(openai_config);
-        let truncated = if user_prompt.len() > 8000 { &user_prompt[..8000] } else { user_prompt };
-
-        let request = CreateChatCompletionRequestArgs::default()
-            .model(&self.config.model)
-            .messages(
-                [
-                    // System message: define the role and behavior
-                    ChatCompletionRequestSystemMessage::from(system_prompt).into(),
-                    // User message: the actual navigation task
-                    ChatCompletionRequestUserMessage::from(truncated).into(),
-                ]
-            )
-            .max_tokens(10u16)  // We only need a short response
-            .temperature(self.config.temperature)
-            .build()
-            .map_err(|e| Error::Retrieval(format!("Failed to build request: {}", e)))?;
-
-        let response = client.chat().create(request).await
-            .map_err(|e| Error::Retrieval(format!("LLM API error: {}", e)))?;
-
-        let content = response
-            .choices
-            .first()
-            .map(|choice| choice.message.content.clone())
-            .unwrap_or_default();
-
-        debug!("LLM response: {:?}", content);
-        content.ok_or_else(|| Error::Retrieval("LLM returned no content".to_string()))
     }
 
     /// Parse the LLM navigation response.

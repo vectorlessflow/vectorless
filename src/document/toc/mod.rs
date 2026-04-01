@@ -65,7 +65,6 @@
 //! ```
 
 mod types;
-mod llm_client;
 mod detector;
 mod parser;
 mod assigner;
