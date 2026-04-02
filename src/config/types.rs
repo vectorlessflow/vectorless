@@ -47,7 +47,7 @@ impl Default for Config {
     }
 }
 
-// Indexer configuration.
+/// Indexer configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IndexerConfig {
     /// Word count threshold for splitting sections into subsections.
@@ -61,6 +61,10 @@ pub struct IndexerConfig {
     /// Maximum tokens for each summary.
     #[serde(default = "default_max_summary_tokens")]
     pub max_summary_tokens: usize,
+
+    /// Minimum content tokens required to generate a summary.
+    #[serde(default = "default_min_summary_tokens")]
+    pub min_summary_tokens: usize,
 }
 
 /// Default subsection word count threshold.
@@ -78,12 +82,18 @@ pub fn default_max_summary_tokens() -> usize {
     200
 }
 
+/// Default minimum tokens for summary generation.
+pub fn default_min_summary_tokens() -> usize {
+    20
+}
+
 impl Default for IndexerConfig {
     fn default() -> Self {
         Self {
             subsection_threshold: default_subsection_threshold(),
             max_segment_tokens: default_max_segment_tokens(),
             max_summary_tokens: default_max_summary_tokens(),
+            min_summary_tokens: default_min_summary_tokens(),
         }
     }
 }

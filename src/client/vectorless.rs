@@ -126,7 +126,11 @@ impl Vectorless {
             },
             generate_ids: options.generate_ids,
             summary_strategy: if options.generate_summaries {
-                SummaryStrategy::selective(100, true)
+                // Use selective strategy with thresholds from config
+                SummaryStrategy::selective(
+                    self.config.indexer.min_summary_tokens,
+                    false, // branch_only=false - generate for all qualifying nodes
+                )
             } else {
                 SummaryStrategy::none()
             },

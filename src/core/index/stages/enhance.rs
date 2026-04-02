@@ -58,26 +58,37 @@ impl EnhanceStage {
 
         // Skip if no content
         if node.content.is_empty() {
+            eprintln!("[DEBUG] Skipping node '{}' - no content", node.title);
             return Ok(());
         }
 
         // Get token count
         let token_count = node.token_count.unwrap_or(0);
+        let is_leaf = tree.is_leaf(node_id);
+        let should_gen = strategy.should_generate(tree, node_id, token_count);
+
+        eprintln!(
+            "[DEBUG] Node '{}' - tokens: {}, is_leaf: {}, should_generate: {}",
+            node.title, token_count, is_leaf, should_gen
+        );
 
         // Check if we should generate
-        if !strategy.should_generate(tree, node_id, token_count) {
+        if !should_gen {
+            eprintln!("[DEBUG] Skipping node '{}' - strategy check failed", node.title);
             return Ok(());
         }
+
+        eprintln!("[DEBUG] Generating summary for node '{}'...", node.title);
 
         // Generate summary
         match generator.generate(&node.title, &node.content).await {
             Ok(summary) => {
                 tree.set_summary(node_id, &summary);
-                info!("Generated summary for node: {}", node.title);
+                eprintln!("[DEBUG] Generated summary for node: {} ({} chars)", node.title, summary.len());
                 metrics.increment_summaries();
             }
             Err(e) => {
-                warn!("Failed to generate summary for {}: {}", node.title, e);
+                eprintln!("[DEBUG] Failed to generate summary for {}: {}", node.title, e);
                 // Don't fail the stage for a single node failure
             }
         }
@@ -107,7 +118,7 @@ impl IndexStage for EnhanceStage {
 
         // Check if we need summaries
         if !self.needs_summaries(ctx) {
-            info!("Summary generation skipped (strategy: {:?})", ctx.options.summary_strategy);
+            eprintln!("[DEBUG] Summary generation skipped (strategy: {:?})", ctx.options.summary_strategy);
             return Ok(StageResult::success("enhance"));
         }
 
@@ -115,7 +126,7 @@ impl IndexStage for EnhanceStage {
         let llm_client = match &self.llm_client {
             Some(client) => client,
             None => {
-                warn!("No LLM client configured, skipping summary generation");
+                eprintln!("[DEBUG] No LLM client configured, skipping summary generation");
                 return Ok(StageResult::success("enhance"));
             }
         };
@@ -124,10 +135,23 @@ impl IndexStage for EnhanceStage {
         let tree = match ctx.tree.as_mut() {
             Some(t) => t,
             None => {
-                warn!("No tree built, skipping enhance stage");
+                eprintln!("[DEBUG] No tree built, skipping enhance stage");
                 return Ok(StageResult::success("enhance"));
             }
         };
+
+        // Log strategy details
+        let strategy_desc = match &ctx.options.summary_strategy {
+            SummaryStrategy::None => "none".to_string(),
+            SummaryStrategy::Full { config } =>
+                format!("full (max_tokens: {})", config.max_tokens),
+            SummaryStrategy::Selective { min_tokens, branch_only, config } =>
+                format!("selective (min_tokens: {}, branch_only: {}, max_tokens: {})",
+                    min_tokens, branch_only, config.max_tokens),
+            SummaryStrategy::Lazy { persist, config } =>
+                format!("lazy (persist: {}, max_tokens: {})", persist, config.max_tokens),
+        };
+        eprintln!("[DEBUG] Summary strategy: {}", strategy_desc);
 
         // Create summary generator
         let generator = LlmSummaryGenerator::new((*llm_client).as_ref().clone())
@@ -137,7 +161,7 @@ impl IndexStage for EnhanceStage {
         let node_ids: Vec<NodeId> = tree.traverse();
         let total_nodes = node_ids.len();
 
-        info!("Generating summaries for {} nodes", total_nodes);
+        eprintln!("[DEBUG] Processing {} nodes for summary generation", total_nodes);
 
         // Process nodes (with concurrency control)
         let mut generated = 0;

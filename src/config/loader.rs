@@ -8,7 +8,7 @@
 //! - Environment variables
 //! - Programmatic overrides
 
-use super::types::Config;
+use super::types::{Config, default_min_summary_tokens};
 use std::path::{Path, PathBuf};
 use thiserror::Error;
 
@@ -138,6 +138,11 @@ fn merge_config(base: Config, other: Config) -> Config {
                 other.indexer.max_summary_tokens
             } else {
                 base.indexer.max_summary_tokens
+            },
+            min_summary_tokens: if other.indexer.min_summary_tokens != default_min_summary_tokens() {
+                other.indexer.min_summary_tokens
+            } else {
+                base.indexer.min_summary_tokens
             },
         },
         summary: SummaryConfig {

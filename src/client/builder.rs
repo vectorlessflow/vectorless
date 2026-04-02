@@ -140,11 +140,26 @@ impl VectorlessBuilder {
                 .map_err(|e| BuildError::Workspace(e.to_string()))?)
         };
 
+        // Create pipeline executor with LLM client if API key is available
+        let executor = if let Some(api_key) = config.summary.api_key.clone() {
+            // Create LlmConfig from SummaryConfig
+            let llm_config = crate::llm::LlmConfig::new(&config.summary.model)
+                .with_endpoint(config.summary.endpoint.clone())
+                .with_api_key(api_key)
+                .with_max_tokens(config.summary.max_tokens)
+                .with_temperature(config.summary.temperature);
+
+            let llm_client = crate::llm::LlmClient::new(llm_config);
+            crate::core::index::PipelineExecutor::with_llm(llm_client)
+        } else {
+            crate::core::index::PipelineExecutor::new()
+        };
+
         Ok(Vectorless {
             config,
             workspace,
             retriever: crate::core::retriever::AdaptiveRetriever::new(),
-            executor: crate::core::index::PipelineExecutor::new(),
+            executor,
         })
     }
 }
