@@ -163,16 +163,6 @@ impl PartialUpdater {
     pub fn record(&mut self, doc_id: &str, content: &str) {
         self.detector.record(doc_id, content, None);
     }
-
-    /// Hash content.
-    fn hash_content(content: &str) -> u64 {
-        use std::collections::hash_map::DefaultHasher;
-        use std::hash::{Hash, Hasher};
-
-        let mut hasher = DefaultHasher::new();
-        content.hash(&mut hasher);
-        hasher.finish()
-    }
 }
 
 impl Default for PartialUpdater {

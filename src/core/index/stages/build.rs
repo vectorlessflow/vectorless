@@ -229,7 +229,7 @@ impl IndexStage for BuildStage {
         Self::calculate_total_tokens(&mut raw_nodes);
 
         // Step 2: Apply thinning if enabled
-        let original_count = raw_nodes.len();
+        let _original_count = raw_nodes.len();
         let keep = Self::apply_thinning(&raw_nodes, &ctx.options.thinning);
 
         let nodes_before_merge = raw_nodes.len();

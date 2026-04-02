@@ -156,7 +156,6 @@ impl IndexStage for OptimizeStage {
         })?;
 
         let mut merged_count = 0;
-        let mut removed_count = 0;
 
         // 1. Merge small leaves
         if config.merge_leaf_threshold > 0 {
@@ -165,7 +164,7 @@ impl IndexStage for OptimizeStage {
         }
 
         // 2. Remove empty intermediate nodes
-        removed_count = Self::remove_empty_nodes(tree);
+        let removed_count = Self::remove_empty_nodes(tree);
         if removed_count > 0 {
             info!("Marked {} empty intermediate nodes", removed_count);
         }

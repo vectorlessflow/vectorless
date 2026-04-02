@@ -62,6 +62,8 @@ pub struct StageResult {
 impl StageResult {
     /// Create a successful result.
     pub fn success(name: &str) -> Self {
+        println!("Stage '{}' completed successfully", name);
+        
         Self {
             success: true,
             duration_ms: 0,
@@ -71,6 +73,8 @@ impl StageResult {
 
     /// Create a failed result.
     pub fn failure(name: &str, error: &str) -> Self {
+        println!("Stage '{}' failed: {}", name, error);
+
         let mut metadata = HashMap::new();
         metadata.insert("error".to_string(), serde_json::Value::String(error.to_string()));
         Self {

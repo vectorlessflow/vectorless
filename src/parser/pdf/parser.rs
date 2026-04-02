@@ -6,15 +6,17 @@
 use std::path::Path;
 
 use lopdf::Document as LopdfDocument;
+use tracing::{info, warn};
 
 use crate::core::{Error, Result};
 use crate::parser::DocumentParser;
+use crate::parser::toc::TocProcessor;
 
 use super::types::{PdfMetadata, PdfPage, PdfParseResult};
 use crate::parser::{DocumentFormat, DocumentMeta, ParseResult, RawNode};
 
 /// PDF document parser.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct PdfParser {
     config: PdfParserConfig,
 }
@@ -24,11 +26,17 @@ pub struct PdfParser {
 pub struct PdfParserConfig {
     /// Maximum pages to extract (0 = unlimited).
     pub max_pages: usize,
+
+    /// Enable TOC extraction.
+    pub extract_toc: bool,
 }
 
 impl Default for PdfParserConfig {
     fn default() -> Self {
-        Self { max_pages: 0 }
+        Self {
+            max_pages: 0,
+            extract_toc: true, // Default enabled
+        }
     }
 }
 
@@ -41,6 +49,14 @@ impl PdfParser {
     /// Create a parser with custom configuration.
     pub fn with_config(config: PdfParserConfig) -> Self {
         Self { config }
+    }
+
+    /// Create a parser without TOC extraction.
+    pub fn without_toc() -> Self {
+        Self::with_config(PdfParserConfig {
+            extract_toc: false,
+            ..Default::default()
+        })
     }
 
     /// Parse a PDF file and return detailed result.
@@ -301,6 +317,67 @@ impl PdfParser {
 
         result.trim().to_string()
     }
+
+    /// Convert TOC entries to RawNodes.
+    fn toc_entries_to_raw_nodes(&self, entries: &[crate::parser::toc::TocEntry], pages: &[PdfPage]) -> Vec<RawNode> {
+        let mut nodes = Vec::new();
+
+        for entry in entries {
+            // Get content from the page range
+            let content = self.get_content_for_entry(entry, pages);
+
+            let mut node = RawNode::new(&entry.title)
+                .with_content(content)
+                .with_level(entry.level);
+
+            if let Some(page) = entry.physical_page {
+                node = node.with_page(page);
+            }
+
+            nodes.push(node);
+        }
+
+        nodes
+    }
+
+    /// Get content for a TOC entry from pages.
+    fn get_content_for_entry(&self, entry: &crate::parser::toc::TocEntry, pages: &[PdfPage]) -> String {
+        let start_page = entry.physical_page.unwrap_or(1);
+
+        // Find content on this page
+        pages
+            .iter()
+            .find(|p| p.number == start_page)
+            .map(|p| {
+                // Try to find the title position and extract content after it
+                let text = &p.text;
+                if let Some(pos) = text.find(&entry.title) {
+                    text[pos + entry.title.len()..].trim().to_string()
+                } else {
+                    text.clone()
+                }
+            })
+            .unwrap_or_default()
+    }
+
+    /// Create RawNodes from pages (fallback when no TOC).
+    fn pages_to_raw_nodes(&self, pages: &[PdfPage]) -> Vec<RawNode> {
+        pages
+            .iter()
+            .map(|page| {
+                RawNode::new(&format!("Page {}", page.number))
+                    .with_content(page.text.clone())
+                    .with_level(1)
+                    .with_page(page.number)
+            })
+            .collect()
+    }
+}
+
+impl Default for PdfParser {
+    fn default() -> Self {
+        Self::with_config(PdfParserConfig::default())
+    }
 }
 
 #[async_trait::async_trait]
@@ -324,27 +401,40 @@ impl PdfParser {
     /// Internal async method to parse PDF from path.
     async fn parse_path(&self, path: &Path) -> Result<ParseResult> {
         let result = self.parse_pdf_file(path)?;
+        let page_count = result.pages.len();
 
-        // Convert PdfParseResult to ParseResult
+        // Try TOC extraction if enabled
+        let nodes = if self.config.extract_toc {
+            info!("Extracting TOC from PDF with {} pages", page_count);
+
+            let processor = TocProcessor::new();
+            match processor.process(&result.pages).await {
+                Ok(entries) if !entries.is_empty() => {
+                    info!("Extracted {} TOC entries", entries.len());
+                    self.toc_entries_to_raw_nodes(&entries, &result.pages)
+                }
+                Ok(_) => {
+                    warn!("No TOC entries found, falling back to page-based extraction");
+                    self.pages_to_raw_nodes(&result.pages)
+                }
+                Err(e) => {
+                    warn!("TOC extraction failed: {}, falling back to page-based extraction", e);
+                    self.pages_to_raw_nodes(&result.pages)
+                }
+            }
+        } else {
+            self.pages_to_raw_nodes(&result.pages)
+        };
+
+        // Build metadata
         let meta = DocumentMeta {
             name: result.metadata.title,
             format: DocumentFormat::Pdf,
-            page_count: Some(result.pages.len()),
+            page_count: Some(page_count),
             line_count: 0,
             source_path: Some(path.to_string_lossy().to_string()),
             description: result.metadata.subject,
         };
-
-        // Create raw nodes from pages
-        let nodes: Vec<RawNode> = result.pages
-            .iter()
-            .map(|page| {
-                RawNode::new(&format!("Page {}", page.number))
-                    .with_content(page.text.clone())
-                    .with_level(1)
-                    .with_page(page.number)
-            })
-            .collect();
 
         Ok(ParseResult::new(meta, nodes))
     }
@@ -366,6 +456,13 @@ mod tests {
     fn test_parser_creation() {
         let parser = PdfParser::new();
         assert_eq!(parser.config.max_pages, 0);
+        assert!(parser.config.extract_toc);
+    }
+
+    #[test]
+    fn test_parser_without_toc() {
+        let parser = PdfParser::without_toc();
+        assert!(!parser.config.extract_toc);
     }
 
     #[test]
