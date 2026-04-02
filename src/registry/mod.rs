@@ -8,7 +8,4 @@
 //! - **Summarizer Registry** — Summarization strategies
 
 mod parser_registry;
-mod summarizer_registry;
-
 pub use parser_registry::ParserRegistry;
-pub use summarizer_registry::SummarizerRegistry;
