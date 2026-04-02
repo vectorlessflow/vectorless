@@ -14,7 +14,7 @@
 //! # Example
 //!
 //! ```rust
-//! use vectorless::core::{DocumentTree, TreeNode, NodeId};
+//! use vectorless::core::{VectorlessTree, VectorlessNode, NodeId};
 //!
 //! // Create a new tree
 //! let mut tree = DocumentTree::new("Root", "Root content");
@@ -67,13 +67,13 @@ impl<'de> Deserialize<'de> for NodeId {
     }
 }
 
-/// A node in the document tree.
+/// A node in the Vectorless document tree.
 ///
 /// Each branch represents a section and each leaf contains the actual text.
 /// When a question is asked, an LLM navigates this tree level by level
 /// to find the right answer.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TreeNode {
+pub struct VectorlessNode {
     /// Title of this section.
     pub title: String,
 
@@ -113,7 +113,7 @@ pub struct TreeNode {
     pub token_count: Option<usize>,
 }
 
-impl Default for TreeNode {
+impl Default for VectorlessNode {
     fn default() -> Self {
         Self {
             title: String::new(),
