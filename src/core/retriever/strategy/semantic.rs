@@ -10,7 +10,7 @@ use async_trait::async_trait;
 use crate::core::{NodeId, VectorlessTree};
 use super::super::types::{NavigationDecision, QueryComplexity};
 use super::super::RetrievalContext;
-use super::{NodeEvaluation, RetrievalStrategy, StrategyCapabilities};
+use super::r#trait::{NodeEvaluation, RetrievalStrategy, StrategyCapabilities};
 
 /// Embedding model trait for semantic strategies.
 #[async_trait]

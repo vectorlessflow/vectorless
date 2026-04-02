@@ -104,8 +104,20 @@ pub use client::{DocumentInfo, IndexedDocument, Vectorless, VectorlessBuilder};
 
 // Core types
 pub use core::{
-    DocumentStructure, DocumentTree, Error, NodeId, Result, Retriever, StructureNode, TreeNode,
+    DocumentStructure, Error, NodeId, Result, StructureNode,
+    VectorlessNode, VectorlessTree,
+    // Re-export retriever types from core
+    Retriever, RetrieverError, RetrieverResult, RetrievalContext,
+    RetrieveOptions, RetrieveResponse, RetrievalResult,
+    QueryComplexity, StrategyPreference, SufficiencyLevel,
 };
+
+// Backward compatibility alias
+#[doc(hidden)]
+pub type DocumentTree = VectorlessTree;
+
+#[doc(hidden)]
+pub type TreeNode = VectorlessNode;
 
 // Configuration
 pub use config::{Config, ConfigLoader, RetrievalConfig, SummaryConfig};
@@ -120,7 +132,10 @@ pub use document::{DocumentFormat, DocumentParser, DocxParser, MarkdownParser, P
 pub use indexer::TreeBuilder;
 
 // Retrieval
-pub use retriever::{ContextBuilder, LlmNavigator, RetrieveOptions, RetrievalResult};
+pub use retriever::{
+    AdaptiveRetriever, ContextBuilder, LlmNavigator,
+    NavigationDecision, NavigationStep, SearchPath,
+};
 
 // Ranking
 pub use ranking::{MergeStrategy, Merger, ScoredResult, Scorer, ScoringStrategy};

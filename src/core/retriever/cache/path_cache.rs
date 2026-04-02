@@ -241,7 +241,8 @@ mod tests {
     fn test_cache_paths() {
         let cache = PathCache::new();
 
-        let path = SearchPath::from_node(NodeId(indextree::NodeId::new(0)), 0.8);
+        let arena = &mut indextree::Arena::new();
+        let path = SearchPath::from_node(NodeId(arena.new_node(0)), 0.8);
         let paths = vec![path];
 
         cache.store_paths("test query", paths.clone());
@@ -255,7 +256,9 @@ mod tests {
     fn test_cache_case_insensitive() {
         let cache = PathCache::new();
 
-        let path = SearchPath::from_node(NodeId(indextree::NodeId::new(0)), 0.8);
+        let arena = &mut indextree::Arena::new();
+        let path = SearchPath::from_node(NodeId(arena.new_node(0)), 0.8);
+
         let paths = vec![path];
 
         cache.store_paths("Test Query", paths);

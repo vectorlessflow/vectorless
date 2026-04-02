@@ -10,10 +10,23 @@ use async_trait::async_trait;
 use tracing::{debug, info, warn};
 
 use crate::config::RetrievalConfig;
-use crate::core::{DocumentTree, NodeId, Result, Retriever};
+use crate::core::{NodeId, VectorlessTree};
+use crate::core::retriever::{
+    Retriever, RetrieverResult, RetrieveOptions, RetrieveResponse,
+    RetrievalResult,
+};
 use crate::llm::LlmClient;
 
-use super::{RetrieveOptions, RetrievalResult, NavigationDecision};
+/// Navigation decision from LLM.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum NavigationDecisionInternal {
+    /// Go to the specified child node.
+    GoToChild(usize),
+    /// The current node is the answer.
+    ThisIsTheAnswer,
+    /// Need to explore more at this level.
+    ExploreMore,
+}
 
 /// LLM-based tree navigation retriever.
 ///
@@ -42,10 +55,10 @@ impl LlmNavigator {
     /// Navigate the tree to find relevant nodes.
     pub async fn navigate(
         &self,
-        tree: &DocumentTree,
+        tree: &VectorlessTree,
         query: &str,
         options: &RetrieveOptions,
-    ) -> Result<Vec<RetrievalResult>> {
+    ) -> RetrieverResult<Vec<RetrievalResult>> {
         let mut results = Vec::new();
         let mut visited = std::collections::HashSet::new();
 
@@ -65,14 +78,14 @@ impl LlmNavigator {
 
     async fn navigate_from_node(
         &self,
-        tree: &DocumentTree,
+        tree: &VectorlessTree,
         node_id: NodeId,
         query: &str,
         options: &RetrieveOptions,
         results: &mut Vec<RetrievalResult>,
         visited: &mut std::collections::HashSet<String>,
         depth: usize,
-    ) -> Result<()> {
+    ) -> RetrieverResult<()> {
         // Prevent cycles using node_id string representation
         let node_key = format!("{:?}", node_id);
         if visited.contains(&node_key) {
@@ -149,7 +162,7 @@ impl LlmNavigator {
         let decision = self.make_navigation_decision(query, &node.title, &child_info).await?;
 
         match decision {
-            NavigationDecision::ThisIsTheAnswer => {
+            NavigationDecisionInternal::ThisIsTheAnswer => {
                 // Current node is relevant, add it
                 let score = self.compute_relevance_score(query, &node.title, &node.content);
 
@@ -170,7 +183,7 @@ impl LlmNavigator {
 
                 results.push(result);
             }
-            NavigationDecision::GoToChild(idx) => {
+            NavigationDecisionInternal::GoToChild(idx) => {
                 if idx < children.len() {
                     // Explore the selected child
                     Box::pin(self.navigate_from_node(
@@ -178,7 +191,7 @@ impl LlmNavigator {
                     )).await?;
                 }
             }
-            NavigationDecision::ExploreMore => {
+            NavigationDecisionInternal::ExploreMore => {
                 // Explore multiple children that might be relevant
                 for child_id in children {
                     Box::pin(self.navigate_from_node(
@@ -202,9 +215,9 @@ impl LlmNavigator {
         query: &str,
         current_title: &str,
         child_info: &[String],
-    ) -> Result<NavigationDecision> {
+    ) -> RetrieverResult<NavigationDecisionInternal> {
         if child_info.is_empty() {
-            return Ok(NavigationDecision::ThisIsTheAnswer);
+            return Ok(NavigationDecisionInternal::ThisIsTheAnswer);
         }
 
         // Check if API key is configured
@@ -275,33 +288,33 @@ Instructions:
     }
 
     /// Parse the LLM navigation response.
-    fn parse_navigation_response(&self, response: &str, num_children: usize) -> Result<NavigationDecision> {
+    fn parse_navigation_response(&self, response: &str, num_children: usize) -> RetrieverResult<NavigationDecisionInternal> {
         let response = response.trim().to_lowercase();
 
         if response == "0" || response == "current" {
-            return Ok(NavigationDecision::ThisIsTheAnswer);
+            return Ok(NavigationDecisionInternal::ThisIsTheAnswer);
         }
 
         if response == "all" || response == "multiple" {
-            return Ok(NavigationDecision::ExploreMore);
+            return Ok(NavigationDecisionInternal::ExploreMore);
         }
 
         // Try to parse as a number
         if let Ok(num) = response.parse::<usize>() {
             if num == 0 {
-                return Ok(NavigationDecision::ThisIsTheAnswer);
+                return Ok(NavigationDecisionInternal::ThisIsTheAnswer);
             }
             if num <= num_children {
-                return Ok(NavigationDecision::GoToChild(num - 1));  // Convert to 0-indexed
+                return Ok(NavigationDecisionInternal::GoToChild(num - 1));  // Convert to 0-indexed
             }
         }
 
         // Default to exploring all
-        Ok(NavigationDecision::ExploreMore)
+        Ok(NavigationDecisionInternal::ExploreMore)
     }
 
     /// Fallback keyword-based navigation.
-    async fn keyword_navigation(&self, query: &str, child_info: &[String]) -> Result<NavigationDecision> {
+    async fn keyword_navigation(&self, query: &str, child_info: &[String]) -> RetrieverResult<NavigationDecisionInternal> {
         let query_lower = query.to_lowercase();
         let query_words: Vec<&str> = query_lower.split_whitespace().collect();
 
@@ -320,9 +333,9 @@ Instructions:
         }
 
         if best_match.1 > 0 {
-            Ok(NavigationDecision::GoToChild(best_match.0))
+            Ok(NavigationDecisionInternal::GoToChild(best_match.0))
         } else {
-            Ok(NavigationDecision::ExploreMore)
+            Ok(NavigationDecisionInternal::ExploreMore)
         }
     }
 
@@ -362,14 +375,42 @@ Instructions:
 impl Retriever for LlmNavigator {
     async fn retrieve(
         &self,
-        tree: &DocumentTree,
+        tree: &VectorlessTree,
         query: &str,
         options: &RetrieveOptions,
-    ) -> Result<Vec<RetrievalResult>> {
+    ) -> RetrieverResult<RetrieveResponse> {
         info!("Retrieving content for query: {}", query);
         let results = self.navigate(tree, query, options).await?;
         info!("Retrieved {} results", results.len());
-        Ok(results)
+
+        // Build response
+        let content = results
+            .iter()
+            .filter_map(|r| r.content.as_ref())
+            .cloned()
+            .collect::<Vec<_>>()
+            .join("\n\n");
+
+        let confidence = if results.is_empty() {
+            0.0
+        } else {
+            results.iter().map(|r| r.score).sum::<f32>() / results.len() as f32
+        };
+
+        Ok(RetrieveResponse {
+            results,
+            content,
+            confidence,
+            is_sufficient: confidence > 0.5,
+            strategy_used: "llm_navigate".to_string(),
+            complexity: crate::core::retriever::QueryComplexity::Medium,
+            trace: Vec::new(),
+            tokens_used: 0,
+        })
+    }
+
+    fn name(&self) -> &str {
+        "llm_navigator"
     }
 }
 
@@ -412,6 +453,6 @@ mod tests {
         ];
 
         let decision = navigator.keyword_navigation("tree organization", &child_info).await.unwrap();
-        assert!(matches!(decision, NavigationDecision::GoToChild(0)));
+        assert!(matches!(decision, NavigationDecisionInternal::GoToChild(0)));
     }
 }

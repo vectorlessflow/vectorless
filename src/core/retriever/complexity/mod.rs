@@ -8,4 +8,4 @@
 mod detector;
 
 pub use detector::ComplexityDetector;
-pub use super::super::types::QueryComplexity;
+pub use super::types::QueryComplexity;

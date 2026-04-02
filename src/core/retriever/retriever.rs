@@ -4,7 +4,6 @@
 //! Core Retriever trait and related types.
 
 use async_trait::async_trait;
-use std::sync::Arc;
 
 use super::types::{RetrieveOptions, RetrieveResponse};
 use crate::core::VectorlessTree;

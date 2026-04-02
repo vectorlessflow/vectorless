@@ -7,7 +7,7 @@
 
 use async_trait::async_trait;
 
-use crate::core::{NodeId, VectorlessTree};
+use crate::core::VectorlessTree;
 use super::super::types::{NavigationDecision, NavigationStep, SearchPath};
 use super::super::RetrievalContext;
 use super::{SearchConfig, SearchResult, SearchTree};

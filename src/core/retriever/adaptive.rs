@@ -12,13 +12,13 @@ use super::cache::PathCache;
 use super::complexity::ComplexityDetector;
 use super::retriever::{CostEstimate, Retriever, RetrieverError, RetrieverResult, RetrievalContext};
 use super::search::{BeamSearch, GreedySearch, SearchConfig, SearchTree};
-use super::strategy::{KeywordStrategy, RetrievalStrategy};
+use super::strategy::KeywordStrategy;
 use super::sufficiency::{SufficiencyChecker, ThresholdChecker};
 use super::types::{
     QueryComplexity, RetrieveOptions, RetrieveResponse, RetrievalResult, StrategyPreference,
     SufficiencyLevel,
 };
-use crate::core::{NodeId, VectorlessTree};
+use crate::core::VectorlessTree;
 
 /// Configuration for the adaptive retriever.
 #[derive(Debug, Clone)]
@@ -153,11 +153,12 @@ impl AdaptiveRetriever {
         };
 
         // Convert paths to results
-        let results = self.paths_to_results(tree, search_result.paths, options)?;
+        let paths_clone = search_result.paths.clone();
+        let results = self.paths_to_results(tree, paths_clone, options)?;
 
         // Cache results
         if self.config.enable_cache {
-            self.cache.store_paths(query, search_result.paths.clone());
+            self.cache.store_paths(query, search_result.paths);
         }
 
         Ok(results)

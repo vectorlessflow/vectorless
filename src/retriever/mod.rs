@@ -4,48 +4,55 @@
 //! Document retrieval strategies.
 //!
 //! This module provides retrievers for finding relevant content in document trees:
+//! - **Adaptive Retriever** — Automatically selects best strategy based on query
 //! - **LLM Navigation** — Tree traversal guided by LLM decisions
 //! - **Context Building** — Assembling results for LLM consumption
 //!
 //! # Example
 //!
 //! ```rust,no_run
-//! use vectorless::retriever::{LlmNavigator, RetrieveOptions, ContextBuilder};
-//! use vectorless::core::DocumentTree;
+//! use vectorless::retriever::{AdaptiveRetriever, RetrieveOptions};
+//! use vectorless::core::VectorlessTree;
 //!
 //! # #[tokio::main]
 //! # async fn main() -> vectorless::core::Result<()> {
-//! let tree = DocumentTree::new("Root", "Content");
-//! let retriever = LlmNavigator::with_defaults();
-//! let options = RetrieveOptions::new().with_top_k(5);
+//! let tree = VectorlessTree::new("Root", "Content");
+//! let retriever = AdaptiveRetriever::new();
+//! let options = RetrieveOptions::default().with_top_k(5);
 //!
-//! let results = retriever.retrieve(&tree, "What is this about?", &options).await?;
-//!
-//! let context = ContextBuilder::new()
-//!     .with_max_tokens(4000)
-//!     .build(&results);
-//!
-//! println!("Context: {}", context);
+//! let response = retriever.retrieve(&tree, "What is this about?", &options).await?;
+//! println!("Found {} results", response.results.len());
 //! # Ok(())
 //! # }
 //! ```
 
-mod retriever;
-mod llm_navigate;
-mod context;
-
-// Re-export main types
-pub use retriever::{
+// Re-export from core::retriever (new unified module)
+pub use crate::core::retriever::{
+    // Main types
+    AdaptiveRetriever,
+    Retriever,
+    RetrieverError,
+    RetrieverResult,
+    RetrievalContext,
     RetrieveOptions,
+    RetrieveResponse,
     RetrievalResult,
+    QueryComplexity,
+    StrategyPreference,
+    SufficiencyLevel,
     NavigationDecision,
-    NavigationContext,
+    NavigationStep,
+    SearchPath,
 };
 
-pub use llm_navigate::LlmNavigator;
-
+// Context builder for formatting results
+mod context;
 pub use context::{
     ContextBuilder,
     format_for_llm,
     format_tree_for_llm,
 };
+
+// LLM Navigator (concrete implementation)
+mod llm_navigate;
+pub use llm_navigate::LlmNavigator;

@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use crate::core::{NodeId, VectorlessTree};
 use super::super::types::{NavigationDecision, QueryComplexity};
 use super::super::RetrievalContext;
-use super::{NodeEvaluation, RetrievalStrategy, StrategyCapabilities};
+use super::r#trait::{NodeEvaluation, RetrievalStrategy, StrategyCapabilities};
 
 /// LLM client trait for the strategy.
 #[async_trait]

@@ -105,7 +105,7 @@ impl ComplexityDetector {
             .filter(|c| {
                 query_lower
                     .split_whitespace()
-                    .any(|w| w == *c)
+                    .any(|w| w == **c)
             })
             .count();
 

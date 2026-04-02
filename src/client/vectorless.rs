@@ -383,14 +383,14 @@ impl Vectorless {
 
         // Use retriever type from config
         let retriever_type = self.config.retrieval.retriever_type.clone();
-        let results = self.retriever_registry.retrieve_with(retriever_type, tree, question, &retrieve_options).await?;
+        let response = self.retriever_registry.retrieve_with(retriever_type, tree, question, &retrieve_options).await?;
 
         // Extract node IDs and build content from results
-        let node_ids: Vec<String> = results.iter()
+        let node_ids: Vec<String> = response.results.iter()
             .filter_map(|r| r.node_id.clone())
             .collect();
 
-        let content_parts: Vec<String> = results.iter()
+        let content_parts: Vec<String> = response.results.iter()
             .map(|r| {
                 let mut parts = vec![format!("## {}", r.title)];
 
@@ -407,17 +407,13 @@ impl Vectorless {
             .collect();
 
         let content = if content_parts.is_empty() {
-            String::new()
+            response.content // Use pre-aggregated content if available
         } else {
             content_parts.join("\n\n---\n\n")
         };
 
-        // Calculate average score
-        let avg_score = if results.is_empty() {
-            1.0
-        } else {
-            results.iter().map(|r| r.score).sum::<f32>() / results.len() as f32
-        };
+        // Use confidence score from response
+        let avg_score = response.confidence;
 
         Ok(QueryResult {
             doc_id: doc_id.to_string(),

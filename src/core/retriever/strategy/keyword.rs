@@ -11,7 +11,7 @@ use std::collections::{HashMap, HashSet};
 use crate::core::{NodeId, VectorlessTree};
 use super::super::types::{NavigationDecision, QueryComplexity};
 use super::super::RetrievalContext;
-use super::{NodeEvaluation, RetrievalStrategy, StrategyCapabilities};
+use super::r#trait::{NodeEvaluation, RetrievalStrategy, StrategyCapabilities};
 
 /// Keyword-based retrieval strategy.
 ///

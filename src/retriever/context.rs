@@ -6,9 +6,8 @@
 //! This module provides utilities for building context strings
 //! from retrieval results for LLM consumption.
 
-use crate::core::{DocumentTree, NodeId};
-
-use super::RetrievalResult;
+use crate::core::{VectorlessTree, NodeId};
+use crate::core::retriever::RetrievalResult;
 
 /// Context builder for assembling retrieval results.
 #[derive(Debug, Default)]
@@ -96,7 +95,7 @@ impl ContextBuilder {
     /// Build context from a document tree starting at a node.
     pub fn build_from_tree(
         &self,
-        tree: &DocumentTree,
+        tree: &VectorlessTree,
         node_id: NodeId,
         max_depth: usize,
     ) -> String {
@@ -107,7 +106,7 @@ impl ContextBuilder {
 
     fn collect_sections(
         &self,
-        tree: &DocumentTree,
+        tree: &VectorlessTree,
         node_id: NodeId,
         current_depth: usize,
         max_depth: usize,
@@ -176,7 +175,7 @@ pub fn format_for_llm(results: &[RetrievalResult], max_tokens: usize) -> String 
 
 /// Format a document tree for LLM consumption.
 pub fn format_tree_for_llm(
-    tree: &DocumentTree,
+    tree: &VectorlessTree,
     max_depth: usize,
     max_tokens: usize,
 ) -> String {

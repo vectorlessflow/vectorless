@@ -6,11 +6,15 @@
 //! This module defines the main extension points of the library:
 //! - [`DocumentParser`] - Parse documents into raw nodes
 //! - [`Summarizer`] - Generate summaries for tree nodes
+//! - [`Retriever`] - Retrieve relevant content from document trees (re-exported from retriever module)
 
 use async_trait::async_trait;
 use std::path::Path;
 
 use super::{DocumentTree, NodeId, Result};
+
+// Re-export Retriever from the retriever module
+pub use super::retriever::Retriever;
 
 // ============================================================
 // Document Parser Trait
@@ -111,56 +115,6 @@ pub trait Summarizer: Send + Sync {
     ///
     /// A summary string, or an error if summarization fails.
     async fn summarize(&self, tree: &DocumentTree, node: NodeId) -> Result<String>;
-}
-
-// ============================================================
-// Retriever Trait
-// ============================================================
-
-/// A retriever finds relevant content in a document tree.
-///
-/// Implementations can use different strategies:
-/// - LLM-based navigation (tree traversal)
-/// - MCTS (Monte Carlo Tree Search)
-/// - Beam search
-/// - Vector similarity
-///
-/// # Example
-///
-/// ```rust
-/// use vectorless::core::{Retriever, DocumentTree, Result};
-/// use vectorless::retriever::RetrieveOptions;
-/// use async_trait::async_trait;
-///
-/// struct MyRetriever;
-///
-/// #[async_trait]
-/// impl Retriever for MyRetriever {
-///     async fn retrieve(&self, tree: &DocumentTree, query: &str, options: &RetrieveOptions) -> Result<Vec<RetrievalResult>> {
-///         // Return relevant content
-///         Ok(vec![RetrievalResult::new("Relevant content")])
-///     }
-/// }
-/// ```
-#[async_trait]
-pub trait Retriever: Send + Sync {
-    /// Retrieve relevant content for a query.
-    ///
-    /// # Arguments
-    ///
-    /// * `tree` - The document tree to search
-    /// * `query` - The user's question
-    /// * `options` - Retrieval options
-    ///
-    /// # Returns
-    ///
-    /// A list of retrieval results with content, scores, and metadata.
-    async fn retrieve(
-        &self,
-        tree: &DocumentTree,
-        query: &str,
-        options: &crate::retriever::RetrieveOptions,
-    ) -> Result<Vec<crate::retriever::RetrievalResult>>;
 }
 
 // ============================================================

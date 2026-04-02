@@ -4,9 +4,8 @@
 //! Core types for the retrieval system.
 
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
-use super::NodeId;
+use crate::core::NodeId;
 
 /// Query complexity level for adaptive strategy selection.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

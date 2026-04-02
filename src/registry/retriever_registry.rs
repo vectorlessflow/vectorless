@@ -9,8 +9,9 @@
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
-use crate::core::{Retriever, DocumentTree, Result, Error};
-use crate::retriever::{RetrieveOptions, LlmNavigator};
+use crate::core::{Retriever, VectorlessTree, Result, Error};
+use crate::core::retriever::{RetrieveOptions, RetrieveResponse};
+use crate::retriever::LlmNavigator;
 use crate::config::RetrieverType;
 
 /// Type alias for retriever factory functions.
@@ -102,25 +103,27 @@ impl RetrieverRegistry {
     /// Retrieve content from a document tree.
     pub async fn retrieve(
         &self,
-        tree: &DocumentTree,
+        tree: &VectorlessTree,
         query: &str,
         options: &RetrieveOptions,
-    ) -> Result<Vec<crate::retriever::RetrievalResult>> {
+    ) -> Result<RetrieveResponse> {
         let retriever = self.get_default();
         retriever.retrieve(tree, query, options).await
+            .map_err(|e| Error::Retrieval(e.to_string()))
     }
 
     /// Retrieve content using a specific retriever type.
     pub async fn retrieve_with(
         &self,
         retriever_type: RetrieverType,
-        tree: &DocumentTree,
+        tree: &VectorlessTree,
         query: &str,
         options: &RetrieveOptions,
-    ) -> Result<Vec<crate::retriever::RetrievalResult>> {
+    ) -> Result<RetrieveResponse> {
         let retriever = self.get(retriever_type)
             .ok_or_else(|| Error::Retrieval(format!("Retriever not found: {:?}", retriever_type)))?;
         retriever.retrieve(tree, query, options).await
+            .map_err(|e| Error::Retrieval(e.to_string()))
     }
 }
 

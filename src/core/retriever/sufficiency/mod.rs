@@ -10,7 +10,7 @@ mod llm_judge;
 
 pub use threshold::ThresholdChecker;
 pub use llm_judge::LlmJudge;
-pub use super::super::types::SufficiencyLevel;
+pub use super::types::SufficiencyLevel;
 
 /// Trait for sufficiency checking strategies.
 pub trait SufficiencyChecker: Send + Sync {
