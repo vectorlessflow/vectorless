@@ -1,49 +1,24 @@
 <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <!-- Gradient for the main shape -->
-    <linearGradient id="mainGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+    <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" style="stop-color:#3b82f6"/>
-      <stop offset="100%" style="stop-color:#1d4ed8"/>
-    </linearGradient>
-
-    <!-- Gradient for accent -->
-    <linearGradient id="accentGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#10b981"/>
-      <stop offset="100%" style="stop-color:#059669"/>
+      <stop offset="100%" style="stop-color:#2563eb"/>
     </linearGradient>
   </defs>
 
-  <!-- Background circle (optional, for contrast) -->
-  <circle cx="100" cy="100" r="95" fill="#f8fafc"/>
+  <!-- V shape with branches -->
+  <path d="M 38 44 L 100 120 L 162 44" stroke="url(#g)" stroke-width="16" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
 
-  <!-- Main V shape representing tree structure -->
-  <!-- Left branch of V -->
-  <path d="M 40 50 L 100 100 L 100 95 L 45 55 Z" fill="url(#mainGradient)"/>
+  <!-- Tree trunk/navigation path -->
+  <path d="M 100 120 L 100 162" stroke="url(#g)" stroke-width="16" stroke-linecap="round"/>
 
-  <!-- Right branch of V -->
-  <path d="M 160 50 L 100 100 L 100 95 L 155 55 Z" fill="url(#mainGradient)"/>
+  <!-- Top Nodes -->
+  <circle cx="38" cy="44" r="14" fill="url(#g)"/>
+  <circle cx="162" cy="44" r="14" fill="url(#g)"/>
 
-  <!-- Tree nodes on the V -->
-  <circle cx="40" cy="50" r="8" fill="url(#mainGradient)"/>
-  <circle cx="160" cy="50" r="8" fill="url(#mainGradient)"/>
-  <circle cx="100" cy="100" r="10" fill="url(#mainGradient)"/>
+  <!-- Center Node -->
+  <circle cx="100" cy="120" r="18" fill="url(#g)"/>
 
-  <!-- Navigation path (the "reasoning" aspect) -->
-  <path d="M 100 100 L 70 130 L 50 160"
-        stroke="url(#accentGradient)"
-        stroke-width="4"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        fill="none"/>
-
-  <!-- Path endpoint (result) -->
-  <circle cx="50" cy="160" r="6" fill="url(#accentGradient)"/>
-
-  <!-- Small branches suggesting tree structure -->
-  <line x1="70" y1="75" x2="55" y2="65" stroke="#60a5fa" stroke-width="2" stroke-linecap="round"/>
-  <line x1="130" y1="75" x2="145" y2="65" stroke="#60a5fa" stroke-width="2" stroke-linecap="round"/>
-
-  <!-- Small node hints -->
-  <circle cx="55" cy="65" r="3" fill="#60a5fa"/>
-  <circle cx="145" cy="65" r="3" fill="#60a5fa"/>
+  <!-- Result Node -->
+  <circle cx="100" cy="162" r="11" fill="#10b981"/>
 </svg>

@@ -1,45 +1,33 @@
-<svg viewBox="0 0 400 120" xmlns="http://www.w3.org/2000/svg">
+<svg viewBox="0 0 400 100" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <linearGradient id="logoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+    <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" style="stop-color:#3b82f6"/>
-      <stop offset="100%" style="stop-color:#1d4ed8"/>
-    </linearGradient>
-    <linearGradient id="pathGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#10b981"/>
-      <stop offset="100%" style="stop-color:#059669"/>
+      <stop offset="100%" style="stop-color:#2563eb"/>
     </linearGradient>
   </defs>
 
-  <!-- Logo mark -->
-  <g transform="translate(20, 10)">
-    <!-- V shape -->
-    <path d="M 15 15 L 50 50 L 50 48 L 18 18 Z" fill="url(#logoGradient)"/>
-    <path d="M 85 15 L 50 50 L 50 48 L 82 18 Z" fill="url(#logoGradient)"/>
+  <!-- Icon -->
+  <g transform="translate(8, 8)">
+    <!-- V shape with branches -->
+    <path d="M 12 14 L 32 38 L 52 14" stroke="url(#g)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
 
-    <!-- Nodes -->
-    <circle cx="15" cy="15" r="6" fill="url(#logoGradient)"/>
-    <circle cx="85" cy="15" r="6" fill="url(#logoGradient)"/>
-    <circle cx="50" cy="50" r="7" fill="url(#logoGradient)"/>
+    <!-- Tree trunk/navigation path -->
+    <path d="M 32 38 L 32 52" stroke="url(#g)" stroke-width="5" stroke-linecap="round"/>
 
-    <!-- Navigation path -->
-    <path d="M 50 50 L 35 70 L 25 90"
-          stroke="url(#pathGradient)"
-          stroke-width="3"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          fill="none"/>
-    <circle cx="25" cy="90" r="4" fill="url(#pathGradient)"/>
+    <!-- Top Nodes -->
+    <circle cx="12" cy="14" r="4.5" fill="url(#g)"/>
+    <circle cx="52" cy="14" r="4.5" fill="url(#g)"/>
 
-    <!-- Branch hints -->
-    <line x1="35" y1="35" x2="25" y2="28" stroke="#60a5fa" stroke-width="1.5" stroke-linecap="round"/>
-    <line x1="65" y1="35" x2="75" y2="28" stroke="#60a5fa" stroke-width="1.5" stroke-linecap="round"/>
-    <circle cx="25" cy="28" r="2" fill="#60a5fa"/>
-    <circle cx="75" cy="28" r="2" fill="#60a5fa"/>
+    <!-- Center Node -->
+    <circle cx="32" cy="38" r="6" fill="url(#g)"/>
+
+    <!-- Result Node -->
+    <circle cx="32" cy="52" r="3.5" fill="#10b981"/>
   </g>
 
   <!-- Wordmark -->
-  <text x="130" y="72" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="42" font-weight="600" fill="#1e293b">Vectorless</text>
+  <text x="80" y="52" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="32" font-weight="600" fill="#1e293b">Vectorless</text>
 
   <!-- Tagline -->
-  <text x="130" y="98" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="14" fill="#64748b">Reasoning-Native Document Intelligence</text>
+  <text x="80" y="74" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="12" fill="#64748b">Reasoning-Native Document Intelligence</text>
 </svg>
