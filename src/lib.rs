@@ -86,7 +86,6 @@ pub mod config;
 pub mod concurrency;
 pub mod core;
 pub mod document;
-pub mod indexer_legacy;
 pub mod llm;
 pub mod ranking;
 pub mod registry;
@@ -127,8 +126,8 @@ pub use llm::{LlmClient, LlmConfig, LlmConfigs, LlmError, LlmPool, RetryConfig};
 // Document parsing
 pub use document::{DocumentFormat, DocumentParser, DocxParser, MarkdownParser, PdfParser, ParseResult, RawNode};
 
-// Indexing (legacy - use core::index instead)
-pub use indexer_legacy::TreeBuilder;
+// Indexing (use core::index)
+pub use core::index::{PipelineExecutor, PipelineOptions, IndexInput, IndexMode};
 
 // Retrieval (from core::retriever)
 pub use core::retriever::{

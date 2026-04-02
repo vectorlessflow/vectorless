@@ -48,7 +48,7 @@ use crate::document::DocumentFormat;
 use crate::storage::{Workspace, PersistedDocument, DocumentMeta as StorageMeta};
 use crate::registry::{ParserRegistry, SummarizerRegistry};
 use crate::core::retriever::{AdaptiveRetriever, Retriever};
-use crate::core::index::{PipelineExecutor, PipelineOptions, IndexInput, IndexMode as PipelineIndexMode, SummaryStrategy};
+use crate::core::index::{PipelineExecutor, PipelineOptions, IndexInput, SummaryStrategy};
 
 use super::types::{IndexedDocument, IndexMode, IndexOptions, DocumentInfo, QueryResult};
 
