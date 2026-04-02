@@ -5,7 +5,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::retriever::RetrievalResult;
+use crate::core::retriever::RetrievalResult;
 
 /// A retrieval result with an assigned score.
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -376,7 +376,7 @@ impl Vectorless {
             .ok_or_else(|| Error::Parse("Document tree not loaded".to_string()))?;
 
         // Build retrieve options from config
-        let retrieve_options = crate::retriever::RetrieveOptions::new()
+        let retrieve_options = crate::core::retriever::RetrieveOptions::new()
             .with_top_k(self.config.retrieval.top_k)
             .with_content(true)
             .with_summaries(true);

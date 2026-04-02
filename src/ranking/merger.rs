@@ -9,7 +9,7 @@
 use std::collections::{HashMap, HashSet};
 
 use super::scorer::ScoredResult;
-use crate::retriever::RetrievalResult;
+use crate::core::retriever::RetrievalResult;
 
 /// Merge strategy for combining results.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

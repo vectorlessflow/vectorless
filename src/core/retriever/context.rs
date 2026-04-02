@@ -7,7 +7,7 @@
 //! from retrieval results for LLM consumption.
 
 use crate::core::{VectorlessTree, NodeId};
-use crate::core::retriever::RetrievalResult;
+use super::types::RetrievalResult;
 
 /// Context builder for assembling retrieval results.
 #[derive(Debug, Default)]

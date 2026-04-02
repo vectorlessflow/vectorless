@@ -90,7 +90,6 @@ pub mod indexer;
 pub mod llm;
 pub mod ranking;
 pub mod registry;
-pub mod retriever;
 pub mod storage;
 pub mod summarizer;
 pub mod token;
@@ -131,10 +130,11 @@ pub use document::{DocumentFormat, DocumentParser, DocxParser, MarkdownParser, P
 // Indexing
 pub use indexer::TreeBuilder;
 
-// Retrieval
-pub use retriever::{
+// Retrieval (from core::retriever)
+pub use core::retriever::{
     AdaptiveRetriever, ContextBuilder, LlmNavigator,
     NavigationDecision, NavigationStep, SearchPath,
+    format_for_llm, format_tree_for_llm,
 };
 
 // Ranking

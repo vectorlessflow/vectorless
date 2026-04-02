@@ -11,7 +11,7 @@ use std::sync::{Arc, RwLock};
 
 use crate::core::{Retriever, VectorlessTree, Result, Error};
 use crate::core::retriever::{RetrieveOptions, RetrieveResponse};
-use crate::retriever::LlmNavigator;
+use crate::core::retriever::LlmNavigator;
 use crate::config::RetrieverType;
 
 /// Type alias for retriever factory functions.

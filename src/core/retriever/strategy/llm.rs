@@ -1,4 +1,6 @@
 // Copyright (c) 2026 vectorless developers
+// SPDX-License-Identifier: Apache-2.0
+
 //! LLM-based retrieval strategy.
 //!
 //! Uses an LLM for deep reasoning about node relevance.
@@ -7,30 +9,10 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
 use crate::core::{NodeId, VectorlessTree};
+use crate::llm::LlmClient;
 use super::super::types::{NavigationDecision, QueryComplexity};
 use super::super::RetrievalContext;
 use super::r#trait::{NodeEvaluation, RetrievalStrategy, StrategyCapabilities};
-
-/// LLM client trait for the strategy.
-#[async_trait]
-pub trait LlmClient: Send + Sync {
-    /// Generate a completion for the given prompt.
-    async fn complete(&self, prompt: &str) -> Result<String, LlmError>;
-
-    /// Get the model name.
-    fn model_name(&self) -> &str;
-}
-
-/// LLM error types.
-#[derive(Debug, thiserror::Error)]
-pub enum LlmError {
-    #[error("LLM request failed: {0}")]
-    RequestFailed(String),
-    #[error("Failed to parse LLM response: {0}")]
-    ParseError(String),
-    #[error("Rate limit exceeded")]
-    RateLimitExceeded,
-}
 
 /// LLM response for navigation decision.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -50,21 +32,23 @@ struct NavigationResponse {
 /// to the query. Most accurate but also most expensive.
 pub struct LlmStrategy {
     /// The LLM client.
-    client: Box<dyn LlmClient>,
+    client: LlmClient,
     /// System prompt for navigation.
     system_prompt: String,
-    /// Maximum tokens for LLM responses.
-    max_response_tokens: usize,
 }
 
 impl LlmStrategy {
     /// Create a new LLM strategy.
-    pub fn new(client: Box<dyn LlmClient>) -> Self {
+    pub fn new(client: LlmClient) -> Self {
         Self {
             client,
             system_prompt: Self::default_system_prompt(),
-            max_response_tokens: 150,
         }
+    }
+
+    /// Create with default LLM client.
+    pub fn with_defaults() -> Self {
+        Self::new(LlmClient::with_defaults())
     }
 
     /// Set custom system prompt.
@@ -166,7 +150,7 @@ impl RetrievalStrategy for LlmStrategy {
     ) -> NodeEvaluation {
         let prompt = self.build_prompt(tree, node_id, context);
 
-        match self.client.complete(&prompt).await {
+        match self.client.complete(&self.system_prompt, &prompt).await {
             Ok(response) => self.parse_response(&response, tree, node_id),
             Err(e) => NodeEvaluation {
                 score: 0.0,
