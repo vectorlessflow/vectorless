@@ -137,9 +137,7 @@ impl Vectorless {
             DocumentFormat::Html => {
                 return Err(Error::Parse("HTML parsing not yet implemented".to_string()));
             }
-            DocumentFormat::Docx => {
-                return Err(Error::Parse("DOCX parsing not yet implemented".to_string()));
-            }
+            DocumentFormat::Docx => self.index_document(&doc_id, &path, &options, DocumentFormat::Docx).await?,
             DocumentFormat::Text => self.index_text(&doc_id, &path, &options).await?,
         };
 
@@ -196,6 +194,7 @@ impl Vectorless {
             IndexMode::Pdf => Ok(DocumentFormat::Pdf),
             IndexMode::Markdown => Ok(DocumentFormat::Markdown),
             IndexMode::Html => Ok(DocumentFormat::Html),
+            IndexMode::Docx => Ok(DocumentFormat::Docx),
         }
     }
 

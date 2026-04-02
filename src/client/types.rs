@@ -130,6 +130,9 @@ pub enum IndexMode {
 
     /// Force HTML parsing.
     Html,
+
+    /// Force DOCX parsing.
+    Docx,
 }
 
 impl Default for IndexMode {

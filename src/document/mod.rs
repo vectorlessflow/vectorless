@@ -11,8 +11,8 @@
 //!
 //! - **Markdown** - Full support via [`MarkdownParser`]
 //! - **PDF** - Full support via [`PdfParser`] with TOC extraction
+//! - **DOCX** - Full support via [`DocxParser`] with heading detection
 //! - **HTML** - Planned (placeholder)
-//! - **DOCX** - Planned (placeholder)
 //!
 //! # Example
 //!
@@ -47,7 +47,7 @@ pub mod pdf;
 pub mod toc;
 
 // DOCX parsing module
-mod docx;
+pub mod docx;
 
 // Re-export main types
 pub use types::{
@@ -71,3 +71,4 @@ pub use parser::{
 // Re-export concrete parsers
 pub use markdown::{MarkdownParser, MarkdownConfig};
 pub use pdf::PdfParser;
+pub use docx::DocxParser;

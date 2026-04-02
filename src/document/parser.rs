@@ -22,10 +22,7 @@ pub fn get_parser(format: DocumentFormat) -> Option<Box<dyn DocumentParser>> {
             // TODO: Implement HTML parser
             None
         }
-        DocumentFormat::Docx => {
-            // TODO: Implement DOCX parser
-            None
-        }
+        DocumentFormat::Docx => Some(Box::new(super::docx::DocxParser::new())),
         DocumentFormat::Text => {
             // TODO: Implement plain text parser
             None

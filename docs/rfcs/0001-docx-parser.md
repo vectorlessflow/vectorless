@@ -1,5 +1,7 @@
 # DOCX Parser Implementation Plan
 
+**Status**: ✅ Implemented
+
 ## Overview
 
 Add DOCX (Microsoft Word) document parsing support to Vectorless, enabling hierarchical tree-based retrieval for Word documents.

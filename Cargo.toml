@@ -60,6 +60,10 @@ lru = "0.12"
 pdf-extract = "0.10.0"
 lopdf = "0.34"
 
+# DOCX processing
+zip = "2.2"
+roxmltree = "0.20"
+
 # Random number generation (for sampling)
 rand = "0.8"
 

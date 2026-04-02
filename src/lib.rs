@@ -114,7 +114,7 @@ pub use config::{Config, ConfigLoader, RetrievalConfig, SummaryConfig};
 pub use llm::{LlmClient, LlmConfig, LlmConfigs, LlmError, LlmPool, RetryConfig};
 
 // Document parsing
-pub use document::{DocumentFormat, DocumentParser, MarkdownParser, ParseResult, RawNode};
+pub use document::{DocumentFormat, DocumentParser, DocxParser, MarkdownParser, PdfParser, ParseResult, RawNode};
 
 // Indexing
 pub use indexer::TreeBuilder;
