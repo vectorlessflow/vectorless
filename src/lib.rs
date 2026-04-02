@@ -1,80 +1,141 @@
 // Copyright (c) 2026 vectorless developers
 // SPDX-License-Identifier: Apache-2.0
 
-//! # vectorless
+//! # Vectorless
 //!
-//! Hierarchical, Reasoning-Native Document Intelligence Engine.
+//! **A hierarchical, reasoning-native document intelligence engine.**
 //!
-//! A document indexing and retrieval library that uses tree-based navigation
-//! instead of vector embeddings for RAG applications.
+//! Replace your vector database with LLM-powered tree navigation.
+//! No embeddings. No vector search. Just reasoning.
+//!
+//! ## Overview
+//!
+//! Traditional RAG systems chunk documents into flat vectors, losing structure.
+//! Vectorless preserves your document's hierarchy and uses an LLM to navigate it —
+//! like a human skimming a table of contents, then drilling into relevant sections.
 //!
 //! ## Features
 //!
-//! - **Tree-Based Indexing** — Documents organized as hierarchical trees
-//! - **LLM Navigation** — Intelligent traversal using LLM to find relevant content
-//! - **No Vector Database** — Eliminates infrastructure complexity
-//! - **Multiple Formats** — Support for Markdown, PDF, HTML, and more
+//! - 🌳 **Tree-Based Indexing** — Documents as hierarchical trees, not flat chunks
+//! - 🧠 **LLM Navigation** — Reasoning-based traversal to find relevant content
+//! - 🚀 **Zero Infrastructure** — No vector database, no embedding models
+//! - 📄 **Multi-Format** — Markdown, PDF, DOCX support
+//! - 💾 **Persistent Workspace** — LRU-cached storage with lazy loading
+//! - 🔄 **Retry & Fallback** — Resilient LLM calls with automatic recovery
 //!
 //! ## Quick Start
 //!
 //! ```rust,no_run
-//! use vectorless::core::{DocumentTree, TreeNode};
+//! use vectorless::{VectorlessBuilder, Vectorless};
 //!
-//! // Create a document tree
-//! let mut tree = DocumentTree::new("Root", "Root content");
+//! #[tokio::main]
+//! async fn main() -> vectorless::Result<()> {
+//!     // Create client
+//!     let mut client = VectorlessBuilder::new()
+//!         .with_workspace("./workspace")
+//!         .build()?;
 //!
-//! // Add children
-//! let root = tree.root();
-//! let child = tree.add_child(root, "Section 1", "Content for section 1");
+//!     // Index a document
+//!     let doc_id = client.index("./document.md").await?;
 //!
-//! // Navigate the tree
-//! for node_id in tree.children(root) {
-//!     if let Some(node) = tree.get(node_id) {
-//!         println!("Title: {}", node.title);
-//!     }
+//!     // Query with natural language
+//!     let result = client.query(&doc_id, "What is this about?").await?;
+//!     println!("{}", result.content);
+//!
+//!     Ok(())
 //! }
 //! ```
 //!
-//! ## Architecture
+//! ## Modules
 //!
-//! The crate is organized into the following modules:
+//! | Module | Description |
+//! |--------|-------------|
+//! | [`client`] | High-level API (`Vectorless`, `VectorlessBuilder`) |
+//! | [`core`] | Core types (`DocumentTree`, `TreeNode`, `NodeId`) |
+//! | [`config`] | Configuration management |
+//! | [`llm`] | LLM client with retry & fallback |
+//! | [`document`] | Document parsers (Markdown, PDF, DOCX) |
+//! | [`indexer`] | Tree building and optimization |
+//! | [`retriever`] | Retrieval strategies (LLM navigate, beam search) |
+//! | [`ranking`] | Result scoring and merging |
+//! | [`storage`] | Workspace persistence |
+//! | [`summarizer`] | Summary generation |
+//! | [`concurrency`] | Rate limiting |
 //!
-//! - [`core`] — Core types: TreeNode, DocumentTree, NodeId
-//! - [`llm`] — Unified LLM client with retry support
-//! - [`concurrency`] — Rate limiting and concurrency control
-//! - [`document`] — Document parsing: Markdown, PDF, HTML
-//! - [`indexer`] — Index building: tree construction, thinning, merging
-//! - [`summarizer`] — Summary generation
-//! - [`retriever`] — Retrieval strategies
-//! - [`ranking`] — Result ranking
-//! - [`storage`] — Persistence and caching
-//! - [`client`] — High-level API
+//! ## Configuration
+//!
+//! Create `vectorless.toml` in your project root:
+//!
+//! ```toml
+//! [summary]
+//! model = "gpt-4o-mini"
+//! endpoint = "https://api.openai.com/v1"
+//!
+//! [retrieval]
+//! model = "gpt-4o"
+//! retriever_type = "llm_navigate"
+//! top_k = 3
+//! ```
 
-pub mod core;
-pub mod config;
-pub mod llm;
-pub mod concurrency;
-pub mod document;
-pub mod summarizer;
-pub mod indexer;
-pub mod storage;
+// =============================================================================
+// Modules
+// =============================================================================
+
 pub mod client;
-pub mod retriever;
-pub mod registry;
+pub mod config;
+pub mod concurrency;
+pub mod core;
+pub mod document;
+pub mod indexer;
+pub mod llm;
 pub mod ranking;
+pub mod registry;
+pub mod retriever;
+pub mod storage;
+pub mod summarizer;
 pub mod token;
 
-// Re-exports for convenience
-pub use core::{DocumentTree, DocumentStructure, NodeId, StructureNode, TreeNode, Error, Result, Retriever};
-pub use config::{Config, ConfigLoader, SummaryConfig, RetrievalConfig};
+// =============================================================================
+// Re-exports (Convenience API)
+// =============================================================================
+
+// Client API (most common entry point)
+pub use client::{DocumentInfo, IndexedDocument, Vectorless, VectorlessBuilder};
+
+// Core types
+pub use core::{
+    DocumentStructure, DocumentTree, Error, NodeId, Result, Retriever, StructureNode, TreeNode,
+};
+
+// Configuration
+pub use config::{Config, ConfigLoader, RetrievalConfig, SummaryConfig};
+
+// LLM
 pub use llm::{LlmClient, LlmConfig, LlmConfigs, LlmError, LlmPool, RetryConfig};
-pub use concurrency::{ConcurrencyConfig, ConcurrencyController, RateLimiter};
-pub use document::{DocumentParser, DocumentFormat, MarkdownParser, RawNode, ParseResult};
-pub use summarizer::{summarize};
+
+// Document parsing
+pub use document::{DocumentFormat, DocumentParser, MarkdownParser, ParseResult, RawNode};
+
+// Indexing
 pub use indexer::TreeBuilder;
-pub use storage::{Workspace, PersistedDocument, DocumentMeta as StorageDocumentMeta};
-pub use client::{Vectorless, VectorlessBuilder, IndexedDocument, DocumentInfo};
-pub use retriever::{LlmNavigator, RetrieveOptions, RetrievalResult, ContextBuilder};
-pub use registry::{ParserRegistry, SummarizerRegistry, RetrieverRegistry};
-pub use ranking::{Scorer, Merger, ScoredResult, ScoringStrategy, MergeStrategy};
+
+// Retrieval
+pub use retriever::{ContextBuilder, LlmNavigator, RetrieveOptions, RetrievalResult};
+
+// Ranking
+pub use ranking::{MergeStrategy, Merger, ScoredResult, Scorer, ScoringStrategy};
+
+// Storage
+pub use storage::{DocumentMeta as StorageDocumentMeta, PersistedDocument, Workspace};
+
+// Concurrency
+pub use concurrency::{ConcurrencyConfig, ConcurrencyController, RateLimiter};
+
+// Registry
+pub use registry::{ParserRegistry, RetrieverRegistry, SummarizerRegistry};
+
+// Summarization
+pub use summarizer::summarize;
+
+// Token estimation
 pub use token::{estimate_tokens, estimate_tokens_fast};
