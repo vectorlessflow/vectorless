@@ -8,7 +8,7 @@ use std::path::Path;
 use lopdf::Document as LopdfDocument;
 
 use crate::core::{Error, Result};
-use crate::core::DocumentParser;
+use crate::parser::DocumentParser;
 
 use super::types::{PdfMetadata, PdfPage, PdfParseResult};
 use crate::parser::{DocumentFormat, DocumentMeta, ParseResult, RawNode};

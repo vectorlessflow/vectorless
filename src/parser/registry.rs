@@ -11,8 +11,8 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Arc, RwLock};
 
-use crate::core::{DocumentParser, Error, Result};
-use crate::parser::{DocumentFormat, MarkdownParser, ParseResult, PdfParser};
+use crate::core::{Error, Result};
+use crate::parser::{DocumentFormat, DocumentParser, MarkdownParser, ParseResult, PdfParser};
 
 /// Type alias for parser factory functions.
 type ParserFactory = Box<dyn Fn() -> Box<dyn DocumentParser> + Send + Sync>;

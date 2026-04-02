@@ -38,6 +38,7 @@
 
 mod types;
 mod registry;
+mod traits;
 
 // Markdown parsing module
 pub mod markdown;
@@ -59,8 +60,8 @@ pub use types::{
     RawNode,
 };
 
-// Re-export parser trait from core
-pub use crate::core::DocumentParser;
+// Re-export parser trait
+pub use traits::DocumentParser;
 
 // Re-export registry and convenience functions
 pub use registry::{

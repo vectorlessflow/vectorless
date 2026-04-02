@@ -32,8 +32,8 @@ use std::path::Path;
 use async_trait::async_trait;
 use zip::ZipArchive;
 
-use crate::core::{DocumentParser, Error, Result};
-use crate::parser::{DocumentFormat, DocumentMeta, ParseResult, RawNode};
+use crate::core::{Error, Result};
+use crate::parser::{DocumentFormat, DocumentMeta, DocumentParser, ParseResult, RawNode};
 
 use super::styles::StyleResolver;
 use super::types::DocxParagraph;

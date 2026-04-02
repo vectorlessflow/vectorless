@@ -7,8 +7,8 @@ use async_trait::async_trait;
 use pulldown_cmark::Options;
 use std::path::Path;
 
-use crate::core::{DocumentParser, Result};
-use crate::parser::{DocumentFormat, DocumentMeta, ParseResult, RawNode};
+use crate::core::Result;
+use crate::parser::{DocumentFormat, DocumentMeta, DocumentParser, ParseResult, RawNode};
 use crate::token::estimate_tokens;
 
 use super::config::MarkdownConfig;

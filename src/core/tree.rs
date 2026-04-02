@@ -290,40 +290,4 @@ impl VectorlessTree {
             nodes: children.into_iter().enumerate().map(|(i, c)| self.node_to_structure(c, i)).collect(),
         }
     }
-
-    /// Generate summaries for all nodes using the provided summarizer.
-    ///
-    /// This method traverses the tree and generates summaries for each node
-    /// that has content.
-    pub async fn generate_summaries<F, Fut>(&mut self, mut summarizer: F) -> Result<(), Box<dyn std::error::Error + Send + Sync>>
-    where
-        F: FnMut(String) -> Fut,
-        Fut: std::future::Future<Output = Result<String, Box<dyn std::error::Error + Send + Sync>>>,
-    {
-        let node_ids: Vec<NodeId> = self.traverse();
-        eprintln!("[DEBUG] generate_summaries called for {} nodes", node_ids.len());
-        for node_id in node_ids {
-            if let Some(node) = self.get(node_id).cloned() {
-                if !node.content.is_empty() {
-                    eprintln!("[DEBUG] Generating summary for node: {} (content length: {})", node.title, node.content.len());
-                    match summarizer(node.content.clone()).await {
-                        Ok(summary) => {
-                            eprintln!("[DEBUG] Summary generated for {}: {}", node.title, &summary[..std::cmp::min(50, summary.len())]);
-                            self.set_summary(node_id, &summary);
-                        }
-                        Err(e) => {
-                            eprintln!("[WARN] Failed to generate summary for node '{}': {}", node.title, e);
-                        }
-                    }
-                } else {
-                    eprintln!("[DEBUG] Skipping node {} (no content)", node.title);
-                }
-            }
-        }
-        Ok(())
-    }
-
 }
-
-/// Type alias for backward compatibility.
-pub type DocumentTree = VectorlessTree;
