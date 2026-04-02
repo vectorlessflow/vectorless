@@ -221,11 +221,12 @@ on_rate_limit = "retry_then_fallback"
 - [x] Markdown parser with TOC detection
 - [x] Rate limiting and concurrency control
 - [x] Fallback and retry logic
-- [ ] DOCX parser
+- [x] DOCX parser
 - [ ] Enhanced PDF with TOC extraction
 - [ ] Beam search retriever
 - [ ] Sled storage backend for scale
 - [ ] Python bindings
+- [ ] Incremental indexing
 
 ## Contributing
 
