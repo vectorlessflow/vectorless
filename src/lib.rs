@@ -87,7 +87,6 @@ pub mod concurrency;
 pub mod core;
 pub mod parser;
 pub mod llm;
-pub mod ranking;
 pub mod storage;
 pub mod token;
 
@@ -132,9 +131,6 @@ pub use core::retriever::{
     AdaptiveRetriever, ContextBuilder,
     NavigationDecision, NavigationStep, SearchPath,
     format_for_llm, format_tree_for_llm,};
-
-// Ranking
-pub use ranking::{MergeStrategy, Merger, ScoredResult, Scorer, ScoringStrategy};
 
 // Storage
 pub use storage::{DocumentMeta as StorageDocumentMeta, PersistedDocument, Workspace};
