@@ -1,6 +1,6 @@
 <div align="center">
 
-![Vectorless](docs/logo-horizontal.svg)
+![Vectorless](docs/assets/brand/logo-horizontal.svg)
 
 [![Crates.io](https://img.shields.io/crates/v/vectorless.svg)](https://crates.io/crates/vectorless)
 [![Downloads](https://img.shields.io/crates/d/vectorless.svg)](https://crates.io/crates/vectorless)
@@ -30,7 +30,7 @@ It preserves your document's tree structure and uses an LLM to navigate it — j
 
 ## How It Works
 
-![Architecture](docs/architecture.svg)
+![Architecture](docs/design/architecture.svg)
 
 **Vectorless** preserves your document's hierarchical structure and uses an LLM to navigate it step by step:
 
