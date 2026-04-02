@@ -38,7 +38,9 @@
 
 mod types;
 mod parser;
-mod markdown;
+
+// Markdown parsing module
+pub mod markdown;
 
 // PDF parsing module
 pub mod pdf;

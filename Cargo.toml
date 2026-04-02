@@ -50,6 +50,9 @@ tiktoken-rs = "0.9"
 # Text processing
 regex = "1.10"
 
+# Markdown parsing
+pulldown-cmark = { version = "0.12", default-features = false, features = ["simd"] }
+
 # Tree data structure
 indextree = { version = "4.8.0", features = ["deser"] }
 
