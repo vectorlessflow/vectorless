@@ -8,8 +8,7 @@ use std::time::Instant;
 use tracing::info;
 
 use crate::core::{NodeId, Result};
-use crate::core::index::context::IndexContext;
-use crate::core::index::OptimizationConfig;
+use crate::core::index::pipeline::IndexContext;
 
 use super::{IndexStage, StageResult};
 

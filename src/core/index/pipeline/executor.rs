@@ -3,7 +3,6 @@
 
 //! Pipeline executor for running index stages.
 
-use std::sync::Arc;
 use std::time::Instant;
 use tracing::{info, warn, error};
 
@@ -11,7 +10,6 @@ use crate::core::Result;
 use crate::llm::LlmClient;
 
 use super::context::{IndexContext, IndexInput, IndexResult};
-use super::metrics::IndexMetrics;
 use super::super::stages::{
     BuildStage, EnhanceStage, EnrichStage, IndexStage, OptimizeStage,
     ParseStage, PersistStage,

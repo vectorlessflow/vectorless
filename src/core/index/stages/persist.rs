@@ -11,7 +11,7 @@ use crate::core::Result;
 use crate::storage::{PersistedDocument, DocumentMeta as StorageMeta, Workspace};
 
 use super::{IndexStage, StageResult};
-use crate::core::index::context::IndexContext;
+use crate::core::index::pipeline::IndexContext;
 
 /// Persist stage - saves indexed document to storage.
 pub struct PersistStage {

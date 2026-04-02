@@ -5,7 +5,7 @@
 
 use crate::core::{DocumentTree, NodeId};
 use crate::document::RawNode;
-use crate::indexer::{ThinningConfig, thin_raw_nodes, calculate_total_tokens};
+use crate::indexer_legacy::{ThinningConfig, thin_raw_nodes, calculate_total_tokens};
 
 /// Builder for constructing document trees from raw nodes.
 pub struct TreeBuilder {

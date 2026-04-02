@@ -12,8 +12,8 @@ use crate::core::{NodeId, Result, VectorlessTree};
 use crate::llm::LlmClient;
 
 use super::{IndexStage, StageResult};
-use crate::core::index::context::IndexContext;
-use crate::core::index::strategy::{LlmSummaryGenerator, SummaryGenerator, SummaryStrategy};
+use crate::core::index::pipeline::IndexContext;
+use crate::core::index::summary::{LlmSummaryGenerator, SummaryGenerator, SummaryStrategy};
 
 /// Enhance stage - generates summaries using LLM.
 pub struct EnhanceStage {

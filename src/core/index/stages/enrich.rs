@@ -11,7 +11,7 @@ use crate::core::{NodeId, Result, VectorlessTree};
 use crate::core::toc::TocView;
 
 use super::{IndexStage, StageResult};
-use crate::core::index::context::IndexContext;
+use crate::core::index::pipeline::IndexContext;
 
 /// Enrich stage - adds metadata to the tree.
 pub struct EnrichStage;

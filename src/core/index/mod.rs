@@ -49,7 +49,7 @@ pub use pipeline::{IndexContext, IndexInput, IndexMetrics, IndexResult, Pipeline
 pub use stages::IndexStage;
 
 // Re-export summary
-pub use summary::{SummaryStrategy, SummaryStrategyConfig, SummaryGenerator, LlmSummaryGenerator};
+pub use summary::{SummaryStrategy, SummaryStrategyConfig, SummaryGenerator, LlmSummaryGenerator, FullStrategy, SelectiveStrategy, LazyStrategy};
 
 // Re-export incremental
 pub use incremental::{ChangeDetector, ChangeSet, PartialUpdater};

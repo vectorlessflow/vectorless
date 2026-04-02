@@ -6,8 +6,6 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use serde::{Deserialize, Serialize};
-
 use crate::core::{VectorlessTree, NodeId};
 use crate::document::{DocumentFormat, RawNode};
 use crate::llm::LlmClient;

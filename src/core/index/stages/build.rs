@@ -12,8 +12,8 @@ use crate::document::RawNode;
 use crate::token::estimate_tokens;
 
 use super::{IndexStage, StageResult};
-use crate::core::index::context::IndexContext;
-use crate::core::index::{ThinningConfig, OptimizationConfig};
+use crate::core::index::pipeline::IndexContext;
+use crate::core::index::ThinningConfig;
 
 /// Build stage - constructs a tree from raw nodes.
 pub struct BuildStage;

@@ -12,7 +12,7 @@ use crate::document::DocumentFormat;
 use crate::registry::ParserRegistry;
 
 use super::{IndexStage, StageResult};
-use crate::core::index::context::{IndexContext, IndexInput};
+use crate::core::index::pipeline::{IndexContext, IndexInput};
 use crate::core::index::IndexMode;
 
 /// Parse stage - extracts raw nodes from documents.

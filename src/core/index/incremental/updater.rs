@@ -3,13 +3,12 @@
 
 //! Partial tree updater for incremental indexing.
 
-use std::collections::HashSet;
 use tracing::info;
 
 use crate::core::{NodeId, Result, VectorlessTree};
 use crate::document::RawNode;
 
-use super::detector::{ChangeDetector, ChangeSet};
+use super::detector::ChangeDetector;
 
 /// Result of a partial update.
 #[derive(Debug)]
