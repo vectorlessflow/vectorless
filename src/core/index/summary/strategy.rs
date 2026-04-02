@@ -130,12 +130,12 @@ impl SummaryStrategy {
     }
 
     /// Get the config.
-    pub fn config(&self) -> &SummaryStrategyConfig {
+    pub fn config(&self) -> SummaryStrategyConfig {
         match self {
-            Self::None => &SummaryStrategyConfig::default(),
-            Self::Full { config } => config,
-            Self::Selective { config, .. } => config,
-            Self::Lazy { config, .. } => config,
+            Self::None => SummaryStrategyConfig::default(),
+            Self::Full { config } => config.clone(),
+            Self::Selective { config, .. } => config.clone(),
+            Self::Lazy { config, .. } => config.clone(),
         }
     }
 }
@@ -184,7 +184,7 @@ impl SummaryGenerator for LlmSummaryGenerator {
         );
 
         self.client
-            .complete_once_with_max_tokens(&system_prompt, &user_prompt, self.max_tokens as u16)
+            .complete_with_max_tokens(&system_prompt, &user_prompt, self.max_tokens as u16)
             .await
     }
 }

@@ -33,8 +33,8 @@ impl PersistStage {
     }
 
     /// Save document to workspace.
-    fn save_to_workspace(&self, ctx: &IndexContext) -> Result<()> {
-        let workspace = self.workspace.as_ref().ok_or_else(|| {
+    fn save_to_workspace(&mut self, ctx: &IndexContext) -> Result<()> {
+        let workspace = self.workspace.as_mut().ok_or_else(|| {
             crate::core::Error::Config("No workspace configured".to_string())
         })?;
 
@@ -79,7 +79,7 @@ impl IndexStage for PersistStage {
         true
     }
 
-    async fn execute(&self, ctx: &mut IndexContext) -> Result<StageResult> {
+    async fn execute(&mut self, ctx: &mut IndexContext) -> Result<StageResult> {
         let start = Instant::now();
 
         // Only persist if workspace is configured

@@ -107,7 +107,7 @@ impl IndexStage for EnrichStage {
         "enrich"
     }
 
-    async fn execute(&self, ctx: &mut IndexContext) -> Result<StageResult> {
+    async fn execute(&mut self, ctx: &mut IndexContext) -> Result<StageResult> {
         let start = Instant::now();
 
         let tree = ctx.tree.as_mut().ok_or_else(|| {

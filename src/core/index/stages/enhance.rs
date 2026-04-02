@@ -102,7 +102,7 @@ impl IndexStage for EnhanceStage {
         true
     }
 
-    async fn execute(&self, ctx: &mut IndexContext) -> Result<StageResult> {
+    async fn execute(&mut self, ctx: &mut IndexContext) -> Result<StageResult> {
         let start = Instant::now();
 
         // Check if we need summaries

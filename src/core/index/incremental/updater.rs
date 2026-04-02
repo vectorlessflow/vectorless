@@ -162,8 +162,7 @@ impl PartialUpdater {
 
     /// Record document state after indexing.
     pub fn record(&mut self, doc_id: &str, content: &str) {
-        let hash = Self::hash_content(content);
-        self.detector.hashes.insert(doc_id.to_string(), hash);
+        self.detector.record(doc_id, content, None);
     }
 
     /// Hash content.

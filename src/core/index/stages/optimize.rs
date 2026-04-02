@@ -143,7 +143,7 @@ impl IndexStage for OptimizeStage {
         true
     }
 
-    async fn execute(&self, ctx: &mut IndexContext) -> Result<StageResult> {
+    async fn execute(&mut self, ctx: &mut IndexContext) -> Result<StageResult> {
         let start = Instant::now();
 
         let config = &ctx.options.optimization;

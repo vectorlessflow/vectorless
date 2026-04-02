@@ -19,7 +19,7 @@ pub use persist::PersistStage;
 
 pub use async_trait::async_trait;
 use crate::core::Result;
-use super::context::{IndexContext, StageResult};
+use super::pipeline::{IndexContext, StageResult};
 
 /// Index pipeline stage.
 #[async_trait]
@@ -28,7 +28,7 @@ pub trait IndexStage: Send + Sync {
     fn name(&self) -> &str;
 
     /// Execute the stage.
-    async fn execute(&self, ctx: &mut IndexContext) -> Result<StageResult>;
+    async fn execute(&mut self, ctx: &mut IndexContext) -> Result<StageResult>;
 
     /// Whether this stage is optional (can be skipped on failure).
     fn is_optional(&self) -> bool {

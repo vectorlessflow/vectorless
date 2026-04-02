@@ -11,11 +11,12 @@ use crate::core::Result;
 use crate::llm::LlmClient;
 
 use super::context::{IndexContext, IndexInput, IndexResult};
-use super::stages::{
+use super::metrics::IndexMetrics;
+use super::super::stages::{
     BuildStage, EnhanceStage, EnrichStage, IndexStage, OptimizeStage,
     ParseStage, PersistStage,
 };
-use super::{IndexMetrics, IndexOptions};
+use super::super::IndexOptions;
 
 /// Pipeline executor for document indexing.
 pub struct PipelineExecutor {
@@ -61,7 +62,7 @@ impl PipelineExecutor {
     }
 
     /// Execute the pipeline.
-    pub async fn execute(&self, input: IndexInput, options: IndexOptions) -> Result<IndexResult> {
+    pub async fn execute(&mut self, input: IndexInput, options: IndexOptions) -> Result<IndexResult> {
         let total_start = Instant::now();
         info!("Starting index pipeline");
 
@@ -69,16 +70,17 @@ impl PipelineExecutor {
         let mut ctx = IndexContext::new(input, options);
 
         // Execute each stage
-        for stage in &self.stages {
-            let stage_name = stage.name();
+        for stage in &mut self.stages {
+            let stage_name = stage.name().to_string();
+            let is_optional = stage.is_optional();
             info!("Executing stage: {}", stage_name);
 
             match stage.execute(&mut ctx).await {
                 Ok(result) => {
-                    ctx.stage_results.insert(stage_name.to_string(), result);
+                    ctx.stage_results.insert(stage_name.clone(), result);
                 }
                 Err(e) => {
-                    if stage.is_optional() {
+                    if is_optional {
                         warn!("Optional stage {} failed: {}", stage_name, e);
                     } else {
                         error!("Required stage {} failed: {}", stage_name, e);

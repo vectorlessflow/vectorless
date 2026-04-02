@@ -119,7 +119,7 @@ impl ChangeDetector {
             return true;
         };
 
-        current_mtime > recorded_mtime
+        current_mtime > *recorded_mtime
     }
 
     /// Check if content needs reindexing based on hash.
@@ -160,7 +160,7 @@ impl ChangeDetector {
         for (title, info) in &new_nodes {
             if !old_nodes.contains_key(title) {
                 changes.added.push(NodeChange {
-                    node_id: info.node_id,
+                    node_id: info.node_id.clone(),
                     title: title.clone(),
                     change_type: ChangeType::Added,
                 });
@@ -171,7 +171,7 @@ impl ChangeDetector {
         for (title, info) in &old_nodes {
             if !new_nodes.contains_key(title) {
                 changes.removed.push(NodeChange {
-                    node_id: Some(info.node_id),
+                    node_id: info.node_id.clone(),
                     title: title.clone(),
                     change_type: ChangeType::Removed,
                 });
@@ -183,7 +183,7 @@ impl ChangeDetector {
             if let Some(old_info) = old_nodes.get(title) {
                 if old_info.content_hash != new_info.content_hash {
                     changes.modified.push(NodeChange {
-                        node_id: Some(new_info.node_id),
+                        node_id: new_info.node_id.clone(),
                         title: title.clone(),
                         change_type: ChangeType::Modified,
                     });

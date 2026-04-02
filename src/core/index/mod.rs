@@ -23,10 +23,11 @@
 //! # Usage
 //!
 //! ```rust,ignore
-//! use vectorless::core::index::{PipelineExecutor, IndexOptions, SummaryStrategy};
+//! use vectorless::core::index::pipeline::{PipelineExecutor, IndexOptions};
+//! use vectorless::core::index::summary::SummaryStrategy;
 //!
 //! let options = IndexOptions {
-//!     summary_strategy: SummaryStrategy::Selective { min_tokens: 100, branch_only: true },
+//!     summary_strategy: SummaryStrategy::selective(100, true),
 //!     ..Default::default()
 //! };
 //!
@@ -36,28 +37,25 @@
 //!     .await?;
 //! ```
 
-pub mod context;
-pub mod executor;
-pub mod metrics;
-pub mod stages;
-pub mod strategy;
 pub mod incremental;
+pub mod pipeline;
+pub mod stages;
+pub mod summary;
 
-// Re-export main types
-pub use context::{IndexContext, IndexInput, IndexResult, StageResult};
-pub use executor::PipelineExecutor;
-pub use metrics::IndexMetrics;
+// Re-export main types from pipeline
+pub use pipeline::{IndexContext, IndexInput, IndexMetrics, IndexResult, PipelineExecutor, StageResult};
+
+// Re-export stages
 pub use stages::IndexStage;
 
-// Re-export strategies
-pub use strategy::{SummaryStrategy, SummaryStrategyConfig};
+// Re-export summary
+pub use summary::{SummaryStrategy, SummaryStrategyConfig, SummaryGenerator, LlmSummaryGenerator};
 
-// Re-export incremental update
+// Re-export incremental
 pub use incremental::{ChangeDetector, ChangeSet, PartialUpdater};
 
-// Re-export types from config
+// Configuration types
 use crate::config::{ConcurrencyConfig, IndexerConfig};
-use std::path::PathBuf;
 
 /// Configuration for tree optimization.
 #[derive(Debug, Clone)]

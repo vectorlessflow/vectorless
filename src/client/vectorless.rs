@@ -45,7 +45,7 @@ use tracing::info;
 use crate::config::Config;
 use crate::core::{DocumentTree, Result, Error};
 use crate::document::DocumentFormat;
-use crate::indexer::TreeBuilder;
+use crate::indexer_legacy::TreeBuilder;
 use crate::storage::{Workspace, PersistedDocument, DocumentMeta as StorageMeta};
 use crate::registry::{ParserRegistry, SummarizerRegistry};
 use crate::core::retriever::{AdaptiveRetriever, Retriever};

@@ -13,7 +13,7 @@ use crate::document::{DocumentFormat, RawNode};
 use crate::llm::LlmClient;
 
 use super::metrics::IndexMetrics;
-use super::{IndexOptions, SummaryStrategy};
+use super::super::{IndexOptions, SummaryStrategy};
 
 /// Input for the index pipeline.
 #[derive(Debug, Clone)]

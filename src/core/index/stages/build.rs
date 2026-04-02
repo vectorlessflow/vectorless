@@ -213,7 +213,7 @@ impl IndexStage for BuildStage {
         "build"
     }
 
-    async fn execute(&self, ctx: &mut IndexContext) -> Result<StageResult> {
+    async fn execute(&mut self, ctx: &mut IndexContext) -> Result<StageResult> {
         let start = Instant::now();
 
         // Take raw nodes from context
