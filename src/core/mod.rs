@@ -22,6 +22,7 @@ mod error;
 mod node;
 mod traits;
 mod tree;
+mod toc;
 
 pub mod retriever;
 
@@ -29,6 +30,7 @@ pub use error::{Error, Result};
 pub use node::{NodeId, VectorlessNode};
 pub use tree::{DocumentStructure, VectorlessTree, StructureNode};
 pub use traits::*;
+pub use toc::{TocView, TocNode, TocEntry, TocConfig};
 
 // Re-export retriever types for convenience
 pub use retriever::{

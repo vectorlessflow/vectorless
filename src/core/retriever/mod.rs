@@ -49,6 +49,11 @@ pub mod cache;
 
 pub use types::*;
 pub use retriever::{Retriever, RetrieverError, RetrieverResult, RetrievalContext};
-pub use adaptive::AdaptiveRetriever;
+pub use adaptive::{AdaptiveRetriever, AdaptiveConfig};
 pub use llm_navigate::LlmNavigator;
 pub use context::{ContextBuilder, format_for_llm, format_tree_for_llm};
+pub use strategy::{RetrievalStrategy, StrategyCapabilities, KeywordStrategy, SemanticStrategy, LlmStrategy};
+pub use search::{BeamSearch, GreedySearch, SearchConfig, SearchResult};
+pub use sufficiency::{SufficiencyChecker, SufficiencyLevel, ThresholdChecker};
+pub use complexity::ComplexityDetector;
+pub use cache::PathCache;

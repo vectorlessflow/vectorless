@@ -8,7 +8,7 @@ mod keyword;
 mod semantic;
 mod llm;
 
-pub use r#trait::{RetrievalStrategy, StrategyCapabilities};
+pub use r#trait::{RetrievalStrategy, StrategyCapabilities, NodeEvaluation, StrategyCost};
 pub use keyword::KeywordStrategy;
 pub use semantic::SemanticStrategy;
 pub use llm::LlmStrategy;
