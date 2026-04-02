@@ -229,9 +229,19 @@ on_rate_limit = "retry_then_fallback"
 
 ## Contributing
 
-Contributions are welcome! 
+Contributions are welcome!
 
 If you find this project useful, please consider giving it a star on [GitHub](https://github.com/vectorlessflow/vectorless) — it helps others discover it and supports ongoing development.
+
+## Star History
+
+<a href="https://www.star-history.com/#vectorlessflow/vectorless&Date">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=vectorlessflow/vectorless&type=Date&theme=dark" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=vectorlessflow/vectorless&type=Date" />
+   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=vectorlessflow/vectorless&type=Date" />
+ </picture>
+</a>
 
 ## License
 
