@@ -167,66 +167,7 @@ async fn main() -> vectorless::core::Result<()> {
 
 ## Architecture
 
-```
-src/
-├── core/           # Core types: DocumentTree, TreeNode, NodeId
-├── client/         # High-level API: Vectorless, VectorlessBuilder
-├── document/       # Document parsing: Markdown, PDF, TOC detection
-├── indexer/        # Index building: Tree construction, thinning
-├── retriever/      # Retrieval strategies: LLM navigate, beam search
-├── llm/            # LLM client: Retry, fallback, concurrency
-├── storage/        # Persistence: Workspace, LRU cache
-├── config/         # Configuration management
-└── token/          # Token estimation (tiktoken)
-```
-
-### Key Components
-
-- **DocumentTree** — Hierarchical structure preserving document organization
-- **TreeBuilder** — Converts raw nodes to optimized tree with thinning
-- **LlmNavigator** — LLM-powered tree traversal for retrieval
-- **Workspace** — Persistent storage with lazy loading and LRU caching
-- **ConcurrencyController** — Rate limiting and request throttling
-
-## Configuration
-
-```toml
-# vectorless.toml
-
-[summary]
-model = "gpt-4o-mini"
-endpoint = "https://api.openai.com/v1"
-max_tokens = 200
-
-[retrieval]
-model = "gpt-4o"
-retriever_type = "llm_navigate"
-top_k = 3
-
-[concurrency]
-max_concurrent_requests = 10
-requests_per_minute = 500
-
-[fallback]
-enabled = true
-models = ["gpt-4o-mini", "glm-4-flash"]
-on_rate_limit = "retry_then_fallback"
-```
-
-## Roadmap
-
-- [x] Tree-based document indexing
-- [x] LLM-powered navigation
-- [x] Workspace persistence with LRU cache
-- [x] Markdown parser with TOC detection
-- [x] Rate limiting and concurrency control
-- [x] Fallback and retry logic
-- [x] DOCX parser
-- [ ] Enhanced PDF with TOC extraction
-- [ ] Beam search retriever
-- [ ] Sled storage backend for scale
-- [ ] Python bindings
-- [ ] Incremental indexing
+![Architecture](docs/design/architecture-v2.svg)
 
 ## Contributing
 
