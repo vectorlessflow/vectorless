@@ -44,7 +44,7 @@ pub use super::retriever::Retriever;
 #[async_trait]
 pub trait DocumentParser: Send + Sync {
     /// Get the document format this parser handles.
-    fn format(&self) -> crate::document::DocumentFormat;
+    fn format(&self) -> crate::parser::DocumentFormat;
 
     /// Parse content from a string.
     ///
@@ -55,7 +55,7 @@ pub trait DocumentParser: Send + Sync {
     /// # Returns
     ///
     /// A [`ParseResult`] containing extracted nodes and metadata.
-    async fn parse(&self, content: &str) -> Result<crate::document::ParseResult>;
+    async fn parse(&self, content: &str) -> Result<crate::parser::ParseResult>;
 
     /// Parse content from a file.
     ///
@@ -64,7 +64,7 @@ pub trait DocumentParser: Send + Sync {
     /// # Arguments
     ///
     /// * `path` - Path to the file
-    async fn parse_file(&self, path: &Path) -> Result<crate::document::ParseResult> {
+    async fn parse_file(&self, path: &Path) -> Result<crate::parser::ParseResult> {
         let content = tokio::fs::read_to_string(path)
             .await
             .map_err(|e| crate::core::Error::Parse(format!("Failed to read file: {}", e)))?;

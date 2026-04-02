@@ -8,8 +8,8 @@ use std::time::Instant;
 use tracing::info;
 
 use crate::core::Result;
-use crate::document::DocumentFormat;
-use crate::document::ParserRegistry;
+use crate::parser::DocumentFormat;
+use crate::parser::ParserRegistry;
 
 use super::{IndexStage, StageResult};
 use crate::core::index::pipeline::{IndexContext, IndexInput};

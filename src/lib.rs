@@ -85,7 +85,7 @@ pub mod client;
 pub mod config;
 pub mod concurrency;
 pub mod core;
-pub mod document;
+pub mod parser;
 pub mod llm;
 pub mod ranking;
 pub mod storage;
@@ -122,7 +122,7 @@ pub use config::{Config, ConfigLoader, RetrievalConfig, SummaryConfig};
 pub use llm::{LlmClient, LlmConfig, LlmConfigs, LlmError, LlmPool, RetryConfig};
 
 // Document parsing
-pub use document::{DocumentFormat, DocumentParser, DocxParser, MarkdownParser, PdfParser, ParseResult, RawNode};
+pub use parser::{DocumentFormat, DocumentParser, DocxParser, MarkdownParser, PdfParser, ParseResult, RawNode};
 
 // Indexing (use core::index)
 pub use core::index::{PipelineExecutor, PipelineOptions, IndexInput, IndexMode};

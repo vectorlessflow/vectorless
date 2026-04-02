@@ -11,7 +11,7 @@ use crate::core::Result;
 
 use crate::llm::LlmClient;
 use super::types::TocDetection;
-use crate::document::pdf::PdfPage;
+use crate::parser::pdf::PdfPage;
 
 /// TOC detector configuration.
 #[derive(Debug, Clone)]

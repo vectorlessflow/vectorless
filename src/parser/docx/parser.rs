@@ -33,7 +33,7 @@ use async_trait::async_trait;
 use zip::ZipArchive;
 
 use crate::core::{DocumentParser, Error, Result};
-use crate::document::{DocumentFormat, DocumentMeta, ParseResult, RawNode};
+use crate::parser::{DocumentFormat, DocumentMeta, ParseResult, RawNode};
 
 use super::styles::StyleResolver;
 use super::types::DocxParagraph;

@@ -8,7 +8,7 @@ use std::path::PathBuf;
 
 use crate::config::{Config, ConfigLoader};
 use crate::storage::Workspace;
-use crate::document::ParserRegistry;
+use crate::parser::ParserRegistry;
 use crate::core::retriever::AdaptiveRetriever;
 
 use super::Vectorless;

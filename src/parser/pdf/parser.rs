@@ -11,7 +11,7 @@ use crate::core::{Error, Result};
 use crate::core::DocumentParser;
 
 use super::types::{PdfMetadata, PdfPage, PdfParseResult};
-use crate::document::{DocumentFormat, DocumentMeta, ParseResult, RawNode};
+use crate::parser::{DocumentFormat, DocumentMeta, ParseResult, RawNode};
 
 /// PDF document parser.
 #[derive(Debug, Clone, Default)]

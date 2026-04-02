@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 use crate::core::DocumentTree;
-use crate::document::DocumentFormat;
+use crate::parser::DocumentFormat;
 
 /// An indexed document with its tree structure and metadata.
 #[derive(Debug, Clone)]

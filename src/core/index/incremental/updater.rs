@@ -6,7 +6,7 @@
 use tracing::info;
 
 use crate::core::{NodeId, Result, VectorlessTree};
-use crate::document::RawNode;
+use crate::parser::RawNode;
 
 use super::detector::ChangeDetector;
 

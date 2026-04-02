@@ -8,7 +8,7 @@ use std::time::Instant;
 use tracing::info;
 
 use crate::core::{DocumentTree, NodeId, Result};
-use crate::document::RawNode;
+use crate::parser::RawNode;
 use crate::token::estimate_tokens;
 
 use super::{IndexStage, StageResult};

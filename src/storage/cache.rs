@@ -6,7 +6,7 @@
 //! This module provides functionality for caching frequently accessed
 //! document data to improve performance.
 
-use crate::document::StructureNodeDto;
+use crate::parser::StructureNodeDto;
 use lru::LruCache;
 use serde_json;
 use std::io;

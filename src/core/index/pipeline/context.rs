@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 use crate::core::{VectorlessTree, NodeId};
-use crate::document::{DocumentFormat, RawNode};
+use crate::parser::{DocumentFormat, RawNode};
 use crate::llm::LlmClient;
 
 use super::metrics::IndexMetrics;

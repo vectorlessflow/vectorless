@@ -8,7 +8,7 @@ use pulldown_cmark::Options;
 use std::path::Path;
 
 use crate::core::{DocumentParser, Result};
-use crate::document::{DocumentFormat, DocumentMeta, ParseResult, RawNode};
+use crate::parser::{DocumentFormat, DocumentMeta, ParseResult, RawNode};
 use crate::token::estimate_tokens;
 
 use super::config::MarkdownConfig;

@@ -37,7 +37,6 @@
 //! ```
 
 mod types;
-mod parser;
 mod registry;
 
 // Markdown parsing module
@@ -63,16 +62,14 @@ pub use types::{
 // Re-export parser trait from core
 pub use crate::core::DocumentParser;
 
-// Re-export parser utilities
-pub use parser::{
+// Re-export registry and convenience functions
+pub use registry::{
+    ParserRegistry,
     get_parser,
     get_parser_for_file,
     parse_content,
     parse_file,
 };
-
-// Re-export registry
-pub use registry::ParserRegistry;
 
 // Re-export concrete parsers
 pub use markdown::{MarkdownParser, MarkdownConfig};
