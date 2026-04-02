@@ -37,6 +37,10 @@ pub struct DocumentStructure {
     pub structure: Vec<StructureNode>,
 }
 
+/// A hierarchical document tree structure.
+///
+/// Uses an arena-based tree representation for efficient traversal
+/// and node manipulation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DocumentTree {
     /// The underlying arena storing all nodes.

@@ -63,14 +63,17 @@ pub struct IndexerConfig {
     pub max_summary_tokens: usize,
 }
 
+/// Default subsection word count threshold.
 pub fn default_subsection_threshold() -> usize {
     300
 }
 
+/// Default maximum tokens for segmentation.
 pub fn default_max_segment_tokens() -> usize {
     3000
 }
 
+/// Default maximum tokens for summaries.
 pub fn default_max_summary_tokens() -> usize {
     200
 }
@@ -111,10 +114,12 @@ pub struct LlmConfig {
     pub temperature: f32,
 }
 
+/// Default LLM model name.
 fn default_llm_model() -> String {
     "gpt-4o-mini".to_string()
 }
 
+/// Default LLM API endpoint, auto-detected from environment.
 fn default_llm_endpoint() -> String {
     std::env::var("OPENAI_API_BASE")
         .or_else(|_| std::env::var("OPENAI_BASE_URL"))
@@ -122,6 +127,7 @@ fn default_llm_endpoint() -> String {
         .unwrap_or_else(|_| "https://api.openai.com/v1".to_string())
 }
 
+/// Default maximum tokens for LLM responses.
 fn default_llm_max_tokens() -> usize {
     1000
 }
@@ -195,6 +201,7 @@ pub struct SummaryConfig {
     pub temperature: f32,
 }
 
+/// Default summary model name.
 pub fn default_summary_model() -> String {
     // Auto-detect based on available API keys
     // if std::env::var("OPENAI_API_KEY").is_ok() {
@@ -208,6 +215,7 @@ pub fn default_summary_model() -> String {
     "glm-5".to_string()
 }
 
+/// Default summary endpoint, auto-detected from environment.
 pub fn default_summary_endpoint() -> String {
     // Auto-detect based on available API keys
     if std::env::var("OPENAI_API_KEY").is_ok() {
@@ -219,10 +227,12 @@ pub fn default_summary_endpoint() -> String {
     }
 }
 
+/// Default maximum tokens for summary generation.
 pub fn default_summary_max_tokens() -> usize {
     200
 }
 
+/// Default temperature for LLM generation.
 pub fn default_temperature() -> f32 {
     0.0
 }
@@ -293,6 +303,7 @@ pub struct RetrievalConfig {
     pub retriever_type: RetrieverType,
 }
 
+/// Default retrieval model name, auto-detected from environment.
 pub fn default_retrieval_model() -> String {
     // Auto-detect based on available API keys
     if std::env::var("OPENAI_API_KEY").is_ok() {
@@ -304,6 +315,7 @@ pub fn default_retrieval_model() -> String {
     }
 }
 
+/// Default retrieval endpoint, auto-detected from environment.
 pub fn default_retrieval_endpoint() -> String {
     // Auto-detect based on available API keys
     if std::env::var("OPENAI_API_KEY").is_ok() {
@@ -315,10 +327,12 @@ pub fn default_retrieval_endpoint() -> String {
     }
 }
 
+/// Default maximum tokens for retrieval context.
 pub fn default_retrieval_max_tokens() -> usize {
     1000
 }
 
+/// Default number of top results to return.
 pub fn default_top_k() -> usize {
     3
 }
@@ -353,6 +367,7 @@ pub struct StorageConfig {
     pub workspace_dir: PathBuf,
 }
 
+/// Default workspace directory path.
 pub fn default_workspace_dir() -> PathBuf {
     PathBuf::from("./workspace")
 }
@@ -385,8 +400,13 @@ pub struct ConcurrencyConfig {
     pub semaphore_enabled: bool,
 }
 
+/// Default maximum concurrent requests.
 pub fn default_max_concurrent_requests() -> usize { 10 }
+
+/// Default requests per minute rate limit.
 pub fn default_requests_per_minute() -> usize { 500 }
+
+/// Default boolean value (true).
 pub fn default_true() -> bool { true }
 
 impl Default for ConcurrencyConfig {
@@ -476,7 +496,10 @@ pub enum OnAllFailedBehavior {
     /// Try to return cached result if available.
     ReturnCache,
     /// Return a default value.
-    ReturnDefault { value: String },
+    ReturnDefault {
+        /// The default value to return.
+        value: String,
+    },
 }
 
 impl Default for OnAllFailedBehavior {

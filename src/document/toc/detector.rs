@@ -48,9 +48,13 @@ pub struct TocDetector {
 }
 
 /// A TOC detection pattern.
+#[allow(dead_code)]
 struct TocPattern {
+    /// Pattern name for debugging.
     name: &'static str,
+    /// Regex pattern to match.
     regex: Regex,
+    /// Weight for scoring.
     weight: f32,
 }
 
