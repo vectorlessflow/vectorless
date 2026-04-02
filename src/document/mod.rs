@@ -38,6 +38,7 @@
 
 mod types;
 mod parser;
+mod registry;
 
 // Markdown parsing module
 pub mod markdown;
@@ -69,6 +70,9 @@ pub use parser::{
     parse_content,
     parse_file,
 };
+
+// Re-export registry
+pub use registry::ParserRegistry;
 
 // Re-export concrete parsers
 pub use markdown::{MarkdownParser, MarkdownConfig};

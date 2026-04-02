@@ -88,7 +88,6 @@ pub mod core;
 pub mod document;
 pub mod llm;
 pub mod ranking;
-pub mod registry;
 pub mod storage;
 pub mod token;
 
@@ -142,9 +141,6 @@ pub use storage::{DocumentMeta as StorageDocumentMeta, PersistedDocument, Worksp
 
 // Concurrency
 pub use concurrency::{ConcurrencyConfig, ConcurrencyController, RateLimiter};
-
-// Registry
-pub use registry::ParserRegistry;
 
 // Token estimation
 pub use token::{estimate_tokens, estimate_tokens_fast};

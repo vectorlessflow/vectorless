@@ -9,7 +9,7 @@ use tracing::info;
 
 use crate::core::Result;
 use crate::document::DocumentFormat;
-use crate::registry::ParserRegistry;
+use crate::document::ParserRegistry;
 
 use super::{IndexStage, StageResult};
 use crate::core::index::pipeline::{IndexContext, IndexInput};

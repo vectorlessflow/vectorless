@@ -46,7 +46,7 @@ use crate::config::Config;
 use crate::core::{DocumentTree, Result, Error};
 use crate::document::DocumentFormat;
 use crate::storage::{Workspace, PersistedDocument, DocumentMeta as StorageMeta};
-use crate::registry::ParserRegistry;
+use crate::document::ParserRegistry;
 use crate::core::retriever::{AdaptiveRetriever, Retriever};
 use crate::core::index::{PipelineExecutor, PipelineOptions, IndexInput, SummaryStrategy};
 
