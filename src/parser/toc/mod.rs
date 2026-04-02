@@ -43,8 +43,8 @@
 //! # Example
 //!
 //! ```rust,no_run
-//! use vectorless::document::toc::TocProcessor;
-//! use vectorless::document::pdf::{PdfParser, PdfPage};
+//! use vectorless::parser::toc::TocProcessor;
+//! use vectorless::parser::pdf::{PdfParser, PdfPage};
 //!
 //! # #[tokio::main]
 //! # async fn main() -> vectorless::core::Result<()> {

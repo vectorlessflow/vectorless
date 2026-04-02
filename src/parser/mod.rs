@@ -17,7 +17,7 @@
 //! # Example
 //!
 //! ```rust,no_run
-//! use vectorless::document::{DocumentParser, MarkdownParser, DocumentFormat};
+//! use vectorless::parser::{DocumentParser, MarkdownParser, DocumentFormat};
 //!
 //! # #[tokio::main]
 //! # async fn main() -> vectorless::core::Result<()> {

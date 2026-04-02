@@ -16,7 +16,7 @@
 //! # Example
 //!
 //! ```rust
-//! use vectorless::document::markdown::{MarkdownParser, MarkdownConfig};
+//! use vectorless::parser::markdown::{MarkdownParser, MarkdownConfig};
 //!
 //! let parser = MarkdownParser::new();
 //! // or with custom config:

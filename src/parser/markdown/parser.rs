@@ -28,8 +28,8 @@ use super::frontmatter;
 /// # Example
 ///
 /// ```rust
-/// use vectorless::document::markdown::MarkdownParser;
-/// # use vectorless::core::DocumentParser;
+/// use vectorless::parser::markdown::MarkdownParser;
+/// use vectorless::parser::DocumentParser;
 ///
 /// # #[tokio::main]
 /// # async fn main() -> vectorless::core::Result<()> {

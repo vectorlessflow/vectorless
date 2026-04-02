@@ -10,7 +10,7 @@
 //! # Example
 //!
 //! ```rust,no_run
-//! use vectorless::document::pdf::{PdfParser, PdfPage};
+//! use vectorless::parser::pdf::{PdfParser, PdfPage};
 //! use std::path::Path;
 //!
 //! # fn main() -> vectorless::core::Result<()> {

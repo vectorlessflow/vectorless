@@ -10,7 +10,7 @@
 /// # Example
 ///
 /// ```rust
-/// use vectorless::document::markdown::MarkdownConfig;
+/// use vectorless::parser::markdown::MarkdownConfig;
 ///
 /// // Default GFM configuration
 /// let config = MarkdownConfig::default();

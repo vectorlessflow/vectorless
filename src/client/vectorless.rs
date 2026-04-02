@@ -17,7 +17,6 @@
 //! # async fn main() -> vectorless::core::Result<()> {
 //! // Create a client
 //! let mut client = VectorlessBuilder::new()
-//!     .with_api_key("sk-...")
 //!     .with_workspace("./my_workspace")
 //!     .build()?;
 //!
@@ -35,8 +34,6 @@
 //! # }
 //! ```
 
-use std::cell::RefCell;
-use std::collections::HashMap;
 use std::path::Path;
 
 use uuid::Uuid;
@@ -49,22 +46,19 @@ use crate::storage::{Workspace, PersistedDocument, DocumentMeta as StorageMeta};
 use crate::core::retriever::{AdaptiveRetriever, Retriever};
 use crate::core::index::{PipelineExecutor, PipelineOptions, IndexInput, SummaryStrategy};
 
-use super::types::{IndexedDocument, IndexMode, IndexOptions, DocumentInfo, QueryResult};
+use super::types::{IndexMode, IndexOptions, DocumentInfo, QueryResult};
 
 /// The main Vectorless client.
 ///
 /// Provides high-level operations for document indexing and retrieval.
+/// Uses Workspace for persistence with built-in LRU cache.
 #[derive(Debug)]
-#[allow(dead_code)]
 pub struct Vectorless {
     /// Configuration.
     pub(crate) config: Config,
 
-    /// Optional workspace for persistence.
-    pub(crate) workspace: Option<RefCell<Workspace>>,
-
-    /// In-memory document cache.
-    pub(crate) documents: HashMap<String, IndexedDocument>,
+    /// Workspace for persistence (with built-in LRU cache).
+    pub(crate) workspace: Option<Workspace>,
 
     /// Adaptive retriever.
     pub(crate) retriever: AdaptiveRetriever,
@@ -72,12 +66,11 @@ pub struct Vectorless {
 
 impl Vectorless {
     /// Create a new client with default configuration.
-    pub fn new() -> Result<Self> {
+    fn new() -> Result<Self> {
         let config = Config::default();
         Ok(Self {
             config,
             workspace: None,
-            documents: HashMap::new(),
             retriever: AdaptiveRetriever::new(),
         })
     }
@@ -119,82 +112,6 @@ impl Vectorless {
 
         info!("Indexing {:?} document: {}", format, path.display());
 
-        // Parse based on format
-        let indexed = match format {
-            DocumentFormat::Markdown => self.index_document(&doc_id, &path, &options, DocumentFormat::Markdown).await?,
-            DocumentFormat::Pdf => self.index_document(&doc_id, &path, &options, DocumentFormat::Pdf).await?,
-            DocumentFormat::Html => {
-                return Err(Error::Parse("HTML parsing not yet implemented".to_string()));
-            }
-            DocumentFormat::Docx => self.index_document(&doc_id, &path, &options, DocumentFormat::Docx).await?,
-            DocumentFormat::Text => self.index_text(&doc_id, &path, &options).await?,
-        };
-
-        // Save to workspace if configured
-        if let Some(ref workspace_cell) = self.workspace {
-            let mut workspace = workspace_cell.borrow_mut();
-            self.save_to_workspace(&mut workspace, &indexed)?;
-        }
-
-        // Cache in memory
-        let doc_id_clone = indexed.id.clone();
-        self.documents.insert(doc_id_clone.clone(), indexed);
-
-        info!("Indexing complete. Document ID: {}", doc_id_clone);
-        Ok(doc_id_clone)
-    }
-
-    /// Save an indexed document to the workspace.
-    fn save_to_workspace(&self, workspace: &mut Workspace, indexed: &IndexedDocument) -> Result<()> {
-        let tree = indexed.tree.as_ref()
-            .ok_or_else(|| Error::Parse("Document tree not generated".to_string()))?;
-
-        let meta = StorageMeta::new(
-            &indexed.id,
-            &indexed.name,
-            indexed.format.extension()
-        )
-        .with_source_path(indexed.source_path.clone().unwrap_or_default())
-        .with_description(indexed.description.clone().unwrap_or_default());
-
-        let mut doc = PersistedDocument::new(meta, tree.clone());
-
-        // Add pages if available
-        for page in &indexed.pages {
-            doc.add_page(page.page, &page.content);
-        }
-
-        workspace.add(&doc)?;
-        info!("Saved document {} to workspace", indexed.id);
-
-        Ok(())
-    }
-
-    /// Detect document format from path and options.
-    fn detect_format(&self, path: &Path, options: &IndexOptions) -> Result<DocumentFormat> {
-        match options.mode {
-            IndexMode::Auto => {
-                let ext = path.extension()
-                    .and_then(|e| e.to_str())
-                    .unwrap_or("");
-                DocumentFormat::from_extension(ext)
-                    .ok_or_else(|| Error::Parse(format!("Unknown format: {}", ext)))
-            }
-            IndexMode::Pdf => Ok(DocumentFormat::Pdf),
-            IndexMode::Markdown => Ok(DocumentFormat::Markdown),
-            IndexMode::Html => Ok(DocumentFormat::Html),
-            IndexMode::Docx => Ok(DocumentFormat::Docx),
-        }
-    }
-
-    /// Index a document file (Markdown, PDF, etc).
-    async fn index_document(
-        &self,
-        doc_id: &str,
-        path: &Path,
-        options: &IndexOptions,
-        format: DocumentFormat,
-    ) -> Result<IndexedDocument> {
         // Convert client options to pipeline options
         let pipeline_options = PipelineOptions {
             mode: match options.mode {
@@ -214,64 +131,53 @@ impl Vectorless {
             ..Default::default()
         };
 
-        // Create pipeline input
-        let input = IndexInput::file(path);
-
-        // Execute pipeline
+        // Create pipeline input and execute
+        let input = IndexInput::file(&path);
         let mut executor = PipelineExecutor::new();
         let result = executor.execute(input, pipeline_options).await?;
 
-        // Create indexed document from result
-        let mut doc = IndexedDocument::new(doc_id, format)
-            .with_name(&result.name)
-            .with_source_path(path);
+        // Build persisted document
+        let tree = result.tree.ok_or_else(||
+            Error::Parse("Document tree not generated".to_string()))?;
 
-        if let Some(tree) = result.tree {
-            doc = doc.with_tree(tree);
-        }
+        let meta = StorageMeta::new(&doc_id, &result.name, format.extension())
+            .with_source_path(path.to_string_lossy().to_string())
+            .with_description(result.description.clone().unwrap_or_default());
 
+        let mut doc = PersistedDocument::new(meta, tree);
+
+        // Add page count if available
         if let Some(page_count) = result.page_count {
-            doc = doc.with_page_count(page_count);
+            for i in 1..=page_count {
+                doc.add_page(i, "");
+            }
         }
 
-        if let Some(line_count) = result.line_count {
-            doc = doc.with_line_count(line_count);
+        // Save to workspace if configured
+        if let Some(ref mut workspace) = self.workspace {
+            workspace.add(&doc)?;
+            info!("Saved document {} to workspace", doc_id);
         }
 
-        if let Some(desc) = result.description {
-            doc = doc.with_description(desc);
-        }
-
-        Ok(doc)
+        info!("Indexing complete. Document ID: {}", doc_id);
+        Ok(doc_id)
     }
 
-    /// Index a plain text file.
-    async fn index_text(
-        &self,
-        doc_id: &str,
-        path: &Path,
-        _options: &IndexOptions,
-    ) -> Result<IndexedDocument> {
-        let content = tokio::fs::read_to_string(path).await
-            .map_err(|e| Error::Io(e))?;
-
-        let line_count = content.lines().count();
-
-        // Create a simple tree with root containing all content
-        let tree = DocumentTree::new(
-            path.file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or("Document"),
-            &content,
-        );
-
-        let doc = IndexedDocument::new(doc_id, DocumentFormat::Text)
-            .with_name(path.file_name().unwrap().to_string_lossy())
-            .with_source_path(path)
-            .with_line_count(line_count)
-            .with_tree(tree);
-
-        Ok(doc)
+    /// Detect document format from path and options.
+    fn detect_format(&self, path: &Path, options: &IndexOptions) -> Result<DocumentFormat> {
+        match options.mode {
+            IndexMode::Auto => {
+                let ext = path.extension()
+                    .and_then(|e| e.to_str())
+                    .unwrap_or("");
+                DocumentFormat::from_extension(ext)
+                    .ok_or_else(|| Error::Parse(format!("Unknown format: {}", ext)))
+            }
+            IndexMode::Pdf => Ok(DocumentFormat::Pdf),
+            IndexMode::Markdown => Ok(DocumentFormat::Markdown),
+            IndexMode::Html => Ok(DocumentFormat::Html),
+            IndexMode::Docx => Ok(DocumentFormat::Docx),
+        }
     }
 
     // ============================================================
@@ -280,33 +186,40 @@ impl Vectorless {
 
     /// Get a list of all indexed documents.
     pub fn list_documents(&self) -> Vec<DocumentInfo> {
-        self.documents.values().map(|doc| DocumentInfo {
-            id: doc.id.clone(),
-            name: doc.name.clone(),
-            format: doc.format.extension().to_string(),
-            description: doc.description.clone(),
-            page_count: doc.page_count,
-            line_count: doc.line_count,
-        }).collect()
-    }
-
-    /// Get document metadata.
-    pub fn get_document(&self, doc_id: &str) -> Option<&IndexedDocument> {
-        self.documents.get(doc_id)
+        match &self.workspace {
+            Some(workspace) => workspace.list_documents()
+                .iter()
+                .filter_map(|id| workspace.get_meta(id))
+                .map(|meta| DocumentInfo {
+                    id: meta.id.clone(),
+                    name: meta.doc_name.clone(),
+                    format: meta.doc_type.clone(),
+                    description: meta.doc_description.clone(),
+                    page_count: meta.page_count,
+                    line_count: meta.line_count,
+                })
+                .collect(),
+            None => Vec::new(),
+        }
     }
 
     /// Get document structure (tree).
-    pub fn get_structure(&self, doc_id: &str) -> Result<&DocumentTree> {
-        let doc = self.documents.get(doc_id)
+    pub fn get_structure(&mut self, doc_id: &str) -> Result<DocumentTree> {
+        let workspace = self.workspace.as_mut()
+            .ok_or_else(|| Error::Parse("No workspace configured".to_string()))?;
+
+        let doc = workspace.load(doc_id)?
             .ok_or_else(|| Error::DocumentNotFound(format!("Document not found: {}", doc_id)))?;
 
-        doc.tree.as_ref()
-            .ok_or_else(|| Error::Parse("Document tree not loaded".to_string()))
+        Ok(doc.tree)
     }
 
     /// Get page content for PDFs.
-    pub fn get_page_content(&self, doc_id: &str, pages: &str) -> Result<String> {
-        let doc = self.documents.get(doc_id)
+    pub fn get_page_content(&mut self, doc_id: &str, pages: &str) -> Result<String> {
+        let workspace = self.workspace.as_mut()
+            .ok_or_else(|| Error::Parse("No workspace configured".to_string()))?;
+
+        let doc = workspace.load(doc_id)?
             .ok_or_else(|| Error::DocumentNotFound(format!("Document not found: {}", doc_id)))?;
 
         if doc.pages.is_empty() {
@@ -358,12 +271,8 @@ impl Vectorless {
     /// Query a document.
     ///
     /// Uses the retriever type configured in `RetrievalConfig`.
-    pub async fn query(&self, doc_id: &str, question: &str) -> Result<QueryResult> {
-        let doc = self.documents.get(doc_id)
-            .ok_or_else(|| Error::DocumentNotFound(format!("Document not found: {}", doc_id)))?;
-
-        let tree = doc.tree.as_ref()
-            .ok_or_else(|| Error::Parse("Document tree not loaded".to_string()))?;
+    pub async fn query(&mut self, doc_id: &str, question: &str) -> Result<QueryResult> {
+        let tree = self.get_structure(doc_id)?;
 
         // Build retrieve options from config
         let retrieve_options = crate::core::retriever::RetrieveOptions::new()
@@ -372,7 +281,7 @@ impl Vectorless {
             .with_summaries(true);
 
         // Use adaptive retriever directly
-        let response = Retriever::retrieve(&self.retriever, tree, question, &retrieve_options).await
+        let response = Retriever::retrieve(&self.retriever, &tree, question, &retrieve_options).await
             .map_err(|e| Error::Retrieval(e.to_string()))?;
 
         // Extract node IDs and build content from results
@@ -427,50 +336,41 @@ impl Vectorless {
         Ok(())
     }
 
-    /// Load a document from the workspace.
+    /// Load a document from the workspace into cache.
+    ///
+    /// This preloads the document into the LRU cache for faster access.
     pub fn load(&mut self, doc_id: &str) -> Result<bool> {
-        let workspace_cell = self.workspace.as_ref()
+        let workspace = self.workspace.as_mut()
             .ok_or_else(|| Error::Parse("No workspace configured".to_string()))?;
-
-        let mut workspace = workspace_cell.borrow_mut();
 
         if !workspace.contains(doc_id) {
             return Ok(false);
         }
 
-        let persisted = workspace.load(doc_id)?
-            .ok_or_else(|| Error::DocumentNotFound(format!("Document not found: {}", doc_id)))?;
-
-        let format = DocumentFormat::from_extension(&persisted.meta.format)
-            .unwrap_or(DocumentFormat::Text);
-
-        let doc = IndexedDocument::new(&persisted.meta.id, format)
-            .with_name(&persisted.meta.name)
-            .with_tree(persisted.tree);
-
-        self.documents.insert(doc_id.to_string(), doc);
+        // Load into cache
+        let _ = workspace.load(doc_id)?;
         Ok(true)
     }
 
     /// Remove a document.
     pub fn remove(&mut self, doc_id: &str) -> Result<bool> {
-        let existed = self.documents.remove(doc_id).is_some();
-
-        if let Some(ref workspace_cell) = self.workspace {
-            workspace_cell.borrow_mut().remove(doc_id)?;
+        match &mut self.workspace {
+            Some(workspace) => workspace.remove(doc_id),
+            None => Ok(false),
         }
-
-        Ok(existed)
     }
 
     /// Get the number of indexed documents.
     pub fn len(&self) -> usize {
-        self.documents.len()
+        match &self.workspace {
+            Some(workspace) => workspace.len(),
+            None => 0,
+        }
     }
 
     /// Check if there are no documents.
     pub fn is_empty(&self) -> bool {
-        self.documents.is_empty()
+        self.len() == 0
     }
 }
 

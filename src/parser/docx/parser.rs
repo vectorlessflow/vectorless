@@ -9,7 +9,7 @@
 //! # Example
 //!
 //! ```rust,no_run
-//! use vectorless::document::docx::DocxParser;
+//! use vectorless::parser::docx::DocxParser;
 //! use vectorless::core::DocumentParser;
 //! use std::path::Path;
 //!

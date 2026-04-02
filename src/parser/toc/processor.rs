@@ -68,8 +68,8 @@ impl Default for TocProcessorConfig {
 /// # Example
 ///
 /// ```rust,no_run
-/// use vectorless::document::toc::TocProcessor;
-/// use vectorless::document::pdf::PdfParser;
+/// use vectorless::parser::toc::TocProcessor;
+/// use vectorless::parser::pdf::PdfParser;
 ///
 /// # #[tokio::main]
 /// # async fn main() -> vectorless::core::Result<()> {

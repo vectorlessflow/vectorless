@@ -3,12 +3,10 @@
 
 //! Builder pattern for creating Vectorless clients.
 
-use std::cell::RefCell;
 use std::path::PathBuf;
 
 use crate::config::{Config, ConfigLoader};
 use crate::storage::Workspace;
-use crate::core::retriever::AdaptiveRetriever;
 
 use super::Vectorless;
 
@@ -135,18 +133,17 @@ impl VectorlessBuilder {
 
         // Open workspace: prefer explicit path, fallback to config
         let workspace = if let Some(path) = &self.workspace {
-            Some(RefCell::new(Workspace::open(path).map_err(|e| BuildError::Workspace(e.to_string()))?))
+            Some(Workspace::open(path).map_err(|e| BuildError::Workspace(e.to_string()))?)
         } else {
             // Use workspace_dir from config
-            Some(RefCell::new(Workspace::open(&config.storage.workspace_dir)
-                .map_err(|e| BuildError::Workspace(e.to_string()))?))
+            Some(Workspace::open(&config.storage.workspace_dir)
+                .map_err(|e| BuildError::Workspace(e.to_string()))?)
         };
 
         Ok(Vectorless {
             config,
             workspace,
-            documents: std::collections::HashMap::new(),
-            retriever: AdaptiveRetriever::new(),
+            retriever: crate::core::retriever::AdaptiveRetriever::new(),
         })
     }
 }
