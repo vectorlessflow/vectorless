@@ -45,10 +45,10 @@ use tracing::info;
 use crate::config::Config;
 use crate::core::{DocumentTree, Result, Error};
 use crate::document::DocumentFormat;
-use crate::indexer_legacy::TreeBuilder;
 use crate::storage::{Workspace, PersistedDocument, DocumentMeta as StorageMeta};
 use crate::registry::{ParserRegistry, SummarizerRegistry};
 use crate::core::retriever::{AdaptiveRetriever, Retriever};
+use crate::core::index::{PipelineExecutor, PipelineOptions, IndexInput, IndexMode as PipelineIndexMode, SummaryStrategy};
 
 use super::types::{IndexedDocument, IndexMode, IndexOptions, DocumentInfo, QueryResult};
 
@@ -204,50 +204,51 @@ impl Vectorless {
         options: &IndexOptions,
         format: DocumentFormat,
     ) -> Result<IndexedDocument> {
-        // Use registry to get parser
-        let result = self.parser_registry.parse_file(path).await?;
-
-        // Build tree
-        let builder = TreeBuilder::new()
-            .with_root_title(&result.meta.name);
-
-        let mut tree = if options.generate_ids {
-            builder.build_with_ids(result.nodes)
-        } else {
-            builder.build(result.nodes)
+        // Convert client options to pipeline options
+        let pipeline_options = PipelineOptions {
+            mode: match options.mode {
+                IndexMode::Auto => crate::core::index::IndexMode::Auto,
+                IndexMode::Pdf => crate::core::index::IndexMode::Pdf,
+                IndexMode::Markdown => crate::core::index::IndexMode::Markdown,
+                IndexMode::Html => crate::core::index::IndexMode::Html,
+                IndexMode::Docx => crate::core::index::IndexMode::Docx,
+            },
+            generate_ids: options.generate_ids,
+            summary_strategy: if options.generate_summaries {
+                SummaryStrategy::selective(100, true)
+            } else {
+                SummaryStrategy::none()
+            },
+            generate_description: options.generate_description,
+            ..Default::default()
         };
 
-        // Generate summaries if requested
-        if options.generate_summaries {
-            info!("Generating summaries for document: {}", doc_id);
-            let config = self.config.summary.clone();
-            tree.generate_summaries(move |text: String| {
-                let cfg = config.clone();
-                async move {
-                    crate::summarizer::summarize(&cfg, &text).await
-                        .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
-                }
-            }).await.map_err(|e| Error::Summarization(e.to_string()))?;
-        }
+        // Create pipeline input
+        let input = IndexInput::file(path);
 
-        // Create indexed document
+        // Execute pipeline
+        let mut executor = PipelineExecutor::new();
+        let result = executor.execute(input, pipeline_options).await?;
+
+        // Create indexed document from result
         let mut doc = IndexedDocument::new(doc_id, format)
-            .with_name(&result.meta.name)
-            .with_source_path(path)
-            .with_line_count(result.meta.line_count)
-            .with_tree(tree);
+            .with_name(&result.name)
+            .with_source_path(path);
 
-        // Add page count for PDF
-        if format == DocumentFormat::Pdf {
-            if let Some(page_count) = result.meta.page_count {
-                doc = doc.with_page_count(page_count);
-            }
+        if let Some(tree) = result.tree {
+            doc = doc.with_tree(tree);
         }
 
-        if options.generate_description {
-            if let Some(desc) = result.meta.description {
-                doc = doc.with_description(desc);
-            }
+        if let Some(page_count) = result.page_count {
+            doc = doc.with_page_count(page_count);
+        }
+
+        if let Some(line_count) = result.line_count {
+            doc = doc.with_line_count(line_count);
+        }
+
+        if let Some(desc) = result.description {
+            doc = doc.with_description(desc);
         }
 
         Ok(doc)

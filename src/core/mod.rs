@@ -42,7 +42,7 @@ pub use toc::{TocView, TocNode, TocEntry, TocConfig};
 
 // Re-export index types for convenience
 pub use index::{
-    IndexContext, IndexInput, IndexOptions, IndexResult, IndexStage,
+    IndexContext, IndexInput, PipelineOptions, IndexResult, IndexStage,
     PipelineExecutor, IndexMetrics, SummaryStrategy,
     ChangeDetector, ChangeSet, PartialUpdater,
 };

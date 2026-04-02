@@ -11,7 +11,7 @@ use crate::document::{DocumentFormat, RawNode};
 use crate::llm::LlmClient;
 
 use super::metrics::IndexMetrics;
-use super::super::{IndexOptions, SummaryStrategy};
+use super::super::{PipelineOptions, SummaryStrategy};
 
 /// Input for the index pipeline.
 #[derive(Debug, Clone)]
@@ -158,7 +158,7 @@ pub struct IndexContext {
     pub tree: Option<VectorlessTree>,
 
     /// Index options.
-    pub options: IndexOptions,
+    pub options: PipelineOptions,
 
     /// LLM client for enhancement.
     pub llm_client: Option<LlmClient>,
@@ -184,7 +184,7 @@ pub struct IndexContext {
 
 impl IndexContext {
     /// Create a new context from input.
-    pub fn new(input: IndexInput, options: IndexOptions) -> Self {
+    pub fn new(input: IndexInput, options: PipelineOptions) -> Self {
         Self {
             doc_id: uuid::Uuid::new_v4().to_string(),
             input,

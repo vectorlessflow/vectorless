@@ -14,7 +14,7 @@ use super::super::stages::{
     BuildStage, EnhanceStage, EnrichStage, IndexStage, OptimizeStage,
     ParseStage, PersistStage,
 };
-use super::super::IndexOptions;
+use super::super::PipelineOptions;
 
 /// Pipeline executor for document indexing.
 pub struct PipelineExecutor {
@@ -60,7 +60,7 @@ impl PipelineExecutor {
     }
 
     /// Execute the pipeline.
-    pub async fn execute(&mut self, input: IndexInput, options: IndexOptions) -> Result<IndexResult> {
+    pub async fn execute(&mut self, input: IndexInput, options: PipelineOptions) -> Result<IndexResult> {
         let total_start = Instant::now();
         info!("Starting index pipeline");
 

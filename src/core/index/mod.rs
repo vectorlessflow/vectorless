@@ -54,8 +54,8 @@ pub use summary::{SummaryStrategy, SummaryStrategyConfig, SummaryGenerator, LlmS
 // Re-export incremental
 pub use incremental::{ChangeDetector, ChangeSet, PartialUpdater};
 
-// Configuration types
-use crate::config::{ConcurrencyConfig, IndexerConfig};
+// Re-export config types
+pub use crate::config::{ConcurrencyConfig, IndexerConfig};
 
 /// Configuration for tree optimization.
 #[derive(Debug, Clone)]
@@ -139,9 +139,9 @@ impl Default for IndexMode {
     }
 }
 
-/// Index options (v2).
+/// Pipeline options (v2).
 #[derive(Debug, Clone)]
-pub struct IndexOptions {
+pub struct PipelineOptions {
     /// Index mode.
     pub mode: IndexMode,
 
@@ -167,7 +167,7 @@ pub struct IndexOptions {
     pub indexer: IndexerConfig,
 }
 
-impl Default for IndexOptions {
+impl Default for PipelineOptions {
     fn default() -> Self {
         Self {
             mode: IndexMode::Auto,
