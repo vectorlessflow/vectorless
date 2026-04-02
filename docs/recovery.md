@@ -125,7 +125,6 @@ pub enum FallbackBehavior {
 pub enum OnAllFailedBehavior {
     ReturnError,
     ReturnCache,
-    ReturnDefault(String),
 }
 ```
 

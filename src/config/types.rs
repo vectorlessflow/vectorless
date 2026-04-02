@@ -488,18 +488,13 @@ impl Default for FallbackBehavior {
 }
 
 /// Behavior when all fallback attempts fail.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum OnAllFailedBehavior {
     /// Return the error to the caller.
     ReturnError,
     /// Try to return cached result if available.
     ReturnCache,
-    /// Return a default value.
-    ReturnDefault {
-        /// The default value to return.
-        value: String,
-    },
 }
 
 impl Default for OnAllFailedBehavior {

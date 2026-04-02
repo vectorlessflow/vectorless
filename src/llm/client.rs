@@ -249,6 +249,9 @@ impl LlmClient {
         let endpoint = self.config.auto_detect_endpoint();
         let model = self.config.auto_detect_model();
 
+        println!("Using OpenAI API endpoint: {}", endpoint);
+        println!("Using OpenAI model: {}", model);
+
         let openai_config = OpenAIConfig::new()
             .with_api_key(api_key)
             .with_api_base(&endpoint);
