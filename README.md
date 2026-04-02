@@ -177,11 +177,13 @@ If you find this project useful, please consider giving it a star on [GitHub](ht
 
 ## Star History
 
-<a href="https://www.star-history.com/#vectorlessflow/vectorless&Date">
+## Star History
+
+<a href="https://www.star-history.com/?repos=vectorlessflow%2Fvectorless&type=date&legend=bottom-right">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=vectorlessflow/vectorless&type=Date&theme=dark" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=vectorlessflow/vectorless&type=Date" />
-   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=vectorlessflow/vectorless&type=Date" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/image?repos=vectorlessflow/vectorless&type=date&theme=dark&legend=bottom-right" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/image?repos=vectorlessflow/vectorless&type=date&legend=bottom-right" />
+   <img alt="Star History Chart" src="https://api.star-history.com/image?repos=vectorlessflow/vectorless&type=date&legend=bottom-right" />
  </picture>
 </a>
 
