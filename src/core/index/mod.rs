@@ -1,0 +1,185 @@
+// Copyright (c) 2026 vectorless developers
+// SPDX-License-Identifier: Apache-2.0
+
+//! Index Pipeline module.
+//!
+//! This module provides a modular, extensible document indexing pipeline.
+//!
+//! # Architecture
+//!
+//! ```text
+//! ┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
+//! │   Parse     │───►│   Build     │───►│  Enhance    │───►│   Enrich    │
+//! │  (Document) │    │   (Tree)    │    │  (LLM Boost)│    │  (Metadata) │
+//! └─────────────┘    └─────────────┘    └─────────────┘    └─────────────┘
+//!                                                                  │
+//!                                                                  ▼
+//! ┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
+//! │   Output    │◄───│   Persist   │◄───│   Optimize  │◄───│   Enrich    │
+//! │  (Indexed)  │    │  (Storage)  │    │   (Tree)    │    │             │
+//! └─────────────┘    └─────────────┘    └─────────────┘    └─────────────┘
+//! ```
+//!
+//! # Usage
+//!
+//! ```rust,ignore
+//! use vectorless::core::index::{PipelineExecutor, IndexOptions, SummaryStrategy};
+//!
+//! let options = IndexOptions {
+//!     summary_strategy: SummaryStrategy::Selective { min_tokens: 100, branch_only: true },
+//!     ..Default::default()
+//! };
+//!
+//! let result = PipelineExecutor::new()
+//!     .with_options(options)
+//!     .execute(input)
+//!     .await?;
+//! ```
+
+pub mod context;
+pub mod executor;
+pub mod metrics;
+pub mod stages;
+pub mod strategy;
+pub mod incremental;
+
+// Re-export main types
+pub use context::{IndexContext, IndexInput, IndexResult, StageResult};
+pub use executor::PipelineExecutor;
+pub use metrics::IndexMetrics;
+pub use stages::IndexStage;
+
+// Re-export strategies
+pub use strategy::{SummaryStrategy, SummaryStrategyConfig};
+
+// Re-export incremental update
+pub use incremental::{ChangeDetector, ChangeSet, PartialUpdater};
+
+// Re-export types from config
+use crate::config::{ConcurrencyConfig, IndexerConfig};
+use std::path::PathBuf;
+
+/// Configuration for tree optimization.
+#[derive(Debug, Clone)]
+pub struct OptimizationConfig {
+    /// Whether optimization is enabled.
+    pub enabled: bool,
+
+    /// Maximum tree depth (flatten if exceeded).
+    pub max_depth: Option<usize>,
+
+    /// Maximum children per node (group if exceeded).
+    pub max_children: Option<usize>,
+
+    /// Minimum tokens for a leaf node (merge smaller ones).
+    pub merge_leaf_threshold: usize,
+}
+
+impl Default for OptimizationConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            max_depth: None,
+            max_children: None,
+            merge_leaf_threshold: 50,
+        }
+    }
+}
+
+/// Configuration for thinning (merging small nodes).
+#[derive(Debug, Clone)]
+pub struct ThinningConfig {
+    /// Whether thinning is enabled.
+    pub enabled: bool,
+
+    /// Token threshold for merging.
+    pub threshold: usize,
+}
+
+impl Default for ThinningConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            threshold: 500,
+        }
+    }
+}
+
+impl ThinningConfig {
+    /// Create disabled config.
+    pub fn disabled() -> Self {
+        Self::default()
+    }
+
+    /// Create enabled config with threshold.
+    pub fn enabled(threshold: usize) -> Self {
+        Self {
+            enabled: true,
+            threshold,
+        }
+    }
+}
+
+/// Index mode.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IndexMode {
+    /// Auto-detect format from file extension.
+    Auto,
+    /// Force Markdown format.
+    Markdown,
+    /// Force PDF format.
+    Pdf,
+    /// Force DOCX format.
+    Docx,
+    /// Force HTML format.
+    Html,
+}
+
+impl Default for IndexMode {
+    fn default() -> Self {
+        Self::Auto
+    }
+}
+
+/// Index options (v2).
+#[derive(Debug, Clone)]
+pub struct IndexOptions {
+    /// Index mode.
+    pub mode: IndexMode,
+
+    /// Whether to generate node IDs.
+    pub generate_ids: bool,
+
+    /// Summary generation strategy.
+    pub summary_strategy: SummaryStrategy,
+
+    /// Thinning configuration.
+    pub thinning: ThinningConfig,
+
+    /// Optimization configuration.
+    pub optimization: OptimizationConfig,
+
+    /// Whether to generate document description.
+    pub generate_description: bool,
+
+    /// Concurrency configuration.
+    pub concurrency: ConcurrencyConfig,
+
+    /// Indexer configuration.
+    pub indexer: IndexerConfig,
+}
+
+impl Default for IndexOptions {
+    fn default() -> Self {
+        Self {
+            mode: IndexMode::Auto,
+            generate_ids: true,
+            summary_strategy: SummaryStrategy::default(),
+            thinning: ThinningConfig::default(),
+            optimization: OptimizationConfig::default(),
+            generate_description: true,
+            concurrency: ConcurrencyConfig::default(),
+            indexer: IndexerConfig::default(),
+        }
+    }
+}

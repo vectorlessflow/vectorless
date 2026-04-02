@@ -10,6 +10,13 @@
 //! - [`StructureNode`] - JSON export format for tree nodes
 //! - [`DocumentStructure`] - JSON export format for document structure
 //!
+//! ## Index Pipeline
+//!
+//! The index module provides a modular document indexing pipeline:
+//! - [`PipelineExecutor`] - Main entry point for indexing
+//! - [`IndexStage`] - Stage interface for pipeline steps
+//! - [`IndexOptions`] - Configuration for indexing operations
+//!
 //! ## Retrieval System
 //!
 //! The retriever module provides a hybrid retrieval architecture:
@@ -24,6 +31,7 @@ mod traits;
 mod tree;
 mod toc;
 
+pub mod index;
 pub mod retriever;
 
 pub use error::{Error, Result};
@@ -31,6 +39,13 @@ pub use node::{NodeId, VectorlessNode};
 pub use tree::{DocumentStructure, VectorlessTree, StructureNode};
 pub use traits::*;
 pub use toc::{TocView, TocNode, TocEntry, TocConfig};
+
+// Re-export index types for convenience
+pub use index::{
+    IndexContext, IndexInput, IndexOptions, IndexResult, IndexStage,
+    PipelineExecutor, IndexMetrics, SummaryStrategy,
+    ChangeDetector, ChangeSet, PartialUpdater,
+};
 
 // Re-export retriever types for convenience
 pub use retriever::{
