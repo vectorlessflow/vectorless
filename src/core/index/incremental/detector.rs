@@ -231,7 +231,10 @@ impl Default for ChangeDetector {
 
 /// Internal node information for change detection.
 struct NodeInfo {
+    /// Node ID (if assigned).
     node_id: Option<String>,
+    /// Hash of node content.
     content_hash: u64,
+    /// Number of direct children.
     child_count: usize,
 }

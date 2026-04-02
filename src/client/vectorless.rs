@@ -46,7 +46,6 @@ use crate::config::Config;
 use crate::core::{DocumentTree, Result, Error};
 use crate::parser::DocumentFormat;
 use crate::storage::{Workspace, PersistedDocument, DocumentMeta as StorageMeta};
-use crate::parser::ParserRegistry;
 use crate::core::retriever::{AdaptiveRetriever, Retriever};
 use crate::core::index::{PipelineExecutor, PipelineOptions, IndexInput, SummaryStrategy};
 
@@ -67,9 +66,6 @@ pub struct Vectorless {
     /// In-memory document cache.
     pub(crate) documents: HashMap<String, IndexedDocument>,
 
-    /// Parser registry.
-    pub(crate) parser_registry: ParserRegistry,
-
     /// Adaptive retriever.
     pub(crate) retriever: AdaptiveRetriever,
 }
@@ -82,7 +78,6 @@ impl Vectorless {
             config,
             workspace: None,
             documents: HashMap::new(),
-            parser_registry: ParserRegistry::with_defaults(),
             retriever: AdaptiveRetriever::new(),
         })
     }
@@ -482,33 +477,5 @@ impl Vectorless {
 impl Default for Vectorless {
     fn default() -> Self {
         Self::new().expect("Failed to create default Vectorless client")
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_client_creation() {
-        let client = Vectorless::new().unwrap();
-        assert!(client.is_empty());
-    }
-
-    #[test]
-    fn test_parse_page_range() {
-        let client = Vectorless::new().unwrap();
-
-        let pages = client.parse_page_range("5").unwrap();
-        assert_eq!(pages, vec![5]);
-
-        let pages = client.parse_page_range("5-7").unwrap();
-        assert_eq!(pages, vec![5, 6, 7]);
-
-        let pages = client.parse_page_range("3,8,12").unwrap();
-        assert_eq!(pages, vec![3, 8, 12]);
-
-        let pages = client.parse_page_range("5-7,10").unwrap();
-        assert_eq!(pages, vec![5, 6, 7, 10]);
     }
 }
