@@ -8,7 +8,8 @@ use std::path::PathBuf;
 
 use crate::config::{Config, ConfigLoader};
 use crate::storage::Workspace;
-use crate::registry::{ParserRegistry, RetrieverRegistry, SummarizerRegistry};
+use crate::registry::{ParserRegistry, SummarizerRegistry};
+use crate::core::retriever::AdaptiveRetriever;
 
 use super::Vectorless;
 
@@ -142,16 +143,12 @@ impl VectorlessBuilder {
                 .map_err(|e| BuildError::Workspace(e.to_string()))?))
         };
 
-        // Initialize retriever registry and set default from config
-        let retriever_registry = RetrieverRegistry::with_defaults();
-        retriever_registry.set_default(config.retrieval.retriever_type);
-
         Ok(Vectorless {
             config,
             workspace,
             documents: std::collections::HashMap::new(),
             parser_registry: ParserRegistry::with_defaults(),
-            retriever_registry,
+            retriever: AdaptiveRetriever::new(),
             summarizer_registry: SummarizerRegistry::default(),
         })
     }

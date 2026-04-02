@@ -47,7 +47,8 @@ use crate::core::{DocumentTree, Result, Error};
 use crate::document::DocumentFormat;
 use crate::indexer::TreeBuilder;
 use crate::storage::{Workspace, PersistedDocument, DocumentMeta as StorageMeta};
-use crate::registry::{ParserRegistry, RetrieverRegistry, SummarizerRegistry};
+use crate::registry::{ParserRegistry, SummarizerRegistry};
+use crate::core::retriever::{AdaptiveRetriever, Retriever};
 
 use super::types::{IndexedDocument, IndexMode, IndexOptions, DocumentInfo, QueryResult};
 
@@ -69,8 +70,8 @@ pub struct Vectorless {
     /// Parser registry.
     pub(crate) parser_registry: ParserRegistry,
 
-    /// Retriever registry.
-    pub(crate) retriever_registry: RetrieverRegistry,
+    /// Adaptive retriever.
+    pub(crate) retriever: AdaptiveRetriever,
 
     /// Summarizer registry.
     pub(crate) summarizer_registry: SummarizerRegistry,
@@ -80,15 +81,12 @@ impl Vectorless {
     /// Create a new client with default configuration.
     pub fn new() -> Result<Self> {
         let config = Config::default();
-        let retriever_registry = RetrieverRegistry::with_defaults();
-        // Set default retriever from config
-        retriever_registry.set_default(config.retrieval.retriever_type.clone());
         Ok(Self {
             config,
             workspace: None,
             documents: HashMap::new(),
             parser_registry: ParserRegistry::with_defaults(),
-            retriever_registry,
+            retriever: AdaptiveRetriever::new(),
             summarizer_registry: SummarizerRegistry::default(),
         })
     }
@@ -381,9 +379,9 @@ impl Vectorless {
             .with_content(true)
             .with_summaries(true);
 
-        // Use retriever type from config
-        let retriever_type = self.config.retrieval.retriever_type.clone();
-        let response = self.retriever_registry.retrieve_with(retriever_type, tree, question, &retrieve_options).await?;
+        // Use adaptive retriever directly
+        let response = Retriever::retrieve(&self.retriever, tree, question, &retrieve_options).await
+            .map_err(|e| Error::Retrieval(e.to_string()))?;
 
         // Extract node IDs and build content from results
         let node_ids: Vec<String> = response.results.iter()

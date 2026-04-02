@@ -47,7 +47,7 @@ impl Default for Config {
     }
 }
 
-/// Indexer configuration.
+// Indexer configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IndexerConfig {
     /// Word count threshold for splitting sections into subsections.
@@ -90,7 +90,7 @@ impl Default for IndexerConfig {
 
 /// Generic LLM configuration.
 ///
-/// Used for TOC processing, verification, and repair operations.
+/// Used for both summarization and retrieval/navigation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LlmConfig {
     /// Model name (e.g., "gpt-4o-mini", "claude-3-haiku").
@@ -101,7 +101,7 @@ pub struct LlmConfig {
     #[serde(default = "default_llm_endpoint")]
     pub endpoint: String,
 
-    /// API key (prefer environment variables).
+    /// API key (prefer using environment variable).
     #[serde(default)]
     pub api_key: Option<String>,
 
@@ -121,15 +121,24 @@ fn default_llm_model() -> String {
 
 /// Default LLM API endpoint, auto-detected from environment.
 fn default_llm_endpoint() -> String {
-    std::env::var("OPENAI_API_BASE")
-        .or_else(|_| std::env::var("OPENAI_BASE_URL"))
-        .or_else(|_| std::env::var("AZURE_OPENAI_ENDPOINT"))
-        .unwrap_or_else(|_| "https://api.openai.com/v1".to_string())
+    // Auto-detect based on available API keys
+    if std::env::var("OPENAI_API_KEY").is_ok() {
+        "https://api.openai.com/v1".to_string()
+    } else if std::env::var("AZURE_OPENAI_ENDPOINT").is_ok() {
+        std::env::var("AZURE_OPENAI_ENDPOINT").unwrap_or_default()
+    } else {
+        "https://api.z.ai/api/paas/v4".to_string()
+    }
 }
 
 /// Default maximum tokens for LLM responses.
 fn default_llm_max_tokens() -> usize {
     1000
+}
+
+/// Default temperature for LLM generation.
+pub(crate) fn default_temperature() -> f32 {
+    0.0
 }
 
 impl Default for LlmConfig {
@@ -170,14 +179,19 @@ impl LlmConfig {
 
     /// Get the API key from config or environment.
     pub fn get_api_key(&self) -> Option<String> {
-        self.api_key.clone()
-            .or_else(|| std::env::var("OPENAI_API_KEY").ok())
-            .or_else(|| std::env::var("ANTHROPIC_API_KEY").ok())
-            .or_else(|| std::env::var("AZURE_OPENAI_API_KEY").ok())
+        self.api_key.clone().or_else(|| {
+            if std::env::var("OPENAI_API_KEY").is_ok() {
+                std::env::var("OPENAI_API_KEY").ok()
+            } else if std::env::var("ANTHROPIC_API_KEY").is_ok() {
+                std::env::var("ANTHROPIC_API_KEY").ok()
+            } else {
+                None
+            }
+        })
     }
 }
 
-/// Summary model configuration (for indexing/summarization).
+/// Summary model configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SummaryConfig {
     /// Model name for summarization.
@@ -204,15 +218,13 @@ pub struct SummaryConfig {
 /// Default summary model name.
 pub fn default_summary_model() -> String {
     // Auto-detect based on available API keys
-    // if std::env::var("OPENAI_API_KEY").is_ok() {
-    //     "gpt-4o-mini".to_string()
-    // } else if std::env::var("ANTHROPIC_API_KEY").is_ok() {
-    //     "claude-3-haiku-20240307".to_string()
-    // } else {
-    //     "glm-5".to_string()
-    // }
-
-    "glm-5".to_string()
+    if std::env::var("OPENAI_API_KEY").is_ok() {
+        "gpt-4o-mini".to_string()
+    } else if std::env::var("ANTHROPIC_API_KEY").is_ok() {
+        "claude-3-sonnet-20240229".to_string()
+    } else {
+        "glm-5".to_string()
+    }
 }
 
 /// Default summary endpoint, auto-detected from environment.
@@ -223,18 +235,13 @@ pub fn default_summary_endpoint() -> String {
     } else if std::env::var("AZURE_OPENAI_ENDPOINT").is_ok() {
         std::env::var("AZURE_OPENAI_ENDPOINT").unwrap_or_default()
     } else {
-        "https://api.z.ai/api/coding/paas/v4".to_string()
+        "https://api.z.ai/api/paas/v4".to_string()
     }
 }
 
 /// Default maximum tokens for summary generation.
 pub fn default_summary_max_tokens() -> usize {
     200
-}
-
-/// Default temperature for LLM generation.
-pub fn default_temperature() -> f32 {
-    0.0
 }
 
 impl Default for SummaryConfig {
@@ -253,21 +260,13 @@ impl Default for SummaryConfig {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum RetrieverType {
-    /// LLM-based tree navigation (default).
-    LlmNavigate,
-    /// Beam search traversal.
-    BeamSearch,
-    /// Monte Carlo Tree Search.
-    Mcsts,
-    /// Multi-document retrieval.
-    MultiDoc,
-    /// Hybrid approach combining multiple strategies.
-    Hybrid,
+    /// Adaptive retrieval (default).
+    Adaptive,
 }
 
 impl Default for RetrieverType {
     fn default() -> Self {
-        Self::LlmNavigate
+        Self::Adaptive
     }
 }
 
@@ -303,7 +302,7 @@ pub struct RetrievalConfig {
     pub retriever_type: RetrieverType,
 }
 
-/// Default retrieval model name, auto-detected from environment.
+/// Default retrieval model name.
 pub fn default_retrieval_model() -> String {
     // Auto-detect based on available API keys
     if std::env::var("OPENAI_API_KEY").is_ok() {
@@ -401,13 +400,19 @@ pub struct ConcurrencyConfig {
 }
 
 /// Default maximum concurrent requests.
-pub fn default_max_concurrent_requests() -> usize { 10 }
+pub fn default_max_concurrent_requests() -> usize {
+    10
+}
 
 /// Default requests per minute rate limit.
-pub fn default_requests_per_minute() -> usize { 500 }
+pub fn default_requests_per_minute() -> usize {
+    500
+}
 
 /// Default boolean value (true).
-pub fn default_true() -> bool { true }
+pub fn default_true() -> bool {
+    true
+}
 
 impl Default for ConcurrencyConfig {
     fn default() -> Self {

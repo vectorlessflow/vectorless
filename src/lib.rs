@@ -132,10 +132,9 @@ pub use indexer::TreeBuilder;
 
 // Retrieval (from core::retriever)
 pub use core::retriever::{
-    AdaptiveRetriever, ContextBuilder, LlmNavigator,
+    AdaptiveRetriever, ContextBuilder,
     NavigationDecision, NavigationStep, SearchPath,
-    format_for_llm, format_tree_for_llm,
-};
+    format_for_llm, format_tree_for_llm,};
 
 // Ranking
 pub use ranking::{MergeStrategy, Merger, ScoredResult, Scorer, ScoringStrategy};
@@ -147,7 +146,7 @@ pub use storage::{DocumentMeta as StorageDocumentMeta, PersistedDocument, Worksp
 pub use concurrency::{ConcurrencyConfig, ConcurrencyController, RateLimiter};
 
 // Registry
-pub use registry::{ParserRegistry, RetrieverRegistry, SummarizerRegistry};
+pub use registry::{ParserRegistry, SummarizerRegistry};
 
 // Summarization
 pub use summarizer::summarize;

@@ -12,8 +12,8 @@ use std::sync::Arc;
 use super::cache::PathCache;
 use super::complexity::ComplexityDetector;
 use super::retriever::{CostEstimate, Retriever, RetrieverError, RetrieverResult, RetrievalContext};
-use super::search::{SearchConfig, SearchResult};
-use super::strategy::{KeywordStrategy, NodeEvaluation, RetrievalStrategy, StrategyCapabilities, SemanticStrategy};
+use super::search::SearchResult;
+use super::strategy::{KeywordStrategy, NodeEvaluation, RetrievalStrategy};
 use super::sufficiency::{SufficiencyChecker, SufficiencyLevel, ThresholdChecker};
 use super::types::{
     NavigationDecision, QueryComplexity, RetrieveOptions, RetrieveResponse, RetrievalResult,
@@ -715,6 +715,16 @@ impl AdaptiveRetriever {
 impl Default for AdaptiveRetriever {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl std::fmt::Debug for AdaptiveRetriever {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AdaptiveRetriever")
+            .field("config", &self.config)
+            .field("enable_cache", &self.config.enable_cache)
+            .field("enable_sufficiency_check", &self.config.enable_sufficiency_check)
+            .finish()
     }
 }
 
