@@ -327,7 +327,7 @@ impl LlmClient {
                 ChatCompletionRequestSystemMessage::from(system).into(),
                 ChatCompletionRequestUserMessage::from(truncated).into(),
             ])
-            .max_tokens(max_tokens)
+            // .max_tokens(max_tokens)
             .temperature(self.config.temperature)
             .build()
             .map_err(|e| LlmError::Request(format!("Failed to build request: {}", e)))?;
@@ -335,14 +335,33 @@ impl LlmClient {
         let response = client.chat().create(request).await
             .map_err(|e| {
                 let msg = e.to_string();
+                eprintln!("[LLM ERROR] API error: {}", msg);
                 LlmError::from_api_message(&msg)
             })?;
+
+        // Debug: log response structure
+        eprintln!("[LLM DEBUG] Response: {} choices", response.choices.len());
+        if let Some(choice) = response.choices.first() {
+            eprintln!("[LLM DEBUG] First choice: finish_reason={:?}, has_content={}",
+                choice.finish_reason,
+                choice.message.content.is_some()
+            );
+        }
 
         let content = response
             .choices
             .first()
             .and_then(|choice| choice.message.content.clone())
-            .ok_or(LlmError::NoContent)?;
+            .ok_or_else(|| {
+                eprintln!("[LLM ERROR] Response has no content");
+                LlmError::NoContent
+            })?;
+
+        if content.is_empty() {
+            eprintln!("[LLM WARN] Returned empty content for model: {}", model);
+        } else {
+            eprintln!("[LLM DEBUG] Content length: {} chars", content.len());
+        }
 
         Ok(content)
     }
