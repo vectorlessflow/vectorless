@@ -38,7 +38,6 @@
 mod types;
 mod retriever;
 mod adaptive;
-mod llm_navigate;
 mod context;
 
 pub mod strategy;
@@ -50,7 +49,6 @@ pub mod cache;
 pub use types::*;
 pub use retriever::{Retriever, RetrieverError, RetrieverResult, RetrievalContext};
 pub use adaptive::{AdaptiveRetriever, AdaptiveConfig};
-pub use llm_navigate::LlmNavigator;
 pub use context::{ContextBuilder, format_for_llm, format_tree_for_llm};
 pub use strategy::{RetrievalStrategy, StrategyCapabilities, KeywordStrategy, SemanticStrategy, LlmStrategy};
 pub use search::{BeamSearch, GreedySearch, SearchConfig, SearchResult};
