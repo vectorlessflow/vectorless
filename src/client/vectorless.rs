@@ -52,7 +52,6 @@ use super::types::{IndexMode, IndexOptions, DocumentInfo, QueryResult};
 ///
 /// Provides high-level operations for document indexing and retrieval.
 /// Uses Workspace for persistence with built-in LRU cache.
-#[derive(Debug)]
 pub struct Vectorless {
     /// Configuration.
     pub(crate) config: Config,
@@ -62,6 +61,9 @@ pub struct Vectorless {
 
     /// Adaptive retriever.
     pub(crate) retriever: AdaptiveRetriever,
+
+    /// Pipeline executor for indexing.
+    pub(crate) executor: PipelineExecutor,
 }
 
 impl Vectorless {
@@ -72,6 +74,7 @@ impl Vectorless {
             config,
             workspace: None,
             retriever: AdaptiveRetriever::new(),
+            executor: PipelineExecutor::new(),
         })
     }
 
@@ -133,8 +136,7 @@ impl Vectorless {
 
         // Create pipeline input and execute
         let input = IndexInput::file(&path);
-        let mut executor = PipelineExecutor::new();
-        let result = executor.execute(input, pipeline_options).await?;
+        let result = self.executor.execute(input, pipeline_options).await?;
 
         // Build persisted document
         let tree = result.tree.ok_or_else(||
@@ -281,7 +283,7 @@ impl Vectorless {
             .with_summaries(true);
 
         // Use adaptive retriever directly
-        let response = Retriever::retrieve(&self.retriever, &tree, question, &retrieve_options).await
+        let response = self.retriever.retrieve(&tree, question, &retrieve_options).await
             .map_err(|e| Error::Retrieval(e.to_string()))?;
 
         // Extract node IDs and build content from results

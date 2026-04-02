@@ -144,6 +144,7 @@ impl VectorlessBuilder {
             config,
             workspace,
             retriever: crate::core::retriever::AdaptiveRetriever::new(),
+            executor: crate::core::index::PipelineExecutor::new(),
         })
     }
 }
