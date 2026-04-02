@@ -190,7 +190,6 @@ fn merge_config(base: Config, other: Config) -> Config {
             } else {
                 base.retrieval.top_k
             },
-            retriever_type: other.retrieval.retriever_type,
         },
         storage: StorageConfig {
             workspace_dir: if other.storage.workspace_dir != default_workspace_dir() {

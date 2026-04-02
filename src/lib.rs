@@ -73,7 +73,6 @@
 //!
 //! [retrieval]
 //! model = "gpt-4o"
-//! retriever_type = "llm_navigate"
 //! top_k = 3
 //! ```
 

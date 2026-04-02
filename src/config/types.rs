@@ -256,20 +256,6 @@ impl Default for SummaryConfig {
     }
 }
 
-/// Retriever type enum.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum RetrieverType {
-    /// Adaptive retrieval (default).
-    Adaptive,
-}
-
-impl Default for RetrieverType {
-    fn default() -> Self {
-        Self::Adaptive
-    }
-}
-
 /// Retrieval model configuration (for navigation).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RetrievalConfig {
@@ -296,10 +282,6 @@ pub struct RetrievalConfig {
     /// Number of top-k results to return.
     #[serde(default = "default_top_k")]
     pub top_k: usize,
-
-    /// Retriever type to use.
-    #[serde(default)]
-    pub retriever_type: RetrieverType,
 }
 
 /// Default retrieval model name.
@@ -345,7 +327,6 @@ impl Default for RetrievalConfig {
             max_tokens: default_retrieval_max_tokens(),
             temperature: default_temperature(),
             top_k: default_top_k(),
-            retriever_type: RetrieverType::default(),
         }
     }
 }

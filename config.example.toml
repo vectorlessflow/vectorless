@@ -40,9 +40,6 @@ endpoint = "https://api.openai.com/v1"
 # Model for retrieval navigation (use smarter models for better results)
 model = "gpt-4o"
 
-# Retriever type: llm_navigate, beam_search, mcts, multi_doc, hybrid
-retriever_type = "llm_navigate"
-
 # Number of top results to return
 top_k = 3
 

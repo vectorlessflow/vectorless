@@ -15,6 +15,3 @@ mod loader;
 
 pub use types::*;
 pub use loader::{ConfigLoader, ConfigError};
-
-// Re-export RetrieverType for convenience
-pub use types::RetrieverType;
