@@ -1,3 +1,4 @@
+<div align="center">
 
 ![Vectorless](docs/logo-horizontal.svg)
 
@@ -9,7 +10,8 @@
 
 **A hierarchical, reasoning-native document intelligence engine.**
 
-Replace your vector database with LLM-powered tree navigation. No embeddings. No vector search. Just reasoning.
+
+</div>
 
 ## Why Vectorless?
 
