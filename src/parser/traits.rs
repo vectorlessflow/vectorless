@@ -7,7 +7,7 @@ use async_trait::async_trait;
 use std::path::Path;
 
 use super::{DocumentFormat, ParseResult};
-use crate::core::Result;
+use crate::domain::Result;
 
 /// A parser for extracting content from documents.
 ///
@@ -54,7 +54,7 @@ pub trait DocumentParser: Send + Sync {
     async fn parse_file(&self, path: &Path) -> Result<ParseResult> {
         let content = tokio::fs::read_to_string(path)
             .await
-            .map_err(|e| crate::core::Error::Parse(format!("Failed to read file: {}", e)))?;
+            .map_err(|e| crate::domain::Error::Parse(format!("Failed to read file: {}", e)))?;
 
         self.parse(&content).await
     }

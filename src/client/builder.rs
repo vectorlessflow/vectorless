@@ -7,7 +7,7 @@ use std::path::PathBuf;
 
 use crate::config::{Config, ConfigLoader, RetrievalConfig};
 use crate::storage::Workspace;
-use crate::core::retriever::AdaptiveRetriever;
+use crate::retrieval::AdaptiveRetriever;
 
 use super::Vectorless;
 
@@ -168,14 +168,14 @@ impl VectorlessBuilder {
                 .with_temperature(config.summary.temperature);
 
             let llm_client = crate::llm::LlmClient::new(llm_config);
-            crate::core::index::PipelineExecutor::with_llm(llm_client)
+            crate::index::PipelineExecutor::with_llm(llm_client)
         } else {
-            crate::core::index::PipelineExecutor::new()
+            crate::index::PipelineExecutor::new()
         };
 
         // Create adaptive retriever with config
         let retrieval_config = self.retrieval_config.unwrap_or_else(|| config.retrieval.clone());
-        let adaptive_config = crate::core::retriever::AdaptiveConfig::from_app_config(&retrieval_config);
+        let adaptive_config = crate::retrieval::AdaptiveConfig::from_app_config(&retrieval_config);
         let retriever = AdaptiveRetriever::with_config(adaptive_config);
 
         Ok(Vectorless::with_components(config, workspace, retriever, executor))

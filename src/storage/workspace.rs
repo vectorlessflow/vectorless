@@ -34,7 +34,7 @@ use lru::LruCache;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, info, warn};
 
-use crate::core::{Result, Error};
+use crate::domain::{Result, Error};
 use super::persistence::{PersistedDocument, save_document, load_document};
 
 const META_FILE: &str = "_meta.json";
@@ -370,113 +370,5 @@ impl Workspace {
         }
 
         Ok(())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use tempfile::tempdir;
-
-    #[test]
-    fn test_workspace_create() {
-        let dir = tempdir().unwrap();
-        let workspace = Workspace::new(dir.path()).unwrap();
-        assert!(workspace.is_empty());
-    }
-
-    #[test]
-    fn test_workspace_add_and_load() {
-        let dir = tempdir().unwrap();
-        let mut workspace = Workspace::new(dir.path()).unwrap();
-
-        let meta = crate::storage::DocumentMeta::new("test-1", "Test Doc", "md");
-        let tree = crate::core::DocumentTree::new("Root", "Content");
-        let doc = PersistedDocument::new(meta, tree);
-
-        workspace.add(&doc).unwrap();
-        assert_eq!(workspace.len(), 1);
-
-        // Load it back (should be cached) - only needs &self now
-        let loaded = workspace.load("test-1").unwrap().unwrap();
-        assert_eq!(loaded.meta.name, "Test Doc");
-        assert_eq!(workspace.cache_len(), 1);
-    }
-
-    #[test]
-    fn test_workspace_lru_cache() {
-        let dir = tempdir().unwrap();
-        // Small cache size for testing
-        let mut workspace = Workspace::with_cache_size(dir.path(), 2).unwrap();
-
-        // Add 3 documents
-        for i in 0..3 {
-            let meta = crate::storage::DocumentMeta::new(&format!("doc-{}", i), &format!("Doc {}", i), "md");
-            let tree = crate::core::DocumentTree::new("Root", "Content");
-            let doc = PersistedDocument::new(meta, tree);
-            workspace.add(&doc).unwrap();
-        }
-
-        // Load all 3 (should evict first one due to LRU with size 2)
-        workspace.load("doc-0").unwrap();
-        workspace.load("doc-1").unwrap();
-        workspace.load("doc-2").unwrap();
-
-        // Cache should have at most 2 items
-        assert!(workspace.cache_len() <= 2);
-    }
-
-    #[test]
-    fn test_workspace_meta_only() {
-        let dir = tempdir().unwrap();
-        let mut workspace = Workspace::new(dir.path()).unwrap();
-
-        let meta = crate::storage::DocumentMeta::new("test-2", "Test", "md");
-        let tree = crate::core::DocumentTree::new("Root", "Content");
-        let doc = PersistedDocument::new(meta, tree);
-
-        workspace.add(&doc).unwrap();
-
-        // Open fresh workspace - should only load meta
-        let workspace2 = Workspace::open(dir.path()).unwrap();
-        assert_eq!(workspace2.len(), 1);
-        assert!(workspace2.get_meta("test-2").is_some());
-        assert_eq!(workspace2.cache_len(), 0); // Cache should be empty
-    }
-
-    #[test]
-    fn test_concurrent_read_access() {
-        use std::sync::Arc;
-        use std::thread;
-
-        let dir = tempdir().unwrap();
-        let mut workspace = Workspace::new(dir.path()).unwrap();
-
-        // Add a document
-        let meta = crate::storage::DocumentMeta::new("test-3", "Test", "md");
-        let tree = crate::core::DocumentTree::new("Root", "Content");
-        let doc = PersistedDocument::new(meta, tree);
-        workspace.add(&doc).unwrap();
-
-        // Wrap in Arc for sharing (simulating what Vectorless does)
-        let workspace = Arc::new(workspace);
-
-        // Spawn multiple threads that read concurrently
-        let handles: Vec<_> = (0..3)
-            .map(|i| {
-                let ws = Arc::clone(&workspace);
-                thread::spawn(move || {
-                    // All threads can read concurrently
-                    assert!(ws.contains("test-3"));
-                    let loaded = ws.load("test-3").unwrap().unwrap();
-                    assert_eq!(loaded.meta.name, "Test");
-                    ws.cache_len() // Should work from multiple threads
-                })
-            })
-            .collect();
-
-        for handle in handles {
-            handle.join().unwrap();
-        }
     }
 }

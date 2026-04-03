@@ -52,11 +52,11 @@ use uuid::Uuid;
 use tracing::info;
 
 use crate::config::Config;
-use crate::core::{DocumentTree, Result, Error};
+use crate::domain::{DocumentTree, Result, Error};
 use crate::parser::DocumentFormat;
 use crate::storage::{Workspace, PersistedDocument, DocumentMeta as StorageMeta};
-use crate::core::retriever::{AdaptiveRetriever, Retriever};
-use crate::core::index::{PipelineExecutor, PipelineOptions, IndexInput, SummaryStrategy};
+use crate::retrieval::{AdaptiveRetriever, Retriever};
+use crate::index::{PipelineExecutor, PipelineOptions, IndexInput, SummaryStrategy};
 
 use super::types::{IndexMode, IndexOptions, DocumentInfo, QueryResult};
 
@@ -160,11 +160,11 @@ impl Vectorless {
         // Convert client options to pipeline options
         let pipeline_options = PipelineOptions {
             mode: match options.mode {
-                IndexMode::Auto => crate::core::index::IndexMode::Auto,
-                IndexMode::Pdf => crate::core::index::IndexMode::Pdf,
-                IndexMode::Markdown => crate::core::index::IndexMode::Markdown,
-                IndexMode::Html => crate::core::index::IndexMode::Html,
-                IndexMode::Docx => crate::core::index::IndexMode::Docx,
+                IndexMode::Auto => crate::index::IndexMode::Auto,
+                IndexMode::Pdf => crate::index::IndexMode::Pdf,
+                IndexMode::Markdown => crate::index::IndexMode::Markdown,
+                IndexMode::Html => crate::index::IndexMode::Html,
+                IndexMode::Docx => crate::index::IndexMode::Docx,
             },
             generate_ids: options.generate_ids,
             summary_strategy: if options.generate_summaries {
@@ -367,7 +367,7 @@ impl Vectorless {
         let tree = self.get_structure(doc_id)?;
 
         // Build retrieve options from config
-        let retrieve_options = crate::core::retriever::RetrieveOptions::new()
+        let retrieve_options = crate::retrieval::RetrieveOptions::new()
             .with_top_k(self.config.retrieval.top_k)
             .with_include_content(true)
             .with_include_summaries(true);

@@ -8,7 +8,7 @@ use std::path::Path;
 use lopdf::Document as LopdfDocument;
 use tracing::{info, warn};
 
-use crate::core::{Error, Result};
+use crate::domain::{Error, Result};
 use crate::parser::DocumentParser;
 use crate::parser::toc::TocProcessor;
 

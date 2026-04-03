@@ -6,7 +6,7 @@
 use tracing::debug;
 
 use crate::config::LlmConfig;
-use crate::core::Result;
+use crate::domain::Result;
 
 use crate::llm::LlmClient;
 use super::types::TocEntry;

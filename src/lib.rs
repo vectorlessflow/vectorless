@@ -14,6 +14,35 @@
 //! Vectorless preserves your document's hierarchy and uses an LLM to navigate it —
 //! like a human skimming a table of contents, then drilling into relevant sections.
 //!
+//! ## Architecture
+//!
+//! ```text
+//! ┌─────────────────────────────────────────────────────────────────┐
+//! │                          client                                  │
+//! │                    (Vectorless, Builder)                         │
+//! └────────────────────────────┬────────────────────────────────────┘
+//!                              │
+//!           ┌──────────────────┼──────────────────┐
+//!           ▼                  ▼                  ▼
+//!     ┌──────────┐       ┌───────────┐      ┌──────────┐
+//!     │  index   │       │ retrieval │      │ storage  │
+//!     │ (write)  │       │  (read)   │      │ (persist)│
+//!     └────┬─────┘       └─────┬─────┘      └────┬─────┘
+//!          │                   │                 │
+//!          └───────────┬───────┘                 │
+//!                      ▼                         │
+//!                ┌───────────┐                   │
+//!                │  domain   │                   │
+//!                │(Tree/Node)│                   │
+//!                └─────┬─────┘                   │
+//!                      │                         │
+//!       ┌──────────────┼──────────────┐          │
+//!       ▼              ▼              ▼          │
+//!  ┌────────┐    ┌──────────┐   ┌────────┐      │
+//!  │ parser │    │   llm    │   │ config │◄─────┘
+//!  └────────┘    └──────────┘   └────────┘
+//! ```
+//!
 //! ## Features
 //!
 //! - 🌳 **Tree-Based Indexing** — Documents as hierarchical trees, not flat chunks
@@ -29,7 +58,7 @@
 //! use vectorless::{VectorlessBuilder, Vectorless};
 //!
 //! #[tokio::main]
-//! async fn main() -> vectorless::Result<()> {
+//! async fn main() -> vectorless::domain::Result<()> {
 //!     // Create client
 //!     let mut client = VectorlessBuilder::new()
 //!         .with_workspace("./workspace")
@@ -51,30 +80,14 @@
 //! | Module | Description |
 //! |--------|-------------|
 //! | [`client`] | High-level API (`Vectorless`, `VectorlessBuilder`) |
-//! | [`core`] | Core types (`DocumentTree`, `TreeNode`, `NodeId`) |
+//! | [`domain`] | Core domain types (`VectorlessTree`, `VectorlessNode`, `NodeId`) |
+//! | [`index`] | Document indexing pipeline |
+//! | [`retrieval`] | Retrieval strategies and search algorithms |
 //! | [`config`] | Configuration management |
 //! | [`llm`] | LLM client with retry & fallback |
-//! | [`document`] | Document parsers (Markdown, PDF, DOCX) |
-//! | [`indexer`] | Tree building and optimization |
-//! | [`retriever`] | Retrieval strategies (LLM navigate, beam search) |
-//! | [`ranking`] | Result scoring and merging |
+//! | [`parser`] | Document parsers (Markdown, PDF, DOCX) |
 //! | [`storage`] | Workspace persistence |
-//! | [`summarizer`] | Summary generation |
 //! | [`concurrency`] | Rate limiting |
-//!
-//! ## Configuration
-//!
-//! Create `vectorless.toml` in your project root:
-//!
-//! ```toml
-//! [summary]
-//! model = "gpt-4o-mini"
-//! endpoint = "https://api.openai.com/v1"
-//!
-//! [retrieval]
-//! model = "gpt-4o"
-//! top_k = 3
-//! ```
 
 // =============================================================================
 // Modules
@@ -83,9 +96,11 @@
 pub mod client;
 pub mod config;
 pub mod concurrency;
-pub mod core;
-pub mod parser;
+pub mod domain;
+pub mod index;
 pub mod llm;
+pub mod parser;
+pub mod retrieval;
 pub mod storage;
 
 // =============================================================================
@@ -95,17 +110,15 @@ pub mod storage;
 // Client API (most common entry point)
 pub use client::{DocumentInfo, IndexedDocument, Vectorless, VectorlessBuilder};
 
-// Core types
-pub use core::{
-    DocumentStructure, Error, NodeId, Result, StructureNode,
-    VectorlessNode, VectorlessTree,
-    // Re-export retriever types from core
-    Retriever, RetrieverError, RetrieverResult, RetrievalContext,
-    RetrieveOptions, RetrieveResponse, RetrievalResult,
-    QueryComplexity, StrategyPreference, SufficiencyLevel,
+// Domain types
+pub use domain::{
+    Error, Result, NodeId, VectorlessNode, VectorlessTree,
+    DocumentStructure, StructureNode,
+    TocView, TocNode, TocEntry, TocConfig,
+    estimate_tokens, estimate_tokens_fast,
 };
 
-// Backward compatibility alias
+// Backward compatibility aliases
 #[doc(hidden)]
 pub type DocumentTree = VectorlessTree;
 
@@ -121,21 +134,26 @@ pub use llm::{LlmClient, LlmConfig, LlmConfigs, LlmError, LlmPool, RetryConfig};
 // Document parsing
 pub use parser::{DocumentFormat, DocumentParser, DocxParser, MarkdownParser, PdfParser, ParseResult, RawNode};
 
-// Indexing (use core::index)
-pub use core::index::{PipelineExecutor, PipelineOptions, IndexInput, IndexMode};
-pub use core::index::pipeline::{PipelineOrchestrator, CustomStageBuilder};
+// Indexing
+pub use index::{
+    PipelineExecutor, PipelineOptions, IndexInput, IndexMode,
+    IndexContext, IndexResult, IndexStage, IndexMetrics,
+    SummaryStrategy, ChangeDetector, ChangeSet, PartialUpdater,
+};
+pub use index::pipeline::{PipelineOrchestrator, CustomStageBuilder};
 
-// Retrieval (from core::retriever)
-pub use core::retriever::{
-    AdaptiveRetriever, ContextBuilder,
+// Retrieval
+pub use retrieval::{
+    AdaptiveRetriever, Retriever, RetrieverError, RetrieverResult,
+    RetrieveOptions, RetrieveResponse, RetrievalResult, RetrievalContext,
+    QueryComplexity, StrategyPreference, SufficiencyLevel,
+    ContextBuilder, PruningStrategy, TokenEstimation,
     NavigationDecision, NavigationStep, SearchPath,
-    format_for_llm, format_tree_for_llm,};
+    format_for_llm, format_for_llm_async, format_tree_for_llm, format_tree_for_llm_async,
+};
 
 // Storage
 pub use storage::{DocumentMeta as StorageDocumentMeta, PersistedDocument, Workspace};
 
 // Concurrency
 pub use concurrency::{ConcurrencyConfig, ConcurrencyController, RateLimiter};
-
-// Token estimation (from core)
-pub use core::{estimate_tokens, estimate_tokens_fast};
