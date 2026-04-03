@@ -24,7 +24,9 @@ use serde::{Deserialize, Serialize};
 use tracing::{debug, info, warn};
 
 use super::error::LlmError;
-use crate::config::{FallbackBehavior, FallbackConfig as ConfigFallbackConfig, OnAllFailedBehavior};
+use crate::config::{
+    FallbackBehavior, FallbackConfig as ConfigFallbackConfig, OnAllFailedBehavior,
+};
 
 /// Result from a fallback-aware LLM call.
 #[derive(Debug, Clone)]
@@ -217,7 +219,10 @@ impl FallbackChain {
             }
             // Current model is the last in the list, no more fallbacks
             Some(_) => {
-                warn!(model = current, "Already at last fallback model, no more available");
+                warn!(
+                    model = current,
+                    "Already at last fallback model, no more available"
+                );
                 None
             }
             // Current model not in fallback list, try first fallback
@@ -248,7 +253,10 @@ impl FallbackChain {
             }
             // Current endpoint is the last in the list, no more fallbacks
             Some(_) => {
-                warn!(endpoint = current, "Already at last fallback endpoint, no more available");
+                warn!(
+                    endpoint = current,
+                    "Already at last fallback endpoint, no more available"
+                );
                 None
             }
             // Current endpoint not in fallback list, try first fallback
@@ -307,14 +315,21 @@ mod tests {
     #[test]
     fn test_next_model() {
         let config = FallbackConfig {
-            models: vec!["gpt-4o".to_string(), "gpt-4o-mini".to_string(), "glm-4-flash".to_string()],
+            models: vec![
+                "gpt-4o".to_string(),
+                "gpt-4o-mini".to_string(),
+                "glm-4-flash".to_string(),
+            ],
             ..FallbackConfig::default()
         };
         let chain = FallbackChain::new(config);
 
         // Should get next model in chain
         assert_eq!(chain.next_model("gpt-4o"), Some("gpt-4o-mini".to_string()));
-        assert_eq!(chain.next_model("gpt-4o-mini"), Some("glm-4-flash".to_string()));
+        assert_eq!(
+            chain.next_model("gpt-4o-mini"),
+            Some("glm-4-flash".to_string())
+        );
         assert_eq!(chain.next_model("glm-4-flash"), None);
     }
 
@@ -327,7 +342,10 @@ mod tests {
         let chain = FallbackChain::new(config);
 
         // Should fall back to first model in list
-        assert_eq!(chain.next_model("unknown-model"), Some("gpt-4o-mini".to_string()));
+        assert_eq!(
+            chain.next_model("unknown-model"),
+            Some("gpt-4o-mini".to_string())
+        );
     }
 
     #[test]

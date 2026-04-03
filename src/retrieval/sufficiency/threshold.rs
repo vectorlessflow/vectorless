@@ -5,8 +5,8 @@
 //!
 //! Uses simple heuristics like token count and content length.
 
-use crate::config::SufficiencyConfig;
 use super::{SufficiencyChecker, SufficiencyLevel};
+use crate::config::SufficiencyConfig;
 
 /// Configuration for threshold-based checking.
 #[derive(Debug, Clone)]

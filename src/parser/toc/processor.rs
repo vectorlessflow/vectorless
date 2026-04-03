@@ -221,7 +221,10 @@ impl TocProcessor {
             let report = self.verifier.verify(entries, pages).await?;
 
             if report.accuracy >= self.config.accuracy_threshold {
-                debug!("Verification passed: accuracy {:.1}%", report.accuracy * 100.0);
+                debug!(
+                    "Verification passed: accuracy {:.1}%",
+                    report.accuracy * 100.0
+                );
                 return Ok(report);
             }
 

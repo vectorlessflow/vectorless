@@ -4,13 +4,12 @@
 //! Unified LLM client with retry and concurrency support.
 
 use async_openai::{
+    Client,
     config::OpenAIConfig,
     types::chat::{
-        ChatCompletionRequestSystemMessage,
-        ChatCompletionRequestUserMessage,
+        ChatCompletionRequestSystemMessage, ChatCompletionRequestUserMessage,
         CreateChatCompletionRequestArgs,
     },
-    Client,
 };
 use serde::de::DeserializeOwned;
 use std::borrow::Cow;
@@ -71,7 +70,10 @@ impl std::fmt::Debug for LlmClient {
         f.debug_struct("LlmClient")
             .field("model", &self.config.model)
             .field("endpoint", &self.config.endpoint)
-            .field("concurrency", &self.concurrency.as_ref().map(|c| format!("{:?}", c)))
+            .field(
+                "concurrency",
+                &self.concurrency.as_ref().map(|c| format!("{:?}", c)),
+            )
             .field("fallback_enabled", &self.fallback.is_some())
             .finish()
     }
@@ -171,7 +173,8 @@ impl LlmClient {
     pub async fn complete(&self, system: &str, user: &str) -> LlmResult<String> {
         with_retry(&self.config.retry, || async {
             self.complete_once(system, user).await
-        }).await
+        })
+        .await
     }
 
     /// Complete a prompt with custom max tokens.
@@ -182,8 +185,10 @@ impl LlmClient {
         max_tokens: u16,
     ) -> LlmResult<String> {
         with_retry(&self.config.retry, || async {
-            self.complete_once_with_max_tokens(system, user, max_tokens).await
-        }).await
+            self.complete_once_with_max_tokens(system, user, max_tokens)
+                .await
+        })
+        .await
     }
 
     /// Complete a prompt and parse the response as JSON.
@@ -228,7 +233,9 @@ impl LlmClient {
         user: &str,
         max_tokens: u16,
     ) -> LlmResult<T> {
-        let response = self.complete_with_max_tokens(system, user, max_tokens).await?;
+        let response = self
+            .complete_with_max_tokens(system, user, max_tokens)
+            .await?;
         self.parse_json(&response)
     }
 
@@ -241,10 +248,11 @@ impl LlmClient {
             None
         };
 
-        let api_key = self.config.get_api_key()
-            .ok_or_else(|| LlmError::Config(
-                "No API key found. Set OPENAI_API_KEY environment variable.".to_string()
-            ))?;
+        let api_key = self.config.get_api_key().ok_or_else(|| {
+            LlmError::Config(
+                "No API key found. Set OPENAI_API_KEY environment variable.".to_string(),
+            )
+        })?;
 
         let endpoint = self.config.auto_detect_endpoint();
         let model = self.config.auto_detect_model();
@@ -274,11 +282,10 @@ impl LlmClient {
 
         debug!("Sending LLM request to {} with model {}", endpoint, model);
 
-        let response = client.chat().create(request).await
-            .map_err(|e| {
-                let msg = e.to_string();
-                LlmError::from_api_message(&msg)
-            })?;
+        let response = client.chat().create(request).await.map_err(|e| {
+            let msg = e.to_string();
+            LlmError::from_api_message(&msg)
+        })?;
 
         let content = response
             .choices
@@ -305,10 +312,11 @@ impl LlmClient {
             None
         };
 
-        let api_key = self.config.get_api_key()
-            .ok_or_else(|| LlmError::Config(
-                "No API key found. Set OPENAI_API_KEY environment variable.".to_string()
-            ))?;
+        let api_key = self.config.get_api_key().ok_or_else(|| {
+            LlmError::Config(
+                "No API key found. Set OPENAI_API_KEY environment variable.".to_string(),
+            )
+        })?;
 
         let endpoint = self.config.auto_detect_endpoint();
         let model = self.config.auto_detect_model();
@@ -332,17 +340,17 @@ impl LlmClient {
             .build()
             .map_err(|e| LlmError::Request(format!("Failed to build request: {}", e)))?;
 
-        let response = client.chat().create(request).await
-            .map_err(|e| {
-                let msg = e.to_string();
-                eprintln!("[LLM ERROR] API error: {}", msg);
-                LlmError::from_api_message(&msg)
-            })?;
+        let response = client.chat().create(request).await.map_err(|e| {
+            let msg = e.to_string();
+            eprintln!("[LLM ERROR] API error: {}", msg);
+            LlmError::from_api_message(&msg)
+        })?;
 
         // Debug: log response structure
         eprintln!("[LLM DEBUG] Response: {} choices", response.choices.len());
         if let Some(choice) = response.choices.first() {
-            eprintln!("[LLM DEBUG] First choice: finish_reason={:?}, has_content={}",
+            eprintln!(
+                "[LLM DEBUG] First choice: finish_reason={:?}, has_content={}",
                 choice.finish_reason,
                 choice.message.content.is_some()
             );
@@ -380,8 +388,9 @@ impl LlmClient {
     /// Parse JSON from LLM response.
     fn parse_json<T: DeserializeOwned>(&self, text: &str) -> LlmResult<T> {
         let json_text = self.extract_json(text);
-        serde_json::from_str(&json_text)
-            .map_err(|e| LlmError::Parse(format!("Failed to parse JSON: {}. Response: {}", e, text)))
+        serde_json::from_str(&json_text).map_err(|e| {
+            LlmError::Parse(format!("Failed to parse JSON: {}. Response: {}", e, text))
+        })
     }
 
     /// Extract JSON from text (handles markdown code blocks).
@@ -445,9 +454,11 @@ mod tests {
     fn test_extract_json_code_block() {
         let client = LlmClient::with_defaults();
 
-        let json = client.extract_json(r#"```json
+        let json = client.extract_json(
+            r#"```json
 {"key": "value"}
-```"#);
+```"#,
+        );
         assert_eq!(json, r#"{"key": "value"}"#);
     }
 
@@ -478,8 +489,7 @@ mod tests {
         use crate::throttle::ConcurrencyConfig;
 
         let controller = ConcurrencyController::new(ConcurrencyConfig::conservative());
-        let client = LlmClient::for_model("gpt-4o-mini")
-            .with_concurrency(controller);
+        let client = LlmClient::for_model("gpt-4o-mini").with_concurrency(controller);
 
         assert!(client.concurrency.is_some());
     }

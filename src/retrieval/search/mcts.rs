@@ -8,12 +8,12 @@
 use async_trait::async_trait;
 use std::collections::HashMap;
 
-use crate::config::StrategyConfig;
-use crate::domain::{NodeId, DocumentTree};
-use super::super::types::{NavigationDecision, NavigationStep, SearchPath};
 use super::super::RetrievalContext;
-use super::{SearchConfig, SearchResult, SearchTree};
+use super::super::types::{NavigationDecision, NavigationStep, SearchPath};
 use super::scorer::NodeScorer;
+use super::{SearchConfig, SearchResult, SearchTree};
+use crate::config::StrategyConfig;
+use crate::domain::{DocumentTree, NodeId};
 
 /// Statistics for a node in MCTS.
 #[derive(Debug, Clone, Default)]
@@ -55,20 +55,14 @@ impl MctsSearch {
     }
 
     /// Calculate UCT score for a child node.
-    fn uct_score(
-        &self,
-        child_stats: &NodeStats,
-        parent_visits: usize,
-        prior_score: f32,
-    ) -> f32 {
+    fn uct_score(&self, child_stats: &NodeStats, parent_visits: usize, prior_score: f32) -> f32 {
         if child_stats.visits == 0 {
             // Unvisited nodes get high priority
             return f32::INFINITY;
         }
 
         let exploitation = child_stats.total_score / child_stats.visits as f32;
-        let exploration = self.exploration_weight
-            * (parent_visits as f32).ln().sqrt()
+        let exploration = self.exploration_weight * (parent_visits as f32).ln().sqrt()
             / child_stats.visits as f32;
 
         // Combine with prior score from scorer
@@ -134,12 +128,7 @@ impl MctsSearch {
     }
 
     /// Backpropagate score up the tree.
-    fn backpropagate(
-        &self,
-        stats: &mut HashMap<NodeId, NodeStats>,
-        path: &[NodeId],
-        score: f32,
-    ) {
+    fn backpropagate(&self, stats: &mut HashMap<NodeId, NodeStats>, path: &[NodeId], score: f32) {
         for &node_id in path {
             let node_stats = stats.entry(node_id).or_default();
             node_stats.visits += 1;
@@ -224,7 +213,8 @@ impl SearchTree for MctsSearch {
                     })
                     .collect();
 
-                scored_children.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+                scored_children
+                    .sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
 
                 for (child_id, score) in scored_children.iter().take(config.top_k) {
                     if *score >= config.min_score {
@@ -250,7 +240,11 @@ impl SearchTree for MctsSearch {
             })
             .collect();
 
-        final_paths.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+        final_paths.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         final_paths.truncate(config.top_k);
 
         result.paths = final_paths

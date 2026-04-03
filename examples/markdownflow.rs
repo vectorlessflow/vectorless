@@ -86,9 +86,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Step 4: Query the document
     println!("Step 4: Querying the document...");
 
-    let queries = vec![
-        "What is this project about?",
-    ];
+    let queries = vec!["What is this project about?"];
 
     for query in queries {
         println!("  Query: \"{}\"", query);

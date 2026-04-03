@@ -99,7 +99,10 @@ impl ConcurrencyController {
         if self.config.semaphore_enabled {
             trace!("Waiting for semaphore permit");
             let permit = self.semaphore.acquire().await.unwrap();
-            debug!("Semaphore: permit acquired (available: {})", self.semaphore.available_permits());
+            debug!(
+                "Semaphore: permit acquired (available: {})",
+                self.semaphore.available_permits()
+            );
             Some(permit)
         } else {
             None
@@ -144,7 +147,10 @@ impl ConcurrencyController {
 impl std::fmt::Debug for ConcurrencyController {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ConcurrencyController")
-            .field("max_concurrent_requests", &self.config.max_concurrent_requests)
+            .field(
+                "max_concurrent_requests",
+                &self.config.max_concurrent_requests,
+            )
             .field("requests_per_minute", &self.config.requests_per_minute)
             .field("rate_limiting_enabled", &self.config.enabled)
             .field("semaphore_enabled", &self.config.semaphore_enabled)

@@ -5,7 +5,7 @@
 
 use async_trait::async_trait;
 
-use crate::domain::{NodeId, DocumentTree};
+use crate::domain::{DocumentTree, NodeId};
 use crate::llm::{LlmClient, LlmResult};
 
 /// Configuration for summary strategies.
@@ -106,11 +106,20 @@ impl SummaryStrategy {
     }
 
     /// Check if we should generate a summary for a node.
-    pub fn should_generate(&self, tree: &DocumentTree, node_id: NodeId, token_count: usize) -> bool {
+    pub fn should_generate(
+        &self,
+        tree: &DocumentTree,
+        node_id: NodeId,
+        token_count: usize,
+    ) -> bool {
         match self {
             Self::None => false,
             Self::Full { .. } => token_count > 0,
-            Self::Selective { min_tokens, branch_only, .. } => {
+            Self::Selective {
+                min_tokens,
+                branch_only,
+                ..
+            } => {
                 let is_branch = !tree.is_leaf(node_id);
                 let enough_tokens = token_count >= *min_tokens;
 
@@ -177,11 +186,7 @@ impl SummaryGenerator for LlmSummaryGenerator {
             Focus on the main topics and key information. \
             Respond with only the summary, no additional text.";
 
-        let user_prompt = format!(
-            "Title: {}\n\nContent:\n{}",
-            title,
-            content
-        );
+        let user_prompt = format!("Title: {}\n\nContent:\n{}", title, content);
 
         self.client
             .complete_with_max_tokens(&system_prompt, &user_prompt, self.max_tokens as u16)

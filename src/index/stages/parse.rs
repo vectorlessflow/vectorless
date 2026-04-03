@@ -12,8 +12,8 @@ use crate::parser::DocumentFormat;
 use crate::parser::ParserRegistry;
 
 use super::{IndexStage, StageResult};
-use crate::index::pipeline::{IndexContext, IndexInput};
 use crate::index::IndexMode;
+use crate::index::pipeline::{IndexContext, IndexInput};
 
 /// Parse stage - extracts raw nodes from documents.
 pub struct ParseStage {
@@ -31,19 +31,15 @@ impl ParseStage {
     /// Detect document format from path and options.
     fn detect_format(&self, ctx: &IndexContext) -> Result<DocumentFormat> {
         match ctx.options.mode {
-            IndexMode::Auto => {
-                match &ctx.input {
-                    IndexInput::File(path) => {
-                        let ext = path
-                            .extension()
-                            .and_then(|e| e.to_str())
-                            .unwrap_or("");
-                        DocumentFormat::from_extension(ext)
-                            .ok_or_else(|| crate::domain::Error::Parse(format!("Unknown format: {}", ext)))
-                    }
-                    IndexInput::Content { format, .. } => Ok(*format),
+            IndexMode::Auto => match &ctx.input {
+                IndexInput::File(path) => {
+                    let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+                    DocumentFormat::from_extension(ext).ok_or_else(|| {
+                        crate::domain::Error::Parse(format!("Unknown format: {}", ext))
+                    })
                 }
-            }
+                IndexInput::Content { format, .. } => Ok(*format),
+            },
             IndexMode::Markdown => Ok(DocumentFormat::Markdown),
             IndexMode::Pdf => Ok(DocumentFormat::Pdf),
             IndexMode::Docx => Ok(DocumentFormat::Docx),
@@ -90,7 +86,11 @@ impl IndexStage for ParseStage {
                 // Parse using registry
                 self.parser_registry.parse_file(&path).await?
             }
-            IndexInput::Content { content, name, format } => {
+            IndexInput::Content {
+                content,
+                name,
+                format,
+            } => {
                 // Set name
                 ctx.name = name.clone();
 
@@ -129,10 +129,9 @@ impl IndexStage for ParseStage {
             "node_count".to_string(),
             serde_json::json!(ctx.raw_nodes.len()),
         );
-        stage_result.metadata.insert(
-            "format".to_string(),
-            serde_json::json!(format.extension()),
-        );
+        stage_result
+            .metadata
+            .insert("format".to_string(), serde_json::json!(format.extension()));
 
         Ok(stage_result)
     }

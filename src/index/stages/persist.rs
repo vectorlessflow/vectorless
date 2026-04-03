@@ -8,7 +8,7 @@ use std::time::Instant;
 use tracing::info;
 
 use crate::domain::Result;
-use crate::storage::{PersistedDocument, DocumentMeta as StorageMeta, Workspace};
+use crate::storage::{DocumentMeta as StorageMeta, PersistedDocument, Workspace};
 
 use super::{IndexStage, StageResult};
 use crate::index::pipeline::IndexContext;
@@ -34,22 +34,20 @@ impl PersistStage {
 
     /// Save document to workspace.
     fn save_to_workspace(&mut self, ctx: &IndexContext) -> Result<()> {
-        let workspace = self.workspace.as_mut().ok_or_else(|| {
-            crate::domain::Error::Config("No workspace configured".to_string())
-        })?;
+        let workspace = self
+            .workspace
+            .as_mut()
+            .ok_or_else(|| crate::domain::Error::Config("No workspace configured".to_string()))?;
 
-        let tree = ctx.tree.as_ref().ok_or_else(|| {
-            crate::domain::Error::IndexBuild("Tree not built".to_string())
-        })?;
+        let tree = ctx
+            .tree
+            .as_ref()
+            .ok_or_else(|| crate::domain::Error::IndexBuild("Tree not built".to_string()))?;
 
         // Create metadata
-        let meta = StorageMeta::new(
-            &ctx.doc_id,
-            &ctx.name,
-            ctx.format.extension(),
-        )
-        .with_source_path(ctx.source_path.clone().unwrap_or_default())
-        .with_description(ctx.description.clone().unwrap_or_default());
+        let meta = StorageMeta::new(&ctx.doc_id, &ctx.name, ctx.format.extension())
+            .with_source_path(ctx.source_path.clone().unwrap_or_default())
+            .with_description(ctx.description.clone().unwrap_or_default());
 
         let doc = PersistedDocument::new(meta, tree.clone());
 

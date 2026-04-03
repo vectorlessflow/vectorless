@@ -182,7 +182,12 @@ pub struct VerificationError {
 
 impl VerificationError {
     /// Create a new verification error.
-    pub fn new(index: usize, title: impl Into<String>, expected_page: usize, error_type: ErrorType) -> Self {
+    pub fn new(
+        index: usize,
+        title: impl Into<String>,
+        expected_page: usize,
+        error_type: ErrorType,
+    ) -> Self {
         Self {
             index,
             title: title.into(),
@@ -237,7 +242,12 @@ impl VerificationReport {
         } else {
             1.0
         };
-        Self { total, correct, accuracy, errors }
+        Self {
+            total,
+            correct,
+            accuracy,
+            errors,
+        }
     }
 
     /// Create a report indicating all entries are correct.

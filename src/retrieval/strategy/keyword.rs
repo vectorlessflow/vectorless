@@ -8,10 +8,10 @@
 use async_trait::async_trait;
 use std::collections::{HashMap, HashSet};
 
-use crate::domain::{NodeId, DocumentTree};
-use super::super::types::{NavigationDecision, QueryComplexity};
 use super::super::RetrievalContext;
+use super::super::types::{NavigationDecision, QueryComplexity};
 use super::r#trait::{NodeEvaluation, RetrievalStrategy, StrategyCapabilities};
+use crate::domain::{DocumentTree, NodeId};
 
 /// Keyword-based retrieval strategy.
 ///

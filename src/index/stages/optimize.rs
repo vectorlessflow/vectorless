@@ -30,7 +30,8 @@ impl OptimizeStage {
         let mut merged_count = 0;
 
         // Get all non-leaf nodes
-        let non_leaves: Vec<NodeId> = tree.traverse()
+        let non_leaves: Vec<NodeId> = tree
+            .traverse()
             .into_iter()
             .filter(|id| !tree.is_leaf(*id))
             .collect();
@@ -47,12 +48,8 @@ impl OptimizeStage {
                 let curr_id = children[i];
                 let next_id = children[i + 1];
 
-                let curr_tokens = tree.get(curr_id)
-                    .and_then(|n| n.token_count)
-                    .unwrap_or(0);
-                let next_tokens = tree.get(next_id)
-                    .and_then(|n| n.token_count)
-                    .unwrap_or(0);
+                let curr_tokens = tree.get(curr_id).and_then(|n| n.token_count).unwrap_or(0);
+                let next_tokens = tree.get(next_id).and_then(|n| n.token_count).unwrap_or(0);
 
                 // If both are small, merge next into current
                 if curr_tokens < min_tokens && next_tokens < min_tokens {
@@ -65,9 +62,7 @@ impl OptimizeStage {
                                 }
                                 curr.content.push_str(&next_node.content);
                             }
-                            curr.token_count = Some(
-                                curr.token_count.unwrap_or(0) + next_tokens
-                            );
+                            curr.token_count = Some(curr.token_count.unwrap_or(0) + next_tokens);
                         }
                     }
 
@@ -95,7 +90,8 @@ impl OptimizeStage {
         let mut removed_count = 0;
 
         // Find nodes with no content and only one child
-        let candidates: Vec<NodeId> = tree.traverse()
+        let candidates: Vec<NodeId> = tree
+            .traverse()
             .into_iter()
             .filter(|id| {
                 if tree.is_leaf(*id) {
@@ -155,15 +151,17 @@ impl IndexStage for OptimizeStage {
             return Ok(StageResult::success("optimize"));
         }
 
-        let tree = ctx.tree.as_mut().ok_or_else(|| {
-            crate::domain::Error::IndexBuild("Tree not built".to_string())
-        })?;
+        let tree = ctx
+            .tree
+            .as_mut()
+            .ok_or_else(|| crate::domain::Error::IndexBuild("Tree not built".to_string()))?;
 
         let mut merged_count = 0;
 
         // 1. Merge small leaves
         if config.merge_leaf_threshold > 0 {
-            merged_count = Self::merge_small_leaves(tree, config.merge_leaf_threshold, &mut ctx.metrics);
+            merged_count =
+                Self::merge_small_leaves(tree, config.merge_leaf_threshold, &mut ctx.metrics);
             info!("Merged {} small leaf nodes", merged_count);
         }
 
@@ -180,10 +178,9 @@ impl IndexStage for OptimizeStage {
 
         let mut stage_result = StageResult::success("optimize");
         stage_result.duration_ms = duration;
-        stage_result.metadata.insert(
-            "nodes_merged".to_string(),
-            serde_json::json!(merged_count),
-        );
+        stage_result
+            .metadata
+            .insert("nodes_merged".to_string(), serde_json::json!(merged_count));
         stage_result.metadata.insert(
             "nodes_removed".to_string(),
             serde_json::json!(removed_count),

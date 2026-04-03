@@ -12,11 +12,9 @@ use tracing::{info, warn};
 
 use crate::domain::estimate_tokens;
 use crate::llm::LlmClient;
-use crate::retrieval::pipeline::{
-    FailurePolicy, PipelineContext, RetrievalStage, StageOutcome,
-};
+use crate::retrieval::pipeline::{FailurePolicy, PipelineContext, RetrievalStage, StageOutcome};
 use crate::retrieval::sufficiency::{LlmJudge, SufficiencyChecker, ThresholdChecker};
-use crate::retrieval::types::{RetrieveResponse, RetrievalResult, SufficiencyLevel};
+use crate::retrieval::types::{RetrievalResult, RetrieveResponse, SufficiencyLevel};
 
 /// Judge Stage - evaluates retrieval sufficiency.
 ///
@@ -110,7 +108,8 @@ impl JudgeStage {
         }
 
         // Fall back to threshold checker
-        self.threshold_checker.check(&ctx.query, &ctx.accumulated_content, ctx.token_count)
+        self.threshold_checker
+            .check(&ctx.query, &ctx.accumulated_content, ctx.token_count)
     }
 
     /// Build the final response.
@@ -144,7 +143,8 @@ impl JudgeStage {
             content: ctx.accumulated_content.clone(),
             confidence: self.calculate_confidence(ctx),
             is_sufficient: ctx.sufficiency == SufficiencyLevel::Sufficient,
-            strategy_used: ctx.selected_strategy
+            strategy_used: ctx
+                .selected_strategy
                 .map(|s| format!("{:?}", s))
                 .unwrap_or_else(|| "unknown".to_string()),
             complexity: ctx.complexity.unwrap_or_default(),
@@ -160,8 +160,8 @@ impl JudgeStage {
         }
 
         // Weight by score and sufficiency
-        let avg_score: f32 = ctx.candidates.iter().map(|c| c.score).sum::<f32>()
-            / ctx.candidates.len() as f32;
+        let avg_score: f32 =
+            ctx.candidates.iter().map(|c| c.score).sum::<f32>() / ctx.candidates.len() as f32;
 
         let sufficiency_factor = match ctx.sufficiency {
             SufficiencyLevel::Sufficient => 1.0,

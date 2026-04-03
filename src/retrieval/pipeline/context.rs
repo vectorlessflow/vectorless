@@ -246,7 +246,11 @@ pub struct PipelineContext {
 
 impl PipelineContext {
     /// Create a new retrieval context.
-    pub fn new(tree: Arc<DocumentTree>, query: impl Into<String>, options: RetrieveOptions) -> Self {
+    pub fn new(
+        tree: Arc<DocumentTree>,
+        query: impl Into<String>,
+        options: RetrieveOptions,
+    ) -> Self {
         Self {
             query: query.into(),
             tree,
@@ -278,7 +282,8 @@ impl PipelineContext {
 
     /// End timing and record for a stage.
     pub fn end_stage(&mut self, stage_name: &str, success: bool, message: Option<String>) {
-        let duration_ms = self.stage_start
+        let duration_ms = self
+            .stage_start
             .map(|s| s.elapsed().as_millis() as u64)
             .unwrap_or(0);
 
@@ -339,7 +344,8 @@ impl PipelineContext {
             content: self.accumulated_content,
             confidence: 0.0,
             is_sufficient: self.sufficiency == SufficiencyLevel::Sufficient,
-            strategy_used: self.selected_strategy
+            strategy_used: self
+                .selected_strategy
                 .map(|s| format!("{:?}", s))
                 .unwrap_or_else(|| "unknown".to_string()),
             complexity: self.complexity.unwrap_or_default(),

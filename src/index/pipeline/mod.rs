@@ -20,5 +20,5 @@ mod policy;
 pub use context::{IndexContext, IndexInput, IndexResult, StageResult};
 pub use executor::PipelineExecutor;
 pub use metrics::IndexMetrics;
-pub use orchestrator::{ExecutionGroup, PipelineOrchestrator, CustomStageBuilder};
+pub use orchestrator::{CustomStageBuilder, ExecutionGroup, PipelineOrchestrator};
 pub use policy::{FailurePolicy, StageRetryConfig};

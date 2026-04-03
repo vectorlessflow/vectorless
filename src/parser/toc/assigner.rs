@@ -10,8 +10,8 @@ use crate::config::LlmConfig;
 use crate::domain::Result;
 use crate::parser::pdf::PdfPage;
 
-use crate::llm::LlmClient;
 use super::types::{PageOffset, TocEntry};
+use crate::llm::LlmClient;
 
 /// Page assigner configuration.
 #[derive(Debug, Clone)]
@@ -89,7 +89,10 @@ impl PageAssigner {
             return self.assign_with_llm(entries, pages).await;
         }
 
-        info!("Calculated offset: {} (confidence: {})", offset.offset, offset.confidence);
+        info!(
+            "Calculated offset: {} (confidence: {})",
+            offset.offset, offset.confidence
+        );
 
         // Step 3: Apply offset to all entries
         for entry in entries.iter_mut() {
@@ -105,9 +108,7 @@ impl PageAssigner {
     /// Select anchor entries for offset calculation.
     fn select_anchors<'a>(&self, entries: &'a [TocEntry], count: usize) -> Vec<&'a TocEntry> {
         // Select entries with TOC pages, evenly distributed
-        let with_pages: Vec<_> = entries.iter()
-            .filter(|e| e.toc_page.is_some())
-            .collect();
+        let with_pages: Vec<_> = entries.iter().filter(|e| e.toc_page.is_some()).collect();
 
         if with_pages.len() <= count {
             return with_pages;
@@ -121,7 +122,11 @@ impl PageAssigner {
     }
 
     /// Calculate page offset by verifying anchors.
-    async fn calculate_offset(&self, anchors: Vec<&TocEntry>, pages: &[PdfPage]) -> Result<PageOffset> {
+    async fn calculate_offset(
+        &self,
+        anchors: Vec<&TocEntry>,
+        pages: &[PdfPage],
+    ) -> Result<PageOffset> {
         if anchors.is_empty() {
             return Ok(PageOffset::new(0, 0, 0.0));
         }
@@ -133,18 +138,24 @@ impl PageAssigner {
             let toc_page = anchor.toc_page.unwrap();
 
             // Find the physical page where this title appears
-            if let Some(physical) = self.locate_title_in_range(anchor.title.as_str(), pages, toc_page).await? {
+            if let Some(physical) = self
+                .locate_title_in_range(anchor.title.as_str(), pages, toc_page)
+                .await?
+            {
                 let offset = physical as i32 - toc_page as i32;
                 verified_offsets.push((offset, true));
-                debug!("Anchor '{}' found: toc={}, physical={}, offset={}",
-                    anchor.title, toc_page, physical, offset);
+                debug!(
+                    "Anchor '{}' found: toc={}, physical={}, offset={}",
+                    anchor.title, toc_page, physical, offset
+                );
             } else {
                 verified_offsets.push((0, false));
             }
         }
 
         // Calculate the mode (most common offset)
-        let successful: Vec<_> = verified_offsets.iter()
+        let successful: Vec<_> = verified_offsets
+            .iter()
             .filter(|(_, success)| *success)
             .map(|(offset, _)| *offset)
             .collect();
@@ -166,32 +177,41 @@ impl PageAssigner {
         for &v in values {
             *counts.entry(v).or_insert(0) += 1;
         }
-        counts.into_iter()
+        counts
+            .into_iter()
             .max_by_key(|&(_, count)| count)
             .map(|(v, _)| v)
             .unwrap_or(0)
     }
 
     /// Locate a title in a range of pages using LLM.
-    async fn locate_title_in_range(&self, title: &str, pages: &[PdfPage], near_page: usize) -> Result<Option<usize>> {
+    async fn locate_title_in_range(
+        &self,
+        title: &str,
+        pages: &[PdfPage],
+        near_page: usize,
+    ) -> Result<Option<usize>> {
         // Search in a range around the expected page
         let start = (near_page.saturating_sub(3)).max(1);
         let end = (near_page + 3).min(pages.len());
 
-        let range_pages: Vec<_> = (start..=end)
-            .filter_map(|i| pages.get(i - 1))
-            .collect();
+        let range_pages: Vec<_> = (start..=end).filter_map(|i| pages.get(i - 1)).collect();
 
         if range_pages.is_empty() {
             return Ok(None);
         }
 
         // Use LLM to find the exact page
-        let content = range_pages.iter()
-            .map(|p| format!("<page_{}>\n{}\n</page_{}>",
-                p.number,
-                &p.text[..p.text.len().min(500)],
-                p.number))
+        let content = range_pages
+            .iter()
+            .map(|p| {
+                format!(
+                    "<page_{}>\n{}\n</page_{}>",
+                    p.number,
+                    &p.text[..p.text.len().min(500)],
+                    p.number
+                )
+            })
             .collect::<Vec<_>>()
             .join("\n\n");
 
@@ -224,7 +244,9 @@ Reply in JSON format:
         let page_groups = self.group_pages(pages, 5);
 
         for entry in entries.iter_mut() {
-            let physical = self.locate_title_in_groups(entry.title.as_str(), &page_groups).await?;
+            let physical = self
+                .locate_title_in_groups(entry.title.as_str(), &page_groups)
+                .await?;
             entry.physical_page = physical;
             entry.confidence = if physical.is_some() { 0.8 } else { 0.3 };
         }
@@ -234,21 +256,31 @@ Reply in JSON format:
 
     /// Group pages for batch processing.
     fn group_pages<'a>(&self, pages: &'a [PdfPage], group_size: usize) -> Vec<Vec<&'a PdfPage>> {
-        pages.chunks(group_size)
+        pages
+            .chunks(group_size)
             .map(|chunk| chunk.iter().collect())
             .collect()
     }
 
     /// Locate a title across page groups.
-    async fn locate_title_in_groups(&self, title: &str, groups: &[Vec<&PdfPage>]) -> Result<Option<usize>> {
+    async fn locate_title_in_groups(
+        &self,
+        title: &str,
+        groups: &[Vec<&PdfPage>],
+    ) -> Result<Option<usize>> {
         let system = "You are a document analysis assistant. Find which page contains a specific section title.";
 
         for group in groups {
-            let content = group.iter()
-                .map(|p| format!("<page_{}>\n{}\n</page_{}>",
-                    p.number,
-                    &p.text[..p.text.len().min(300)],
-                    p.number))
+            let content = group
+                .iter()
+                .map(|p| {
+                    format!(
+                        "<page_{}>\n{}\n</page_{}>",
+                        p.number,
+                        &p.text[..p.text.len().min(300)],
+                        p.number
+                    )
+                })
                 .collect::<Vec<_>>()
                 .join("\n\n");
 

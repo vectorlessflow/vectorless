@@ -6,7 +6,7 @@
 //! This module provides a node type for hierarchical document representation.
 //! Each branch represents a section and each leaf contains the actual text.
 
-use indextree::{NodeId as IndexTreeNodeId};
+use indextree::NodeId as IndexTreeNodeId;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 

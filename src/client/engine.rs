@@ -48,17 +48,17 @@
 use std::path::Path;
 use std::sync::{Arc, Mutex, RwLock};
 
-use uuid::Uuid;
 use tracing::info;
+use uuid::Uuid;
 
 use crate::config::Config;
-use crate::domain::{DocumentTree, Result, Error};
+use crate::domain::{DocumentTree, Error, Result};
+use crate::index::{IndexInput, PipelineExecutor, PipelineOptions, SummaryStrategy};
 use crate::parser::DocumentFormat;
-use crate::storage::{Workspace, PersistedDocument, DocumentMeta as StorageMeta};
 use crate::retrieval::{PipelineRetriever, Retriever};
-use crate::index::{PipelineExecutor, PipelineOptions, IndexInput, SummaryStrategy};
+use crate::storage::{DocumentMeta as StorageMeta, PersistedDocument, Workspace};
 
-use super::types::{IndexMode, IndexOptions, DocumentInfo, QueryResult};
+use super::types::{DocumentInfo, IndexMode, IndexOptions, QueryResult};
 
 /// The main Engine client.
 ///
@@ -168,10 +168,7 @@ impl Engine {
             },
             generate_ids: options.generate_ids,
             summary_strategy: if options.generate_summaries {
-                SummaryStrategy::selective(
-                    self.config.indexer.min_summary_tokens,
-                    false,
-                )
+                SummaryStrategy::selective(self.config.indexer.min_summary_tokens, false)
             } else {
                 SummaryStrategy::none()
             },
@@ -182,16 +179,17 @@ impl Engine {
         // Create pipeline input and execute (with mutex lock)
         let input = IndexInput::file(&path);
         let result = {
-            let mut executor = self.executor.lock().map_err(|_| {
-                Error::Other("Pipeline executor lock poisoned".to_string())
-            })?;
+            let mut executor = self
+                .executor
+                .lock()
+                .map_err(|_| Error::Other("Pipeline executor lock poisoned".to_string()))?;
             executor.execute(input, pipeline_options).await?
         };
 
         // Build persisted document
-        let tree = result.tree.ok_or_else(|| {
-            Error::Parse("Document tree not generated".to_string())
-        })?;
+        let tree = result
+            .tree
+            .ok_or_else(|| Error::Parse("Document tree not generated".to_string()))?;
 
         let meta = StorageMeta::new(&doc_id, &result.name, format.extension())
             .with_source_path(path.to_string_lossy().to_string())
@@ -208,9 +206,9 @@ impl Engine {
 
         // Save to workspace if configured
         if let Some(ref workspace) = self.workspace {
-            let mut ws = workspace.write().map_err(|_| {
-                Error::Other("Workspace lock poisoned".to_string())
-            })?;
+            let mut ws = workspace
+                .write()
+                .map_err(|_| Error::Other("Workspace lock poisoned".to_string()))?;
             ws.add(&doc)?;
             info!("Saved document {} to workspace", doc_id);
         }
@@ -223,9 +221,7 @@ impl Engine {
     fn detect_format(&self, path: &Path, options: &IndexOptions) -> Result<DocumentFormat> {
         match options.mode {
             IndexMode::Auto => {
-                let ext = path.extension()
-                    .and_then(|e| e.to_str())
-                    .unwrap_or("");
+                let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
                 DocumentFormat::from_extension(ext)
                     .ok_or_else(|| Error::Parse(format!("Unknown format: {}", ext)))
             }
@@ -274,15 +270,18 @@ impl Engine {
     /// - No workspace is configured
     /// - The document is not found
     pub fn get_structure(&self, doc_id: &str) -> Result<DocumentTree> {
-        let workspace = self.workspace.as_ref()
+        let workspace = self
+            .workspace
+            .as_ref()
             .ok_or_else(|| Error::Config("No workspace configured".to_string()))?;
 
         // Use read lock - Workspace::load now uses interior mutability for cache
-        let ws = workspace.read().map_err(|_| {
-            Error::Other("Workspace lock poisoned".to_string())
-        })?;
+        let ws = workspace
+            .read()
+            .map_err(|_| Error::Other("Workspace lock poisoned".to_string()))?;
 
-        let doc = ws.load(doc_id)?
+        let doc = ws
+            .load(doc_id)?
             .ok_or_else(|| Error::DocumentNotFound(format!("Document not found: {}", doc_id)))?;
 
         Ok(doc.tree)
@@ -297,15 +296,18 @@ impl Engine {
     /// - The document is not found
     /// - No page content is available
     pub fn get_page_content(&self, doc_id: &str, pages: &str) -> Result<String> {
-        let workspace = self.workspace.as_ref()
+        let workspace = self
+            .workspace
+            .as_ref()
             .ok_or_else(|| Error::Config("No workspace configured".to_string()))?;
 
         // Use read lock - Workspace::load now uses interior mutability for cache
-        let ws = workspace.read().map_err(|_| {
-            Error::Other("Workspace lock poisoned".to_string())
-        })?;
+        let ws = workspace
+            .read()
+            .map_err(|_| Error::Other("Workspace lock poisoned".to_string()))?;
 
-        let doc = ws.load(doc_id)?
+        let doc = ws
+            .load(doc_id)?
             .ok_or_else(|| Error::DocumentNotFound(format!("Document not found: {}", doc_id)))?;
 
         if doc.pages.is_empty() {
@@ -335,16 +337,19 @@ impl Engine {
             if part.contains('-') {
                 let range: Vec<&str> = part.split('-').collect();
                 if range.len() == 2 {
-                    let start: usize = range[0].parse()
+                    let start: usize = range[0]
+                        .parse()
                         .map_err(|_| Error::Parse(format!("Invalid page number: {}", range[0])))?;
-                    let end: usize = range[1].parse()
+                    let end: usize = range[1]
+                        .parse()
                         .map_err(|_| Error::Parse(format!("Invalid page number: {}", range[1])))?;
                     for p in start..=end {
                         result.push(p);
                     }
                 }
             } else if !part.is_empty() {
-                let page: usize = part.parse()
+                let page: usize = part
+                    .parse()
                     .map_err(|_| Error::Parse(format!("Invalid page number: {}", part)))?;
                 result.push(page);
             }
@@ -373,15 +378,22 @@ impl Engine {
             .with_include_summaries(true);
 
         // Use adaptive retriever
-        let response = self.retriever.retrieve(&tree, question, &retrieve_options).await
+        let response = self
+            .retriever
+            .retrieve(&tree, question, &retrieve_options)
+            .await
             .map_err(|e| Error::Retrieval(e.to_string()))?;
 
         // Extract node IDs and build content from results
-        let node_ids: Vec<String> = response.results.iter()
+        let node_ids: Vec<String> = response
+            .results
+            .iter()
             .filter_map(|r| r.node_id.clone())
             .collect();
 
-        let content_parts: Vec<String> = response.results.iter()
+        let content_parts: Vec<String> = response
+            .results
+            .iter()
             .map(|r| {
                 let mut parts = vec![format!("## {}", r.title)];
 
@@ -423,13 +435,15 @@ impl Engine {
     ///
     /// Returns an error if no workspace is configured.
     pub fn load(&self, doc_id: &str) -> Result<bool> {
-        let workspace = self.workspace.as_ref()
+        let workspace = self
+            .workspace
+            .as_ref()
             .ok_or_else(|| Error::Config("No workspace configured".to_string()))?;
 
         // Use read lock - Workspace::load now uses interior mutability for cache
-        let ws = workspace.read().map_err(|_| {
-            Error::Other("Workspace lock poisoned".to_string())
-        })?;
+        let ws = workspace
+            .read()
+            .map_err(|_| Error::Other("Workspace lock poisoned".to_string()))?;
 
         if !ws.contains(doc_id) {
             return Ok(false);
@@ -445,12 +459,14 @@ impl Engine {
     ///
     /// Returns an error if no workspace is configured.
     pub fn remove(&self, doc_id: &str) -> Result<bool> {
-        let workspace = self.workspace.as_ref()
+        let workspace = self
+            .workspace
+            .as_ref()
             .ok_or_else(|| Error::Config("No workspace configured".to_string()))?;
 
-        let mut ws = workspace.write().map_err(|_| {
-            Error::Other("Workspace lock poisoned".to_string())
-        })?;
+        let mut ws = workspace
+            .write()
+            .map_err(|_| Error::Other("Workspace lock poisoned".to_string()))?;
         ws.remove(doc_id)
     }
 
@@ -460,12 +476,14 @@ impl Engine {
     ///
     /// Returns an error if no workspace is configured.
     pub fn exists(&self, doc_id: &str) -> Result<bool> {
-        let workspace = self.workspace.as_ref()
+        let workspace = self
+            .workspace
+            .as_ref()
             .ok_or_else(|| Error::Config("No workspace configured".to_string()))?;
 
-        let ws = workspace.read().map_err(|_| {
-            Error::Other("Workspace lock poisoned".to_string())
-        })?;
+        let ws = workspace
+            .read()
+            .map_err(|_| Error::Other("Workspace lock poisoned".to_string()))?;
         Ok(ws.contains(doc_id))
     }
 
@@ -475,12 +493,14 @@ impl Engine {
     ///
     /// Returns an error if no workspace is configured.
     pub fn get_metadata(&self, doc_id: &str) -> Result<Option<DocumentInfo>> {
-        let workspace = self.workspace.as_ref()
+        let workspace = self
+            .workspace
+            .as_ref()
             .ok_or_else(|| Error::Config("No workspace configured".to_string()))?;
 
-        let ws = workspace.read().map_err(|_| {
-            Error::Other("Workspace lock poisoned".to_string())
-        })?;
+        let ws = workspace
+            .read()
+            .map_err(|_| Error::Other("Workspace lock poisoned".to_string()))?;
 
         Ok(ws.get_meta(doc_id).map(|meta| DocumentInfo {
             id: meta.id.clone(),
@@ -500,12 +520,14 @@ impl Engine {
     ///
     /// Returns an error if no workspace is configured.
     pub fn batch_remove(&self, doc_ids: &[&str]) -> Result<usize> {
-        let workspace = self.workspace.as_ref()
+        let workspace = self
+            .workspace
+            .as_ref()
             .ok_or_else(|| Error::Config("No workspace configured".to_string()))?;
 
-        let mut ws = workspace.write().map_err(|_| {
-            Error::Other("Workspace lock poisoned".to_string())
-        })?;
+        let mut ws = workspace
+            .write()
+            .map_err(|_| Error::Other("Workspace lock poisoned".to_string()))?;
 
         let mut removed = 0;
         for doc_id in doc_ids {
@@ -524,12 +546,14 @@ impl Engine {
     ///
     /// Returns an error if no workspace is configured.
     pub fn clear(&self) -> Result<usize> {
-        let workspace = self.workspace.as_ref()
+        let workspace = self
+            .workspace
+            .as_ref()
             .ok_or_else(|| Error::Config("No workspace configured".to_string()))?;
 
-        let mut ws = workspace.write().map_err(|_| {
-            Error::Other("Workspace lock poisoned".to_string())
-        })?;
+        let mut ws = workspace
+            .write()
+            .map_err(|_| Error::Other("Workspace lock poisoned".to_string()))?;
 
         let doc_ids: Vec<String> = ws.list_documents().iter().map(|s| s.to_string()).collect();
         let count = doc_ids.len();

@@ -93,16 +93,13 @@ impl LlmPool {
         let arc = Arc::new(controller);
         self.concurrency = Some(arc.clone());
         self.summary = Arc::new(
-            LlmClient::new(self.summary.config().clone())
-                .with_shared_concurrency(arc.clone())
+            LlmClient::new(self.summary.config().clone()).with_shared_concurrency(arc.clone()),
         );
         self.retrieval = Arc::new(
-            LlmClient::new(self.retrieval.config().clone())
-                .with_shared_concurrency(arc.clone())
+            LlmClient::new(self.retrieval.config().clone()).with_shared_concurrency(arc.clone()),
         );
         self.toc = Arc::new(
-            LlmClient::new(self.toc.config().clone())
-                .with_shared_concurrency(arc.clone())
+            LlmClient::new(self.toc.config().clone()).with_shared_concurrency(arc.clone()),
         );
         self
     }
@@ -112,15 +109,14 @@ impl LlmPool {
         self.concurrency = Some(controller.clone());
         self.summary = Arc::new(
             LlmClient::new(self.summary.config().clone())
-                .with_shared_concurrency(controller.clone())
+                .with_shared_concurrency(controller.clone()),
         );
         self.retrieval = Arc::new(
             LlmClient::new(self.retrieval.config().clone())
-                .with_shared_concurrency(controller.clone())
+                .with_shared_concurrency(controller.clone()),
         );
         self.toc = Arc::new(
-            LlmClient::new(self.toc.config().clone())
-                .with_shared_concurrency(controller.clone())
+            LlmClient::new(self.toc.config().clone()).with_shared_concurrency(controller.clone()),
         );
         self
     }

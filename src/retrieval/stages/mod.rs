@@ -23,11 +23,11 @@
 //! Implement [`RetrievalStage`](crate::retrieval::pipeline::RetrievalStage) to create custom stages.
 
 mod analyze;
+mod judge;
 mod plan;
 mod search;
-mod judge;
 
 pub use analyze::AnalyzeStage;
+pub use judge::JudgeStage;
 pub use plan::PlanStage;
 pub use search::SearchStage;
-pub use judge::JudgeStage;

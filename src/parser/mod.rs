@@ -36,9 +36,9 @@
 //! # }
 //! ```
 
-mod types;
 mod registry;
 mod traits;
+mod types;
 
 // Markdown parsing module
 pub mod markdown;
@@ -53,26 +53,15 @@ pub mod toc;
 pub mod docx;
 
 // Re-export main types
-pub use types::{
-    DocumentFormat,
-    DocumentMeta,
-    ParseResult,
-    RawNode,
-};
+pub use types::{DocumentFormat, DocumentMeta, ParseResult, RawNode};
 
 // Re-export parser trait
 pub use traits::DocumentParser;
 
 // Re-export registry and convenience functions
-pub use registry::{
-    ParserRegistry,
-    get_parser,
-    get_parser_for_file,
-    parse_content,
-    parse_file,
-};
+pub use registry::{ParserRegistry, get_parser, get_parser_for_file, parse_content, parse_file};
 
 // Re-export concrete parsers
-pub use markdown::{MarkdownParser, MarkdownConfig};
-pub use pdf::PdfParser;
 pub use docx::DocxParser;
+pub use markdown::{MarkdownConfig, MarkdownParser};
+pub use pdf::PdfParser;

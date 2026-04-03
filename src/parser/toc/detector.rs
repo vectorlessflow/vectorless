@@ -9,8 +9,8 @@ use tracing::debug;
 use crate::config::LlmConfig;
 use crate::domain::Result;
 
-use crate::llm::LlmClient;
 use super::types::TocDetection;
+use crate::llm::LlmClient;
 use crate::parser::pdf::PdfPage;
 
 /// TOC detector configuration.
@@ -90,7 +90,8 @@ impl TocDetector {
             },
             TocPattern {
                 name: "chinese_chapter_with_page",
-                regex: Regex::new(r"第[一二三四五六七八九十\d]+[章节部篇].*?[\.\s…·]{2,}\s*\d+").unwrap(),
+                regex: Regex::new(r"第[一二三四五六七八九十\d]+[章节部篇].*?[\.\s…·]{2,}\s*\d+")
+                    .unwrap(),
                 weight: 0.85,
             },
             TocPattern {
@@ -101,7 +102,8 @@ impl TocDetector {
             // English TOC patterns
             TocPattern {
                 name: "english_toc_header",
-                regex: Regex::new(r"(?i)^[\s]*(table\s+of\s+contents|contents|outline)[\s]*$").unwrap(),
+                regex: Regex::new(r"(?i)^[\s]*(table\s+of\s+contents|contents|outline)[\s]*$")
+                    .unwrap(),
                 weight: 0.9,
             },
             TocPattern {
@@ -130,7 +132,8 @@ impl TocDetector {
 
     /// Detect TOC in PDF pages.
     pub async fn detect(&self, pages: &[PdfPage]) -> Result<TocDetection> {
-        let check_pages = pages.iter()
+        let check_pages = pages
+            .iter()
             .take(self.config.max_check_pages)
             .collect::<Vec<_>>();
 
@@ -140,8 +143,10 @@ impl TocDetector {
 
         // Step 1: Regex detection
         let regex_result = self.detect_with_regex(&check_pages);
-        debug!("Regex detection result: found={}, confidence={}",
-            regex_result.found, regex_result.confidence);
+        debug!(
+            "Regex detection result: found={}, confidence={}",
+            regex_result.found, regex_result.confidence
+        );
 
         // Step 2: If confidence is high enough, return
         if regex_result.confidence >= self.config.regex_confidence_threshold {
@@ -236,12 +241,23 @@ impl TocDetector {
     }
 
     /// Detect TOC using LLM.
-    async fn detect_with_llm(&self, client: &LlmClient, pages: &[&PdfPage]) -> Result<TocDetection> {
+    async fn detect_with_llm(
+        &self,
+        client: &LlmClient,
+        pages: &[&PdfPage],
+    ) -> Result<TocDetection> {
         // Combine first few pages for analysis
-        let content = pages.iter()
+        let content = pages
+            .iter()
             .take(5)
-            .map(|p| format!("<page_{}>\n{}\n</page_{}>", p.number,
-                &p.text[..p.text.len().min(1000)], p.number))
+            .map(|p| {
+                format!(
+                    "<page_{}>\n{}\n</page_{}>",
+                    p.number,
+                    &p.text[..p.text.len().min(1000)],
+                    p.number
+                )
+            })
             .collect::<Vec<_>>()
             .join("\n\n");
 
@@ -309,7 +325,10 @@ mod tests {
 
         let pages = vec![
             make_page(1, "Abstract"),
-            make_page(2, "Table of Contents\n\nChapter 1. Introduction  1\nChapter 2. Methods  5"),
+            make_page(
+                2,
+                "Table of Contents\n\nChapter 1. Introduction  1\nChapter 2. Methods  5",
+            ),
         ];
 
         let rt = tokio::runtime::Runtime::new().unwrap();

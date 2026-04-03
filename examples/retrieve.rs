@@ -16,12 +16,12 @@
 //! ```
 
 use std::sync::Arc;
+use vectorless::domain::{DocumentTree, NodeId};
 use vectorless::retrieval::{
-    PipelineRetriever, Retriever, RetrieveOptions, StrategyPreference,
+    PipelineRetriever, RetrieveOptions, Retriever, StrategyPreference,
     pipeline::RetrievalOrchestrator,
     stages::{AnalyzeStage, JudgeStage, PlanStage, SearchStage},
 };
-use vectorless::domain::{DocumentTree, NodeId};
 
 #[tokio::main]
 async fn main() -> vectorless::Result<()> {
@@ -29,7 +29,10 @@ async fn main() -> vectorless::Result<()> {
 
     // 1. Create a sample document tree
     let tree = create_sample_tree();
-    println!("✓ Created sample document tree ({} nodes)\n", tree.node_count());
+    println!(
+        "✓ Created sample document tree ({} nodes)\n",
+        tree.node_count()
+    );
 
     // 2. Method A: Use PipelineRetriever (simple API)
     println!("--- Method A: PipelineRetriever (Simple API) ---\n");
@@ -79,7 +82,9 @@ async fn demo_pipeline_retriever(tree: &DocumentTree) -> vectorless::Result<()> 
     let query = "What is the main architecture?";
     println!("Query: \"{}\"\n", query);
 
-    let response = retriever.retrieve(tree, query, &options).await
+    let response = retriever
+        .retrieve(tree, query, &options)
+        .await
         .map_err(|e| vectorless::Error::Retrieval(e.to_string()))?;
 
     // Display results
@@ -93,7 +98,12 @@ async fn demo_pipeline_retriever(tree: &DocumentTree) -> vectorless::Result<()> 
     if !response.results.is_empty() {
         println!("\n  Top results:");
         for (i, result) in response.results.iter().take(3).enumerate() {
-            println!("    {}. {} (score: {:.2})", i + 1, result.title, result.score);
+            println!(
+                "    {}. {} (score: {:.2})",
+                i + 1,
+                result.title,
+                result.score
+            );
         }
     }
 
@@ -123,8 +133,17 @@ async fn demo_orchestrator(tree: &DocumentTree) -> vectorless::Result<()> {
     if let Ok(groups) = orchestrator.get_execution_groups() {
         println!("Execution groups: {} groups", groups.len());
         for (i, group) in groups.iter().enumerate() {
-            let parallel = if group.parallel { " (can parallelize)" } else { "" };
-            println!("  Group {}: {} stages{}", i, group.stage_indices.len(), parallel);
+            let parallel = if group.parallel {
+                " (can parallelize)"
+            } else {
+                ""
+            };
+            println!(
+                "  Group {}: {} stages{}",
+                i,
+                group.stage_indices.len(),
+                parallel
+            );
         }
     }
     println!();
@@ -135,7 +154,9 @@ async fn demo_orchestrator(tree: &DocumentTree) -> vectorless::Result<()> {
 
     let options = RetrieveOptions::default();
     let tree_arc = Arc::new(tree.clone());
-    let response = orchestrator.execute(tree_arc, query, options).await
+    let response = orchestrator
+        .execute(tree_arc, query, options)
+        .await
         .map_err(|e| vectorless::Error::Retrieval(e.to_string()))?;
 
     println!("Results:");
@@ -162,39 +183,77 @@ fn create_sample_tree() -> DocumentTree {
     );
 
     // Add sections using the correct API
-    let _intro = tree.add_child(tree.root(), "Introduction",
-        "Vectorless is a document intelligence engine written in Rust.");
+    let _intro = tree.add_child(
+        tree.root(),
+        "Introduction",
+        "Vectorless is a document intelligence engine written in Rust.",
+    );
 
-    let arch = tree.add_child(tree.root(), "Architecture",
-        "The system consists of three main components: indexer, retriever, and storage.");
+    let arch = tree.add_child(
+        tree.root(),
+        "Architecture",
+        "The system consists of three main components: indexer, retriever, and storage.",
+    );
 
-    let index_section = tree.add_child(arch, "Index Pipeline",
-        "The index pipeline processes documents into a tree structure with summaries.");
-    let retrieve_section = tree.add_child(arch, "Retrieval Pipeline",
-        "The retrieval pipeline finds relevant content using multi-stage processing.");
+    let index_section = tree.add_child(
+        arch,
+        "Index Pipeline",
+        "The index pipeline processes documents into a tree structure with summaries.",
+    );
+    let retrieve_section = tree.add_child(
+        arch,
+        "Retrieval Pipeline",
+        "The retrieval pipeline finds relevant content using multi-stage processing.",
+    );
 
-    tree.add_child(index_section, "Parse Stage",
-        "Parses documents (Markdown, PDF, DOCX) into structured content.");
-    tree.add_child(index_section, "Build Stage",
-        "Builds the document tree with metadata like page numbers and indices.");
-    tree.add_child(index_section, "Enrich Stage",
-        "Generates AI summaries for tree nodes using LLM.");
+    tree.add_child(
+        index_section,
+        "Parse Stage",
+        "Parses documents (Markdown, PDF, DOCX) into structured content.",
+    );
+    tree.add_child(
+        index_section,
+        "Build Stage",
+        "Builds the document tree with metadata like page numbers and indices.",
+    );
+    tree.add_child(
+        index_section,
+        "Enrich Stage",
+        "Generates AI summaries for tree nodes using LLM.",
+    );
 
-    tree.add_child(retrieve_section, "Analyze Stage",
-        "Analyzes query complexity and extracts keywords for matching.");
-    tree.add_child(retrieve_section, "Plan Stage",
-        "Selects retrieval strategy (keyword/semantic/LLM) and search algorithm.");
-    tree.add_child(retrieve_section, "Search Stage",
-        "Executes tree traversal (greedy/beam/MCTS) to find relevant content.");
-    tree.add_child(retrieve_section, "Judge Stage",
-        "Evaluates sufficiency of collected content, can trigger backtracking.");
+    tree.add_child(
+        retrieve_section,
+        "Analyze Stage",
+        "Analyzes query complexity and extracts keywords for matching.",
+    );
+    tree.add_child(
+        retrieve_section,
+        "Plan Stage",
+        "Selects retrieval strategy (keyword/semantic/LLM) and search algorithm.",
+    );
+    tree.add_child(
+        retrieve_section,
+        "Search Stage",
+        "Executes tree traversal (greedy/beam/MCTS) to find relevant content.",
+    );
+    tree.add_child(
+        retrieve_section,
+        "Judge Stage",
+        "Evaluates sufficiency of collected content, can trigger backtracking.",
+    );
 
-    let usage = tree.add_child(tree.root(), "Usage",
-        "How to use the vectorless library.");
-    tree.add_child(usage, "Basic Example",
-        "Simple usage with default configuration and workspace.");
-    tree.add_child(usage, "Advanced Example",
-        "Custom pipeline configuration with LLM and custom stages.");
+    let usage = tree.add_child(tree.root(), "Usage", "How to use the vectorless library.");
+    tree.add_child(
+        usage,
+        "Basic Example",
+        "Simple usage with default configuration and workspace.",
+    );
+    tree.add_child(
+        usage,
+        "Advanced Example",
+        "Custom pipeline configuration with LLM and custom stages.",
+    );
 
     tree
 }

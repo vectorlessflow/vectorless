@@ -63,15 +63,15 @@
 //! # }
 //! ```
 
-mod error;
-mod config;
-mod retry;
 mod client;
-mod pool;
+mod config;
+mod error;
 mod fallback;
+mod pool;
+mod retry;
 
-pub use error::{LlmError, LlmResult};
-pub use config::{LlmConfig, RetryConfig, LlmConfigs};
 pub use client::LlmClient;
-pub use pool::LlmPool;
+pub use config::{LlmConfig, LlmConfigs, RetryConfig};
+pub use error::{LlmError, LlmResult};
 pub use fallback::{FallbackChain, FallbackConfig, FallbackResult, FallbackStep};
+pub use pool::LlmPool;

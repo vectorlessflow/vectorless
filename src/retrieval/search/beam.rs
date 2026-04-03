@@ -7,11 +7,11 @@
 
 use async_trait::async_trait;
 
-use crate::domain::DocumentTree;
-use super::super::types::{NavigationDecision, NavigationStep, SearchPath};
 use super::super::RetrievalContext;
-use super::{SearchConfig, SearchResult, SearchTree};
+use super::super::types::{NavigationDecision, NavigationStep, SearchPath};
 use super::scorer::NodeScorer;
+use super::{SearchConfig, SearchResult, SearchTree};
+use crate::domain::DocumentTree;
 
 /// Beam search - explores multiple paths simultaneously.
 ///
@@ -68,7 +68,11 @@ impl SearchTree for BeamSearch {
             .collect();
 
         // Sort by score and keep top beam_width
-        current_beam.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+        current_beam.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         current_beam.truncate(beam_width);
 
         for iteration in 0..config.max_iterations {
@@ -106,7 +110,7 @@ impl SearchTree for BeamSearch {
                             title: child_node.map(|n| n.title.clone()).unwrap_or_default(),
                             score: child_score,
                             decision: NavigationDecision::GoToChild(
-                                children.iter().position(|&c| c == child_id).unwrap_or(0)
+                                children.iter().position(|&c| c == child_id).unwrap_or(0),
                             ),
                             depth: child_node.map(|n| n.depth).unwrap_or(0),
                         });
@@ -118,7 +122,11 @@ impl SearchTree for BeamSearch {
             }
 
             // Sort next beam and keep top candidates
-            next_beam.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+            next_beam.sort_by(|a, b| {
+                b.score
+                    .partial_cmp(&a.score)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            });
             next_beam.truncate(beam_width);
 
             current_beam = next_beam;
@@ -137,7 +145,11 @@ impl SearchTree for BeamSearch {
         }
 
         // Sort final results by score
-        result.paths.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+        result.paths.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         result.paths.truncate(config.top_k);
 
         result

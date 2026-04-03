@@ -8,11 +8,11 @@
 use async_trait::async_trait;
 use serde::Deserialize;
 
-use crate::domain::{NodeId, DocumentTree, TocView};
-use crate::llm::LlmClient;
-use super::super::types::{NavigationDecision, QueryComplexity};
 use super::super::RetrievalContext;
+use super::super::types::{NavigationDecision, QueryComplexity};
 use super::r#trait::{NodeEvaluation, RetrievalStrategy, StrategyCapabilities};
+use crate::domain::{DocumentTree, NodeId, TocView};
+use crate::llm::LlmClient;
 
 /// LLM response for navigation decision.
 #[derive(Debug, Clone, Deserialize)]
@@ -96,7 +96,12 @@ Be concise and focused on finding the most relevant information."#.to_string()
     }
 
     /// Build the navigation prompt for a single node.
-    fn build_prompt(&self, tree: &DocumentTree, node_id: NodeId, context: &RetrievalContext) -> String {
+    fn build_prompt(
+        &self,
+        tree: &DocumentTree,
+        node_id: NodeId,
+        context: &RetrievalContext,
+    ) -> String {
         let node = tree.get(node_id);
         let children = tree.children(node_id);
 
@@ -125,21 +130,27 @@ Be concise and focused on finding the most relevant information."#.to_string()
             let toc_markdown = self.toc_view.format_markdown(&toc);
             // Limit ToC size for token efficiency
             let toc_preview: String = toc_markdown.chars().take(1000).collect();
-            format!("\n\nDocument ToC (from this node):\n```\n{}\n```\n", toc_preview)
+            format!(
+                "\n\nDocument ToC (from this node):\n```\n{}\n```\n",
+                toc_preview
+            )
         } else {
             String::new()
         };
 
         format!(
             "Query: {}\n{}Current Node:\n{}\n\nWhat is the relevance and action?",
-            context.query,
-            toc_context,
-            node_info
+            context.query, toc_context, node_info
         )
     }
 
     /// Parse LLM response to evaluation.
-    fn parse_response(&self, response: &str, tree: &DocumentTree, node_id: NodeId) -> NodeEvaluation {
+    fn parse_response(
+        &self,
+        response: &str,
+        tree: &DocumentTree,
+        node_id: NodeId,
+    ) -> NodeEvaluation {
         // Try to parse as JSON
         if let Ok(parsed) = serde_json::from_str::<NavigationResponse>(response) {
             let score = (parsed.relevance as f32 / 100.0).clamp(0.0, 1.0);
@@ -187,7 +198,10 @@ Be concise and focused on finding the most relevant information."#.to_string()
             } else {
                 NavigationDecision::ExploreMore
             },
-            reasoning: Some(format!("Parsed from response: {}...", &response[..100.min(response.len())])),
+            reasoning: Some(format!(
+                "Parsed from response: {}...",
+                &response[..100.min(response.len())]
+            )),
         }
     }
 }
@@ -248,6 +262,9 @@ impl RetrievalStrategy for LlmStrategy {
     }
 
     fn suitable_for_complexity(&self, complexity: QueryComplexity) -> bool {
-        matches!(complexity, QueryComplexity::Medium | QueryComplexity::Complex)
+        matches!(
+            complexity,
+            QueryComplexity::Medium | QueryComplexity::Complex
+        )
     }
 }

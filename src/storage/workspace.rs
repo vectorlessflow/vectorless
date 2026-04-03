@@ -24,18 +24,18 @@
 //! - Read operations (`get_meta`, `contains`, `list_documents`) only need `&self`
 //! - Cache updates happen internally via `Mutex`
 
-use std::path::{Path, PathBuf};
 use std::collections::HashMap;
 use std::fs;
 use std::num::NonZeroUsize;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use lru::LruCache;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, info, warn};
 
-use crate::domain::{Result, Error};
-use super::persistence::{PersistedDocument, save_document, load_document};
+use super::persistence::{PersistedDocument, load_document, save_document};
+use crate::domain::{Error, Result};
 
 const META_FILE: &str = "_meta.json";
 const DEFAULT_CACHE_SIZE: usize = 100;
@@ -97,8 +97,7 @@ impl Workspace {
     /// Create a new workspace with custom LRU cache size.
     pub fn with_cache_size(path: impl Into<PathBuf>, cache_size: usize) -> Result<Self> {
         let root = path.into();
-        fs::create_dir_all(&root)
-            .map_err(Error::Io)?;
+        fs::create_dir_all(&root).map_err(Error::Io)?;
 
         let capacity = NonZeroUsize::new(cache_size.max(1))
             .unwrap_or_else(|| NonZeroUsize::new(DEFAULT_CACHE_SIZE).unwrap());
@@ -121,7 +120,10 @@ impl Workspace {
     }
 
     /// Open with custom cache size.
-    pub fn open_with_cache_size(path: impl Into<PathBuf> + Clone, cache_size: usize) -> Result<Self> {
+    pub fn open_with_cache_size(
+        path: impl Into<PathBuf> + Clone,
+        cache_size: usize,
+    ) -> Result<Self> {
         let root = path.clone().into();
         if root.exists() {
             let capacity = NonZeroUsize::new(cache_size.max(1))
@@ -178,7 +180,11 @@ impl Workspace {
             doc_name: doc.meta.name.clone(),
             doc_description: doc.meta.description.clone(),
             doc_type: doc.meta.format.clone(),
-            path: doc.meta.source_path.as_ref().map(|p| p.to_string_lossy().to_string()),
+            path: doc
+                .meta
+                .source_path
+                .as_ref()
+                .map(|p| p.to_string_lossy().to_string()),
             page_count: doc.pages.first().map(|p| p.page),
             line_count: None, // TODO: track this
         };
@@ -208,7 +214,9 @@ impl Workspace {
 
         // Check LRU cache first (with lock)
         {
-            let mut inner = self.inner.lock()
+            let mut inner = self
+                .inner
+                .lock()
                 .map_err(|_| Error::Other("Workspace lock poisoned".to_string()))?;
 
             if let Some(cached) = inner.document_cache.get(id) {
@@ -228,7 +236,9 @@ impl Workspace {
 
         // Add to LRU cache (with lock)
         {
-            let mut inner = self.inner.lock()
+            let mut inner = self
+                .inner
+                .lock()
                 .map_err(|_| Error::Other("Workspace lock poisoned".to_string()))?;
             inner.document_cache.put(id.to_string(), doc.clone());
         }
@@ -245,8 +255,7 @@ impl Workspace {
 
         let doc_path = self.document_path(id);
         if doc_path.exists() {
-            fs::remove_file(&doc_path)
-                .map_err(Error::Io)?;
+            fs::remove_file(&doc_path).map_err(Error::Io)?;
         }
 
         self.meta_index.remove(id);
@@ -274,7 +283,8 @@ impl Workspace {
 
     /// Get the number of items currently in the LRU cache.
     pub fn cache_len(&self) -> usize {
-        self.inner.lock()
+        self.inner
+            .lock()
             .map(|inner| inner.document_cache.len())
             .unwrap_or(0)
     }
@@ -307,14 +317,16 @@ impl Workspace {
             return Ok(());
         }
 
-        let content = fs::read_to_string(&meta_path)
-            .map_err(Error::Io)?;
+        let content = fs::read_to_string(&meta_path).map_err(Error::Io)?;
 
         let meta: HashMap<String, DocumentMetaEntry> = serde_json::from_str(&content)
             .map_err(|e| Error::Parse(format!("Failed to parse meta index: {}", e)))?;
 
         self.meta_index = meta;
-        info!("Loaded {} document(s) from workspace index", self.meta_index.len());
+        info!(
+            "Loaded {} document(s) from workspace index",
+            self.meta_index.len()
+        );
         Ok(())
     }
 
@@ -323,8 +335,7 @@ impl Workspace {
         let content = serde_json::to_string_pretty(&self.meta_index)
             .map_err(|e| Error::Parse(format!("Failed to serialize meta index: {}", e)))?;
 
-        fs::write(&self.meta_path(), content)
-            .map_err(Error::Io)?;
+        fs::write(&self.meta_path(), content).map_err(Error::Io)?;
 
         Ok(())
     }
@@ -335,7 +346,11 @@ impl Workspace {
             .map_err(Error::Io)?
             .filter_map(|entry| entry.ok())
             .filter(|entry| {
-                entry.path().extension().map(|ext| ext == "json").unwrap_or(false)
+                entry
+                    .path()
+                    .extension()
+                    .map(|ext| ext == "json")
+                    .unwrap_or(false)
             })
             .filter_map(|entry| {
                 let path = entry.path();
@@ -351,7 +366,11 @@ impl Workspace {
                         doc_name: doc.meta.name,
                         doc_description: doc.meta.description,
                         doc_type: doc.meta.format,
-                        path: doc.meta.source_path.as_ref().map(|p| p.to_string_lossy().to_string()),
+                        path: doc
+                            .meta
+                            .source_path
+                            .as_ref()
+                            .map(|p| p.to_string_lossy().to_string()),
                         page_count: doc.pages.first().map(|p| p.page),
                         line_count: None,
                     };
@@ -366,7 +385,10 @@ impl Workspace {
 
         if !self.meta_index.is_empty() {
             self.save_meta_index()?;
-            info!("Rebuilt index from {} document file(s)", self.meta_index.len());
+            info!(
+                "Rebuilt index from {} document file(s)",
+                self.meta_index.len()
+            );
         }
 
         Ok(())

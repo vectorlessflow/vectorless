@@ -147,7 +147,7 @@ impl Retriever for PipelineRetriever {
 
         CostEstimate {
             llm_calls: base_llm_calls + (node_count / 10), // Rough estimate
-            tokens: node_count * 50, // Conservative estimate
+            tokens: node_count * 50,                       // Conservative estimate
         }
     }
 }

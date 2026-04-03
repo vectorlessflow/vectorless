@@ -11,13 +11,12 @@ use tracing::info;
 use crate::domain::Result;
 use crate::llm::LlmClient;
 
+use super::super::PipelineOptions;
+use super::super::stages::{
+    BuildStage, EnhanceStage, EnrichStage, IndexStage, OptimizeStage, ParseStage, PersistStage,
+};
 use super::context::{IndexInput, IndexResult};
 use super::orchestrator::PipelineOrchestrator;
-use super::super::stages::{
-    BuildStage, EnhanceStage, EnrichStage, IndexStage, OptimizeStage,
-    ParseStage, PersistStage,
-};
-use super::super::PipelineOptions;
 
 /// Pipeline executor for document indexing.
 ///
@@ -112,7 +111,11 @@ impl PipelineExecutor {
     /// Add a stage with custom priority.
     ///
     /// Lower priority = earlier execution.
-    pub fn add_stage_with_priority(mut self, stage: impl IndexStage + 'static, priority: i32) -> Self {
+    pub fn add_stage_with_priority(
+        mut self,
+        stage: impl IndexStage + 'static,
+        priority: i32,
+    ) -> Self {
         self.orchestrator = self.orchestrator.stage_with_priority(stage, priority);
         self
     }
@@ -126,13 +129,16 @@ impl PipelineExecutor {
         priority: i32,
         depends_on: &[&str],
     ) -> Self {
-        self.orchestrator = self.orchestrator.stage_with_deps(stage, priority, depends_on);
+        self.orchestrator = self
+            .orchestrator
+            .stage_with_deps(stage, priority, depends_on);
         self
     }
 
     /// Add persistence stage with workspace.
     pub fn with_persistence(mut self, workspace: crate::storage::Workspace) -> Self {
-        self.orchestrator = self.orchestrator
+        self.orchestrator = self
+            .orchestrator
             .stage_with_priority(PersistStage::with_workspace(workspace), 80);
         self
     }
@@ -150,8 +156,15 @@ impl PipelineExecutor {
     /// Execute the pipeline.
     ///
     /// Stages are executed in dependency-resolved order.
-    pub async fn execute(&mut self, input: IndexInput, options: PipelineOptions) -> Result<IndexResult> {
-        info!("Starting index pipeline with {} stages", self.orchestrator.stage_count());
+    pub async fn execute(
+        &mut self,
+        input: IndexInput,
+        options: PipelineOptions,
+    ) -> Result<IndexResult> {
+        info!(
+            "Starting index pipeline with {} stages",
+            self.orchestrator.stage_count()
+        );
         self.orchestrator.execute(input, options).await
     }
 }

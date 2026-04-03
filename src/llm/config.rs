@@ -31,11 +31,21 @@ pub struct RetryConfig {
     pub retry_on_rate_limit: bool,
 }
 
-fn default_max_attempts() -> usize { 3 }
-fn default_initial_delay_ms() -> u64 { 500 }
-fn default_max_delay_ms() -> u64 { 30000 }
-fn default_multiplier() -> f64 { 2.0 }
-fn default_true() -> bool { true }
+fn default_max_attempts() -> usize {
+    3
+}
+fn default_initial_delay_ms() -> u64 {
+    500
+}
+fn default_max_delay_ms() -> u64 {
+    30000
+}
+fn default_multiplier() -> f64 {
+    2.0
+}
+fn default_true() -> bool {
+    true
+}
 
 impl Default for RetryConfig {
     fn default() -> Self {
@@ -87,8 +97,7 @@ impl RetryConfig {
 
     /// Calculate delay for a given attempt (0-indexed).
     pub fn delay_for_attempt(&self, attempt: usize) -> Duration {
-        let delay_ms = (self.initial_delay_ms as f64)
-            * self.multiplier.powf(attempt as f64);
+        let delay_ms = (self.initial_delay_ms as f64) * self.multiplier.powf(attempt as f64);
         let delay_ms = delay_ms.min(self.max_delay_ms as f64);
         Duration::from_millis(delay_ms as u64)
     }
@@ -122,10 +131,18 @@ pub struct LlmConfig {
     pub retry: RetryConfig,
 }
 
-fn default_model() -> String { "gpt-4o-mini".to_string() }
-fn default_endpoint() -> String { "https://api.openai.com/v1".to_string() }
-fn default_max_tokens() -> usize { 2000 }
-fn default_temperature() -> f32 { 0.0 }
+fn default_model() -> String {
+    "gpt-4o-mini".to_string()
+}
+fn default_endpoint() -> String {
+    "https://api.openai.com/v1".to_string()
+}
+fn default_max_tokens() -> usize {
+    2000
+}
+fn default_temperature() -> f32 {
+    0.0
+}
 
 impl Default for LlmConfig {
     fn default() -> Self {
@@ -187,7 +204,8 @@ impl LlmConfig {
 
     /// Get the API key from config or environment.
     pub fn get_api_key(&self) -> Option<String> {
-        self.api_key.clone()
+        self.api_key
+            .clone()
             .or_else(|| std::env::var("OPENAI_API_KEY").ok())
             .or_else(|| std::env::var("ANTHROPIC_API_KEY").ok())
             .or_else(|| std::env::var("AZURE_OPENAI_API_KEY").ok())

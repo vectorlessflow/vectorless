@@ -30,7 +30,9 @@ impl LazyStrategy {
     /// Create a new lazy strategy with LLM client.
     pub fn new(client: LlmClient) -> Self {
         Self {
-            generator: Arc::new(RwLock::new(Box::new(super::LlmSummaryGenerator::new(client)))),
+            generator: Arc::new(RwLock::new(Box::new(super::LlmSummaryGenerator::new(
+                client,
+            )))),
             cache: Arc::new(RwLock::new(HashMap::new())),
             persist: false,
             config: SummaryStrategyConfig::default(),
@@ -40,7 +42,9 @@ impl LazyStrategy {
     /// Create with persistence enabled.
     pub fn with_persist(client: LlmClient, persist: bool) -> Self {
         Self {
-            generator: Arc::new(RwLock::new(Box::new(super::LlmSummaryGenerator::new(client)))),
+            generator: Arc::new(RwLock::new(Box::new(super::LlmSummaryGenerator::new(
+                client,
+            )))),
             cache: Arc::new(RwLock::new(HashMap::new())),
             persist,
             config: SummaryStrategyConfig::default(),
@@ -84,7 +88,12 @@ impl LazyStrategy {
     /// Get or generate a summary.
     ///
     /// Returns the cached summary if available, otherwise generates a new one.
-    pub async fn get_or_generate(&self, node_id: &str, title: &str, content: &str) -> crate::llm::LlmResult<String> {
+    pub async fn get_or_generate(
+        &self,
+        node_id: &str,
+        title: &str,
+        content: &str,
+    ) -> crate::llm::LlmResult<String> {
         // Check cache first
         if self.persist {
             if let Some(cached) = self.get_cached(node_id).await {

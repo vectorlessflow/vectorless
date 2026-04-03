@@ -5,9 +5,9 @@
 
 use async_trait::async_trait;
 
-use crate::domain::DocumentTree;
-use super::super::types::{NavigationStep, SearchPath};
 use super::super::RetrievalContext;
+use super::super::types::{NavigationStep, SearchPath};
+use crate::domain::DocumentTree;
 
 /// Result of a search operation.
 #[derive(Debug, Clone)]

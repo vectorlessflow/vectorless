@@ -15,8 +15,7 @@ use tracing::info;
 // DocumentTree is accessed via context
 use crate::llm::LlmClient;
 use crate::retrieval::pipeline::{
-    FailurePolicy, PipelineContext, RetrievalStage, StageOutcome,
-    SearchAlgorithm, SearchConfig,
+    FailurePolicy, PipelineContext, RetrievalStage, SearchAlgorithm, SearchConfig, StageOutcome,
 };
 use crate::retrieval::types::{QueryComplexity, StrategyPreference};
 
@@ -124,7 +123,7 @@ impl PlanStage {
         let complexity = ctx.complexity.unwrap_or(QueryComplexity::Medium);
 
         let (beam_width, max_depth) = match complexity {
-            QueryComplexity::Simple => (1, 5),  // Greedy-like
+            QueryComplexity::Simple => (1, 5), // Greedy-like
             QueryComplexity::Medium => (ctx.options.beam_width, 10),
             QueryComplexity::Complex => (ctx.options.beam_width + 2, 15),
         };
@@ -172,7 +171,10 @@ impl RetrievalStage for PlanStage {
             "Plan complete: strategy={:?}, algorithm={:?}, beam_width={}",
             ctx.selected_strategy,
             ctx.selected_algorithm,
-            ctx.search_config.as_ref().map(|c| c.beam_width).unwrap_or(0)
+            ctx.search_config
+                .as_ref()
+                .map(|c| c.beam_width)
+                .unwrap_or(0)
         );
 
         Ok(StageOutcome::cont())

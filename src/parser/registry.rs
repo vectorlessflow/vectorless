@@ -174,8 +174,8 @@ pub fn get_parser_for_file(path: &Path) -> Option<Box<dyn DocumentParser>> {
 ///
 /// A [`ParseResult`] containing the extracted nodes.
 pub async fn parse_content(content: &str, format: DocumentFormat) -> Result<ParseResult> {
-    let parser =
-        get_parser(format).ok_or_else(|| Error::Parse(format!("Unsupported format: {:?}", format)))?;
+    let parser = get_parser(format)
+        .ok_or_else(|| Error::Parse(format!("Unsupported format: {:?}", format)))?;
     parser.parse(content).await
 }
 

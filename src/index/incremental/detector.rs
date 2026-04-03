@@ -63,10 +63,7 @@ impl ChangeSet {
 
     /// Get total number of changes.
     pub fn total_changes(&self) -> usize {
-        self.added.len()
-            + self.removed.len()
-            + self.modified.len()
-            + self.restructured.len()
+        self.added.len() + self.removed.len() + self.modified.len() + self.restructured.len()
     }
 
     /// Merge another change set into this one.
@@ -205,11 +202,14 @@ impl ChangeDetector {
                     continue;
                 }
 
-                info.insert(node.title.clone(), NodeInfo {
-                    node_id: node.node_id.clone(),
-                    content_hash: Self::hash_content(&node.content),
-                    child_count: tree.children(node_id).len(),
-                });
+                info.insert(
+                    node.title.clone(),
+                    NodeInfo {
+                        node_id: node.node_id.clone(),
+                        content_hash: Self::hash_content(&node.content),
+                        child_count: tree.children(node_id).len(),
+                    },
+                );
             }
         }
 

@@ -40,9 +40,15 @@ pub struct ConcurrencyConfig {
     pub semaphore_enabled: bool,
 }
 
-fn default_max_concurrent_requests() -> usize { 10 }
-fn default_requests_per_minute() -> usize { 500 }
-fn default_true() -> bool { true }
+fn default_max_concurrent_requests() -> usize {
+    10
+}
+fn default_requests_per_minute() -> usize {
+    500
+}
+fn default_true() -> bool {
+    true
+}
 
 impl Default for ConcurrencyConfig {
     fn default() -> Self {

@@ -8,7 +8,7 @@ use std::sync::Arc;
 use std::time::Instant;
 use tracing::{info, warn};
 
-use crate::domain::{NodeId, Result, DocumentTree};
+use crate::domain::{DocumentTree, NodeId, Result};
 use crate::llm::LlmClient;
 
 use super::{IndexStage, StageResult};
@@ -75,7 +75,11 @@ impl EnhanceStage {
             Ok(summary) => {
                 if !summary.is_empty() {
                     tree.set_summary(node_id, &summary);
-                    info!("Generated summary for node: {} ({} chars)", node.title, summary.len());
+                    info!(
+                        "Generated summary for node: {} ({} chars)",
+                        node.title,
+                        summary.len()
+                    );
                     metrics.increment_summaries();
                 } else {
                     warn!("Empty summary returned for node '{}'", node.title);
@@ -115,7 +119,7 @@ impl IndexStage for EnhanceStage {
         FailurePolicy::retry_with(
             StageRetryConfig::new()
                 .with_max_attempts(2)
-                .with_initial_delay(std::time::Duration::from_millis(500))
+                .with_initial_delay(std::time::Duration::from_millis(500)),
         )
     }
 
@@ -124,7 +128,10 @@ impl IndexStage for EnhanceStage {
 
         // Check if we need summaries
         if !self.needs_summaries(ctx) {
-            info!("Summary generation skipped (strategy: {:?})", ctx.options.summary_strategy);
+            info!(
+                "Summary generation skipped (strategy: {:?})",
+                ctx.options.summary_strategy
+            );
             return Ok(StageResult::success("enhance"));
         }
 
@@ -164,7 +171,15 @@ impl IndexStage for EnhanceStage {
         let strategy = ctx.options.summary_strategy.clone();
 
         for node_id in node_ids {
-            match Self::generate_node_summary(tree, node_id, &generator, &strategy, &mut ctx.metrics).await {
+            match Self::generate_node_summary(
+                tree,
+                node_id,
+                &generator,
+                &strategy,
+                &mut ctx.metrics,
+            )
+            .await
+            {
                 Ok(()) => {
                     generated += 1;
                 }
@@ -183,9 +198,7 @@ impl IndexStage for EnhanceStage {
 
         info!(
             "Generated {} summaries ({} failed) in {}ms",
-            generated,
-            failed,
-            duration
+            generated, failed, duration
         );
 
         let mut stage_result = StageResult::success("enhance");
@@ -194,10 +207,9 @@ impl IndexStage for EnhanceStage {
             "summaries_generated".to_string(),
             serde_json::json!(generated),
         );
-        stage_result.metadata.insert(
-            "summaries_failed".to_string(),
-            serde_json::json!(failed),
-        );
+        stage_result
+            .metadata
+            .insert("summaries_failed".to_string(), serde_json::json!(failed));
 
         Ok(stage_result)
     }

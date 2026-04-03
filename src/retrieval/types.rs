@@ -5,8 +5,8 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::domain::NodeId;
 use super::context::{PruningStrategy, TokenEstimation};
+use crate::domain::NodeId;
 
 /// Query complexity level for adaptive strategy selection.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

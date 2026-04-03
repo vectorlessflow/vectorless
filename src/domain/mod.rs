@@ -16,12 +16,12 @@
 
 mod error;
 mod node;
-mod token;
 mod toc;
+mod token;
 mod tree;
 
 pub use error::{Error, Result};
 pub use node::{NodeId, TreeNode};
-pub use token::{estimate_tokens, estimate_tokens_fast, estimate_tokens_batch};
 pub use toc::{TocConfig, TocEntry, TocNode, TocView};
-pub use tree::{DocumentStructure, StructureNode, DocumentTree};
+pub use token::{estimate_tokens, estimate_tokens_batch, estimate_tokens_fast};
+pub use tree::{DocumentStructure, DocumentTree, StructureNode};

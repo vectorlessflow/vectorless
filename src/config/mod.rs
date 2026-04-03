@@ -10,8 +10,8 @@
 //! - [`RetrievalConfig`] - Retrieval model settings
 //! - [`StorageConfig`] - Storage paths
 
-mod types;
 mod loader;
+mod types;
 
+pub use loader::{ConfigError, ConfigLoader};
 pub use types::*;
-pub use loader::{ConfigLoader, ConfigError};

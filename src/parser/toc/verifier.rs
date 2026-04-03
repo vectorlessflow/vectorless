@@ -10,8 +10,8 @@ use crate::config::LlmConfig;
 use crate::domain::Result;
 use crate::parser::pdf::PdfPage;
 
-use crate::llm::LlmClient;
 use super::types::{ErrorType, TocEntry, VerificationError, VerificationReport};
+use crate::llm::LlmClient;
 
 /// Verifier configuration.
 #[derive(Debug, Clone)]
@@ -55,7 +55,11 @@ impl IndexVerifier {
     }
 
     /// Verify TOC entries against PDF pages.
-    pub async fn verify(&self, entries: &[TocEntry], pages: &[PdfPage]) -> Result<VerificationReport> {
+    pub async fn verify(
+        &self,
+        entries: &[TocEntry],
+        pages: &[PdfPage],
+    ) -> Result<VerificationReport> {
         if entries.is_empty() {
             return Ok(VerificationReport::all_correct(0));
         }
@@ -92,8 +96,12 @@ impl IndexVerifier {
         }
 
         let report = VerificationReport::new(sample.len(), correct, errors);
-        info!("Verification complete: {}/{} correct ({:.1}% accuracy)",
-            report.correct, report.total, report.accuracy * 100.0);
+        info!(
+            "Verification complete: {}/{} correct ({:.1}% accuracy)",
+            report.correct,
+            report.total,
+            report.accuracy * 100.0
+        );
 
         Ok(report)
     }
@@ -136,7 +144,10 @@ impl IndexVerifier {
         let found = self.check_title_on_page(&entry.title, &page.text).await?;
 
         if !found {
-            debug!("Title '{}' not found on page {}", entry.title, physical_page);
+            debug!(
+                "Title '{}' not found on page {}",
+                entry.title, physical_page
+            );
             return Ok(Err(ErrorType::TitleNotFound));
         }
 
