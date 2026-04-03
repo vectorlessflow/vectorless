@@ -20,7 +20,7 @@ use crate::domain::Result;
 /// use vectorless::parser::{DocumentParser, MarkdownParser};
 ///
 /// # #[tokio::main]
-/// # async fn main() -> vectorless::core::Result<()> {
+/// # async fn main() -> vectorless::domain::Result<()> {
 /// let parser = MarkdownParser::new();
 /// let content = "# Title\n\nContent here.";
 /// let result = parser.parse(content).await?;

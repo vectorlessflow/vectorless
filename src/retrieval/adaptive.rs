@@ -109,7 +109,7 @@ impl SelectedStrategy {
 /// # Example
 ///
 /// ```rust,no_run
-/// use vectorless::core::retriever::AdaptiveRetriever;
+/// use vectorless::domain::retriever::AdaptiveRetriever;
 /// use vectorless::llm::LlmClient;
 ///
 /// // With LLM support

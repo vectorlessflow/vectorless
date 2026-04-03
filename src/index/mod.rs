@@ -23,8 +23,8 @@
 //! # Usage
 //!
 //! ```rust,ignore
-//! use vectorless::core::index::pipeline::{PipelineExecutor, IndexOptions};
-//! use vectorless::core::index::summary::SummaryStrategy;
+//! use vectorless::domain::index::pipeline::{PipelineExecutor, IndexOptions};
+//! use vectorless::domain::index::summary::SummaryStrategy;
 //!
 //! let options = IndexOptions {
 //!     summary_strategy: SummaryStrategy::selective(100, true),

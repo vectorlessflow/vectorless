@@ -28,7 +28,7 @@
 //! use vectorless::client::{Engine, EngineBuilder};
 //!
 //! # #[tokio::main]
-//! # async fn main() -> vectorless::core::Result<()> {
+//! # async fn main() -> vectorless::domain::Result<()> {
 //! // Create a client
 //! let client = EngineBuilder::new()
 //!     .with_workspace("./my_workspace")

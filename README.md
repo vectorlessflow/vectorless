@@ -75,7 +75,7 @@ Basic usage:
 use vectorless::client::{Vectorless, VectorlessBuilder};
 
 #[tokio::main]
-async fn main() -> vectorless::core::Result<()> {
+async fn main() -> vectorless::domain::Result<()> {
     // Create client
     let mut client = VectorlessBuilder::new()
         .with_workspace("./workspace")
@@ -100,7 +100,7 @@ async fn main() -> vectorless::core::Result<()> {
 use vectorless::client::{Vectorless, VectorlessBuilder};
 
 #[tokio::main]
-async fn main() -> vectorless::core::Result<()> {
+async fn main() -> vectorless::domain::Result<()> {
     let mut client = VectorlessBuilder::new()
         .with_workspace("./workspace")
         .build()?;
@@ -122,7 +122,7 @@ async fn main() -> vectorless::core::Result<()> {
 use vectorless::client::{Vectorless, VectorlessBuilder};
 
 #[tokio::main]
-async fn main() -> vectorless::core::Result<()> {
+async fn main() -> vectorless::domain::Result<()> {
     let mut client = VectorlessBuilder::new()
         .with_workspace("./docs_workspace")
         .build()?;
@@ -150,7 +150,7 @@ use vectorless::config::Config;
 use vectorless::llm::LlmPool;
 
 #[tokio::main]
-async fn main() -> vectorless::core::Result<()> {
+async fn main() -> vectorless::domain::Result<()> {
     // Load configuration from file
     let config = Config::load("./vectorless.toml")?;
 

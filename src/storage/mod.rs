@@ -11,7 +11,7 @@
 //!
 //! ```rust,no_run
 //! use vectorless::storage::{Workspace, PersistedDocument, DocumentMeta};
-//! use vectorless::core::DocumentTree;
+//! use vectorless::domain::DocumentTree;
 //!
 //! // Create a workspace
 //! let mut workspace = Workspace::new("./my_workspace")?;

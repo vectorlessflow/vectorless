@@ -31,7 +31,7 @@ use super::frontmatter;
 /// use vectorless::parser::DocumentParser;
 ///
 /// # #[tokio::main]
-/// # async fn main() -> vectorless::core::Result<()> {
+/// # async fn main() -> vectorless::domain::Result<()> {
 /// let parser = MarkdownParser::new();
 /// let result = parser.parse("# Title\n\nContent").await?;
 ///

@@ -27,7 +27,7 @@ const CONFIG_FILE_NAMES: &[&str] = &["vectorless.toml", "config.toml", ".vectorl
 /// let client = EngineBuilder::new()
 ///     .with_workspace("./my_workspace")
 ///     .build()?;
-/// # Ok::<(), vectorless::core::Error>(())
+/// # Ok::<(), vectorless::domain::Error>(())
 /// ```
 #[derive(Debug)]
 pub struct EngineBuilder {
