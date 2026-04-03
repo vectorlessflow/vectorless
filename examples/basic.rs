@@ -11,14 +11,14 @@
 //! cargo run --example basic
 //! ```
 
-use vectorless::Vectorless;
+use vectorless::Engine;
 
 #[tokio::main]
 async fn main() -> vectorless::Result<()> {
     println!("=== Vectorless Basic Example ===\n");
 
     // 1. Create a client
-    let client = Vectorless::builder()
+    let client = Engine::builder()
         .with_workspace("./workspace")
         .build()
         .map_err(|e| vectorless::Error::Config(e.to_string()))?;

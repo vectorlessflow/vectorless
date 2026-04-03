@@ -19,7 +19,7 @@
 //! OPENAI_API_KEY=sk-... cargo run --example markdown_flow
 //! ```
 
-use vectorless::VectorlessBuilder;
+use vectorless::Engine;
 use vectorless::client::IndexOptions;
 
 /// Sample markdown content for demonstration.
@@ -40,7 +40,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Step 1: Create a Vectorless client (no API key needed - LLM config is automatic)
     println!("Step 1: Creating Vectorless client...");
 
-    let client = VectorlessBuilder::new()
+    let client = Engine::builder()
+        .with_workspace("./workspace")
         .build()
         .map_err(|e| vectorless::Error::Config(e.to_string()))?;
 
