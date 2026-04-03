@@ -41,6 +41,7 @@ struct NavigationResponse {
 /// let strategy = LlmStrategy::new(client)
 ///     .with_toc_context(true);
 /// ```
+#[derive(Clone)]
 pub struct LlmStrategy {
     /// The LLM client.
     client: LlmClient,
