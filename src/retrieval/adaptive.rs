@@ -93,11 +93,18 @@ impl SelectedStrategy {
 
 /// Adaptive retriever that combines multiple strategies.
 ///
+/// **DEPRECATED**: Use `PipelineRetriever` instead, which uses the new
+/// pipeline architecture with proper stage separation and backtracking support.
+///
+/// This retriever is kept for backward compatibility but will be removed
+/// in a future version.
+///
 /// This is the main entry point for retrieval operations. It:
 /// 1. Detects query complexity
 /// 2. Selects an appropriate strategy
 /// 3. Executes tree search with strategy-guided scoring
 /// 4. Checks sufficiency incrementally
+#[deprecated(since = "0.2.0", note = "Use `PipelineRetriever` instead")]
 /// 5. Returns aggregated results
 ///
 /// # Strategies

@@ -55,7 +55,7 @@ use crate::config::Config;
 use crate::domain::{DocumentTree, Result, Error};
 use crate::parser::DocumentFormat;
 use crate::storage::{Workspace, PersistedDocument, DocumentMeta as StorageMeta};
-use crate::retrieval::{AdaptiveRetriever, Retriever};
+use crate::retrieval::{PipelineRetriever, Retriever};
 use crate::index::{PipelineExecutor, PipelineOptions, IndexInput, SummaryStrategy};
 
 use super::types::{IndexMode, IndexOptions, DocumentInfo, QueryResult};
@@ -77,7 +77,7 @@ use super::types::{IndexMode, IndexOptions, DocumentInfo, QueryResult};
 ///
 /// - Workspace: `Arc<RwLock<Workspace>>` - Multiple readers, single writer
 /// - Executor: `Arc<Mutex<PipelineExecutor>>` - Exclusive access during indexing
-/// - Retriever: `Arc<AdaptiveRetriever>` - Immutable, uses internal synchronization
+/// - Retriever: `Arc<PipelineRetriever>` - Immutable, uses internal synchronization
 pub struct Engine {
     /// Configuration (immutable, shared).
     config: Arc<Config>,
@@ -86,8 +86,8 @@ pub struct Engine {
     /// Uses RwLock for concurrent read access.
     workspace: Option<Arc<RwLock<Workspace>>>,
 
-    /// Adaptive retriever (immutable, uses interior mutability internally).
-    retriever: Arc<AdaptiveRetriever>,
+    /// Pipeline retriever (immutable, uses interior mutability internally).
+    retriever: Arc<PipelineRetriever>,
 
     /// Pipeline executor for indexing.
     /// Uses Mutex for exclusive access during pipeline execution.
@@ -109,7 +109,7 @@ impl Engine {
         Ok(Self {
             config: Arc::new(config),
             workspace: None,
-            retriever: Arc::new(AdaptiveRetriever::new()),
+            retriever: Arc::new(PipelineRetriever::new()),
             executor: Arc::new(Mutex::new(PipelineExecutor::new())),
         })
     }
@@ -570,7 +570,7 @@ impl Engine {
     pub(crate) fn with_components(
         config: Config,
         workspace: Option<Workspace>,
-        retriever: AdaptiveRetriever,
+        retriever: PipelineRetriever,
         executor: PipelineExecutor,
     ) -> Self {
         Self {

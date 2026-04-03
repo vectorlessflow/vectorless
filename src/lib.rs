@@ -137,7 +137,7 @@ pub use index::pipeline::{PipelineOrchestrator, CustomStageBuilder};
 
 // Retrieval
 pub use retrieval::{
-    AdaptiveRetriever, Retriever, RetrieverError, RetrieverResult,
+    PipelineRetriever, Retriever, RetrieverError, RetrieverResult,
     RetrieveOptions, RetrieveResponse, RetrievalResult, RetrievalContext,
     QueryComplexity, StrategyPreference, SufficiencyLevel,
     ContextBuilder, PruningStrategy, TokenEstimation,

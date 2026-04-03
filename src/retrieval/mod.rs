@@ -16,7 +16,6 @@
 //! │                                                                  │
 //! │  ┌─────────┐    ┌─────────┐    ┌─────────┐    ┌─────────┐      │
 //! │  │ Analyze │───►│  Plan   │───►│ Search  │───►│  Judge  │      │
-//! │  │ (分析)  │    │ (规划)  │    │ (搜索)  │    │ (判断)  │      │
 //! │  └─────────┘    └─────────┘    └─────────┘    └─────────┘      │
 //! │                                     ▲              │             │
 //! │                                     └──────────────┘             │
@@ -52,6 +51,7 @@ mod types;
 mod retriever;
 mod adaptive;
 mod context;
+mod pipeline_retriever;
 
 pub mod pipeline;
 pub mod stages;
@@ -63,7 +63,8 @@ pub mod cache;
 
 pub use types::*;
 pub use retriever::{Retriever, RetrieverError, RetrieverResult, RetrievalContext};
-pub use adaptive::{AdaptiveRetriever, AdaptiveConfig};
+// AdaptiveRetriever deprecated - use PipelineRetriever instead
+pub use pipeline_retriever::PipelineRetriever;
 pub use context::{
     ContextBuilder, PruningStrategy, TokenEstimation,
     format_for_llm, format_for_llm_async,

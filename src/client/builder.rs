@@ -7,7 +7,7 @@ use std::path::PathBuf;
 
 use crate::config::{Config, ConfigLoader, RetrievalConfig};
 use crate::storage::Workspace;
-use crate::retrieval::AdaptiveRetriever;
+use crate::retrieval::PipelineRetriever;
 
 use super::Engine;
 
@@ -173,10 +173,20 @@ impl EngineBuilder {
             crate::index::PipelineExecutor::new()
         };
 
-        // Create adaptive retriever with config
+        // Create pipeline retriever with config
         let retrieval_config = self.retrieval_config.unwrap_or_else(|| config.retrieval.clone());
-        let adaptive_config = crate::retrieval::AdaptiveConfig::from_app_config(&retrieval_config);
-        let retriever = AdaptiveRetriever::with_config(adaptive_config);
+        let mut retriever = PipelineRetriever::new()
+            .with_max_iterations(retrieval_config.search.max_iterations);
+
+        // Add LLM client if API key is available in retrieval config
+        if let Some(ref api_key) = retrieval_config.api_key {
+            let llm_config = crate::llm::LlmConfig::new(&retrieval_config.model)
+                .with_endpoint(retrieval_config.endpoint.clone())
+                .with_api_key(api_key.clone())
+                .with_temperature(retrieval_config.temperature);
+            let llm_client = crate::llm::LlmClient::new(llm_config);
+            retriever = retriever.with_llm_client(llm_client);
+        }
 
         Ok(Engine::with_components(config, workspace, retriever, executor))
     }
