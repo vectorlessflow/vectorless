@@ -109,75 +109,7 @@ async fn main() -> vectorless::domain::Result<()> {
 
 ## Examples
 
-### Document Q&A
-
-```rust
-use vectorless::client::{Engine, EngineBuilder};
-
-#[tokio::main]
-async fn main() -> vectorless::domain::Result<()> {
-    let client = EngineBuilder::new()
-        .with_workspace("./workspace")
-        .build()?;
-
-    // Index a technical manual
-    let doc_id = client.index("./manual.md").await?;
-
-    // Ask questions - LLM navigates the tree structure
-    let answer = client.query(&doc_id, "How do I configure authentication?").await?;
-    println!("Answer: {}", answer.content);
-
-    Ok(())
-}
-```
-
-### Multi-Document Workspace
-
-```rust
-use vectorless::client::{Engine, EngineBuilder};
-
-#[tokio::main]
-async fn main() -> vectorless::domain::Result<()> {
-    let client = EngineBuilder::new()
-        .with_workspace("./docs_workspace")
-        .build()?;
-
-    // Index multiple documents
-    let doc1 = client.index("./docs/api.md").await?;
-    let doc2 = client.index("./docs/tutorial.md").await?;
-    let doc3 = client.index("./docs/reference.md").await?;
-
-    // List all indexed documents
-    let docs = client.list_documents();
-    for doc in docs {
-        println!("{}: {} ({} pages)", doc.id, doc.name, doc.page_count);
-    }
-
-    Ok(())
-}
-```
-
-### Custom Configuration
-
-```rust
-use vectorless::client::{Engine, EngineBuilder};
-use vectorless::config::Config;
-
-#[tokio::main]
-async fn main() -> vectorless::domain::Result<()> {
-    // Load configuration from file
-    let config = Config::load("./vectorless.toml")?;
-
-    let client = EngineBuilder::new()
-        .with_workspace("./workspace")
-        .with_config(config)
-        .build()?;
-
-    // Use the client...
-
-    Ok(())
-}
-```
+See the [examples/](examples/) directory for complete working examples:
 
 ## Architecture
 
