@@ -158,7 +158,7 @@ impl RetrievalOrchestrator {
 
         // Collect stages with no dependencies, sorted by priority
         let mut ready: Vec<usize> = (0..n)
-            .filter(|&i| in_degree[i] == 1) // 1 means no additional deps (started at 1)
+            .filter(|&i| in_degree[i] == 0) // 0 means no dependencies
             .collect();
         ready.sort_by_key(|&i| (self.stages[i].priority, i));
 
@@ -171,7 +171,7 @@ impl RetrievalOrchestrator {
             if let Some(neighbors) = adjacency.get(&idx) {
                 for &neighbor in neighbors {
                     in_degree[neighbor] -= 1;
-                    if in_degree[neighbor] == 1 {
+                    if in_degree[neighbor] == 0 {
                         let entry = &self.stages[neighbor];
                         let pos = ready
                             .binary_search_by_key(&(entry.priority, neighbor), |&i| {
