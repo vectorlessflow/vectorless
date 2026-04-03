@@ -11,28 +11,41 @@
 //! # Architecture
 //!
 //! ```text
-//! ┌─────────────────────────────────────────────────────────┐
-//! │                    AdaptiveRetriever                     │
-//! │  ┌─────────────────────────────────────────────────┐    │
-//! │  │              Complexity Detector                 │    │
-//! │  │   Simple ─────────► Medium ─────────► Complex   │    │
-//! │  └─────────────────────────────────────────────────┘    │
-//! │                          │                               │
-//! │  ┌───────────┬───────────┴───────────┬───────────┐      │
-//! │  │ Keyword   │      Semantic         │    LLM    │      │
-//! │  │ Strategy  │      Strategy         │  Strategy │      │
-//! │  └───────────┴───────────────────────┴───────────┘      │
-//! │                          │                               │
-//! │  ┌───────────────────────┴───────────────────────┐      │
-//! │  │              Multi-Path Search                 │      │
-//! │  │   Greedy │ Beam Search │ MCTS                 │      │
-//! │  └───────────────────────────────────────────────┘      │
-//! │                          │                               │
-//! │  ┌───────────────────────┴───────────────────────┐      │
-//! │  │           Sufficiency Checker                  │      │
-//! │  │   Threshold-based │ LLM-based Judge           │      │
-//! │  └───────────────────────────────────────────────┘      │
-//! └─────────────────────────────────────────────────────────┘
+//! ┌─────────────────────────────────────────────────────────────────┐
+//! │                    RetrievalOrchestrator                         │
+//! │                                                                  │
+//! │  ┌─────────┐    ┌─────────┐    ┌─────────┐    ┌─────────┐      │
+//! │  │ Analyze │───►│  Plan   │───►│ Search  │───►│  Judge  │      │
+//! │  │ (分析)  │    │ (规划)  │    │ (搜索)  │    │ (判断)  │      │
+//! │  └─────────┘    └─────────┘    └─────────┘    └─────────┘      │
+//! │                                     ▲              │             │
+//! │                                     └──────────────┘             │
+//! │                                    (NeedMoreData)               │
+//! └─────────────────────────────────────────────────────────────────┘
+//! ```
+//!
+//! # Pipeline Stages
+//!
+//! | Stage | Description |
+//! |-------|-------------|
+//! | [`AnalyzeStage`] | Query analysis (complexity, keywords, targets) |
+//! | [`PlanStage`] | Strategy and algorithm selection |
+//! | [`SearchStage`] | Execute tree search |
+//! | [`JudgeStage`] | Sufficiency checking |
+//!
+//! # Quick Start
+//!
+//! ```rust,ignore
+//! use vectorless::retrieval::pipeline::{RetrievalOrchestrator, RetrievalStage};
+//! use vectorless::retrieval::stages::{AnalyzeStage, PlanStage, SearchStage, JudgeStage};
+//!
+//! let orchestrator = RetrievalOrchestrator::new()
+//!     .stage(AnalyzeStage::new())
+//!     .stage(PlanStage::new())
+//!     .stage(SearchStage::new())
+//!     .stage(JudgeStage::new());
+//!
+//! let response = orchestrator.execute(tree, query, options).await?;
 //! ```
 
 mod types;
@@ -40,6 +53,8 @@ mod retriever;
 mod adaptive;
 mod context;
 
+pub mod pipeline;
+pub mod stages;
 pub mod strategy;
 pub mod search;
 pub mod sufficiency;
@@ -54,8 +69,31 @@ pub use context::{
     format_for_llm, format_for_llm_async,
     format_tree_for_llm, format_tree_for_llm_async,
 };
+
+// Pipeline exports
+pub use pipeline::{
+    RetrievalOrchestrator, RetrievalStage, PipelineContext,
+    StageOutcome, ExecutionGroup, FailurePolicy,
+    CandidateNode, SearchAlgorithm, SearchConfig, RetrievalMetrics,
+};
+
+// Re-export PipelineContext as RetrievalContext for stages (alias for clarity)
+pub use pipeline::PipelineContext as StageContext;
+
+// Stage exports
+pub use stages::{AnalyzeStage, PlanStage, SearchStage, JudgeStage};
+
+// Strategy exports
 pub use strategy::{RetrievalStrategy, StrategyCapabilities, KeywordStrategy, SemanticStrategy, LlmStrategy};
-pub use search::{BeamSearch, GreedySearch, SearchConfig, SearchResult};
+
+// Search exports
+pub use search::{BeamSearch, GreedySearch, SearchConfig as SearchAlgConfig, SearchResult};
+
+// Sufficiency exports
 pub use sufficiency::{SufficiencyChecker, SufficiencyLevel, ThresholdChecker};
+
+// Complexity exports
 pub use complexity::ComplexityDetector;
+
+// Cache exports
 pub use cache::PathCache;

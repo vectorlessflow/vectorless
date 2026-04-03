@@ -1,0 +1,291 @@
+// Copyright (c) 2026 vectorless developers
+// SPDX-License-Identifier: Apache-2.0
+
+//! Judge Stage - Sufficiency checking.
+//!
+//! This stage evaluates whether the collected content is sufficient
+//! to answer the query, and can trigger additional search iterations.
+
+use async_trait::async_trait;
+use std::sync::Arc;
+use tracing::{info, warn};
+
+use crate::domain::{DocumentTree, estimate_tokens};
+use crate::llm::LlmClient;
+use crate::retrieval::pipeline::{
+    FailurePolicy, PipelineContext, RetrievalStage, StageOutcome,
+};
+use crate::retrieval::sufficiency::{LlmJudge, SufficiencyChecker, ThresholdChecker};
+use crate::retrieval::types::{RetrieveResponse, RetrievalResult, SufficiencyLevel};
+
+/// Judge Stage - evaluates retrieval sufficiency.
+///
+/// This stage:
+/// 1. Aggregates content from candidates
+/// 2. Checks if content is sufficient to answer the query
+/// 3. Can trigger additional search iterations if needed
+///
+/// # Example
+///
+/// ```rust,ignore
+/// let stage = JudgeStage::new()
+///     .with_llm_judge(llm_client)
+///     .with_max_iterations(3);
+/// ```
+pub struct JudgeStage {
+    threshold_checker: ThresholdChecker,
+    llm_judge: Option<LlmJudge>,
+    max_iterations: usize,
+    use_llm_judge: bool,
+}
+
+impl Default for JudgeStage {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl JudgeStage {
+    /// Create a new judge stage.
+    pub fn new() -> Self {
+        Self {
+            threshold_checker: ThresholdChecker::new(),
+            llm_judge: None,
+            max_iterations: 3,
+            use_llm_judge: false,
+        }
+    }
+
+    /// Add LLM judge for more accurate sufficiency checking.
+    pub fn with_llm_judge(mut self, client: LlmClient) -> Self {
+        self.llm_judge = Some(LlmJudge::new(client));
+        self.use_llm_judge = true;
+        self
+    }
+
+    /// Set maximum search iterations.
+    pub fn with_max_iterations(mut self, n: usize) -> Self {
+        self.max_iterations = n;
+        self
+    }
+
+    /// Aggregate content from candidates.
+    fn aggregate_content(&self, ctx: &PipelineContext) -> (String, usize) {
+        let mut content_parts = Vec::new();
+        let mut total_tokens = 0;
+
+        for candidate in &ctx.candidates {
+            if let Some(node) = ctx.tree.get(candidate.node_id) {
+                // Add title
+                content_parts.push(format!("## {}\n", node.title));
+
+                // Add summary if available, otherwise content preview
+                if !node.summary.is_empty() {
+                    content_parts.push(format!("{}\n\n", node.summary));
+                } else if !node.content.is_empty() {
+                    // Limit content preview
+                    let preview: String = node.content.chars().take(500).collect();
+                    content_parts.push(format!("{}\n\n", preview));
+                }
+
+                // Estimate tokens
+                total_tokens += estimate_tokens(&content_parts.last().unwrap_or(&String::new()));
+            }
+        }
+
+        (content_parts.join(""), total_tokens)
+    }
+
+    /// Check sufficiency level.
+    fn check_sufficiency(&self, ctx: &PipelineContext) -> SufficiencyLevel {
+        if !ctx.options.sufficiency_check {
+            return SufficiencyLevel::Sufficient;
+        }
+
+        // Use LLM judge if available and enabled
+        if self.use_llm_judge {
+            if let Some(ref judge) = self.llm_judge {
+                return judge.check(&ctx.query, &ctx.accumulated_content, ctx.token_count);
+            }
+        }
+
+        // Fall back to threshold checker
+        self.threshold_checker.check(&ctx.query, &ctx.accumulated_content, ctx.token_count)
+    }
+
+    /// Build the final response.
+    fn build_response(&self, ctx: &PipelineContext) -> RetrieveResponse {
+        let mut results = Vec::new();
+
+        for candidate in &ctx.candidates {
+            if let Some(node) = ctx.tree.get(candidate.node_id) {
+                results.push(RetrievalResult {
+                    node_id: Some(format!("{:?}", candidate.node_id)),
+                    title: node.title.clone(),
+                    content: if ctx.options.include_content {
+                        Some(node.content.clone())
+                    } else {
+                        None
+                    },
+                    summary: if ctx.options.include_summaries {
+                        Some(node.summary.clone())
+                    } else {
+                        None
+                    },
+                    score: candidate.score,
+                    depth: candidate.depth,
+                    page_range: node.start_page.zip(node.end_page),
+                });
+            }
+        }
+
+        RetrieveResponse {
+            results,
+            content: ctx.accumulated_content.clone(),
+            confidence: self.calculate_confidence(ctx),
+            is_sufficient: ctx.sufficiency == SufficiencyLevel::Sufficient,
+            strategy_used: ctx.selected_strategy
+                .map(|s| format!("{:?}", s))
+                .unwrap_or_else(|| "unknown".to_string()),
+            complexity: ctx.complexity.unwrap_or_default(),
+            trace: ctx.navigation_trace.clone(),
+            tokens_used: ctx.token_count,
+        }
+    }
+
+    /// Calculate overall confidence score.
+    fn calculate_confidence(&self, ctx: &PipelineContext) -> f32 {
+        if ctx.candidates.is_empty() {
+            return 0.0;
+        }
+
+        // Weight by score and sufficiency
+        let avg_score: f32 = ctx.candidates.iter().map(|c| c.score).sum::<f32>()
+            / ctx.candidates.len() as f32;
+
+        let sufficiency_factor = match ctx.sufficiency {
+            SufficiencyLevel::Sufficient => 1.0,
+            SufficiencyLevel::PartialSufficient => 0.7,
+            SufficiencyLevel::Insufficient => 0.4,
+        };
+
+        avg_score * sufficiency_factor
+    }
+}
+
+#[async_trait]
+impl RetrievalStage for JudgeStage {
+    fn name(&self) -> &str {
+        "judge"
+    }
+
+    fn depends_on(&self) -> Vec<&'static str> {
+        vec!["search"]
+    }
+
+    fn priority(&self) -> i32 {
+        40 // Fourth stage
+    }
+
+    fn failure_policy(&self) -> FailurePolicy {
+        FailurePolicy::skip() // Can skip if judge fails
+    }
+
+    fn can_backtrack(&self) -> bool {
+        true // Can trigger backtracking to search
+    }
+
+    async fn execute(&self, ctx: &mut PipelineContext) -> crate::domain::Result<StageOutcome> {
+        let start = std::time::Instant::now();
+
+        info!(
+            "Judging sufficiency: {} candidates, iteration {}",
+            ctx.candidates.len(),
+            ctx.search_iterations
+        );
+
+        // 1. Aggregate content from candidates
+        let (content, tokens) = self.aggregate_content(ctx);
+        ctx.accumulated_content = content;
+        ctx.token_count = tokens;
+
+        info!("Aggregated {} tokens", tokens);
+
+        // 2. Check sufficiency
+        ctx.sufficiency = self.check_sufficiency(ctx);
+        info!("Sufficiency level: {:?}", ctx.sufficiency);
+
+        // Update metrics
+        ctx.metrics.judge_time_ms += start.elapsed().as_millis() as u64;
+        ctx.metrics.tokens_used = tokens;
+
+        // 3. Decide next action based on sufficiency
+        let outcome = match ctx.sufficiency {
+            SufficiencyLevel::Sufficient => {
+                info!("Content is sufficient, completing retrieval");
+                ctx.result = Some(self.build_response(ctx));
+                StageOutcome::complete()
+            }
+            SufficiencyLevel::PartialSufficient => {
+                // Can return current results or continue
+                if ctx.search_iterations >= self.max_iterations {
+                    info!(
+                        "Partial sufficient but max iterations reached, completing with {} candidates",
+                        ctx.candidates.len()
+                    );
+                    ctx.result = Some(self.build_response(ctx));
+                    StageOutcome::complete()
+                } else {
+                    // Continue searching with small beam increase
+                    info!("Partial sufficient, requesting one more search iteration");
+                    StageOutcome::need_more(1, false)
+                }
+            }
+            SufficiencyLevel::Insufficient => {
+                if ctx.search_iterations >= self.max_iterations {
+                    warn!(
+                        "Insufficient but max iterations reached, returning {} candidates",
+                        ctx.candidates.len()
+                    );
+                    ctx.result = Some(self.build_response(ctx));
+                    StageOutcome::complete()
+                } else {
+                    // Need more data - increase beam and go deeper
+                    info!("Insufficient content, requesting more search with larger beam");
+                    StageOutcome::need_more(2, true)
+                }
+            }
+        };
+
+        // Update LLM call count if we used LLM judge
+        if self.use_llm_judge && self.llm_judge.is_some() {
+            ctx.metrics.llm_calls += 1;
+        }
+
+        Ok(outcome)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_judge_stage_creation() {
+        let stage = JudgeStage::new();
+        assert!(stage.llm_judge.is_none());
+        assert!(!stage.use_llm_judge);
+    }
+
+    #[test]
+    fn test_judge_stage_dependencies() {
+        let stage = JudgeStage::new();
+        assert_eq!(stage.depends_on(), vec!["search"]);
+    }
+
+    #[test]
+    fn test_judge_can_backtrack() {
+        let stage = JudgeStage::new();
+        assert!(stage.can_backtrack());
+    }
+}

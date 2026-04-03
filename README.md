@@ -177,8 +177,6 @@ If you find this project useful, please consider giving it a star on [GitHub](ht
 
 ## Star History
 
-## Star History
-
 <a href="https://www.star-history.com/?repos=vectorlessflow%2Fvectorless&type=date&legend=bottom-right">
  <picture>
    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/image?repos=vectorlessflow/vectorless&type=date&theme=dark&legend=bottom-right" />
