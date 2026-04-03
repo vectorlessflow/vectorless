@@ -9,7 +9,7 @@ use tracing::info;
 
 use crate::core::{DocumentTree, NodeId, Result};
 use crate::parser::RawNode;
-use crate::token::estimate_tokens;
+use crate::core::token::estimate_tokens;
 
 use super::{IndexStage, StageResult};
 use crate::core::index::pipeline::IndexContext;

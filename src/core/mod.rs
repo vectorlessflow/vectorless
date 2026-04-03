@@ -32,11 +32,13 @@ mod toc;
 
 pub mod index;
 pub mod retriever;
+pub mod token;
 
 pub use error::{Error, Result};
 pub use node::{NodeId, VectorlessNode};
 pub use tree::{DocumentStructure, VectorlessTree, StructureNode};
 pub use toc::{TocView, TocNode, TocEntry, TocConfig};
+pub use token::{estimate_tokens, estimate_tokens_fast};
 
 // Re-export index types for convenience
 pub use index::{

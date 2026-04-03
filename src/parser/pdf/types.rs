@@ -4,7 +4,7 @@
 //! PDF document types.
 
 use serde::{Deserialize, Serialize};
-use crate::token::estimate_tokens;
+use crate::core::token::estimate_tokens;
 
 /// A single page from a PDF document.
 #[derive(Debug, Clone, Serialize, Deserialize)]

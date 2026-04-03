@@ -87,7 +87,6 @@ pub mod core;
 pub mod parser;
 pub mod llm;
 pub mod storage;
-pub mod token;
 
 // =============================================================================
 // Re-exports (Convenience API)
@@ -137,5 +136,5 @@ pub use storage::{DocumentMeta as StorageDocumentMeta, PersistedDocument, Worksp
 // Concurrency
 pub use concurrency::{ConcurrencyConfig, ConcurrencyController, RateLimiter};
 
-// Token estimation
-pub use token::{estimate_tokens, estimate_tokens_fast};
+// Token estimation (from core)
+pub use core::{estimate_tokens, estimate_tokens_fast};

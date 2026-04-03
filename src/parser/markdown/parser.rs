@@ -9,7 +9,7 @@ use std::path::Path;
 
 use crate::core::Result;
 use crate::parser::{DocumentFormat, DocumentMeta, DocumentParser, ParseResult, RawNode};
-use crate::token::estimate_tokens;
+use crate::core::token::estimate_tokens;
 
 use super::config::MarkdownConfig;
 use super::frontmatter;
