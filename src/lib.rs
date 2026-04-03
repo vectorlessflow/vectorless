@@ -123,6 +123,7 @@ pub use parser::{DocumentFormat, DocumentParser, DocxParser, MarkdownParser, Pdf
 
 // Indexing (use core::index)
 pub use core::index::{PipelineExecutor, PipelineOptions, IndexInput, IndexMode};
+pub use core::index::pipeline::{PipelineOrchestrator, CustomStageBuilder};
 
 // Retrieval (from core::retriever)
 pub use core::retriever::{
