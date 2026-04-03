@@ -369,8 +369,8 @@ impl Vectorless {
         // Build retrieve options from config
         let retrieve_options = crate::core::retriever::RetrieveOptions::new()
             .with_top_k(self.config.retrieval.top_k)
-            .with_content(true)
-            .with_summaries(true);
+            .with_include_content(true)
+            .with_include_summaries(true);
 
         // Use adaptive retriever
         let response = self.retriever.retrieve(&tree, question, &retrieve_options).await

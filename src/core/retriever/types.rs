@@ -6,6 +6,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::core::NodeId;
+use super::context::{PruningStrategy, TokenEstimation};
 
 /// Query complexity level for adaptive strategy selection.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -99,6 +100,15 @@ pub struct RetrieveOptions {
 
     /// Enable result caching.
     pub enable_cache: bool,
+
+    /// Pruning strategy for context building.
+    pub pruning_strategy: super::PruningStrategy,
+
+    /// Token estimation mode.
+    pub token_estimation: super::TokenEstimation,
+
+    /// Whether to use async context building for large documents.
+    pub use_async_context: bool,
 }
 
 impl Default for RetrieveOptions {
@@ -114,6 +124,9 @@ impl Default for RetrieveOptions {
             sufficiency_check: true,
             max_tokens: 4000,
             enable_cache: true,
+            pruning_strategy: super::PruningStrategy::default(),
+            token_estimation: super::TokenEstimation::default(),
+            use_async_context: false,
         }
     }
 }
@@ -125,59 +138,94 @@ impl RetrieveOptions {
         Self::default()
     }
 
-    /// Set maximum number of results.
+    /// Set the maximum number of results to return.
     #[must_use]
-    pub fn with_top_k(mut self, k: usize) -> Self {
-        self.top_k = k;
+    pub fn with_top_k(mut self, top_k: usize) -> Self {
+        self.top_k = top_k;
         self
     }
 
-    /// Set beam width for multi-path search.
+    /// Set the beam width for multi-path search.
     #[must_use]
-    pub fn with_beam_width(mut self, width: usize) -> Self {
-        self.beam_width = width;
+    pub fn with_beam_width(mut self, beam_width: usize) -> Self {
+        self.beam_width = beam_width;
         self
     }
 
-    /// Set whether to include content.
+    /// Set the maximum search iterations.
     #[must_use]
-    pub fn with_content(mut self, include: bool) -> Self {
+    pub fn with_max_iterations(mut self, max_iterations: usize) -> Self {
+        self.max_iterations = max_iterations;
+        self
+    }
+
+    /// Set whether to include node content in results.
+    #[must_use]
+    pub fn with_include_content(mut self, include: bool) -> Self {
         self.include_content = include;
         self
     }
 
-    /// Set whether to include summaries.
+    /// Set whether to include node summaries in results.
     #[must_use]
-    pub fn with_summaries(mut self, include: bool) -> Self {
+    pub fn with_include_summaries(mut self, include: bool) -> Self {
         self.include_summaries = include;
         self
     }
 
-    /// Set minimum relevance score.
+    /// Set the minimum relevance score.
     #[must_use]
-    pub fn with_min_score(mut self, score: f32) -> Self {
-        self.min_score = score;
+    pub fn with_min_score(mut self, min_score: f32) -> Self {
+        self.min_score = min_score;
         self
     }
 
-    /// Set strategy preference.
+    /// Set the strategy preference.
     #[must_use]
     pub fn with_strategy(mut self, strategy: StrategyPreference) -> Self {
         self.strategy = strategy;
         self
     }
 
-    /// Enable/disable sufficiency checking.
+    /// Set whether to enable sufficiency checking.
     #[must_use]
     pub fn with_sufficiency_check(mut self, enable: bool) -> Self {
         self.sufficiency_check = enable;
         self
     }
 
-    /// Set maximum tokens for sufficiency.
+    /// Set the maximum tokens for sufficiency threshold.
     #[must_use]
-    pub fn with_max_tokens(mut self, tokens: usize) -> Self {
-        self.max_tokens = tokens;
+    pub fn with_max_tokens(mut self, max_tokens: usize) -> Self {
+        self.max_tokens = max_tokens;
+        self
+    }
+
+    /// Set whether to enable result caching.
+    #[must_use]
+    pub fn with_enable_cache(mut self, enable: bool) -> Self {
+        self.enable_cache = enable;
+        self
+    }
+
+    /// Set pruning strategy for context building.
+    #[must_use]
+    pub fn with_pruning_strategy(mut self, strategy: PruningStrategy) -> Self {
+        self.pruning_strategy = strategy;
+        self
+    }
+
+    /// Set token estimation mode.
+    #[must_use]
+    pub fn with_token_estimation(mut self, mode: TokenEstimation) -> Self {
+        self.token_estimation = mode;
+        self
+    }
+
+    /// Enable async context building for large documents.
+    #[must_use]
+    pub fn with_async_context(mut self, enable: bool) -> Self {
+        self.use_async_context = enable;
         self
     }
 }
