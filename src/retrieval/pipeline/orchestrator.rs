@@ -12,10 +12,10 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
-use tracing::{debug, error, info, warn};
+use tracing::{error, info, warn};
 
 use crate::domain::{DocumentTree, Result};
-use crate::index::pipeline::FailurePolicy;
+// FailurePolicy is re-exported for stages
 use crate::retrieval::types::{RetrieveOptions, RetrieveResponse};
 
 use super::context::PipelineContext;

@@ -133,6 +133,7 @@ impl TocConfig {
 }
 
 /// ToC view generator.
+#[derive(Clone)]
 pub struct TocView {
     config: TocConfig,
 }

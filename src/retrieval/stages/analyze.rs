@@ -16,7 +16,7 @@ use crate::retrieval::complexity::ComplexityDetector;
 use crate::retrieval::pipeline::{
     FailurePolicy, PipelineContext, RetrievalStage, StageOutcome,
 };
-use crate::retrieval::types::QueryComplexity;
+// QueryComplexity is used in context
 
 /// Analyze Stage - analyzes queries for retrieval planning.
 ///
@@ -167,7 +167,7 @@ impl RetrievalStage for AnalyzeStage {
         info!("Analyzing query: '{}'", ctx.query);
 
         // 1. Detect complexity
-        ctx.complexity = Some(self.complexity_detector.detect(&ctx.query, &ctx.tree));
+        ctx.complexity = Some(self.complexity_detector.detect(&ctx.query));
         info!(
             "Query complexity: {:?}",
             ctx.complexity

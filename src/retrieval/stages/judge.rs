@@ -7,10 +7,10 @@
 //! to answer the query, and can trigger additional search iterations.
 
 use async_trait::async_trait;
-use std::sync::Arc;
+// Arc is used for async sharing
 use tracing::{info, warn};
 
-use crate::domain::{DocumentTree, estimate_tokens};
+use crate::domain::estimate_tokens;
 use crate::llm::LlmClient;
 use crate::retrieval::pipeline::{
     FailurePolicy, PipelineContext, RetrievalStage, StageOutcome,
@@ -58,7 +58,7 @@ impl JudgeStage {
 
     /// Add LLM judge for more accurate sufficiency checking.
     pub fn with_llm_judge(mut self, client: LlmClient) -> Self {
-        self.llm_judge = Some(LlmJudge::new(client));
+        self.llm_judge = Some(LlmJudge::new(Box::new(client)));
         self.use_llm_judge = true;
         self
     }

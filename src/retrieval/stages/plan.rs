@@ -12,7 +12,7 @@ use async_trait::async_trait;
 use std::sync::Arc;
 use tracing::info;
 
-use crate::domain::DocumentTree;
+// DocumentTree is accessed via context
 use crate::llm::LlmClient;
 use crate::retrieval::pipeline::{
     FailurePolicy, PipelineContext, RetrievalStage, StageOutcome,

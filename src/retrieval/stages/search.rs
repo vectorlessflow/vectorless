@@ -10,13 +10,14 @@ use async_trait::async_trait;
 use std::sync::Arc;
 use tracing::{info, warn};
 
-use crate::domain::{DocumentTree, NodeId};
-use crate::llm::LlmClient;
+use crate::domain::DocumentTree;
+// LlmClient is used via strategy
 use crate::retrieval::pipeline::{
     FailurePolicy, PipelineContext, RetrievalStage, StageOutcome,
     CandidateNode, SearchAlgorithm,
 };
-use crate::retrieval::search::{BeamSearch, GreedySearch, SearchConfig as SearchAlgConfig};
+use crate::retrieval::search::{BeamSearch, GreedySearch, SearchConfig as SearchAlgConfig, SearchTree};
+use crate::retrieval::RetrievalContext; // Legacy context
 use crate::retrieval::strategy::{KeywordStrategy, LlmStrategy, RetrievalStrategy};
 use crate::retrieval::types::StrategyPreference;
 
@@ -112,10 +113,12 @@ impl SearchStage {
         for path in paths {
             if let Some(leaf_id) = path.leaf {
                 // Get node info
-                let depth = tree.depth(leaf_id);
-                let is_leaf = tree.is_leaf(leaf_id);
+                if let Some(node) = tree.get(leaf_id) {
+                    let depth = node.depth;
+                    let is_leaf = tree.children(leaf_id).is_empty();
 
-                candidates.push(CandidateNode::new(leaf_id, path.score, depth, is_leaf));
+                    candidates.push(CandidateNode::new(leaf_id, path.score, depth, is_leaf));
+                }
             }
         }
 
@@ -166,37 +169,40 @@ impl RetrievalStage for SearchStage {
         // Increment search iteration
         ctx.increment_search_iteration();
 
-        // Build search config
+        // Build search config for search algorithms
         let search_config = SearchAlgConfig {
+            top_k: config.beam_width * 2,
             beam_width: config.beam_width,
-            max_depth: config.max_depth,
-            min_score: config.min_score,
             max_iterations: config.max_iterations,
+            min_score: config.min_score,
+            leaf_only: false,
         };
 
+        // Create legacy context for search algorithms
+        let legacy_ctx = RetrievalContext::new(&ctx.query, ctx.options.max_tokens, ctx.options.sufficiency_check);
+
         // Execute search based on algorithm
-        let paths = match algorithm {
+        let result = match algorithm {
             SearchAlgorithm::Greedy => {
-                let search = GreedySearch::new(search_config);
-                search.search(&ctx.tree, strategy.as_ref(), &ctx.query).await?
+                let search = GreedySearch::new();
+                search.search(&ctx.tree, &legacy_ctx, &search_config).await
             }
             SearchAlgorithm::Beam => {
-                let search = BeamSearch::new(search_config);
-                search.search(&ctx.tree, strategy.as_ref(), &ctx.query).await?
+                let search = BeamSearch::new();
+                search.search(&ctx.tree, &legacy_ctx, &search_config).await
             }
             SearchAlgorithm::Mcts => {
                 // Use beam search as fallback for now
-                // MCTS would be implemented separately
-                let search = BeamSearch::new(search_config);
-                search.search(&ctx.tree, strategy.as_ref(), &ctx.query).await?
+                let search = BeamSearch::new();
+                search.search(&ctx.tree, &legacy_ctx, &search_config).await
             }
         };
 
-        info!("Search found {} paths", paths.len());
+        info!("Search found {} paths", result.paths.len());
 
         // Update context with results
-        ctx.search_paths = paths.clone();
-        ctx.candidates = self.extract_candidates(&paths, &ctx.tree);
+        ctx.search_paths = result.paths.clone();
+        ctx.candidates = self.extract_candidates(&result.paths, &ctx.tree);
 
         // Update metrics
         ctx.metrics.search_time_ms += start.elapsed().as_millis() as u64;

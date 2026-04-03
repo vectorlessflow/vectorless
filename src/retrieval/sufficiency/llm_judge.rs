@@ -176,3 +176,13 @@ impl SufficiencyChecker for LlmJudge {
         "llm_judge"
     }
 }
+
+/// Adapter to use LlmClient as LlmJudgeClient.
+#[async_trait]
+impl LlmJudgeClient for crate::llm::LlmClient {
+    async fn complete(&self, prompt: &str) -> Result<String, JudgeError> {
+        self.complete("You are a content sufficiency judge.", prompt)
+            .await
+            .map_err(|e| JudgeError::RequestFailed(e.to_string()))
+    }
+}
