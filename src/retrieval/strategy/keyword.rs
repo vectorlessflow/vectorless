@@ -17,6 +17,7 @@ use super::r#trait::{NodeEvaluation, RetrievalStrategy, StrategyCapabilities};
 ///
 /// Uses simple term frequency matching for fast, lightweight retrieval.
 /// Best for simple queries where exact term matches are sufficient.
+#[derive(Clone)]
 pub struct KeywordStrategy {
     /// Whether to use bigram matching.
     use_bigrams: bool,
