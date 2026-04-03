@@ -2,6 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! Configuration type definitions.
+//!
+//! All configuration values are defined inline in `Default` trait implementations.
+//! Configuration is loaded from TOML files only - no environment variable magic.
 
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -51,114 +54,65 @@ impl Default for Config {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IndexerConfig {
     /// Word count threshold for splitting sections into subsections.
-    #[serde(default = "default_subsection_threshold")]
+    #[serde(default)]
     pub subsection_threshold: usize,
 
     /// Maximum tokens to send in a single segmentation request.
-    #[serde(default = "default_max_segment_tokens")]
+    #[serde(default)]
     pub max_segment_tokens: usize,
 
     /// Maximum tokens for each summary.
-    #[serde(default = "default_max_summary_tokens")]
+    #[serde(default)]
     pub max_summary_tokens: usize,
 
     /// Minimum content tokens required to generate a summary.
-    #[serde(default = "default_min_summary_tokens")]
+    #[serde(default)]
     pub min_summary_tokens: usize,
-}
-
-/// Default subsection word count threshold.
-pub fn default_subsection_threshold() -> usize {
-    300
-}
-
-/// Default maximum tokens for segmentation.
-pub fn default_max_segment_tokens() -> usize {
-    3000
-}
-
-/// Default maximum tokens for summaries.
-pub fn default_max_summary_tokens() -> usize {
-    200
-}
-
-/// Default minimum tokens for summary generation.
-pub fn default_min_summary_tokens() -> usize {
-    20
 }
 
 impl Default for IndexerConfig {
     fn default() -> Self {
         Self {
-            subsection_threshold: default_subsection_threshold(),
-            max_segment_tokens: default_max_segment_tokens(),
-            max_summary_tokens: default_max_summary_tokens(),
-            min_summary_tokens: default_min_summary_tokens(),
+            subsection_threshold: 300,
+            max_segment_tokens: 3000,
+            max_summary_tokens: 200,
+            min_summary_tokens: 20,
         }
     }
 }
 
 /// Generic LLM configuration.
-///
-/// Used for both summarization and retrieval/navigation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LlmConfig {
     /// Model name (e.g., "gpt-4o-mini", "claude-3-haiku").
-    #[serde(default = "default_llm_model")]
+    #[serde(default)]
     pub model: String,
 
     /// API endpoint.
-    #[serde(default = "default_llm_endpoint")]
+    #[serde(default)]
     pub endpoint: String,
 
-    /// API key (prefer using environment variable).
+    /// API key.
     #[serde(default)]
     pub api_key: Option<String>,
 
     /// Maximum tokens for responses.
-    #[serde(default = "default_llm_max_tokens")]
+    #[serde(default)]
     pub max_tokens: usize,
 
     /// Temperature for generation.
-    #[serde(default = "default_temperature")]
+    #[serde(default)]
     pub temperature: f32,
-}
-
-/// Default LLM model name.
-fn default_llm_model() -> String {
-    "gpt-4o-mini".to_string()
-}
-
-/// Default LLM API endpoint, auto-detected from environment.
-fn default_llm_endpoint() -> String {
-    // Auto-detect based on available API keys
-    if std::env::var("OPENAI_API_KEY").is_ok() {
-        "https://api.openai.com/v1".to_string()
-    } else if std::env::var("AZURE_OPENAI_ENDPOINT").is_ok() {
-        std::env::var("AZURE_OPENAI_ENDPOINT").unwrap_or_default()
-    } else {
-        "https://api.z.ai/api/paas/v4".to_string()
-    }
-}
-
-/// Default maximum tokens for LLM responses.
-fn default_llm_max_tokens() -> usize {
-    1000
-}
-
-/// Default temperature for LLM generation.
-pub(crate) fn default_temperature() -> f32 {
-    0.0
 }
 
 impl Default for LlmConfig {
     fn default() -> Self {
         Self {
-            model: default_llm_model(),
-            endpoint: default_llm_endpoint(),
+            model: "gpt-4o-mini".to_string(),
+            endpoint: "https://api.openai.com/v1".to_string(),
             api_key: None,
-            max_tokens: default_llm_max_tokens(),
-            temperature: default_temperature(),
+            max_tokens: 1000,
+            temperature: 0.0,
         }
     }
 }
@@ -187,17 +141,9 @@ impl LlmConfig {
         self
     }
 
-    /// Get the API key from config or environment.
-    pub fn get_api_key(&self) -> Option<String> {
-        self.api_key.clone().or_else(|| {
-            if std::env::var("OPENAI_API_KEY").is_ok() {
-                std::env::var("OPENAI_API_KEY").ok()
-            } else if std::env::var("ANTHROPIC_API_KEY").is_ok() {
-                std::env::var("ANTHROPIC_API_KEY").ok()
-            } else {
-                None
-            }
-        })
+    /// Get the API key from config.
+    pub fn get_api_key(&self) -> Option<&str> {
+        self.api_key.as_deref()
     }
 }
 
@@ -205,63 +151,34 @@ impl LlmConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SummaryConfig {
     /// Model name for summarization.
-    #[serde(default = "default_summary_model")]
+    #[serde(default)]
     pub model: String,
 
     /// API endpoint for summary model.
-    #[serde(default = "default_summary_endpoint")]
+    #[serde(default)]
     pub endpoint: String,
 
-    /// API key (prefer using environment variable).
+    /// API key.
     #[serde(default)]
     pub api_key: Option<String>,
 
     /// Maximum tokens for summary generation.
-    #[serde(default = "default_summary_max_tokens")]
+    #[serde(default)]
     pub max_tokens: usize,
 
     /// Temperature for summary generation.
-    #[serde(default = "default_temperature")]
+    #[serde(default)]
     pub temperature: f32,
-}
-
-/// Default summary model name.
-pub fn default_summary_model() -> String {
-    // Auto-detect based on available API keys
-    if std::env::var("OPENAI_API_KEY").is_ok() {
-        "gpt-4o-mini".to_string()
-    } else if std::env::var("ANTHROPIC_API_KEY").is_ok() {
-        "claude-3-sonnet-20240229".to_string()
-    } else {
-        "glm-5".to_string()
-    }
-}
-
-/// Default summary endpoint, auto-detected from environment.
-pub fn default_summary_endpoint() -> String {
-    // Auto-detect based on available API keys
-    if std::env::var("OPENAI_API_KEY").is_ok() {
-        "https://api.openai.com/v1".to_string()
-    } else if std::env::var("AZURE_OPENAI_ENDPOINT").is_ok() {
-        std::env::var("AZURE_OPENAI_ENDPOINT").unwrap_or_default()
-    } else {
-        "https://api.z.ai/api/paas/v4".to_string()
-    }
-}
-
-/// Default maximum tokens for summary generation.
-pub fn default_summary_max_tokens() -> usize {
-    200
 }
 
 impl Default for SummaryConfig {
     fn default() -> Self {
         Self {
-            model: default_summary_model(),
-            endpoint: default_summary_endpoint(),
+            model: "gpt-4o-mini".to_string(),
+            endpoint: "https://api.openai.com/v1".to_string(),
             api_key: None,
-            max_tokens: default_summary_max_tokens(),
-            temperature: default_temperature(),
+            max_tokens: 200,
+            temperature: 0.0,
         }
     }
 }
@@ -270,27 +187,27 @@ impl Default for SummaryConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RetrievalConfig {
     /// Model name for retrieval/navigation.
-    #[serde(default = "default_retrieval_model")]
+    #[serde(default)]
     pub model: String,
 
     /// API endpoint for retrieval model.
-    #[serde(default = "default_retrieval_endpoint")]
+    #[serde(default)]
     pub endpoint: String,
 
-    /// API key (prefer using environment variable).
+    /// API key.
     #[serde(default)]
     pub api_key: Option<String>,
 
     /// Maximum tokens for retrieval context.
-    #[serde(default = "default_retrieval_max_tokens")]
+    #[serde(default)]
     pub max_tokens: usize,
 
     /// Temperature for retrieval.
-    #[serde(default = "default_temperature")]
+    #[serde(default)]
     pub temperature: f32,
 
     /// Number of top-k results to return.
-    #[serde(default = "default_top_k")]
+    #[serde(default)]
     pub top_k: usize,
 
     /// Search algorithm configuration.
@@ -310,49 +227,15 @@ pub struct RetrievalConfig {
     pub strategy: StrategyConfig,
 }
 
-/// Default retrieval model name.
-pub fn default_retrieval_model() -> String {
-    // Auto-detect based on available API keys
-    if std::env::var("OPENAI_API_KEY").is_ok() {
-        "gpt-4o".to_string()
-    } else if std::env::var("ANTHROPIC_API_KEY").is_ok() {
-        "claude-3-sonnet-20240229".to_string()
-    } else {
-        "glm-5".to_string()
-    }
-}
-
-/// Default retrieval endpoint, auto-detected from environment.
-pub fn default_retrieval_endpoint() -> String {
-    // Auto-detect based on available API keys
-    if std::env::var("OPENAI_API_KEY").is_ok() {
-        "https://api.openai.com/v1".to_string()
-    } else if std::env::var("AZURE_OPENAI_ENDPOINT").is_ok() {
-        std::env::var("AZURE_OPENAI_ENDPOINT").unwrap_or_default()
-    } else {
-        "https://api.z.ai/api/paas/v4".to_string()
-    }
-}
-
-/// Default maximum tokens for retrieval context.
-pub fn default_retrieval_max_tokens() -> usize {
-    1000
-}
-
-/// Default number of top results to return.
-pub fn default_top_k() -> usize {
-    3
-}
-
 impl Default for RetrievalConfig {
     fn default() -> Self {
         Self {
-            model: default_retrieval_model(),
-            endpoint: default_retrieval_endpoint(),
+            model: "gpt-4o".to_string(),
+            endpoint: "https://api.openai.com/v1".to_string(),
             api_key: None,
-            max_tokens: default_retrieval_max_tokens(),
-            temperature: default_temperature(),
-            top_k: default_top_k(),
+            max_tokens: 1000,
+            temperature: 0.0,
+            top_k: 3,
             search: SearchConfig::default(),
             sufficiency: SufficiencyConfig::default(),
             cache: CacheConfig::default(),
@@ -365,34 +248,29 @@ impl Default for RetrievalConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SearchConfig {
     /// Number of top-k results to return.
-    #[serde(default = "default_search_top_k")]
+    #[serde(default)]
     pub top_k: usize,
 
     /// Beam width for multi-path search.
-    #[serde(default = "default_beam_width")]
+    #[serde(default)]
     pub beam_width: usize,
 
     /// Maximum iterations for search algorithms.
-    #[serde(default = "default_max_iterations")]
+    #[serde(default)]
     pub max_iterations: usize,
 
     /// Minimum score to include a path.
-    #[serde(default = "default_min_score")]
+    #[serde(default)]
     pub min_score: f32,
 }
-
-fn default_search_top_k() -> usize { 5 }
-fn default_beam_width() -> usize { 3 }
-fn default_max_iterations() -> usize { 10 }
-fn default_min_score() -> f32 { 0.1 }
 
 impl Default for SearchConfig {
     fn default() -> Self {
         Self {
-            top_k: default_search_top_k(),
-            beam_width: default_beam_width(),
-            max_iterations: default_max_iterations(),
-            min_score: default_min_score(),
+            top_k: 5,
+            beam_width: 3,
+            max_iterations: 10,
+            min_score: 0.1,
         }
     }
 }
@@ -401,40 +279,34 @@ impl Default for SearchConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SufficiencyConfig {
     /// Minimum tokens for sufficiency.
-    #[serde(default = "default_min_tokens")]
+    #[serde(default)]
     pub min_tokens: usize,
 
     /// Target tokens for full sufficiency.
-    #[serde(default = "default_target_tokens")]
+    #[serde(default)]
     pub target_tokens: usize,
 
     /// Maximum tokens before stopping.
-    #[serde(default = "default_max_tokens")]
+    #[serde(default)]
     pub max_tokens: usize,
 
     /// Minimum content length (characters).
-    #[serde(default = "default_min_content_length")]
+    #[serde(default)]
     pub min_content_length: usize,
 
     /// Confidence threshold for LLM judge.
-    #[serde(default = "default_confidence_threshold")]
+    #[serde(default)]
     pub confidence_threshold: f32,
 }
-
-fn default_min_tokens() -> usize { 500 }
-fn default_target_tokens() -> usize { 2000 }
-fn default_max_tokens() -> usize { 4000 }
-fn default_min_content_length() -> usize { 200 }
-fn default_confidence_threshold() -> f32 { 0.7 }
 
 impl Default for SufficiencyConfig {
     fn default() -> Self {
         Self {
-            min_tokens: default_min_tokens(),
-            target_tokens: default_target_tokens(),
-            max_tokens: default_max_tokens(),
-            min_content_length: default_min_content_length(),
-            confidence_threshold: default_confidence_threshold(),
+            min_tokens: 500,
+            target_tokens: 2000,
+            max_tokens: 4000,
+            min_content_length: 200,
+            confidence_threshold: 0.7,
         }
     }
 }
@@ -443,22 +315,19 @@ impl Default for SufficiencyConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CacheConfig {
     /// Maximum number of cache entries.
-    #[serde(default = "default_cache_max_entries")]
+    #[serde(default)]
     pub max_entries: usize,
 
     /// Time-to-live for cache entries (seconds).
-    #[serde(default = "default_cache_ttl_secs")]
+    #[serde(default)]
     pub ttl_secs: u64,
 }
-
-fn default_cache_max_entries() -> usize { 1000 }
-fn default_cache_ttl_secs() -> u64 { 3600 }
 
 impl Default for CacheConfig {
     fn default() -> Self {
         Self {
-            max_entries: default_cache_max_entries(),
-            ttl_secs: default_cache_ttl_secs(),
+            max_entries: 1000,
+            ttl_secs: 3600,
         }
     }
 }
@@ -467,34 +336,29 @@ impl Default for CacheConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StrategyConfig {
     /// MCTS exploration weight (sqrt(2) ≈ 1.414).
-    #[serde(default = "default_exploration_weight")]
+    #[serde(default)]
     pub exploration_weight: f32,
 
     /// Semantic similarity threshold.
-    #[serde(default = "default_similarity_threshold")]
+    #[serde(default)]
     pub similarity_threshold: f32,
 
     /// High similarity threshold for "answer" decision.
-    #[serde(default = "default_high_similarity_threshold")]
+    #[serde(default)]
     pub high_similarity_threshold: f32,
 
     /// Low similarity threshold for "explore" decision.
-    #[serde(default = "default_low_similarity_threshold")]
+    #[serde(default)]
     pub low_similarity_threshold: f32,
 }
-
-fn default_exploration_weight() -> f32 { 1.414 }
-fn default_similarity_threshold() -> f32 { 0.5 }
-fn default_high_similarity_threshold() -> f32 { 0.8 }
-fn default_low_similarity_threshold() -> f32 { 0.3 }
 
 impl Default for StrategyConfig {
     fn default() -> Self {
         Self {
-            exploration_weight: default_exploration_weight(),
-            similarity_threshold: default_similarity_threshold(),
-            high_similarity_threshold: default_high_similarity_threshold(),
-            low_similarity_threshold: default_low_similarity_threshold(),
+            exploration_weight: 1.414,
+            similarity_threshold: 0.5,
+            high_similarity_threshold: 0.8,
+            low_similarity_threshold: 0.3,
         }
     }
 }
@@ -503,27 +367,14 @@ impl Default for StrategyConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StorageConfig {
     /// Workspace directory for persisted documents.
-    ///
-    /// Structure:
-    /// ```text
-    /// workspace/
-    /// ├── _meta.json           # Lightweight index
-    /// ├── {doc_id_1}.json      # Document 1
-    /// └── {doc_id_2}.json      # Document 2
-    /// ```
-    #[serde(default = "default_workspace_dir")]
+    #[serde(default)]
     pub workspace_dir: PathBuf,
-}
-
-/// Default workspace directory path.
-pub fn default_workspace_dir() -> PathBuf {
-    PathBuf::from("./workspace")
 }
 
 impl Default for StorageConfig {
     fn default() -> Self {
         Self {
-            workspace_dir: default_workspace_dir(),
+            workspace_dir: PathBuf::from("./workspace"),
         }
     }
 }
@@ -532,11 +383,11 @@ impl Default for StorageConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConcurrencyConfig {
     /// Maximum concurrent LLM API calls.
-    #[serde(default = "default_max_concurrent_requests")]
+    #[serde(default)]
     pub max_concurrent_requests: usize,
 
     /// Rate limit: requests per minute.
-    #[serde(default = "default_requests_per_minute")]
+    #[serde(default)]
     pub requests_per_minute: usize,
 
     /// Whether rate limiting is enabled.
@@ -548,26 +399,15 @@ pub struct ConcurrencyConfig {
     pub semaphore_enabled: bool,
 }
 
-/// Default maximum concurrent requests.
-pub fn default_max_concurrent_requests() -> usize {
-    10
-}
-
-/// Default requests per minute rate limit.
-pub fn default_requests_per_minute() -> usize {
-    500
-}
-
-/// Default boolean value (true).
-pub fn default_true() -> bool {
+fn default_true() -> bool {
     true
 }
 
 impl Default for ConcurrencyConfig {
     fn default() -> Self {
         Self {
-            max_concurrent_requests: default_max_concurrent_requests(),
-            requests_per_minute: default_requests_per_minute(),
+            max_concurrent_requests: 10,
+            requests_per_minute: 500,
             enabled: true,
             semaphore_enabled: true,
         }
@@ -665,12 +505,10 @@ pub struct FallbackConfig {
     pub enabled: bool,
 
     /// Fallback models in priority order.
-    /// Example: ["gpt-4o", "gpt-4o-mini", "glm-4-flash"]
     #[serde(default)]
     pub models: Vec<String>,
 
     /// Fallback endpoints in priority order.
-    /// Example: ["https://api.openai.com/v1", "https://api.z.ai/api/paas/v4"]
     #[serde(default)]
     pub endpoints: Vec<String>,
 
@@ -691,10 +529,7 @@ impl Default for FallbackConfig {
     fn default() -> Self {
         Self {
             enabled: true,
-            models: vec![
-                "gpt-4o-mini".to_string(),
-                "glm-4-flash".to_string(),
-            ],
+            models: vec!["gpt-4o-mini".to_string(), "glm-4-flash".to_string()],
             endpoints: vec![],
             on_rate_limit: FallbackBehavior::RetryThenFallback,
             on_timeout: FallbackBehavior::RetryThenFallback,

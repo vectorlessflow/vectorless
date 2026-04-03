@@ -117,10 +117,10 @@ impl VectorlessBuilder {
 
     /// Build the Vectorless client.
     ///
-    /// Configuration is loaded in this order (later overrides earlier):
-    /// 1. Default configuration
-    /// 2. Configuration file (auto-detected or specified)
-    /// 3. Environment variables (VECTORLESS_* or standard LLM vars)
+    /// Configuration is loaded from:
+    /// 1. Explicitly provided config (via `with_config`)
+    /// 2. Configuration file (auto-detected or specified via `with_config_path`)
+    /// 3. Default configuration (if no config file found)
     ///
     /// # Errors
     ///
@@ -136,22 +136,17 @@ impl VectorlessBuilder {
             // Load from specified path
             ConfigLoader::new()
                 .file(&path)
-                .env_prefix("VECTORLESS")
                 .load()
                 .map_err(|e| BuildError::Config(e.to_string()))?
         } else if let Some(config_path) = Self::find_config_file() {
             // Auto-detect config file
             ConfigLoader::new()
                 .file(&config_path)
-                .env_prefix("VECTORLESS")
                 .load()
                 .map_err(|e| BuildError::Config(format!("Failed to load {}: {}", config_path.display(), e)))?
         } else {
-            // Use defaults with environment variable overrides
-            ConfigLoader::new()
-                .env_prefix("VECTORLESS")
-                .load()
-                .map_err(|e| BuildError::Config(e.to_string()))?
+            // Use defaults
+            Config::default()
         };
 
         // Open workspace: prefer explicit path, fallback to config

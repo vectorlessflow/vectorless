@@ -1,5 +1,8 @@
 # Vectorless Configuration Example
 # Copy this file to config.toml and fill in your API keys
+#
+# All configuration is loaded from this file only.
+# No environment variables are used - this ensures explicit, traceable configuration.
 
 [indexer]
 # Word count threshold for splitting sections into subsections
@@ -10,6 +13,9 @@ max_segment_tokens = 3000
 
 # Maximum tokens for each summary
 max_summary_tokens = 200
+
+# Minimum content tokens required to generate a summary
+min_summary_tokens = 20
 
 [summary]
 # API key - get from your provider
@@ -48,6 +54,59 @@ max_tokens = 1000
 
 # Temperature for retrieval
 temperature = 0.0
+
+# Search algorithm configuration
+[retrieval.search]
+# Number of top-k results to return
+top_k = 5
+
+# Beam width for multi-path search
+beam_width = 3
+
+# Maximum iterations for search algorithms
+max_iterations = 10
+
+# Minimum score to include a path
+min_score = 0.1
+
+# Sufficiency checker configuration
+[retrieval.sufficiency]
+# Minimum tokens for sufficiency
+min_tokens = 500
+
+# Target tokens for full sufficiency
+target_tokens = 2000
+
+# Maximum tokens before stopping
+max_tokens = 4000
+
+# Minimum content length (characters)
+min_content_length = 200
+
+# Confidence threshold for LLM judge
+confidence_threshold = 0.7
+
+# Cache configuration
+[retrieval.cache]
+# Maximum number of cache entries
+max_entries = 1000
+
+# Time-to-live for cache entries (seconds)
+ttl_secs = 3600
+
+# Strategy-specific configuration
+[retrieval.strategy]
+# MCTS exploration weight (sqrt(2) ≈ 1.414)
+exploration_weight = 1.414
+
+# Semantic similarity threshold
+similarity_threshold = 0.5
+
+# High similarity threshold for "answer" decision
+high_similarity_threshold = 0.8
+
+# Low similarity threshold for "explore" decision
+low_similarity_threshold = 0.3
 
 [storage]
 # Workspace directory for persisted documents
@@ -98,6 +157,5 @@ on_rate_limit = "retry_then_fallback"
 on_timeout = "retry_then_fallback"
 
 # Behavior when all attempts fail
-# Options: return_error, return_cache, return_default
-# return_default requires a value field
+# Options: return_error, return_cache
 on_all_failed = "return_error"
