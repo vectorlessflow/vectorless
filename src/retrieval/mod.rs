@@ -49,7 +49,6 @@
 
 mod types;
 mod retriever;
-mod adaptive;
 mod context;
 mod pipeline_retriever;
 
@@ -63,7 +62,6 @@ pub mod cache;
 
 pub use types::*;
 pub use retriever::{Retriever, RetrieverError, RetrieverResult, RetrievalContext};
-// AdaptiveRetriever deprecated - use PipelineRetriever instead
 pub use pipeline_retriever::PipelineRetriever;
 pub use context::{
     ContextBuilder, PruningStrategy, TokenEstimation,

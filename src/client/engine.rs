@@ -15,7 +15,7 @@
 //!
 //! - `Arc<RwLock<Workspace>>` - Thread-safe workspace access (multiple readers, single writer)
 //! - `Arc<Mutex<PipelineExecutor>>` - Exclusive pipeline execution
-//! - `Arc<AdaptiveRetriever>` - Immutable retriever (uses interior mutability internally)
+//! - `Arc<PipelineRetriever>` - Immutable retriever (uses interior mutability internally)
 //!
 //! # Thread Safety
 //!
