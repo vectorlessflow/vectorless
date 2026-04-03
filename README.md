@@ -30,15 +30,30 @@ It preserves your document's tree structure and uses an LLM to navigate it — j
 
 ## How It Works
 
-![Architecture](docs/design/architecture.svg)
+![Architecture](docs/design/how-it-works.svg)
 
-**Vectorless** preserves your document's hierarchical structure and uses an LLM to navigate it step by step:
+**Vectorless** preserves your document's hierarchical structure and uses a multi-stage pipeline for intelligent retrieval:
 
-1. **Index** — Parse documents into a tree structure (chapters, sections, subsections)
-2. **Navigate** — LLM walks the tree, asking "which branch contains the answer?"
-3. **Retrieve** — Return the relevant section with its context
+### Index Pipeline
 
-This mimics how humans navigate documentation: skim the TOC, drill into relevant sections.
+Transforms documents into a navigable tree structure:
+
+1. **Parse** — Parse documents (Markdown, PDF, DOCX, HTML) into structured content
+2. **Build** — Construct document tree with metadata
+3. **Enhance** — Add table of contents and section detection
+4. **Enrich** — Generate AI summaries for tree nodes
+5. **Optimize** — Optimize tree structure for efficient retrieval
+
+### Retrieval Pipeline
+
+Uses adaptive, multi-stage retrieval with backtracking:
+
+1. **Analyze** — Detect query complexity, extract keywords
+2. **Plan** — Select optimal strategy (keyword/semantic/LLM) and algorithm
+3. **Search** — Execute tree traversal (greedy/beam/MCTS)
+4. **Judge** — Evaluate sufficiency, trigger backtracking if needed
+
+This mimics how humans navigate documentation: skim the TOC, drill into relevant sections, and backtrack when needed.
 
 ## Comparison
 
@@ -72,12 +87,12 @@ cp config.example.toml vectorless.toml
 Basic usage:
 
 ```rust
-use vectorless::client::{Vectorless, VectorlessBuilder};
+use vectorless::client::{Engine, EngineBuilder};
 
 #[tokio::main]
 async fn main() -> vectorless::domain::Result<()> {
     // Create client
-    let mut client = VectorlessBuilder::new()
+    let client = EngineBuilder::new()
         .with_workspace("./workspace")
         .build()?;
 
@@ -97,11 +112,11 @@ async fn main() -> vectorless::domain::Result<()> {
 ### Document Q&A
 
 ```rust
-use vectorless::client::{Vectorless, VectorlessBuilder};
+use vectorless::client::{Engine, EngineBuilder};
 
 #[tokio::main]
 async fn main() -> vectorless::domain::Result<()> {
-    let mut client = VectorlessBuilder::new()
+    let client = EngineBuilder::new()
         .with_workspace("./workspace")
         .build()?;
 
@@ -119,11 +134,11 @@ async fn main() -> vectorless::domain::Result<()> {
 ### Multi-Document Workspace
 
 ```rust
-use vectorless::client::{Vectorless, VectorlessBuilder};
+use vectorless::client::{Engine, EngineBuilder};
 
 #[tokio::main]
 async fn main() -> vectorless::domain::Result<()> {
-    let mut client = VectorlessBuilder::new()
+    let client = EngineBuilder::new()
         .with_workspace("./docs_workspace")
         .build()?;
 
@@ -133,7 +148,7 @@ async fn main() -> vectorless::domain::Result<()> {
     let doc3 = client.index("./docs/reference.md").await?;
 
     // List all indexed documents
-    let docs = client.list_documents().await?;
+    let docs = client.list_documents();
     for doc in docs {
         println!("{}: {} ({} pages)", doc.id, doc.name, doc.page_count);
     }
@@ -145,16 +160,15 @@ async fn main() -> vectorless::domain::Result<()> {
 ### Custom Configuration
 
 ```rust
-use vectorless::client::{Vectorless, VectorlessBuilder};
+use vectorless::client::{Engine, EngineBuilder};
 use vectorless::config::Config;
-use vectorless::llm::LlmPool;
 
 #[tokio::main]
 async fn main() -> vectorless::domain::Result<()> {
     // Load configuration from file
     let config = Config::load("./vectorless.toml")?;
 
-    let client = VectorlessBuilder::new()
+    let client = EngineBuilder::new()
         .with_workspace("./workspace")
         .with_config(config)
         .build()?;

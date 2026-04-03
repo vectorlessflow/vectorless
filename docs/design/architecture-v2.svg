@@ -1,19 +1,19 @@
-<svg viewBox="0 0 900 620" xmlns="http://www.w3.org/2000/svg" font-family="system-ui, -apple-system, sans-serif">
+<svg viewBox="0 0 900 720" xmlns="http://www.w3.org/2000/svg" font-family="system-ui, -apple-system, sans-serif">
   <!-- Background -->
-  <rect width="900" height="620" fill="#fafafa"/>
+  <rect width="900" height="720" fill="#fafafa"/>
 
   <!-- Title -->
   <text x="450" y="30" font-size="18" font-weight="700" fill="#1e293b" text-anchor="middle">Vectorless Architecture</text>
 
-  <!-- Vectorless Client Container -->
-  <rect x="20" y="50" width="860" height="550" rx="12" fill="#f8fafc" stroke="#e2e8f0" stroke-width="2"/>
-  <text x="40" y="80" font-size="14" font-weight="600" fill="#1e293b">Vectorless Client</text>
+  <!-- Engine Client Container -->
+  <rect x="20" y="50" width="860" height="650" rx="12" fill="#f8fafc" stroke="#e2e8f0" stroke-width="2"/>
+  <text x="40" y="80" font-size="14" font-weight="600" fill="#1e293b">Engine Client</text>
 
   <!-- Config Box -->
   <rect x="40" y="100" width="180" height="70" rx="6" fill="#fef3c7" stroke="#fcd34d" stroke-width="1.5"/>
   <text x="130" y="125" font-size="11" font-weight="600" fill="#92400e" text-anchor="middle">Config</text>
   <text x="50" y="145" font-size="9" fill="#78350f">• indexer settings</text>
-  <text x="50" y="158" font-size="9" fill="#78350f">• summary/retrieval LLM</text>
+  <text x="50" y="158" font-size="9" fill="#78350f">• retrieval settings</text>
 
   <!-- Workspace Box -->
   <rect x="40" y="185" width="180" height="85" rx="6" fill="#dbeafe" stroke="#60a5fa" stroke-width="1.5"/>
@@ -23,10 +23,10 @@
   <text x="50" y="256" font-size="9" fill="#1e3a8a">• Document Metadata</text>
 
   <!-- Index Pipeline Container -->
-  <rect x="250" y="100" width="390" height="170" rx="8" fill="#f0fdf4" stroke="#86efac" stroke-width="1.5"/>
+  <rect x="250" y="100" width="390" height="130" rx="8" fill="#f0fdf4" stroke="#86efac" stroke-width="1.5"/>
   <text x="445" y="125" font-size="12" font-weight="600" fill="#166534" text-anchor="middle">Index Pipeline</text>
 
-  <!-- Pipeline Stages -->
+  <!-- Index Pipeline Stages -->
   <rect x="265" y="140" width="55" height="45" rx="4" fill="#22c55e"/>
   <text x="292" y="160" font-size="9" fill="white" text-anchor="middle">Parse</text>
   <text x="292" y="175" font-size="8" fill="#dcfce7" text-anchor="middle">MD/PDF</text>
@@ -41,14 +41,15 @@
 
   <rect x="415" y="140" width="55" height="45" rx="4" fill="#16a34a"/>
   <text x="442" y="155" font-size="9" fill="white" text-anchor="middle">Enhance</text>
-  <text x="442" y="168" font-size="8" fill="#dcfce7" text-anchor="middle">LLM</text>
-  <text x="442" y="180" font-size="8" fill="#dcfce7" text-anchor="middle">Summary</text>
+  <text x="442" y="168" font-size="8" fill="#dcfce7" text-anchor="middle">ToC</text>
+  <text x="442" y="180" font-size="8" fill="#dcfce7" text-anchor="middle">Sections</text>
 
   <path d="M 470 162 L 485 162" stroke="#22c55e" stroke-width="1.5" marker-end="url(#arrow-green)"/>
 
-  <rect x="490" y="140" width="55" height="45" rx="4" fill="#22c55e"/>
-  <text x="517" y="160" font-size="9" fill="white" text-anchor="middle">Enrich</text>
-  <text x="517" y="175" font-size="8" fill="#dcfce7" text-anchor="middle">Meta</text>
+  <rect x="490" y="140" width="55" height="45" rx="4" fill="#16a34a"/>
+  <text x="517" y="155" font-size="9" fill="white" text-anchor="middle">Enrich</text>
+  <text x="517" y="168" font-size="8" fill="#dcfce7" text-anchor="middle">LLM</text>
+  <text x="517" y="180" font-size="8" fill="#dcfce7" text-anchor="middle">Summary</text>
 
   <path d="M 545 162 L 560 162" stroke="#22c55e" stroke-width="1.5" marker-end="url(#arrow-green)"/>
 
@@ -56,53 +57,80 @@
   <text x="595" y="160" font-size="9" fill="white" text-anchor="middle">Optimize</text>
   <text x="595" y="175" font-size="8" fill="#dcfce7" text-anchor="middle">Thin</text>
 
-  <!-- Persist arrow -->
-<!--   <path d="M 595 185 L 595 205 L 130 205 L 130 270" stroke="#60a5fa" stroke-width="1.5" stroke-dasharray="4,2" marker-end="url(#arrow-blue)"/>
-  <text x="350" y="218" font-size="8" fill="#3b82f6">Persist</text> -->
+  <!-- Retrieval Pipeline Container -->
+  <rect x="250" y="250" width="610" height="330" rx="8" fill="#fef2f2" stroke="#fca5a5" stroke-width="1.5"/>
+  <text x="555" y="275" font-size="12" font-weight="600" fill="#991b1b" text-anchor="middle">Retrieval Pipeline</text>
 
-  <!-- Adaptive Retriever Container -->
-  <rect x="250" y="290" width="610" height="290" rx="8" fill="#fef2f2" stroke="#fca5a5" stroke-width="1.5"/>
-  <text x="555" y="315" font-size="12" font-weight="600" fill="#991b1b" text-anchor="middle">Adaptive Retriever</text>
+  <!-- Pipeline Stages Row -->
+  <rect x="270" y="295" width="120" height="55" rx="6" fill="#fee2e2" stroke="#f87171" stroke-width="1.5"/>
+  <text x="330" y="318" font-size="10" font-weight="500" fill="#7f1d1d" text-anchor="middle">Analyze</text>
+  <text x="280" y="338" font-size="8" fill="#dc2626">• Complexity detect</text>
+  <text x="280" y="348" font-size="8" fill="#dc2626">• Keyword extract</text>
 
-  <!-- Complexity Detector -->
-  <rect x="270" y="330" width="570" height="50" rx="6" fill="#fee2e2" stroke="#f87171" stroke-width="1"/>
-  <text x="555" y="352" font-size="10" font-weight="500" fill="#7f1d1d" text-anchor="middle">Complexity Detector</text>
-  <text x="320" y="370" font-size="9" fill="#dc2626">Simple</text>
-  <text x="555" y="370" font-size="9" fill="#dc2626" text-anchor="middle">Medium</text>
-  <text x="790" y="370" font-size="9" fill="#dc2626" text-anchor="end">Complex</text>
+  <path d="M 390 322 L 410 322" stroke="#ef4444" stroke-width="1.5" marker-end="url(#arrow-red)"/>
 
-  <!-- Strategy arrows -->
-  <path d="M 555 380 L 555 395" stroke="#ef4444" stroke-width="1.5" marker-end="url(#arrow-red)"/>
+  <rect x="415" y="295" width="120" height="55" rx="6" fill="#fee2e2" stroke="#f87171" stroke-width="1.5"/>
+  <text x="475" y="318" font-size="10" font-weight="500" fill="#7f1d1d" text-anchor="middle">Plan</text>
+  <text x="425" y="338" font-size="8" fill="#dc2626">• Strategy select</text>
+  <text x="425" y="348" font-size="8" fill="#dc2626">• Algorithm config</text>
 
-  <!-- Strategies -->
-  <rect x="270" y="400" width="170" height="70" rx="6" fill="#fff7ed" stroke="#fdba74" stroke-width="1.5"/>
-  <text x="355" y="422" font-size="10" font-weight="500" fill="#c2410c" text-anchor="middle">Keyword Strategy</text>
-  <text x="280" y="440" font-size="8" fill="#9a3412">• TF-IDF / BM25</text>
-  <text x="280" y="455" font-size="8" fill="#9a3412">• No API calls</text>
+  <path d="M 535 322 L 555 322" stroke="#ef4444" stroke-width="1.5" marker-end="url(#arrow-red)"/>
 
-  <rect x="460" y="400" width="170" height="70" rx="6" fill="#fdf4ff" stroke="#e879f9" stroke-width="1.5"/>
-  <text x="545" y="422" font-size="10" font-weight="500" fill="#86198f" text-anchor="middle">Semantic Strategy</text>
-  <text x="470" y="440" font-size="8" fill="#701a75">• Embedding similarity</text>
-  <text x="470" y="455" font-size="8" fill="#701a75">• Vector comparison</text>
+  <rect x="560" y="295" width="120" height="55" rx="6" fill="#fee2e2" stroke="#f87171" stroke-width="1.5"/>
+  <text x="620" y="318" font-size="10" font-weight="500" fill="#7f1d1d" text-anchor="middle">Search</text>
+  <text x="570" y="338" font-size="8" fill="#dc2626">• Tree traversal</text>
+  <text x="570" y="348" font-size="8" fill="#dc2626">• Beam/MCTS</text>
 
-  <rect x="650" y="400" width="190" height="70" rx="6" fill="#ecfdf5" stroke="#6ee7b7" stroke-width="1.5"/>
-  <text x="745" y="422" font-size="10" font-weight="500" fill="#047857" text-anchor="middle">LLM Strategy</text>
-  <text x="660" y="440" font-size="8" fill="#065f46">• ToC View navigation</text>
-  <text x="660" y="455" font-size="8" fill="#065f46">• Beam search + judge</text>
+  <path d="M 680 322 L 700 322" stroke="#ef4444" stroke-width="1.5" marker-end="url(#arrow-red)"/>
 
-  <!-- Search methods arrow -->
-  <path d="M 555 470 L 555 485" stroke="#ef4444" stroke-width="1.5" marker-end="url(#arrow-red)"/>
+  <rect x="705" y="295" width="135" height="55" rx="6" fill="#fee2e2" stroke="#f87171" stroke-width="1.5"/>
+  <text x="772" y="318" font-size="10" font-weight="500" fill="#7f1d1d" text-anchor="middle">Judge</text>
+  <text x="715" y="338" font-size="8" fill="#dc2626">• Sufficiency check</text>
+  <text x="715" y="348" font-size="8" fill="#dc2626">• Backtrack control</text>
 
-  <!-- Multi-Path Search -->
-  <rect x="270" y="490" width="570" height="40" rx="6" fill="#fef2f2" stroke="#fca5a5" stroke-width="1"/>
-  <text x="555" y="512" font-size="10" font-weight="500" fill="#991b1b" text-anchor="middle">Multi-Path Search: Greedy | Beam Search | MCTS</text>
+  <!-- Strategies Section -->
+  <text x="270" y="380" font-size="10" font-weight="600" fill="#991b1b">Strategies (Plan Stage):</text>
 
-  <!-- Sufficiency arrow -->
-  <path d="M 555 530 L 555 545" stroke="#ef4444" stroke-width="1.5" marker-end="url(#arrow-red)"/>
+  <rect x="270" y="390" width="170" height="70" rx="6" fill="#fff7ed" stroke="#fdba74" stroke-width="1.5"/>
+  <text x="355" y="412" font-size="10" font-weight="500" fill="#c2410c" text-anchor="middle">Keyword</text>
+  <text x="280" y="430" font-size="8" fill="#9a3412">• TF-IDF / BM25</text>
+  <text x="280" y="442" font-size="8" fill="#9a3412">• No API calls</text>
+  <text x="280" y="454" font-size="8" fill="#9a3412">• Fast, local</text>
 
-  <!-- Sufficiency Checker -->
-  <rect x="370" y="550" width="370" height="25" rx="4" fill="#fef2f2" stroke="#fca5a5" stroke-width="1"/>
-  <text x="555" y="567" font-size="9" fill="#991b1b" text-anchor="middle">Sufficiency Checker: Threshold | LLM Judge</text>
+  <rect x="460" y="390" width="170" height="70" rx="6" fill="#fdf4ff" stroke="#e879f9" stroke-width="1.5"/>
+  <text x="545" y="412" font-size="10" font-weight="500" fill="#86198f" text-anchor="middle">Semantic</text>
+  <text x="470" y="430" font-size="8" fill="#701a75">• Embedding similarity</text>
+  <text x="470" y="442" font-size="8" fill="#701a75">• Vector comparison</text>
+  <text x="470" y="454" font-size="8" fill="#701a75">• Medium speed</text>
+
+  <rect x="650" y="390" width="190" height="70" rx="6" fill="#ecfdf5" stroke="#6ee7b7" stroke-width="1.5"/>
+  <text x="745" y="412" font-size="10" font-weight="500" fill="#047857" text-anchor="middle">LLM</text>
+  <text x="660" y="430" font-size="8" fill="#065f46">• ToC navigation</text>
+  <text x="660" y="442" font-size="8" fill="#065f46">• Reasoning-based</text>
+  <text x="660" y="454" font-size="8" fill="#065f46">• Best accuracy</text>
+
+  <!-- LLM indicator for LLM Strategy -->
+  <circle cx="830" cy="410" r="8" fill="#22c55e"/>
+  <text x="830" y="414" font-size="8" fill="white" text-anchor="middle">✓</text>
+
+  <!-- Search Algorithms Section -->
+  <text x="270" y="485" font-size="10" font-weight="600" fill="#991b1b">Search Algorithms (Search Stage):</text>
+
+  <rect x="270" y="495" width="170" height="55" rx="6" fill="#fef2f2" stroke="#fca5a5" stroke-width="1"/>
+  <text x="355" y="515" font-size="10" font-weight="500" fill="#991b1b" text-anchor="middle">Greedy</text>
+  <text x="280" y="535" font-size="8" fill="#7f1d1d">• Best-first traversal</text>
+
+  <rect x="460" y="495" width="170" height="55" rx="6" fill="#fef2f2" stroke="#fca5a5" stroke-width="1"/>
+  <text x="545" y="515" font-size="10" font-weight="500" fill="#991b1b" text-anchor="middle">Beam Search</text>
+  <text x="470" y="535" font-size="8" fill="#7f1d1d">• Top-k paths parallel</text>
+
+  <rect x="650" y="495" width="190" height="55" rx="6" fill="#fef2f2" stroke="#fca5a5" stroke-width="1"/>
+  <text x="745" y="515" font-size="10" font-weight="500" fill="#991b1b" text-anchor="middle">MCTS</text>
+  <text x="660" y="535" font-size="8" fill="#7f1d1d">• Monte Carlo Tree Search</text>
+
+  <!-- Backtracking Arrow -->
+  <path d="M 772 350 L 772 365 L 330 365 L 330 350" stroke="#ef4444" stroke-width="1.5" stroke-dasharray="4,2" fill="none" marker-end="url(#arrow-red)"/>
+  <text x="550" y="378" font-size="8" fill="#dc2626" text-anchor="middle">NeedMoreData / Backtrack (increase beam, go deeper)</text>
 
   <!-- LLM Client (external) -->
   <rect x="660" y="100" width="200" height="85" rx="6" fill="#1e293b" stroke="#374151" stroke-width="1.5"/>
@@ -111,14 +139,23 @@
   <text x="670" y="158" font-size="9" fill="#9ca3af">• Fallback chain</text>
   <text x="670" y="171" font-size="9" fill="#9ca3af">• Concurrency control</text>
 
-  <!-- LLM connections -->
-  <path d="M 760 185 L 760 400" stroke="#374151" stroke-width="1" stroke-dasharray="4,2"/>
-  <path d="M 660 142 L 470 142" stroke="#374151" stroke-width="1" stroke-dasharray="4,2" marker-end="url(#arrow-gray)"/>
+  <!-- LLM usage legend -->
+  <rect x="250" y="595" width="610" height="90" rx="6" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="1"/>
+  <text x="555" y="615" font-size="10" font-weight="600" fill="#1e293b" text-anchor="middle">LLM Usage in Retrieval</text>
 
-  <!-- Query flow arrow from Workspace to Retriever -->
-<!--   <path d="M 130 270 L 130 435 L 265 435" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
-  <text x="140" y="350" font-size="8" fill="#3b82f6">Load</text>
-  <text x="140" y="360" font-size="8" fill="#3b82f6">Tree</text> -->
+  <rect x="270" y="625" width="280" height="50" rx="4" fill="#ecfdf5" stroke="#6ee7b7" stroke-width="1"/>
+  <text x="290" y="645" font-size="9" font-weight="500" fill="#047857">LLM Strategy (Plan → Search)</text>
+  <text x="290" y="660" font-size="8" fill="#065f46">• Evaluates node relevance using title, summary, ToC</text>
+  <text x="290" y="672" font-size="8" fill="#065f46">• Guides tree traversal with reasoning</text>
+
+  <rect x="560" y="625" width="280" height="50" rx="4" fill="#fef3c7" stroke="#fcd34d" stroke-width="1"/>
+  <text x="580" y="645" font-size="9" font-weight="500" fill="#92400e">Judge Stage (Judge)</text>
+  <text x="580" y="660" font-size="8" fill="#78350f">• Evaluates if collected content is sufficient</text>
+  <text x="580" y="672" font-size="8" fill="#78350f">• Triggers backtracking if more data needed</text>
+
+  <!-- LLM connections -->
+  <path d="M 760 185 L 760 250" stroke="#374151" stroke-width="1" stroke-dasharray="4,2"/>
+  <path d="M 660 142 L 530 142" stroke="#374151" stroke-width="1" stroke-dasharray="4,2" marker-end="url(#arrow-gray)"/>
 
   <!-- Arrow markers -->
   <defs>
