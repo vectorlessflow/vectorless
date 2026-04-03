@@ -8,13 +8,17 @@
 //! - [`PipelineExecutor`] - Executes the indexing pipeline
 //! - [`PipelineOrchestrator`] - Flexible stage orchestration with dependencies
 //! - [`IndexMetrics`] - Performance metrics collection
+//! - [`FailurePolicy`] - Configurable failure handling for stages
+//! - [`StageRetryConfig`] - Retry configuration for stages
 
 mod context;
 mod executor;
 mod metrics;
 mod orchestrator;
+mod policy;
 
 pub use context::{IndexContext, IndexInput, IndexResult, StageResult};
 pub use executor::PipelineExecutor;
 pub use metrics::IndexMetrics;
-pub use orchestrator::{PipelineOrchestrator, CustomStageBuilder};
+pub use orchestrator::{ExecutionGroup, PipelineOrchestrator, CustomStageBuilder};
+pub use policy::{FailurePolicy, StageRetryConfig};

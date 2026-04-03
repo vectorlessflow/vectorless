@@ -5,8 +5,9 @@
 //!
 //! The orchestrator provides:
 //! - Stage registration with priority
-//! - Dependency-based ordering
-//! - Custom stage support
+//! - Dependency-based ordering via topological sort
+//! - Failure policies (Fail, Skip, Retry)
+//! - Execution groups for parallel execution
 //!
 //! # Example
 //!
@@ -28,7 +29,8 @@ use tracing::{info, warn, error};
 
 use crate::domain::Result;
 
-use super::context::{IndexContext, IndexInput, IndexResult};
+use super::context::{IndexContext, IndexInput, IndexResult, StageResult};
+use super::policy::FailurePolicy;
 use super::super::stages::IndexStage;
 use super::super::PipelineOptions;
 
@@ -52,12 +54,22 @@ impl std::fmt::Debug for StageEntry {
     }
 }
 
+/// Group of stages at the same dependency level (can run in parallel).
+#[derive(Debug, Clone)]
+pub struct ExecutionGroup {
+    /// Indices of stages in this group.
+    pub stage_indices: Vec<usize>,
+    /// Whether this group has multiple stages (parallelizable).
+    pub parallel: bool,
+}
+
 /// Pipeline orchestrator for stage management and execution.
 ///
 /// Provides flexible stage registration with:
 /// - Priority-based ordering
 /// - Dependency resolution
-/// - Custom stage support
+/// - Failure policies (Fail, Skip, Retry)
+/// - Execution groups for parallel execution
 ///
 /// # Stage Ordering
 ///
@@ -95,51 +107,70 @@ impl PipelineOrchestrator {
         Self { stages: Vec::new() }
     }
 
-    /// Add a stage with default priority (100) and no dependencies.
+    /// Add a stage with default priority (100).
+    ///
+    /// Dependencies are automatically read from the stage's `depends_on()` method.
     pub fn stage<S>(mut self, stage: S) -> Self
     where
         S: IndexStage + 'static,
     {
+        let deps = stage.depends_on();
         self.stages.push(StageEntry {
             stage: Box::new(stage),
             priority: 100,
-            depends_on: Vec::new(),
+            depends_on: deps.into_iter().map(|s| s.to_string()).collect(),
         });
         self
     }
 
     /// Add a stage with custom priority.
     ///
+    /// Dependencies are automatically read from the stage's `depends_on()` method.
     /// Lower priority = earlier execution.
     /// Default priority is 100.
     pub fn stage_with_priority<S>(mut self, stage: S, priority: i32) -> Self
     where
         S: IndexStage + 'static,
     {
+        let deps = stage.depends_on();
         self.stages.push(StageEntry {
             stage: Box::new(stage),
             priority,
-            depends_on: Vec::new(),
+            depends_on: deps.into_iter().map(|s| s.to_string()).collect(),
         });
         self
     }
 
-    /// Add a stage with priority and dependencies.
+    /// Add a stage with priority and explicit dependencies.
     ///
+    /// Merges trait-level dependencies with explicitly provided ones.
     /// The stage will run after all specified dependencies.
     pub fn stage_with_deps<S>(
         mut self,
         stage: S,
         priority: i32,
-        depends_on: &[&str],
+        explicit_depends_on: &[&str],
     ) -> Self
     where
         S: IndexStage + 'static,
     {
+        let trait_deps = stage.depends_on();
+        let mut all_deps: Vec<String> = trait_deps
+            .into_iter()
+            .map(|s| s.to_string())
+            .collect();
+
+        // Add explicit deps that aren't already included
+        for dep in explicit_depends_on {
+            if !all_deps.iter().any(|d| d == dep) {
+                all_deps.push(dep.to_string());
+            }
+        }
+
         self.stages.push(StageEntry {
             stage: Box::new(stage),
             priority,
-            depends_on: depends_on.iter().map(|s| s.to_string()).collect(),
+            depends_on: all_deps,
         });
         self
     }
@@ -248,9 +279,126 @@ impl PipelineOrchestrator {
         Ok(result)
     }
 
+    /// Compute execution groups from resolved order.
+    ///
+    /// Stages with the same "level" in the dependency graph and no
+    /// inter-dependencies can run in parallel.
+    fn compute_execution_groups(&self, order: &[usize]) -> Vec<ExecutionGroup> {
+        if order.is_empty() {
+            return Vec::new();
+        }
+
+        // Build name -> index map
+        let name_to_idx: HashMap<&str, usize> = self
+            .stages
+            .iter()
+            .enumerate()
+            .map(|(i, entry)| (entry.stage.name(), i))
+            .collect();
+
+        // Calculate level for each stage based on dependencies
+        let mut levels: HashMap<usize, usize> = HashMap::new();
+
+        for &idx in order {
+            let entry = &self.stages[idx];
+            let level = if entry.depends_on.is_empty() {
+                0
+            } else {
+                entry
+                    .depends_on
+                    .iter()
+                    .filter_map(|dep| {
+                        name_to_idx
+                            .get(dep.as_str())
+                            .and_then(|&dep_idx| levels.get(&dep_idx))
+                    })
+                    .max()
+                    .map(|&l| l + 1)
+                    .unwrap_or(0)
+            };
+            levels.insert(idx, level);
+        }
+
+        // Group stages by level
+        let mut level_groups: HashMap<usize, Vec<usize>> = HashMap::new();
+        for &idx in order {
+            let level = levels[&idx];
+            level_groups.entry(level).or_default().push(idx);
+        }
+
+        // Convert to execution groups
+        let max_level = *levels.values().max().unwrap_or(&0);
+        (0..=max_level)
+            .filter_map(|level| {
+                level_groups.get(&level).map(|indices| ExecutionGroup {
+                    stage_indices: indices.clone(),
+                    parallel: indices.len() > 1,
+                })
+            })
+            .collect()
+    }
+
+    /// Execute a stage with its failure policy applied.
+    async fn execute_stage_with_policy(
+        stage: &mut Box<dyn IndexStage>,
+        ctx: &mut IndexContext,
+    ) -> Result<StageResult> {
+        let policy = stage.failure_policy();
+        let stage_name = stage.name().to_string();
+
+        match policy {
+            FailurePolicy::Fail => {
+                // Direct execution, errors propagate
+                stage.execute(ctx).await
+            }
+
+            FailurePolicy::Skip => {
+                // Try once, skip on failure
+                match stage.execute(ctx).await {
+                    Ok(result) => Ok(result),
+                    Err(e) => {
+                        warn!("Stage {} failed, skipping: {}", stage_name, e);
+                        Ok(StageResult::failure(&stage_name, &e.to_string()))
+                    }
+                }
+            }
+
+            FailurePolicy::Retry(config) => {
+                let mut attempts = 0;
+                loop {
+                    attempts += 1;
+                    match stage.execute(ctx).await {
+                        Ok(result) => {
+                            if attempts > 1 {
+                                info!("Stage {} succeeded on attempt {}", stage_name, attempts);
+                            }
+                            return Ok(result);
+                        }
+                        Err(e) => {
+                            if attempts >= config.max_attempts {
+                                warn!(
+                                    "Stage {} failed after {} attempts: {}",
+                                    stage_name, attempts, e
+                                );
+                                return Err(e);
+                            }
+                            let delay = config.delay_for_attempt(attempts - 1);
+                            warn!(
+                                "Stage {} failed on attempt {}, retrying in {:?}: {}",
+                                stage_name, attempts, delay, e
+                            );
+                            tokio::time::sleep(delay).await;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     /// Execute the pipeline.
     ///
     /// Stages are executed in dependency-resolved order.
+    /// Failure policies are applied per-stage.
     pub async fn execute(
         &mut self,
         input: IndexInput,
@@ -267,26 +415,55 @@ impl PipelineOrchestrator {
             .collect();
         info!("Execution order: {:?}", stage_names);
 
+        // Compute execution groups for potential parallelization
+        let groups = self.compute_execution_groups(&order);
+        info!("Execution groups: {} ({} parallelizable)",
+            groups.len(),
+            groups.iter().filter(|g| g.parallel).count()
+        );
+
         // Create context
         let mut ctx = IndexContext::new(input, options);
 
-        // Execute each stage in order
-        for &idx in &order {
-            let entry = &mut self.stages[idx];
-            let stage_name = entry.stage.name().to_string();
-            let is_optional = entry.stage.is_optional();
-            info!("Executing stage: {} (priority {})", stage_name, entry.priority);
+        // Execute each group
+        for (group_idx, group) in groups.iter().enumerate() {
+            if group.parallel {
+                info!(
+                    "Executing parallel group {} with {} stages: {:?}",
+                    group_idx,
+                    group.stage_indices.len(),
+                    group.stage_indices.iter()
+                        .map(|&i| self.stages[i].stage.name())
+                        .collect::<Vec<_>>()
+                );
+            }
 
-            match entry.stage.execute(&mut ctx).await {
-                Ok(result) => {
-                    ctx.stage_results.insert(stage_name.clone(), result);
-                }
-                Err(e) => {
-                    if is_optional {
-                        warn!("Optional stage {} failed: {}", stage_name, e);
-                    } else {
-                        error!("Required stage {} failed: {}", stage_name, e);
-                        return Err(e);
+            // Execute stages in this group
+            // Note: For true parallel execution, stages would need to declare
+            // that they don't modify shared context. Currently executed sequentially
+            // for safety, but grouped for future optimization.
+            for &idx in &group.stage_indices {
+                let entry = &mut self.stages[idx];
+                let stage_name = entry.stage.name().to_string();
+                let policy = entry.stage.failure_policy();
+
+                info!("Executing stage: {} (priority {})", stage_name, entry.priority);
+
+                match Self::execute_stage_with_policy(&mut entry.stage, &mut ctx).await {
+                    Ok(result) => {
+                        ctx.stage_results.insert(stage_name.clone(), result);
+                    }
+                    Err(e) => {
+                        if policy.allows_continuation() {
+                            warn!("Stage {} failed but policy allows continuation: {}", stage_name, e);
+                            ctx.stage_results.insert(
+                                stage_name.clone(),
+                                StageResult::failure(&stage_name, &e.to_string()),
+                            );
+                        } else {
+                            error!("Stage {} failed, stopping pipeline: {}", stage_name, e);
+                            return Err(e);
+                        }
                     }
                 }
             }
@@ -306,6 +483,14 @@ impl PipelineOrchestrator {
     pub fn stage_names(&self) -> Result<Vec<&str>> {
         let order = self.resolve_order()?;
         Ok(order.iter().map(|&i| self.stages[i].stage.name()).collect())
+    }
+
+    /// Get execution groups for the current pipeline.
+    ///
+    /// This is useful for visualizing parallelization opportunities.
+    pub fn get_execution_groups(&self) -> Result<Vec<ExecutionGroup>> {
+        let order = self.resolve_order()?;
+        Ok(self.compute_execution_groups(&order))
     }
 }
 

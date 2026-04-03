@@ -142,6 +142,10 @@ impl IndexStage for OptimizeStage {
         true
     }
 
+    fn depends_on(&self) -> Vec<&'static str> {
+        vec!["enrich"]
+    }
+
     async fn execute(&mut self, ctx: &mut IndexContext) -> Result<StageResult> {
         let start = Instant::now();
 

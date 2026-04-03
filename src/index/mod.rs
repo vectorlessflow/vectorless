@@ -43,7 +43,10 @@ pub mod stages;
 pub mod summary;
 
 // Re-export main types from pipeline
-pub use pipeline::{IndexContext, IndexInput, IndexMetrics, IndexResult, PipelineExecutor, StageResult};
+pub use pipeline::{
+    ExecutionGroup, FailurePolicy, IndexContext, IndexInput, IndexMetrics,
+    IndexResult, PipelineExecutor, PipelineOrchestrator, StageResult, StageRetryConfig,
+};
 
 // Re-export stages
 pub use stages::IndexStage;

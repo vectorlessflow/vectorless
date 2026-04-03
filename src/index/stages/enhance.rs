@@ -12,7 +12,7 @@ use crate::domain::{NodeId, Result, DocumentTree};
 use crate::llm::LlmClient;
 
 use super::{IndexStage, StageResult};
-use crate::index::pipeline::IndexContext;
+use crate::index::pipeline::{FailurePolicy, IndexContext, StageRetryConfig};
 use crate::index::summary::{LlmSummaryGenerator, SummaryGenerator, SummaryStrategy};
 
 /// Enhance stage - generates summaries using LLM.
@@ -104,6 +104,19 @@ impl IndexStage for EnhanceStage {
 
     fn is_optional(&self) -> bool {
         true
+    }
+
+    fn depends_on(&self) -> Vec<&'static str> {
+        vec!["build"]
+    }
+
+    fn failure_policy(&self) -> FailurePolicy {
+        // LLM operations benefit from retry with backoff
+        FailurePolicy::retry_with(
+            StageRetryConfig::new()
+                .with_max_attempts(2)
+                .with_initial_delay(std::time::Duration::from_millis(500))
+        )
     }
 
     async fn execute(&mut self, ctx: &mut IndexContext) -> Result<StageResult> {

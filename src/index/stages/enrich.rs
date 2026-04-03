@@ -106,6 +106,10 @@ impl IndexStage for EnrichStage {
         "enrich"
     }
 
+    fn depends_on(&self) -> Vec<&'static str> {
+        vec!["build"]
+    }
+
     async fn execute(&mut self, ctx: &mut IndexContext) -> Result<StageResult> {
         let start = Instant::now();
 
