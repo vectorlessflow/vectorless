@@ -8,6 +8,7 @@
 use async_trait::async_trait;
 use std::collections::HashMap;
 
+use crate::config::StrategyConfig;
 use crate::core::{NodeId, VectorlessTree};
 use super::super::types::{NavigationDecision, NavigationStep, SearchPath};
 use super::super::RetrievalContext;
@@ -36,9 +37,14 @@ pub struct MctsSearch {
 impl MctsSearch {
     /// Create a new MCTS search.
     pub fn new() -> Self {
+        Self::with_config(&StrategyConfig::default())
+    }
+
+    /// Create with configuration.
+    pub fn with_config(config: &StrategyConfig) -> Self {
         Self {
             scorer: NodeScorer::new(Default::default()),
-            exploration_weight: 1.414, // sqrt(2)
+            exploration_weight: config.exploration_weight,
         }
     }
 

@@ -292,6 +292,22 @@ pub struct RetrievalConfig {
     /// Number of top-k results to return.
     #[serde(default = "default_top_k")]
     pub top_k: usize,
+
+    /// Search algorithm configuration.
+    #[serde(default)]
+    pub search: SearchConfig,
+
+    /// Sufficiency checker configuration.
+    #[serde(default)]
+    pub sufficiency: SufficiencyConfig,
+
+    /// Cache configuration.
+    #[serde(default)]
+    pub cache: CacheConfig,
+
+    /// Strategy-specific configuration.
+    #[serde(default)]
+    pub strategy: StrategyConfig,
 }
 
 /// Default retrieval model name.
@@ -337,6 +353,148 @@ impl Default for RetrievalConfig {
             max_tokens: default_retrieval_max_tokens(),
             temperature: default_temperature(),
             top_k: default_top_k(),
+            search: SearchConfig::default(),
+            sufficiency: SufficiencyConfig::default(),
+            cache: CacheConfig::default(),
+            strategy: StrategyConfig::default(),
+        }
+    }
+}
+
+/// Search algorithm configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SearchConfig {
+    /// Number of top-k results to return.
+    #[serde(default = "default_search_top_k")]
+    pub top_k: usize,
+
+    /// Beam width for multi-path search.
+    #[serde(default = "default_beam_width")]
+    pub beam_width: usize,
+
+    /// Maximum iterations for search algorithms.
+    #[serde(default = "default_max_iterations")]
+    pub max_iterations: usize,
+
+    /// Minimum score to include a path.
+    #[serde(default = "default_min_score")]
+    pub min_score: f32,
+}
+
+fn default_search_top_k() -> usize { 5 }
+fn default_beam_width() -> usize { 3 }
+fn default_max_iterations() -> usize { 10 }
+fn default_min_score() -> f32 { 0.1 }
+
+impl Default for SearchConfig {
+    fn default() -> Self {
+        Self {
+            top_k: default_search_top_k(),
+            beam_width: default_beam_width(),
+            max_iterations: default_max_iterations(),
+            min_score: default_min_score(),
+        }
+    }
+}
+
+/// Sufficiency checker configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SufficiencyConfig {
+    /// Minimum tokens for sufficiency.
+    #[serde(default = "default_min_tokens")]
+    pub min_tokens: usize,
+
+    /// Target tokens for full sufficiency.
+    #[serde(default = "default_target_tokens")]
+    pub target_tokens: usize,
+
+    /// Maximum tokens before stopping.
+    #[serde(default = "default_max_tokens")]
+    pub max_tokens: usize,
+
+    /// Minimum content length (characters).
+    #[serde(default = "default_min_content_length")]
+    pub min_content_length: usize,
+
+    /// Confidence threshold for LLM judge.
+    #[serde(default = "default_confidence_threshold")]
+    pub confidence_threshold: f32,
+}
+
+fn default_min_tokens() -> usize { 500 }
+fn default_target_tokens() -> usize { 2000 }
+fn default_max_tokens() -> usize { 4000 }
+fn default_min_content_length() -> usize { 200 }
+fn default_confidence_threshold() -> f32 { 0.7 }
+
+impl Default for SufficiencyConfig {
+    fn default() -> Self {
+        Self {
+            min_tokens: default_min_tokens(),
+            target_tokens: default_target_tokens(),
+            max_tokens: default_max_tokens(),
+            min_content_length: default_min_content_length(),
+            confidence_threshold: default_confidence_threshold(),
+        }
+    }
+}
+
+/// Cache configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CacheConfig {
+    /// Maximum number of cache entries.
+    #[serde(default = "default_cache_max_entries")]
+    pub max_entries: usize,
+
+    /// Time-to-live for cache entries (seconds).
+    #[serde(default = "default_cache_ttl_secs")]
+    pub ttl_secs: u64,
+}
+
+fn default_cache_max_entries() -> usize { 1000 }
+fn default_cache_ttl_secs() -> u64 { 3600 }
+
+impl Default for CacheConfig {
+    fn default() -> Self {
+        Self {
+            max_entries: default_cache_max_entries(),
+            ttl_secs: default_cache_ttl_secs(),
+        }
+    }
+}
+
+/// Strategy-specific configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StrategyConfig {
+    /// MCTS exploration weight (sqrt(2) ≈ 1.414).
+    #[serde(default = "default_exploration_weight")]
+    pub exploration_weight: f32,
+
+    /// Semantic similarity threshold.
+    #[serde(default = "default_similarity_threshold")]
+    pub similarity_threshold: f32,
+
+    /// High similarity threshold for "answer" decision.
+    #[serde(default = "default_high_similarity_threshold")]
+    pub high_similarity_threshold: f32,
+
+    /// Low similarity threshold for "explore" decision.
+    #[serde(default = "default_low_similarity_threshold")]
+    pub low_similarity_threshold: f32,
+}
+
+fn default_exploration_weight() -> f32 { 1.414 }
+fn default_similarity_threshold() -> f32 { 0.5 }
+fn default_high_similarity_threshold() -> f32 { 0.8 }
+fn default_low_similarity_threshold() -> f32 { 0.3 }
+
+impl Default for StrategyConfig {
+    fn default() -> Self {
+        Self {
+            exploration_weight: default_exploration_weight(),
+            similarity_threshold: default_similarity_threshold(),
+            high_similarity_threshold: default_high_similarity_threshold(),
+            low_similarity_threshold: default_low_similarity_threshold(),
         }
     }
 }

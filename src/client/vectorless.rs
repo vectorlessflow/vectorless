@@ -277,7 +277,8 @@ impl Vectorless {
         let workspace = self.workspace.as_ref()
             .ok_or_else(|| Error::Config("No workspace configured".to_string()))?;
 
-        let mut ws = workspace.write().map_err(|_| {
+        // Use read lock - Workspace::load now uses interior mutability for cache
+        let ws = workspace.read().map_err(|_| {
             Error::Other("Workspace lock poisoned".to_string())
         })?;
 
@@ -299,7 +300,8 @@ impl Vectorless {
         let workspace = self.workspace.as_ref()
             .ok_or_else(|| Error::Config("No workspace configured".to_string()))?;
 
-        let mut ws = workspace.write().map_err(|_| {
+        // Use read lock - Workspace::load now uses interior mutability for cache
+        let ws = workspace.read().map_err(|_| {
             Error::Other("Workspace lock poisoned".to_string())
         })?;
 
@@ -424,7 +426,8 @@ impl Vectorless {
         let workspace = self.workspace.as_ref()
             .ok_or_else(|| Error::Config("No workspace configured".to_string()))?;
 
-        let mut ws = workspace.write().map_err(|_| {
+        // Use read lock - Workspace::load now uses interior mutability for cache
+        let ws = workspace.read().map_err(|_| {
             Error::Other("Workspace lock poisoned".to_string())
         })?;
 
@@ -449,6 +452,93 @@ impl Vectorless {
             Error::Other("Workspace lock poisoned".to_string())
         })?;
         ws.remove(doc_id)
+    }
+
+    /// Check if a document exists in the workspace.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if no workspace is configured.
+    pub fn exists(&self, doc_id: &str) -> Result<bool> {
+        let workspace = self.workspace.as_ref()
+            .ok_or_else(|| Error::Config("No workspace configured".to_string()))?;
+
+        let ws = workspace.read().map_err(|_| {
+            Error::Other("Workspace lock poisoned".to_string())
+        })?;
+        Ok(ws.contains(doc_id))
+    }
+
+    /// Get metadata for a document.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if no workspace is configured.
+    pub fn get_metadata(&self, doc_id: &str) -> Result<Option<DocumentInfo>> {
+        let workspace = self.workspace.as_ref()
+            .ok_or_else(|| Error::Config("No workspace configured".to_string()))?;
+
+        let ws = workspace.read().map_err(|_| {
+            Error::Other("Workspace lock poisoned".to_string())
+        })?;
+
+        Ok(ws.get_meta(doc_id).map(|meta| DocumentInfo {
+            id: meta.id.clone(),
+            name: meta.doc_name.clone(),
+            format: meta.doc_type.clone(),
+            description: meta.doc_description.clone(),
+            page_count: meta.page_count,
+            line_count: meta.line_count,
+        }))
+    }
+
+    /// Remove multiple documents from the workspace.
+    ///
+    /// Returns the number of documents successfully removed.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if no workspace is configured.
+    pub fn batch_remove(&self, doc_ids: &[&str]) -> Result<usize> {
+        let workspace = self.workspace.as_ref()
+            .ok_or_else(|| Error::Config("No workspace configured".to_string()))?;
+
+        let mut ws = workspace.write().map_err(|_| {
+            Error::Other("Workspace lock poisoned".to_string())
+        })?;
+
+        let mut removed = 0;
+        for doc_id in doc_ids {
+            if ws.remove(doc_id)? {
+                removed += 1;
+            }
+        }
+        Ok(removed)
+    }
+
+    /// Remove all documents from the workspace.
+    ///
+    /// Returns the number of documents removed.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if no workspace is configured.
+    pub fn clear(&self) -> Result<usize> {
+        let workspace = self.workspace.as_ref()
+            .ok_or_else(|| Error::Config("No workspace configured".to_string()))?;
+
+        let mut ws = workspace.write().map_err(|_| {
+            Error::Other("Workspace lock poisoned".to_string())
+        })?;
+
+        let doc_ids: Vec<String> = ws.list_documents().iter().map(|s| s.to_string()).collect();
+        let count = doc_ids.len();
+
+        for doc_id in &doc_ids {
+            let _ = ws.remove(doc_id);
+        }
+
+        Ok(count)
     }
 
     /// Get the number of indexed documents.

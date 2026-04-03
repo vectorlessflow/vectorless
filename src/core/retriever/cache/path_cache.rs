@@ -7,6 +7,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
 
+use crate::config::CacheConfig as AppConfig;
 use crate::core::NodeId;
 use super::super::types::SearchPath;
 
@@ -49,9 +50,16 @@ pub struct CacheConfig {
 
 impl Default for CacheConfig {
     fn default() -> Self {
+        Self::from_app_config(&AppConfig::default())
+    }
+}
+
+impl CacheConfig {
+    /// Create from application config.
+    pub fn from_app_config(config: &AppConfig) -> Self {
         Self {
-            max_entries: 1000,
-            ttl: Duration::from_secs(3600), // 1 hour
+            max_entries: config.max_entries,
+            ttl: Duration::from_secs(config.ttl_secs),
             use_lru: true,
         }
     }
@@ -87,6 +95,11 @@ impl PathCache {
             scores: Arc::new(RwLock::new(HashMap::new())),
             config,
         }
+    }
+
+    /// Create from application config.
+    pub fn from_app_config(config: &AppConfig) -> Self {
+        Self::with_config(CacheConfig::from_app_config(config))
     }
 
     /// Hash a query string.

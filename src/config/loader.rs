@@ -195,6 +195,10 @@ fn merge_config(base: Config, other: Config) -> Config {
             } else {
                 base.retrieval.top_k
             },
+            search: base.retrieval.search.clone(),
+            sufficiency: base.retrieval.sufficiency.clone(),
+            cache: base.retrieval.cache.clone(),
+            strategy: base.retrieval.strategy.clone(),
         },
         storage: StorageConfig {
             workspace_dir: if other.storage.workspace_dir != default_workspace_dir() {

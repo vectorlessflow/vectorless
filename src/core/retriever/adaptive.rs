@@ -5,6 +5,19 @@
 //!
 //! Automatically selects the best strategy based on query complexity
 //! and provides incremental retrieval with sufficiency checking.
+//!
+//! # Architecture
+//!
+//! The retriever uses a strategy pattern where each strategy implements
+//! `RetrievalStrategy` trait. This decouples the retrieval logic from
+//! the underlying LLM/embedding implementations.
+//!
+//! ```text
+//! AdaptiveRetriever
+//! ├── KeywordStrategy (always available, no deps)
+//! ├── SemanticStrategy (optional, requires embeddings)
+//! └── LlmStrategy (optional, requires LLM client)
+//! ```
 
 use async_trait::async_trait;
 use std::sync::Arc;
@@ -13,12 +26,13 @@ use super::cache::PathCache;
 use super::complexity::ComplexityDetector;
 use super::retriever::{CostEstimate, Retriever, RetrieverError, RetrieverResult, RetrievalContext};
 use super::search::SearchResult;
-use super::strategy::{KeywordStrategy, NodeEvaluation, RetrievalStrategy};
+use super::strategy::{KeywordStrategy, LlmStrategy, RetrievalStrategy};
 use super::sufficiency::{SufficiencyChecker, SufficiencyLevel, ThresholdChecker};
 use super::types::{
-    NavigationDecision, QueryComplexity, RetrieveOptions, RetrieveResponse, RetrievalResult,
-    SearchPath, StrategyPreference,
+    QueryComplexity, RetrieveOptions, RetrieveResponse, RetrievalResult,
+    StrategyPreference,
 };
+use crate::config::RetrievalConfig as AppRetrievalConfig;
 use crate::core::{NodeId, VectorlessTree, toc::TocView};
 use crate::llm::LlmClient;
 
@@ -33,15 +47,28 @@ pub struct AdaptiveConfig {
     pub beam_width: usize,
     /// Maximum search iterations.
     pub max_iterations: usize,
+    /// Minimum score threshold.
+    pub min_score: f32,
+    /// Top-k results.
+    pub top_k: usize,
 }
 
 impl Default for AdaptiveConfig {
     fn default() -> Self {
+        Self::from_app_config(&AppRetrievalConfig::default())
+    }
+}
+
+impl AdaptiveConfig {
+    /// Create from application config.
+    pub fn from_app_config(config: &AppRetrievalConfig) -> Self {
         Self {
             enable_cache: true,
             enable_sufficiency_check: true,
-            beam_width: 3,
-            max_iterations: 10,
+            beam_width: config.search.beam_width,
+            max_iterations: config.search.max_iterations,
+            min_score: config.search.min_score,
+            top_k: config.search.top_k,
         }
     }
 }
@@ -72,6 +99,23 @@ impl SelectedStrategy {
 /// 3. Executes tree search with strategy-guided scoring
 /// 4. Checks sufficiency incrementally
 /// 5. Returns aggregated results
+///
+/// # Strategies
+///
+/// - **Keyword**: Always available, uses TF-IDF/BM25 scoring
+/// - **Semantic**: Optional, requires embedding model
+/// - **LLM**: Optional, requires LLM client (uses `LlmStrategy`)
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use vectorless::core::retriever::AdaptiveRetriever;
+/// use vectorless::llm::LlmClient;
+///
+/// // With LLM support
+/// let retriever = AdaptiveRetriever::new()
+///     .with_llm_strategy(LlmStrategy::with_defaults());
+/// ```
 pub struct AdaptiveRetriever {
     /// Configuration.
     config: AdaptiveConfig,
@@ -83,8 +127,8 @@ pub struct AdaptiveRetriever {
     keyword_strategy: KeywordStrategy,
     /// Semantic strategy (optional, requires embedding model).
     semantic_strategy: Option<Arc<dyn RetrievalStrategy>>,
-    /// LLM client for LLM strategy.
-    llm_client: Option<Arc<LlmClient>>,
+    /// LLM strategy (optional, uses `LlmStrategy`).
+    llm_strategy: Option<Arc<LlmStrategy>>,
     /// Sufficiency checker.
     sufficiency_checker: Box<dyn SufficiencyChecker>,
     /// Path cache.
@@ -92,7 +136,7 @@ pub struct AdaptiveRetriever {
 }
 
 impl AdaptiveRetriever {
-    /// Create a new adaptive retriever.
+    /// Create a new adaptive retriever with default configuration.
     pub fn new() -> Self {
         Self {
             config: AdaptiveConfig::default(),
@@ -100,7 +144,7 @@ impl AdaptiveRetriever {
             toc_view: TocView::new(),
             keyword_strategy: KeywordStrategy::new(),
             semantic_strategy: None,
-            llm_client: None,
+            llm_strategy: None,
             sufficiency_checker: Box::new(ThresholdChecker::new()),
             cache: PathCache::new(),
         }
@@ -114,15 +158,25 @@ impl AdaptiveRetriever {
             toc_view: TocView::new(),
             keyword_strategy: KeywordStrategy::new(),
             semantic_strategy: None,
-            llm_client: None,
+            llm_strategy: None,
             sufficiency_checker: Box::new(ThresholdChecker::new()),
             cache: PathCache::new(),
         }
     }
 
-    /// Set the LLM client for LLM strategy.
-    pub fn with_llm_client(mut self, client: LlmClient) -> Self {
-        self.llm_client = Some(Arc::new(client));
+    /// Set the LLM client for LLM-guided strategy.
+    ///
+    /// This creates an `LlmStrategy` internally using the provided client.
+    pub fn with_llm_client(self, client: LlmClient) -> Self {
+        self.with_llm_strategy(LlmStrategy::new(client))
+    }
+
+    /// Set a custom LLM strategy.
+    ///
+    /// Use this for fine-grained control over the LLM strategy,
+    /// such as custom prompts or evaluation logic.
+    pub fn with_llm_strategy(mut self, strategy: LlmStrategy) -> Self {
+        self.llm_strategy = Some(Arc::new(strategy));
         self
     }
 
@@ -181,7 +235,7 @@ impl AdaptiveRetriever {
                 self.execute_semantic_search(tree, query, options, context).await
             }
             SelectedStrategy::Llm => {
-                self.execute_llm_search(tree, query, options, context).await
+                self.execute_llm_search(tree, options, context).await
             }
         }
     }
@@ -273,26 +327,24 @@ impl AdaptiveRetriever {
         Ok(results)
     }
 
-    /// Execute LLM-guided search with ToC view.
+    /// Execute LLM-guided search using the LLM strategy.
+    ///
+    /// The query is taken from `context.query`.
     async fn execute_llm_search(
         &self,
         tree: &VectorlessTree,
-        query: &str,
         options: &RetrieveOptions,
         context: &RetrievalContext,
     ) -> RetrieverResult<SearchResult> {
-        let llm_client = self.llm_client.as_ref()
+        let llm_strategy = self.llm_strategy.as_ref()
             .ok_or_else(|| RetrieverError::ConfigError(
-                "LLM client not configured. Use with_llm_client() to set one.".to_string()
+                "LLM strategy not configured. Use with_llm_client() to set one.".to_string()
             ))?;
 
         let mut results = SearchResult::default();
         let root = tree.root();
 
-        // Build ToC view for LLM context
-        let toc = self.toc_view.generate(tree);
-
-        // LLM-guided beam search with ToC
+        // LLM-guided beam search
         let beam_width = options.beam_width;
         let mut current_beam: Vec<(NodeId, f32)> = vec![(root, 1.0)];
         let mut visited = std::collections::HashSet::new();
@@ -317,14 +369,10 @@ impl AdaptiveRetriever {
                 // Leaf node
                 if children.is_empty() {
                     if let Some(node) = tree.get(node_id) {
-                        // Use LLM to evaluate this leaf
-                        let eval = self.evaluate_with_llm(
-                            llm_client.as_ref(),
-                            tree,
-                            node_id,
-                            query,
-                            context,
-                        ).await;
+                        // Use LLM strategy to evaluate this leaf
+                        let eval = llm_strategy
+                            .evaluate_node(tree, node_id, context)
+                            .await;
 
                         results.nodes_visited += 1;
 
@@ -342,15 +390,11 @@ impl AdaptiveRetriever {
                     continue;
                 }
 
-                // Score children with LLM using ToC context
+                // Score children with LLM strategy
                 for &child_id in &children {
-                    let eval = self.evaluate_with_llm(
-                        llm_client.as_ref(),
-                        tree,
-                        child_id,
-                        query,
-                        context,
-                    ).await;
+                    let eval = llm_strategy
+                        .evaluate_node(tree, child_id, context)
+                        .await;
 
                     results.nodes_visited += 1;
 
@@ -380,133 +424,6 @@ impl AdaptiveRetriever {
         }
 
         Ok(results)
-    }
-
-    /// Evaluate a node using LLM with ToC context.
-    async fn evaluate_with_llm(
-        &self,
-        client: &LlmClient,
-        tree: &VectorlessTree,
-        node_id: NodeId,
-        query: &str,
-        _context: &RetrievalContext,
-    ) -> NodeEvaluation {
-        let node = match tree.get(node_id) {
-            Some(n) => n,
-            None => return NodeEvaluation {
-                score: 0.0,
-                decision: NavigationDecision::Skip,
-                reasoning: Some("Node not found".to_string()),
-            },
-        };
-
-        // Build ToC context for this node
-        let node_toc = self.toc_view.generate_from(tree, node_id);
-        let toc_markdown = self.toc_view.format_markdown(&node_toc);
-
-        // Build prompt for LLM with ToC context
-        let system_prompt = "You are a document retrieval assistant. \
-            Evaluate how relevant a document section is to a user's query. \
-            You have access to the document's Table of Contents for context. \
-            Respond with a JSON object: {\"score\": <0.0-1.0>, \"action\": \"explore\"|\"answer\"|\"skip\"}";
-
-        let user_prompt = format!(
-            "Query: {}\n\n\
-            Document ToC Context:\n{}\n\n\
-            Current Section: {}\nSection Summary: {}\n\n\
-            Rate the relevance (0.0-1.0) and suggest an action.",
-            query,
-            toc_markdown,
-            node.title,
-            if node.summary.is_empty() {
-                &node.content[..200.min(node.content.len())]
-            } else {
-                &node.summary
-            }
-        );
-
-        match client.complete(system_prompt, &user_prompt).await {
-            Ok(response) => {
-                // Parse LLM response
-                self.parse_llm_evaluation(&response, tree.is_leaf(node_id))
-            }
-            Err(e) => {
-                tracing::warn!("LLM evaluation failed: {}, using fallback score", e);
-                NodeEvaluation {
-                    score: 0.5,
-                    decision: if tree.is_leaf(node_id) {
-                        NavigationDecision::ThisIsTheAnswer
-                    } else {
-                        NavigationDecision::ExploreMore
-                    },
-                    reasoning: Some(format!("LLM error: {}", e)),
-                }
-            }
-        }
-    }
-
-    /// Parse LLM evaluation response.
-    fn parse_llm_evaluation(
-        &self,
-        response: &str,
-        is_leaf: bool,
-    ) -> NodeEvaluation {
-        use serde::Deserialize;
-
-        #[derive(Deserialize)]
-        struct LlmEval {
-            score: Option<f32>,
-            action: Option<String>,
-        }
-
-        // Try to parse JSON
-        if let Ok(eval) = serde_json::from_str::<LlmEval>(response) {
-            let score = eval.score.unwrap_or(0.5).clamp(0.0, 1.0);
-            let decision = match eval.action.as_deref() {
-                Some("answer") => NavigationDecision::ThisIsTheAnswer,
-                Some("skip") => NavigationDecision::Skip,
-                Some("explore") | _ => {
-                    if is_leaf {
-                        NavigationDecision::ThisIsTheAnswer
-                    } else {
-                        NavigationDecision::ExploreMore
-                    }
-                }
-            };
-
-            return NodeEvaluation {
-                score,
-                decision,
-                reasoning: None,
-            };
-        }
-
-        // Fallback: extract score from text
-        let score = response
-            .lines()
-            .find_map(|line| {
-                let lower = line.to_lowercase();
-                if lower.contains("score") || lower.contains("relevance") {
-                    lower
-                        .split(|c: char| !c.is_numeric() && c != '.')
-                        .filter_map(|s| s.parse::<f32>().ok())
-                        .filter(|&s| s >= 0.0 && s <= 1.0)
-                        .next()
-                } else {
-                    None
-                }
-            })
-            .unwrap_or(0.5);
-
-        NodeEvaluation {
-            score,
-            decision: if is_leaf {
-                NavigationDecision::ThisIsTheAnswer
-            } else {
-                NavigationDecision::ExploreMore
-            },
-            reasoning: Some(format!("Parsed from: {}", response)),
-        }
     }
 
     /// Convert search paths to retrieval results.

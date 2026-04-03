@@ -17,11 +17,18 @@
 //! ├── {doc_id_2}.json      # Document 2 full data
 //! └── ...
 //! ```
+//!
+//! # Thread Safety
+//!
+//! The workspace uses interior mutability for the LRU cache:
+//! - Read operations (`get_meta`, `contains`, `list_documents`) only need `&self`
+//! - Cache updates happen internally via `Mutex`
 
 use std::path::{Path, PathBuf};
 use std::collections::HashMap;
 use std::fs;
 use std::num::NonZeroUsize;
+use std::sync::Mutex;
 
 use lru::LruCache;
 use serde::{Deserialize, Serialize};
@@ -56,10 +63,18 @@ pub struct DocumentMetaEntry {
     pub line_count: Option<usize>,
 }
 
+/// Inner state for Workspace (separated for interior mutability).
+#[derive(Debug)]
+struct Inner {
+    /// LRU cache for loaded full documents.
+    document_cache: LruCache<String, PersistedDocument>,
+}
+
 /// A workspace for managing indexed documents.
 ///
 /// Uses LRU cache for loaded documents to balance memory usage
-/// and access performance.
+/// and access performance. The cache uses interior mutability,
+/// so read operations only require `&self`.
 #[derive(Debug)]
 pub struct Workspace {
     /// Root directory for the workspace.
@@ -69,8 +84,8 @@ pub struct Workspace {
     /// This is always loaded in memory.
     meta_index: HashMap<String, DocumentMetaEntry>,
 
-    /// LRU cache for loaded full documents.
-    document_cache: LruCache<String, PersistedDocument>,
+    /// Inner state with LRU cache (protected by Mutex for interior mutability).
+    inner: Mutex<Inner>,
 }
 
 impl Workspace {
@@ -83,7 +98,7 @@ impl Workspace {
     pub fn with_cache_size(path: impl Into<PathBuf>, cache_size: usize) -> Result<Self> {
         let root = path.into();
         fs::create_dir_all(&root)
-            .map_err(|e| Error::Io(e))?;
+            .map_err(Error::Io)?;
 
         let capacity = NonZeroUsize::new(cache_size.max(1))
             .unwrap_or_else(|| NonZeroUsize::new(DEFAULT_CACHE_SIZE).unwrap());
@@ -91,7 +106,9 @@ impl Workspace {
         let mut workspace = Self {
             root,
             meta_index: HashMap::new(),
-            document_cache: LruCache::new(capacity),
+            inner: Mutex::new(Inner {
+                document_cache: LruCache::new(capacity),
+            }),
         };
 
         workspace.load_meta_index()?;
@@ -113,7 +130,9 @@ impl Workspace {
             let mut workspace = Self {
                 root,
                 meta_index: HashMap::new(),
-                document_cache: LruCache::new(capacity),
+                inner: Mutex::new(Inner {
+                    document_cache: LruCache::new(capacity),
+                }),
             };
             workspace.load_meta_index()?;
             Ok(workspace)
@@ -168,7 +187,9 @@ impl Workspace {
         self.save_meta_index()?;
 
         // Remove from cache if present (will lazy load on next access)
-        self.document_cache.pop(&doc_id);
+        if let Ok(mut inner) = self.inner.lock() {
+            inner.document_cache.pop(&doc_id);
+        }
 
         info!("Saved document {} to workspace", doc_id);
         Ok(())
@@ -178,18 +199,25 @@ impl Workspace {
     ///
     /// Uses LRU cache: returns cached version if available,
     /// otherwise loads from disk and caches it.
-    pub fn load(&mut self, id: &str) -> Result<Option<PersistedDocument>> {
+    ///
+    /// This method only requires `&self` (interior mutability for cache).
+    pub fn load(&self, id: &str) -> Result<Option<PersistedDocument>> {
         if !self.contains(id) {
             return Ok(None);
         }
 
-        // Check LRU cache first
-        if let Some(cached) = self.document_cache.get(id) {
-            debug!("Cache hit for document {}", id);
-            return Ok(Some(cached.clone()));
+        // Check LRU cache first (with lock)
+        {
+            let mut inner = self.inner.lock()
+                .map_err(|_| Error::Other("Workspace lock poisoned".to_string()))?;
+
+            if let Some(cached) = inner.document_cache.get(id) {
+                debug!("Cache hit for document {}", id);
+                return Ok(Some(cached.clone()));
+            }
         }
 
-        // Load from disk
+        // Load from disk (lock released during I/O)
         let doc_path = self.document_path(id);
         if !doc_path.exists() {
             warn!("Document {} in meta index but file missing", id);
@@ -198,8 +226,12 @@ impl Workspace {
 
         let doc = load_document(&doc_path)?;
 
-        // Add to LRU cache (auto-evicts LRU item if full)
-        self.document_cache.put(id.to_string(), doc.clone());
+        // Add to LRU cache (with lock)
+        {
+            let mut inner = self.inner.lock()
+                .map_err(|_| Error::Other("Workspace lock poisoned".to_string()))?;
+            inner.document_cache.put(id.to_string(), doc.clone());
+        }
 
         debug!("Loaded document {} from disk (cached)", id);
         Ok(Some(doc))
@@ -214,11 +246,16 @@ impl Workspace {
         let doc_path = self.document_path(id);
         if doc_path.exists() {
             fs::remove_file(&doc_path)
-                .map_err(|e| Error::Io(e))?;
+                .map_err(Error::Io)?;
         }
 
         self.meta_index.remove(id);
-        self.document_cache.pop(id);
+
+        // Remove from cache
+        if let Ok(mut inner) = self.inner.lock() {
+            inner.document_cache.pop(id);
+        }
+
         self.save_meta_index()?;
 
         info!("Removed document {} from workspace", id);
@@ -237,13 +274,17 @@ impl Workspace {
 
     /// Get the number of items currently in the LRU cache.
     pub fn cache_len(&self) -> usize {
-        self.document_cache.len()
+        self.inner.lock()
+            .map(|inner| inner.document_cache.len())
+            .unwrap_or(0)
     }
 
     /// Clear the LRU cache (does not remove documents from workspace).
-    pub fn clear_cache(&mut self) {
-        self.document_cache.clear();
-        debug!("Cleared document cache");
+    pub fn clear_cache(&self) {
+        if let Ok(mut inner) = self.inner.lock() {
+            inner.document_cache.clear();
+            debug!("Cleared document cache");
+        }
     }
 
     /// Get the path for a document file.
@@ -267,7 +308,7 @@ impl Workspace {
         }
 
         let content = fs::read_to_string(&meta_path)
-            .map_err(|e| Error::Io(e))?;
+            .map_err(Error::Io)?;
 
         let meta: HashMap<String, DocumentMetaEntry> = serde_json::from_str(&content)
             .map_err(|e| Error::Parse(format!("Failed to parse meta index: {}", e)))?;
@@ -283,7 +324,7 @@ impl Workspace {
             .map_err(|e| Error::Parse(format!("Failed to serialize meta index: {}", e)))?;
 
         fs::write(&self.meta_path(), content)
-            .map_err(|e| Error::Io(e))?;
+            .map_err(Error::Io)?;
 
         Ok(())
     }
@@ -291,7 +332,7 @@ impl Workspace {
     /// Rebuild the meta index from existing document files.
     fn rebuild_meta_index(&mut self) -> Result<()> {
         let entries: Vec<_> = fs::read_dir(&self.root)
-            .map_err(|e| Error::Io(e))?
+            .map_err(Error::Io)?
             .filter_map(|entry| entry.ok())
             .filter(|entry| {
                 entry.path().extension().map(|ext| ext == "json").unwrap_or(false)
@@ -356,7 +397,7 @@ mod tests {
         workspace.add(&doc).unwrap();
         assert_eq!(workspace.len(), 1);
 
-        // Load it back (should be cached)
+        // Load it back (should be cached) - only needs &self now
         let loaded = workspace.load("test-1").unwrap().unwrap();
         assert_eq!(loaded.meta.name, "Test Doc");
         assert_eq!(workspace.cache_len(), 1);
@@ -401,5 +442,41 @@ mod tests {
         assert_eq!(workspace2.len(), 1);
         assert!(workspace2.get_meta("test-2").is_some());
         assert_eq!(workspace2.cache_len(), 0); // Cache should be empty
+    }
+
+    #[test]
+    fn test_concurrent_read_access() {
+        use std::sync::Arc;
+        use std::thread;
+
+        let dir = tempdir().unwrap();
+        let mut workspace = Workspace::new(dir.path()).unwrap();
+
+        // Add a document
+        let meta = crate::storage::DocumentMeta::new("test-3", "Test", "md");
+        let tree = crate::core::DocumentTree::new("Root", "Content");
+        let doc = PersistedDocument::new(meta, tree);
+        workspace.add(&doc).unwrap();
+
+        // Wrap in Arc for sharing (simulating what Vectorless does)
+        let workspace = Arc::new(workspace);
+
+        // Spawn multiple threads that read concurrently
+        let handles: Vec<_> = (0..3)
+            .map(|i| {
+                let ws = Arc::clone(&workspace);
+                thread::spawn(move || {
+                    // All threads can read concurrently
+                    assert!(ws.contains("test-3"));
+                    let loaded = ws.load("test-3").unwrap().unwrap();
+                    assert_eq!(loaded.meta.name, "Test");
+                    ws.cache_len() // Should work from multiple threads
+                })
+            })
+            .collect();
+
+        for handle in handles {
+            handle.join().unwrap();
+        }
     }
 }

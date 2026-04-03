@@ -7,6 +7,7 @@
 
 use async_trait::async_trait;
 
+use crate::config::StrategyConfig;
 use crate::core::{NodeId, VectorlessTree};
 use super::super::types::{NavigationDecision, QueryComplexity};
 use super::super::RetrievalContext;
@@ -45,15 +46,26 @@ pub struct SemanticStrategy {
     cache_embeddings: bool,
     /// Similarity threshold for considering a node relevant.
     similarity_threshold: f32,
+    /// High similarity threshold for "answer" decision.
+    high_similarity_threshold: f32,
+    /// Low similarity threshold for "explore" decision.
+    low_similarity_threshold: f32,
 }
 
 impl SemanticStrategy {
     /// Create a new semantic strategy with the given embedding model.
     pub fn new(model: Box<dyn EmbeddingModel>) -> Self {
+        Self::with_config(model, &StrategyConfig::default())
+    }
+
+    /// Create with configuration.
+    pub fn with_config(model: Box<dyn EmbeddingModel>, config: &StrategyConfig) -> Self {
         Self {
             model,
             cache_embeddings: true,
-            similarity_threshold: 0.5,
+            similarity_threshold: config.similarity_threshold,
+            high_similarity_threshold: config.high_similarity_threshold,
+            low_similarity_threshold: config.low_similarity_threshold,
         }
     }
 
@@ -154,7 +166,7 @@ impl RetrievalStrategy for SemanticStrategy {
         let similarity = Self::cosine_similarity(&query_embedding, &node_embedding);
 
         // Determine decision based on similarity
-        let decision = if similarity > 0.8 {
+        let decision = if similarity > self.high_similarity_threshold {
             NavigationDecision::ThisIsTheAnswer
         } else if similarity > self.similarity_threshold {
             if tree.is_leaf(node_id) {
@@ -162,7 +174,7 @@ impl RetrievalStrategy for SemanticStrategy {
             } else {
                 NavigationDecision::ExploreMore
             }
-        } else if similarity > 0.3 {
+        } else if similarity > self.low_similarity_threshold {
             NavigationDecision::ExploreMore
         } else {
             NavigationDecision::Skip

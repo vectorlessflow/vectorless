@@ -5,8 +5,9 @@
 
 use std::path::PathBuf;
 
-use crate::config::{Config, ConfigLoader};
+use crate::config::{Config, ConfigLoader, RetrievalConfig};
 use crate::storage::Workspace;
+use crate::core::retriever::AdaptiveRetriever;
 
 use super::Vectorless;
 
@@ -38,6 +39,9 @@ pub struct VectorlessBuilder {
 
     /// Custom configuration.
     config: Option<Config>,
+
+    /// Custom retrieval config.
+    retrieval_config: Option<RetrievalConfig>,
 }
 
 impl VectorlessBuilder {
@@ -48,6 +52,7 @@ impl VectorlessBuilder {
             workspace: None,
             config_path: None,
             config: None,
+            retrieval_config: None,
         }
     }
 
@@ -69,6 +74,13 @@ impl VectorlessBuilder {
     #[must_use]
     pub fn with_config(mut self, config: Config) -> Self {
         self.config = Some(config);
+        self
+    }
+
+    /// Set custom retrieval configuration.
+    #[must_use]
+    pub fn with_retrieval_config(mut self, config: RetrievalConfig) -> Self {
+        self.retrieval_config = Some(config);
         self
     }
 
@@ -166,8 +178,10 @@ impl VectorlessBuilder {
             crate::core::index::PipelineExecutor::new()
         };
 
-        // Create adaptive retriever
-        let retriever = crate::core::retriever::AdaptiveRetriever::new();
+        // Create adaptive retriever with config
+        let retrieval_config = self.retrieval_config.unwrap_or_else(|| config.retrieval.clone());
+        let adaptive_config = crate::core::retriever::AdaptiveConfig::from_app_config(&retrieval_config);
+        let retriever = AdaptiveRetriever::with_config(adaptive_config);
 
         Ok(Vectorless::with_components(config, workspace, retriever, executor))
     }

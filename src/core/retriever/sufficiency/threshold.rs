@@ -5,6 +5,7 @@
 //!
 //! Uses simple heuristics like token count and content length.
 
+use crate::config::SufficiencyConfig;
 use super::{SufficiencyChecker, SufficiencyLevel};
 
 /// Configuration for threshold-based checking.
@@ -22,11 +23,18 @@ pub struct ThresholdConfig {
 
 impl Default for ThresholdConfig {
     fn default() -> Self {
+        Self::from_config(&SufficiencyConfig::default())
+    }
+}
+
+impl ThresholdConfig {
+    /// Create from application config.
+    pub fn from_config(config: &SufficiencyConfig) -> Self {
         Self {
-            min_tokens: 500,
-            target_tokens: 2000,
-            max_tokens: 4000,
-            min_content_length: 200,
+            min_tokens: config.min_tokens,
+            target_tokens: config.target_tokens,
+            max_tokens: config.max_tokens,
+            min_content_length: config.min_content_length,
         }
     }
 }

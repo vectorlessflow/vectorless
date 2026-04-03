@@ -8,6 +8,7 @@
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
+use crate::config::SufficiencyConfig;
 use super::{SufficiencyChecker, SufficiencyLevel};
 
 /// LLM client trait for the judge.
@@ -53,10 +54,15 @@ pub struct LlmJudge {
 impl LlmJudge {
     /// Create a new LLM judge.
     pub fn new(client: Box<dyn LlmJudgeClient>) -> Self {
+        Self::with_config(client, &SufficiencyConfig::default())
+    }
+
+    /// Create a new LLM judge with configuration.
+    pub fn with_config(client: Box<dyn LlmJudgeClient>, config: &SufficiencyConfig) -> Self {
         Self {
             client,
             system_prompt: Self::default_system_prompt(),
-            confidence_threshold: 0.7,
+            confidence_threshold: config.confidence_threshold,
         }
     }
 
