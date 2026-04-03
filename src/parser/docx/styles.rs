@@ -45,26 +45,20 @@ impl StyleResolver {
         // Standard Word heading styles
         for level in 1..=6 {
             let style_id = format!("Heading{}", level);
-            self.styles.insert(
-                style_id.clone(),
-                DocxStyle::heading(&style_id, level),
-            );
+            self.styles
+                .insert(style_id.clone(), DocxStyle::heading(&style_id, level));
         }
 
         // Some documents use lowercase or different casing
         for level in 1..=6 {
             let style_id = format!("heading{}", level);
-            self.styles.insert(
-                style_id.clone(),
-                DocxStyle::heading(&style_id, level),
-            );
+            self.styles
+                .insert(style_id.clone(), DocxStyle::heading(&style_id, level));
         }
 
         // Title style (treat as H1)
-        self.styles.insert(
-            "Title".to_string(),
-            DocxStyle::heading("Title", 1),
-        );
+        self.styles
+            .insert("Title".to_string(), DocxStyle::heading("Title", 1));
     }
 
     /// Parse styles.xml content.
@@ -75,7 +69,10 @@ impl StyleResolver {
         };
 
         // Find all w:style elements
-        for style_elem in doc.descendants().filter(|n| n.has_tag_name((WORD_NS, "style"))) {
+        for style_elem in doc
+            .descendants()
+            .filter(|n| n.has_tag_name((WORD_NS, "style")))
+        {
             if let Some(style) = self.parse_style_element(&style_elem) {
                 self.styles.insert(style.style_id.clone(), style);
             }
@@ -135,16 +132,16 @@ impl StyleResolver {
 
     /// Get heading level for a style ID.
     pub fn get_heading_level(&self, style_id: &Option<String>) -> Option<u8> {
-        style_id.as_ref().and_then(|id| {
-            self.styles.get(id).and_then(|s| s.heading_level)
-        })
+        style_id
+            .as_ref()
+            .and_then(|id| self.styles.get(id).and_then(|s| s.heading_level))
     }
 
     /// Check if a style is a heading.
     pub fn is_heading(&self, style_id: &Option<String>) -> bool {
-        style_id.as_ref().is_some_and(|id| {
-            self.styles.get(id).is_some_and(|s| s.is_heading)
-        })
+        style_id
+            .as_ref()
+            .is_some_and(|id| self.styles.get(id).is_some_and(|s| s.is_heading))
     }
 
     /// Try to detect heading level from text content heuristics.
@@ -219,9 +216,18 @@ mod tests {
             r
         };
 
-        assert_eq!(resolver.get_heading_level(&Some("Heading1".to_string())), Some(1));
-        assert_eq!(resolver.get_heading_level(&Some("Heading2".to_string())), Some(2));
-        assert_eq!(resolver.get_heading_level(&Some("Normal".to_string())), None);
+        assert_eq!(
+            resolver.get_heading_level(&Some("Heading1".to_string())),
+            Some(1)
+        );
+        assert_eq!(
+            resolver.get_heading_level(&Some("Heading2".to_string())),
+            Some(2)
+        );
+        assert_eq!(
+            resolver.get_heading_level(&Some("Normal".to_string())),
+            None
+        );
     }
 
     #[test]
@@ -240,10 +246,18 @@ mod tests {
 
         assert_eq!(resolver.detect_heading_by_heuristics("Chapter 1"), Some(1));
         assert_eq!(resolver.detect_heading_by_heuristics("Section 2"), Some(1));
-        assert_eq!(resolver.detect_heading_by_heuristics("1. Introduction"), Some(1));
-        assert_eq!(resolver.detect_heading_by_heuristics("1.1 Background"), Some(2));
         assert_eq!(
-            resolver.detect_heading_by_heuristics("This is a very long piece of text that is unlikely to be a heading"),
+            resolver.detect_heading_by_heuristics("1. Introduction"),
+            Some(1)
+        );
+        assert_eq!(
+            resolver.detect_heading_by_heuristics("1.1 Background"),
+            Some(2)
+        );
+        assert_eq!(
+            resolver.detect_heading_by_heuristics(
+                "This is a very long piece of text that is unlikely to be a heading"
+            ),
             None
         );
     }

@@ -102,11 +102,7 @@ impl ComplexityDetector {
         let conjunctions = ["and", "or", "but", "however", "although"];
         let conjunction_count = conjunctions
             .iter()
-            .filter(|c| {
-                query_lower
-                    .split_whitespace()
-                    .any(|w| w == **c)
-            })
+            .filter(|c| query_lower.split_whitespace().any(|w| w == **c))
             .count();
 
         if conjunction_count >= 2 {

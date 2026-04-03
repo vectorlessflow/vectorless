@@ -44,15 +44,18 @@ pub mod summary;
 
 // Re-export main types from pipeline
 pub use pipeline::{
-    ExecutionGroup, FailurePolicy, IndexContext, IndexInput, IndexMetrics,
-    IndexResult, PipelineExecutor, PipelineOrchestrator, StageResult, StageRetryConfig,
+    ExecutionGroup, FailurePolicy, IndexContext, IndexInput, IndexMetrics, IndexResult,
+    PipelineExecutor, PipelineOrchestrator, StageResult, StageRetryConfig,
 };
 
 // Re-export stages
 pub use stages::IndexStage;
 
 // Re-export summary
-pub use summary::{SummaryStrategy, SummaryStrategyConfig, SummaryGenerator, LlmSummaryGenerator, FullStrategy, SelectiveStrategy, LazyStrategy};
+pub use summary::{
+    FullStrategy, LazyStrategy, LlmSummaryGenerator, SelectiveStrategy, SummaryGenerator,
+    SummaryStrategy, SummaryStrategyConfig,
+};
 
 // Re-export incremental
 pub use incremental::{ChangeDetector, ChangeSet, PartialUpdater};

@@ -5,7 +5,7 @@
 
 use tracing::info;
 
-use crate::domain::{NodeId, Result, DocumentTree};
+use crate::domain::{DocumentTree, NodeId, Result};
 use crate::parser::RawNode;
 
 use super::detector::ChangeDetector;
@@ -122,7 +122,11 @@ impl PartialUpdater {
                 .unwrap_or(tree.root());
 
             // Create node
-            let content = if raw.content.is_empty() { "" } else { &raw.content };
+            let content = if raw.content.is_empty() {
+                ""
+            } else {
+                &raw.content
+            };
             let node_id = tree.add_child(parent_id, &raw.title, content);
 
             // Set line indices

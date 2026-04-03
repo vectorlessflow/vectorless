@@ -44,19 +44,12 @@
 //! - **Workspace Persistence** — Save and load indexed documents
 //! - **Builder Pattern** — Flexible client configuration
 
-mod types;
 mod builder;
 mod engine;
+mod types;
 
 // Re-export main types
-pub use types::{
-    IndexedDocument,
-    IndexMode,
-    IndexOptions,
-    PageContent,
-    QueryResult,
-    DocumentInfo,
-};
+pub use types::{DocumentInfo, IndexMode, IndexOptions, IndexedDocument, PageContent, QueryResult};
 
-pub use builder::{EngineBuilder, BuildError};
+pub use builder::{BuildError, EngineBuilder};
 pub use engine::Engine;

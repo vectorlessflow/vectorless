@@ -7,11 +7,11 @@
 
 use async_trait::async_trait;
 
-use crate::config::StrategyConfig;
-use crate::domain::{NodeId, DocumentTree};
-use super::super::types::{NavigationDecision, QueryComplexity};
 use super::super::RetrievalContext;
+use super::super::types::{NavigationDecision, QueryComplexity};
 use super::r#trait::{NodeEvaluation, RetrievalStrategy, StrategyCapabilities};
+use crate::config::StrategyConfig;
+use crate::domain::{DocumentTree, NodeId};
 
 /// Embedding model trait for semantic strategies.
 #[async_trait]
@@ -259,7 +259,7 @@ impl RetrievalStrategy for SemanticStrategy {
             .collect()
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "semantic"
     }
 
@@ -273,6 +273,9 @@ impl RetrievalStrategy for SemanticStrategy {
     }
 
     fn suitable_for_complexity(&self, complexity: QueryComplexity) -> bool {
-        matches!(complexity, QueryComplexity::Simple | QueryComplexity::Medium)
+        matches!(
+            complexity,
+            QueryComplexity::Simple | QueryComplexity::Medium
+        )
     }
 }

@@ -7,9 +7,9 @@ use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
 
+use super::super::types::SearchPath;
 use crate::config::CacheConfig as AppConfig;
 use crate::domain::NodeId;
-use super::super::types::SearchPath;
 
 /// Cache entry for a search path.
 #[derive(Debug, Clone)]
@@ -180,19 +180,13 @@ impl PathCache {
     {
         if self.config.use_lru {
             // Find entry with lowest access count
-            if let Some((min_key, _)) = cache
-                .iter()
-                .min_by_key(|(_, e)| e.access_count)
-            {
+            if let Some((min_key, _)) = cache.iter().min_by_key(|(_, e)| e.access_count) {
                 let key = min_key.clone();
                 cache.remove(&key);
             }
         } else {
             // Remove oldest entry
-            if let Some((oldest_key, _)) = cache
-                .iter()
-                .min_by_key(|(_, e)| e.created_at)
-            {
+            if let Some((oldest_key, _)) = cache.iter().min_by_key(|(_, e)| e.created_at) {
                 let key = oldest_key.clone();
                 cache.remove(&key);
             }

@@ -5,12 +5,12 @@
 //!
 //! Determines when enough information has been collected to answer the query.
 
-mod threshold;
 mod llm_judge;
+mod threshold;
 
-pub use threshold::ThresholdChecker;
-pub use llm_judge::LlmJudge;
 pub use super::types::SufficiencyLevel;
+pub use llm_judge::LlmJudge;
+pub use threshold::ThresholdChecker;
 
 /// Trait for sufficiency checking strategies.
 pub trait SufficiencyChecker: Send + Sync {

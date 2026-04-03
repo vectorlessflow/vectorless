@@ -7,7 +7,7 @@ use super::async_trait;
 use std::time::Instant;
 use tracing::info;
 
-use crate::domain::{NodeId, Result, DocumentTree, TocView};
+use crate::domain::{DocumentTree, NodeId, Result, TocView};
 
 use super::{IndexStage, StageResult};
 use crate::index::pipeline::IndexContext;
@@ -102,7 +102,7 @@ impl Default for EnrichStage {
 
 #[async_trait]
 impl IndexStage for EnrichStage {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "enrich"
     }
 
@@ -113,9 +113,10 @@ impl IndexStage for EnrichStage {
     async fn execute(&mut self, ctx: &mut IndexContext) -> Result<StageResult> {
         let start = Instant::now();
 
-        let tree = ctx.tree.as_mut().ok_or_else(|| {
-            crate::domain::Error::IndexBuild("Tree not built".to_string())
-        })?;
+        let tree = ctx
+            .tree
+            .as_mut()
+            .ok_or_else(|| crate::domain::Error::IndexBuild("Tree not built".to_string()))?;
 
         // 1. Calculate page ranges
         Self::calculate_page_ranges(tree);
@@ -141,14 +142,12 @@ impl IndexStage for EnrichStage {
 
         let mut stage_result = StageResult::success("enrich");
         stage_result.duration_ms = duration;
-        stage_result.metadata.insert(
-            "total_tokens".to_string(),
-            serde_json::json!(total_tokens),
-        );
-        stage_result.metadata.insert(
-            "node_count".to_string(),
-            serde_json::json!(node_count),
-        );
+        stage_result
+            .metadata
+            .insert("total_tokens".to_string(), serde_json::json!(total_tokens));
+        stage_result
+            .metadata
+            .insert("node_count".to_string(), serde_json::json!(node_count));
 
         Ok(stage_result)
     }

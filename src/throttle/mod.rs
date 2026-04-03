@@ -55,9 +55,9 @@
 //! ```
 
 mod config;
-mod rate_limiter;
 mod controller;
+mod rate_limiter;
 
 pub use config::ConcurrencyConfig;
-pub use rate_limiter::RateLimiter;
 pub use controller::ConcurrencyController;
+pub use rate_limiter::RateLimiter;

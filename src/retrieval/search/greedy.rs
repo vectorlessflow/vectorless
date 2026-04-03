@@ -7,11 +7,11 @@
 
 use async_trait::async_trait;
 
-use crate::domain::DocumentTree;
-use super::super::types::{NavigationDecision, NavigationStep, SearchPath};
 use super::super::RetrievalContext;
-use super::{SearchConfig, SearchResult, SearchTree};
+use super::super::types::{NavigationDecision, NavigationStep, SearchPath};
 use super::scorer::NodeScorer;
+use super::{SearchConfig, SearchResult, SearchTree};
+use crate::domain::DocumentTree;
 
 /// Greedy search - always follows the best single path.
 ///
@@ -84,7 +84,9 @@ impl SearchTree for GreedySearch {
                     node_id: format!("{:?}", child_id),
                     title: child_node.map(|n| n.title.clone()).unwrap_or_default(),
                     score: best_score,
-                    decision: NavigationDecision::GoToChild(children.iter().position(|&c| c == child_id).unwrap_or(0)),
+                    decision: NavigationDecision::GoToChild(
+                        children.iter().position(|&c| c == child_id).unwrap_or(0),
+                    ),
                     depth: child_node.map(|n| n.depth).unwrap_or(0),
                 });
 
@@ -108,7 +110,7 @@ impl SearchTree for GreedySearch {
         result
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "greedy"
     }
 }

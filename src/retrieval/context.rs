@@ -27,9 +27,9 @@
 //!     .build_async(&results).await?;
 //! ```
 
-use std::collections::HashSet;
-use crate::domain::{DocumentTree, NodeId, estimate_tokens};
 use super::types::RetrievalResult;
+use crate::domain::{DocumentTree, NodeId, estimate_tokens};
+use std::collections::HashSet;
 
 /// Pruning strategy for context building.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -176,7 +176,9 @@ impl ContextBuilder {
         match self.pruning_strategy {
             PruningStrategy::TokenLimit => self.build_token_limit(results),
             PruningStrategy::RelevanceThreshold(min) => self.build_relevance(results, min),
-            PruningStrategy::Diversity { max_overlap } => self.build_diversity(results, max_overlap),
+            PruningStrategy::Diversity { max_overlap } => {
+                self.build_diversity(results, max_overlap)
+            }
             PruningStrategy::Hybrid { min_relevance } => self.build_hybrid(results, min_relevance),
         }
     }
@@ -351,11 +353,12 @@ impl ContextBuilder {
 
         // Collect from title
         words.extend(
-            result.title
+            result
+                .title
                 .to_lowercase()
                 .split_whitespace()
                 .filter(|w| w.len() > 3)
-                .map(|w| w.to_string())
+                .map(|w| w.to_string()),
         );
 
         // Collect from summary
@@ -365,7 +368,7 @@ impl ContextBuilder {
                     .to_lowercase()
                     .split_whitespace()
                     .filter(|w| w.len() > 3)
-                    .map(|w| w.to_string())
+                    .map(|w| w.to_string()),
             );
         }
 
@@ -408,7 +411,8 @@ impl ContextBuilder {
         max_depth: usize,
     ) -> String {
         let mut sections = Vec::new();
-        self.collect_sections_async(tree, node_id, 0, max_depth, &mut sections).await;
+        self.collect_sections_async(tree, node_id, 0, max_depth, &mut sections)
+            .await;
         sections.join(&self.separator)
     }
 
@@ -449,7 +453,7 @@ impl ContextBuilder {
         }
 
         // Yield every few levels to avoid blocking
-        if current_depth > 0 && current_depth % 3 == 0 {
+        if current_depth > 0 && current_depth.is_multiple_of(3) {
             tokio::task::yield_now().await;
         }
 
@@ -466,7 +470,8 @@ impl ContextBuilder {
                     current_depth + 1,
                     max_depth,
                     sections,
-                )).await;
+                ))
+                .await;
             }
         }
     }
@@ -529,11 +534,7 @@ pub async fn format_for_llm_async(results: &[RetrievalResult], max_tokens: usize
 }
 
 /// Format a document tree for LLM consumption.
-pub fn format_tree_for_llm(
-    tree: &DocumentTree,
-    max_depth: usize,
-    max_tokens: usize,
-) -> String {
+pub fn format_tree_for_llm(tree: &DocumentTree, max_depth: usize, max_tokens: usize) -> String {
     ContextBuilder::new()
         .with_max_tokens(max_tokens)
         .build_from_tree(tree, tree.root(), max_depth)
@@ -558,15 +559,11 @@ mod tests {
     #[test]
     fn test_context_builder() {
         let results = vec![
-            RetrievalResult::new("Section 1")
-                .with_content("Content 1"),
-            RetrievalResult::new("Section 2")
-                .with_content("Content 2"),
+            RetrievalResult::new("Section 1").with_content("Content 1"),
+            RetrievalResult::new("Section 2").with_content("Content 2"),
         ];
 
-        let context = ContextBuilder::new()
-            .with_max_tokens(1000)
-            .build(&results);
+        let context = ContextBuilder::new().with_max_tokens(1000).build(&results);
 
         assert!(context.contains("Section 1"));
         assert!(context.contains("Content 1"));
@@ -590,10 +587,9 @@ mod tests {
 
     #[test]
     fn test_token_estimation_modes() {
-        let fast_builder = ContextBuilder::new()
-            .with_token_estimation(TokenEstimation::Fast);
-        let accurate_builder = ContextBuilder::new()
-            .with_token_estimation(TokenEstimation::Accurate);
+        let fast_builder = ContextBuilder::new().with_token_estimation(TokenEstimation::Fast);
+        let accurate_builder =
+            ContextBuilder::new().with_token_estimation(TokenEstimation::Accurate);
 
         let fast_tokens = fast_builder.estimate_tokens("Hello world test");
         let accurate_tokens = accurate_builder.estimate_tokens("Hello world test");
@@ -623,7 +619,10 @@ mod tests {
     #[tokio::test]
     async fn test_async_build() {
         let results: Vec<_> = (0..200)
-            .map(|i| RetrievalResult::new(&format!("Section {}", i)).with_content(&format!("Content {}", i)))
+            .map(|i| {
+                RetrievalResult::new(&format!("Section {}", i))
+                    .with_content(&format!("Content {}", i))
+            })
             .collect();
 
         let context = ContextBuilder::new()

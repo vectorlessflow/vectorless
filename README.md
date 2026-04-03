@@ -1,6 +1,6 @@
 <div align="center">
 
-![Vectorless](docs/assets/brand/logo-horizontal.svg)
+![Vectorless](docs/design/logo-horizontal.svg)
 
 [![Crates.io](https://img.shields.io/crates/v/vectorless.svg)](https://crates.io/crates/vectorless)
 [![Downloads](https://img.shields.io/crates/d/vectorless.svg)](https://crates.io/crates/vectorless)
@@ -8,10 +8,13 @@
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-1.85%2B-orange.svg)](https://www.rust-lang.org/)
 
-**A hierarchical, reasoning-native document intelligence engine.**
-
 
 </div>
+
+Ultra performant document intelligence engine for RAG, with core written in **Rust**. Zero vector database, zero embedding model — just LLM-powered tree navigation. Incremental indexing and multi-format support out-of-box.
+
+⭐ **Drop a star to help us grow!**
+
 
 ## Why Vectorless?
 

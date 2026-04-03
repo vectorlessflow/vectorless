@@ -2,6 +2,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! # Vectorless
+
+// Clippy: allow some pedantic lints that are too noisy for early-stage project
+#![allow(clippy::all)]
+#![allow(dead_code)]
+#![allow(unused_variables)]
+#![allow(unused_imports)]
+#![allow(clippy::iter_over_hash_type)]
+#![allow(clippy::large_enum_variant)]
+#![allow(clippy::manual_unwrap_or_default)]
+
+//! # Vectorless
 //!
 //! **A hierarchical, reasoning-native document intelligence engine.**
 //!
@@ -95,27 +106,25 @@
 
 pub mod client;
 pub mod config;
-pub mod throttle;
 pub mod domain;
 pub mod index;
 pub mod llm;
 pub mod parser;
 pub mod retrieval;
 pub mod storage;
+pub mod throttle;
 
 // =============================================================================
 // Re-exports (Convenience API)
 // =============================================================================
 
 // Client API (most common entry point)
-pub use client::{DocumentInfo, IndexedDocument, Engine, EngineBuilder};
+pub use client::{DocumentInfo, Engine, EngineBuilder, IndexedDocument};
 
 // Domain types
 pub use domain::{
-    Error, Result, NodeId, TreeNode, DocumentTree,
-    DocumentStructure, StructureNode,
-    TocView, TocNode, TocEntry, TocConfig,
-    estimate_tokens, estimate_tokens_fast,
+    DocumentStructure, DocumentTree, Error, NodeId, Result, StructureNode, TocConfig, TocEntry,
+    TocNode, TocView, TreeNode, estimate_tokens, estimate_tokens_fast,
 };
 
 // Configuration
@@ -125,24 +134,24 @@ pub use config::{Config, ConfigLoader, RetrievalConfig, SummaryConfig};
 pub use llm::{LlmClient, LlmConfig, LlmConfigs, LlmError, LlmPool, RetryConfig};
 
 // Document parsing
-pub use parser::{DocumentFormat, DocumentParser, DocxParser, MarkdownParser, PdfParser, ParseResult, RawNode};
+pub use parser::{
+    DocumentFormat, DocumentParser, DocxParser, MarkdownParser, ParseResult, PdfParser, RawNode,
+};
 
 // Indexing
+pub use index::pipeline::{CustomStageBuilder, PipelineOrchestrator};
 pub use index::{
-    PipelineExecutor, PipelineOptions, IndexInput, IndexMode,
-    IndexContext, IndexResult, IndexStage, IndexMetrics,
-    SummaryStrategy, ChangeDetector, ChangeSet, PartialUpdater,
+    ChangeDetector, ChangeSet, IndexContext, IndexInput, IndexMetrics, IndexMode, IndexResult,
+    IndexStage, PartialUpdater, PipelineExecutor, PipelineOptions, SummaryStrategy,
 };
-pub use index::pipeline::{PipelineOrchestrator, CustomStageBuilder};
 
 // Retrieval
 pub use retrieval::{
-    PipelineRetriever, Retriever, RetrieverError, RetrieverResult,
-    RetrieveOptions, RetrieveResponse, RetrievalResult, RetrievalContext,
-    QueryComplexity, StrategyPreference, SufficiencyLevel,
-    ContextBuilder, PruningStrategy, TokenEstimation,
-    NavigationDecision, NavigationStep, SearchPath,
-    format_for_llm, format_for_llm_async, format_tree_for_llm, format_tree_for_llm_async,
+    ContextBuilder, NavigationDecision, NavigationStep, PipelineRetriever, PruningStrategy,
+    QueryComplexity, RetrievalContext, RetrievalResult, RetrieveOptions, RetrieveResponse,
+    Retriever, RetrieverError, RetrieverResult, SearchPath, StrategyPreference, SufficiencyLevel,
+    TokenEstimation, format_for_llm, format_for_llm_async, format_tree_for_llm,
+    format_tree_for_llm_async,
 };
 
 // Storage

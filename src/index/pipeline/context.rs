@@ -7,11 +7,11 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 use crate::domain::{DocumentTree, NodeId};
-use crate::parser::{DocumentFormat, RawNode};
 use crate::llm::LlmClient;
+use crate::parser::{DocumentFormat, RawNode};
 
-use super::metrics::IndexMetrics;
 use super::super::{PipelineOptions, SummaryStrategy};
+use super::metrics::IndexMetrics;
 
 /// Input for the index pipeline.
 #[derive(Debug, Clone)]
@@ -37,7 +37,11 @@ impl IndexInput {
     }
 
     /// Create input from content.
-    pub fn content(content: impl Into<String>, name: impl Into<String>, format: DocumentFormat) -> Self {
+    pub fn content(
+        content: impl Into<String>,
+        name: impl Into<String>,
+        format: DocumentFormat,
+    ) -> Self {
         Self::Content {
             content: content.into(),
             name: name.into(),
@@ -63,7 +67,7 @@ impl StageResult {
     /// Create a successful result.
     pub fn success(name: &str) -> Self {
         println!("Stage '{}' completed successfully", name);
-        
+
         Self {
             success: true,
             duration_ms: 0,
@@ -76,7 +80,10 @@ impl StageResult {
         println!("Stage '{}' failed: {}", name, error);
 
         let mut metadata = HashMap::new();
-        metadata.insert("error".to_string(), serde_json::Value::String(error.to_string()));
+        metadata.insert(
+            "error".to_string(),
+            serde_json::Value::String(error.to_string()),
+        );
         Self {
             success: false,
             duration_ms: 0,

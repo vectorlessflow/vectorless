@@ -64,21 +64,23 @@
 //! # }
 //! ```
 
-mod types;
+mod assigner;
 mod detector;
 mod parser;
-mod assigner;
-mod verifier;
-mod repairer;
 mod processor;
+mod repairer;
+mod types;
+mod verifier;
 
 // Re-export main types
-pub use types::{TocEntry, TocDetection, PageOffset, VerificationError, VerificationReport, ErrorType};
+pub use types::{
+    ErrorType, PageOffset, TocDetection, TocEntry, VerificationError, VerificationReport,
+};
 
 // Re-export components
+pub use assigner::{PageAssigner, PageAssignerConfig};
 pub use detector::{TocDetector, TocDetectorConfig};
 pub use parser::{TocParser, TocParserConfig};
-pub use assigner::{PageAssigner, PageAssignerConfig};
-pub use verifier::{IndexVerifier, VerifierConfig};
-pub use repairer::{IndexRepairer, RepairerConfig};
 pub use processor::{TocProcessor, TocProcessorConfig};
+pub use repairer::{IndexRepairer, RepairerConfig};
+pub use verifier::{IndexVerifier, VerifierConfig};

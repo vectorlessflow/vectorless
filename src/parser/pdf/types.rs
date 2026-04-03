@@ -3,8 +3,8 @@
 
 //! PDF document types.
 
-use serde::{Deserialize, Serialize};
 use crate::domain::estimate_tokens;
+use serde::{Deserialize, Serialize};
 
 /// A single page from a PDF document.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -24,7 +24,11 @@ impl PdfPage {
     pub fn new(number: usize, text: impl Into<String>) -> Self {
         let text = text.into();
         let token_count = estimate_tokens(&text);
-        Self { number, text, token_count }
+        Self {
+            number,
+            text,
+            token_count,
+        }
     }
 
     /// Check if the page is empty.
@@ -95,7 +99,11 @@ impl PdfParseResult {
     /// Create a new parse result.
     pub fn new(metadata: PdfMetadata, pages: Vec<PdfPage>) -> Self {
         let total_tokens = pages.iter().map(|p| p.token_count).sum();
-        Self { metadata, pages, total_tokens }
+        Self {
+            metadata,
+            pages,
+            total_tokens,
+        }
     }
 
     /// Check if the document is empty.

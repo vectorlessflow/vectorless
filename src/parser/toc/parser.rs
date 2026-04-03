@@ -8,8 +8,8 @@ use tracing::debug;
 use crate::config::LlmConfig;
 use crate::domain::Result;
 
-use crate::llm::LlmClient;
 use super::types::TocEntry;
+use crate::llm::LlmClient;
 
 /// TOC parser configuration.
 #[derive(Debug, Clone)]
@@ -131,7 +131,11 @@ Notes:
     }
 
     /// Verify completeness and continue if needed.
-    async fn verify_and_complete(&self, toc_text: &str, mut entries: Vec<TocEntry>) -> Result<Vec<TocEntry>> {
+    async fn verify_and_complete(
+        &self,
+        toc_text: &str,
+        mut entries: Vec<TocEntry>,
+    ) -> Result<Vec<TocEntry>> {
         let mut attempts = 0;
 
         while attempts < self.config.max_retries {
@@ -143,7 +147,10 @@ Notes:
                 return Ok(entries);
             }
 
-            debug!("TOC incomplete, attempting continuation (attempt {})", attempts + 1);
+            debug!(
+                "TOC incomplete, attempting continuation (attempt {})",
+                attempts + 1
+            );
 
             // Continue parsing
             let additional = self.continue_parsing(toc_text, &entries).await?;
@@ -163,9 +170,9 @@ Notes:
     async fn check_completeness(&self, toc_text: &str, entries: &[TocEntry]) -> Result<bool> {
         let system = "You are a document analysis assistant. Determine if the parsed entries completely represent the original TOC.";
 
-        let entries_json = serde_json::to_string_pretty(
-            &entries.iter().map(|e| &e.title).collect::<Vec<_>>()
-        ).unwrap_or_default();
+        let entries_json =
+            serde_json::to_string_pretty(&entries.iter().map(|e| &e.title).collect::<Vec<_>>())
+                .unwrap_or_default();
 
         let user = format!(
             r#"Original TOC:
@@ -189,7 +196,11 @@ Is the parsing complete? Reply with JSON:
     }
 
     /// Continue parsing from where we left off.
-    async fn continue_parsing(&self, toc_text: &str, existing: &[TocEntry]) -> Result<Vec<TocEntry>> {
+    async fn continue_parsing(
+        &self,
+        toc_text: &str,
+        existing: &[TocEntry],
+    ) -> Result<Vec<TocEntry>> {
         let system = "You are a document structure extraction expert. Continue parsing the TOC from where it was left off.";
 
         let last_titles: Vec<_> = existing.iter().rev().take(5).map(|e| &e.title).collect();

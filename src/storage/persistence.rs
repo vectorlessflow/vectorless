@@ -3,11 +3,11 @@
 
 //! Persistence utilities for saving and loading document indices.
 
-use std::path::{Path, PathBuf};
-use std::io;
 use serde::{Deserialize, Serialize};
+use std::io;
+use std::path::{Path, PathBuf};
 
-use crate::domain::{DocumentTree, Result, Error};
+use crate::domain::{DocumentTree, Error, Result};
 
 /// Metadata for a persisted document.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -118,16 +118,14 @@ pub fn save_document(path: &Path, doc: &PersistedDocument) -> Result<()> {
     let json = serde_json::to_string_pretty(doc)
         .map_err(|e| Error::Io(io::Error::new(io::ErrorKind::Other, e)))?;
 
-    std::fs::write(path, json)
-        .map_err(|e| Error::Io(e))?;
+    std::fs::write(path, json).map_err(|e| Error::Io(e))?;
 
     Ok(())
 }
 
 /// Load a document from a JSON file.
 pub fn load_document(path: &Path) -> Result<PersistedDocument> {
-    let json = std::fs::read_to_string(path)
-        .map_err(|e| Error::Io(e))?;
+    let json = std::fs::read_to_string(path).map_err(|e| Error::Io(e))?;
 
     let doc: PersistedDocument = serde_json::from_str(&json)
         .map_err(|e| Error::Parse(format!("Failed to parse document: {}", e)))?;
@@ -140,8 +138,7 @@ pub fn save_index(path: &Path, entries: &[DocumentMeta]) -> Result<()> {
     let json = serde_json::to_string_pretty(entries)
         .map_err(|e| Error::Io(io::Error::new(io::ErrorKind::Other, e)))?;
 
-    std::fs::write(path, json)
-        .map_err(|e| Error::Io(e))?;
+    std::fs::write(path, json).map_err(|e| Error::Io(e))?;
 
     Ok(())
 }
@@ -152,8 +149,7 @@ pub fn load_index(path: &Path) -> Result<Vec<DocumentMeta>> {
         return Ok(Vec::new());
     }
 
-    let json = std::fs::read_to_string(path)
-        .map_err(|e| Error::Io(e))?;
+    let json = std::fs::read_to_string(path).map_err(|e| Error::Io(e))?;
 
     let entries: Vec<DocumentMeta> = serde_json::from_str(&json)
         .map_err(|e| Error::Parse(format!("Failed to parse index: {}", e)))?;

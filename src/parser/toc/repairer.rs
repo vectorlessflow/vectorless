@@ -9,9 +9,9 @@ use crate::config::LlmConfig;
 use crate::domain::Result;
 use crate::parser::pdf::PdfPage;
 
-use crate::llm::LlmClient;
 use super::types::{TocEntry, VerificationError, VerificationReport};
 use super::verifier::IndexVerifier;
+use crate::llm::LlmClient;
 
 /// Repairer configuration.
 #[derive(Debug, Clone)]
@@ -77,16 +77,27 @@ impl IndexRepairer {
             let expected_page = error.expected_page;
 
             // Search around the expected page
-            let start = expected_page.saturating_sub(self.config.search_range).max(1);
+            let start = expected_page
+                .saturating_sub(self.config.search_range)
+                .max(1);
             let end = (expected_page + self.config.search_range).min(pages.len());
 
-            if let Some(correct_page) = self.find_correct_page(&entry.title, pages, start..=end).await? {
-                debug!("Repaired '{}' : page {} → {}", entry.title, expected_page, correct_page);
+            if let Some(correct_page) = self
+                .find_correct_page(&entry.title, pages, start..=end)
+                .await?
+            {
+                debug!(
+                    "Repaired '{}' : page {} → {}",
+                    entry.title, expected_page, correct_page
+                );
                 entry.physical_page = Some(correct_page);
                 entry.confidence = 0.9;
                 repaired_count += 1;
             } else {
-                debug!("Could not repair '{}' (searched pages {}-{})", entry.title, start, end);
+                debug!(
+                    "Could not repair '{}' (searched pages {}-{})",
+                    entry.title, start, end
+                );
             }
         }
 
@@ -112,7 +123,10 @@ impl IndexRepairer {
                 } else {
                     &page.text
                 };
-                content_parts.push(format!("<page_{}>\n{}\n</page_{}>", page_num, text, page_num));
+                content_parts.push(format!(
+                    "<page_{}>\n{}\n</page_{}>",
+                    page_num, text, page_num
+                ));
             }
         }
 

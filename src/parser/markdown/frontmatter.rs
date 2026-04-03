@@ -117,7 +117,11 @@ impl Frontmatter {
 /// - YAML: `---\nkey: value\n---`
 /// - TOML: `+++\nkey = "value"\n+++`
 #[must_use]
-pub fn extract_frontmatter(content: &str, parse_yaml: bool, parse_toml: bool) -> (Option<Frontmatter>, &str) {
+pub fn extract_frontmatter(
+    content: &str,
+    parse_yaml: bool,
+    parse_toml: bool,
+) -> (Option<Frontmatter>, &str) {
     // Try YAML frontmatter first
     if parse_yaml {
         if let Some((fm, remaining)) = Frontmatter::parse(content, "---") {

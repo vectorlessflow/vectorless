@@ -33,7 +33,6 @@ pub struct MarkdownConfig {
     // ============================================================
     // Parsing Options
     // ============================================================
-
     /// Enable GitHub Flavored Markdown extensions.
     ///
     /// Includes: tables, strikethrough, task lists, autolinks.
@@ -65,7 +64,6 @@ pub struct MarkdownConfig {
     // ============================================================
     // Content Extraction
     // ============================================================
-
     /// Include code blocks in node content.
     /// Default: `true`
     pub include_code_blocks: bool,
@@ -85,7 +83,6 @@ pub struct MarkdownConfig {
     // ============================================================
     // Frontmatter
     // ============================================================
-
     /// Parse YAML frontmatter (`---` delimiters).
     /// Default: `true`
     pub parse_frontmatter: bool,
@@ -101,7 +98,6 @@ pub struct MarkdownConfig {
     // ============================================================
     // Advanced Options
     // ============================================================
-
     /// Minimum characters required for a heading title to be valid.
     /// Headings with shorter titles are skipped.
     /// Default: `1`

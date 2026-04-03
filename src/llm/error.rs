@@ -53,12 +53,12 @@ impl LlmError {
             LlmError::Api(msg) => {
                 // Rate limits and temporary failures are retryable
                 let msg_lower = msg.to_lowercase();
-                msg_lower.contains("rate limit") ||
-                msg_lower.contains("429") ||
-                msg_lower.contains("503") ||
-                msg_lower.contains("502") ||
-                msg_lower.contains("timeout") ||
-                msg_lower.contains("overloaded")
+                msg_lower.contains("rate limit")
+                    || msg_lower.contains("429")
+                    || msg_lower.contains("503")
+                    || msg_lower.contains("502")
+                    || msg_lower.contains("timeout")
+                    || msg_lower.contains("overloaded")
             }
             LlmError::Timeout(_) => true,
             LlmError::RateLimit(_) => true,

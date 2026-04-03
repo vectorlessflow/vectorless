@@ -9,8 +9,8 @@
 use serde::{Deserialize, Serialize};
 
 use super::node::NodeId;
-use super::tree::DocumentTree;
 use super::node::TreeNode;
+use super::tree::DocumentTree;
 
 /// A node in the Table of Contents.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -84,7 +84,11 @@ impl TocNode {
         if self.children.is_empty() {
             self.depth
         } else {
-            self.children.iter().map(|c| c.max_depth()).max().unwrap_or(self.depth)
+            self.children
+                .iter()
+                .map(|c| c.max_depth())
+                .max()
+                .unwrap_or(self.depth)
         }
     }
 }
@@ -177,12 +181,13 @@ impl TocView {
         }
 
         // Check minimum content length
-        if node.content.len() < self.config.min_content_length && tree.children(node_id).is_empty() {
+        if node.content.len() < self.config.min_content_length && tree.children(node_id).is_empty()
+        {
             return TocNode::new(node.title.clone(), depth);
         }
 
-        let mut toc_node = TocNode::new(&node.title, depth)
-            .with_node_id(node.node_id.clone().unwrap_or_default());
+        let mut toc_node =
+            TocNode::new(&node.title, depth).with_node_id(node.node_id.clone().unwrap_or_default());
 
         // Add page range
         if self.config.include_pages {
@@ -212,7 +217,12 @@ impl TocView {
         entries
     }
 
-    fn collect_flat_entries(&self, tree: &DocumentTree, node_id: NodeId, entries: &mut Vec<TocEntry>) {
+    fn collect_flat_entries(
+        &self,
+        tree: &DocumentTree,
+        node_id: NodeId,
+        entries: &mut Vec<TocEntry>,
+    ) {
         if let Some(node) = tree.get(node_id) {
             entries.push(TocEntry {
                 title: node.title.clone(),
@@ -237,8 +247,13 @@ impl TocView {
         result
     }
 
-    fn collect_filtered<F>(&self, tree: &DocumentTree, node_id: NodeId, filter: &F, result: &mut Vec<TocNode>)
-    where
+    fn collect_filtered<F>(
+        &self,
+        tree: &DocumentTree,
+        node_id: NodeId,
+        filter: &F,
+        result: &mut Vec<TocNode>,
+    ) where
         F: Fn(&TreeNode) -> bool,
     {
         if let Some(node) = tree.get(node_id) {
@@ -320,9 +335,7 @@ mod tests {
 
     #[test]
     fn test_toc_config() {
-        let config = TocConfig::new()
-            .with_max_depth(3)
-            .with_summaries(false);
+        let config = TocConfig::new().with_max_depth(3).with_summaries(false);
 
         assert_eq!(config.max_depth, Some(3));
         assert!(!config.include_summaries);

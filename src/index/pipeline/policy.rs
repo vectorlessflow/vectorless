@@ -87,8 +87,8 @@ impl StageRetryConfig {
     ///
     /// Uses exponential backoff: `initial_delay * multiplier^attempt`
     pub fn delay_for_attempt(&self, attempt: usize) -> Duration {
-        let delay_ms = (self.initial_delay.as_millis() as f64)
-            * self.multiplier.powi(attempt as i32);
+        let delay_ms =
+            (self.initial_delay.as_millis() as f64) * self.multiplier.powi(attempt as i32);
         let capped_ms = delay_ms.min(self.max_delay.as_millis() as f64);
         Duration::from_millis(capped_ms as u64)
     }

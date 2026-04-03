@@ -11,8 +11,8 @@ use crate::domain::{DocumentTree, NodeId, Result, estimate_tokens};
 use crate::parser::RawNode;
 
 use super::{IndexStage, StageResult};
-use crate::index::pipeline::IndexContext;
 use crate::index::ThinningConfig;
+use crate::index::pipeline::IndexContext;
 
 /// Build stage - constructs a tree from raw nodes.
 pub struct BuildStage;
@@ -31,7 +31,9 @@ impl BuildStage {
 
         // Process from back to front
         for i in (0..nodes.len()).rev() {
-            let own_tokens = nodes[i].token_count.unwrap_or_else(|| estimate_tokens(&nodes[i].content));
+            let own_tokens = nodes[i]
+                .token_count
+                .unwrap_or_else(|| estimate_tokens(&nodes[i].content));
             nodes[i].token_count = Some(own_tokens);
 
             // Find all children (direct and indirect)
@@ -150,7 +152,11 @@ impl BuildStage {
                 .unwrap_or(tree.root());
 
             // Create the node
-            let content = if raw.content.is_empty() { "" } else { &raw.content };
+            let content = if raw.content.is_empty() {
+                ""
+            } else {
+                &raw.content
+            };
             let node_id = tree.add_child(parent_id, &raw.title, content);
 
             // Set line indices
@@ -208,7 +214,7 @@ impl Default for BuildStage {
 
 #[async_trait]
 impl IndexStage for BuildStage {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "build"
     }
 
@@ -272,10 +278,9 @@ impl IndexStage for BuildStage {
             "node_count".to_string(),
             serde_json::json!(ctx.tree.as_ref().map(|t| t.node_count()).unwrap_or(0)),
         );
-        stage_result.metadata.insert(
-            "nodes_skipped".to_string(),
-            serde_json::json!(skipped),
-        );
+        stage_result
+            .metadata
+            .insert("nodes_skipped".to_string(), serde_json::json!(skipped));
 
         Ok(stage_result)
     }

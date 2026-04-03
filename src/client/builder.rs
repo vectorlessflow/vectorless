@@ -6,8 +6,8 @@
 use std::path::PathBuf;
 
 use crate::config::{Config, ConfigLoader, RetrievalConfig};
-use crate::storage::Workspace;
 use crate::retrieval::PipelineRetriever;
+use crate::storage::Workspace;
 
 use super::Engine;
 
@@ -140,10 +140,9 @@ impl EngineBuilder {
                 .map_err(|e| BuildError::Config(e.to_string()))?
         } else if let Some(config_path) = Self::find_config_file() {
             // Auto-detect config file
-            ConfigLoader::new()
-                .file(&config_path)
-                .load()
-                .map_err(|e| BuildError::Config(format!("Failed to load {}: {}", config_path.display(), e)))?
+            ConfigLoader::new().file(&config_path).load().map_err(|e| {
+                BuildError::Config(format!("Failed to load {}: {}", config_path.display(), e))
+            })?
         } else {
             // Use defaults
             Config::default()
@@ -154,8 +153,10 @@ impl EngineBuilder {
             Some(Workspace::open(path).map_err(|e| BuildError::Workspace(e.to_string()))?)
         } else {
             // Use workspace_dir from config
-            Some(Workspace::open(&config.storage.workspace_dir)
-                .map_err(|e| BuildError::Workspace(e.to_string()))?)
+            Some(
+                Workspace::open(&config.storage.workspace_dir)
+                    .map_err(|e| BuildError::Workspace(e.to_string()))?,
+            )
         };
 
         // Create pipeline executor with LLM client if API key is available
@@ -174,9 +175,11 @@ impl EngineBuilder {
         };
 
         // Create pipeline retriever with config
-        let retrieval_config = self.retrieval_config.unwrap_or_else(|| config.retrieval.clone());
-        let mut retriever = PipelineRetriever::new()
-            .with_max_iterations(retrieval_config.search.max_iterations);
+        let retrieval_config = self
+            .retrieval_config
+            .unwrap_or_else(|| config.retrieval.clone());
+        let mut retriever =
+            PipelineRetriever::new().with_max_iterations(retrieval_config.search.max_iterations);
 
         // Add LLM client if API key is available in retrieval config
         if let Some(ref api_key) = retrieval_config.api_key {
@@ -188,7 +191,9 @@ impl EngineBuilder {
             retriever = retriever.with_llm_client(llm_client);
         }
 
-        Ok(Engine::with_components(config, workspace, retriever, executor))
+        Ok(Engine::with_components(
+            config, workspace, retriever, executor,
+        ))
     }
 }
 
@@ -222,8 +227,7 @@ mod tests {
 
     #[test]
     fn test_builder_with_workspace() {
-        let builder = EngineBuilder::new()
-            .with_workspace("./test_workspace");
+        let builder = EngineBuilder::new().with_workspace("./test_workspace");
 
         assert_eq!(builder.workspace, Some(PathBuf::from("./test_workspace")));
     }

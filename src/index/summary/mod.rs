@@ -16,12 +16,12 @@
 //! - **Selective**: Generate summaries only for qualifying nodes (default)
 //! - **Lazy**: Generate summaries on-demand at query time
 
-mod strategy;
 mod full;
-mod selective;
 mod lazy;
+mod selective;
+mod strategy;
 
-pub use strategy::{SummaryStrategy, SummaryStrategyConfig, SummaryGenerator, LlmSummaryGenerator};
 pub use full::FullStrategy;
-pub use selective::SelectiveStrategy;
 pub use lazy::LazyStrategy;
+pub use selective::SelectiveStrategy;
+pub use strategy::{LlmSummaryGenerator, SummaryGenerator, SummaryStrategy, SummaryStrategyConfig};

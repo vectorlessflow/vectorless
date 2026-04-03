@@ -25,14 +25,14 @@
 
 use std::collections::HashMap;
 use std::time::Instant;
-use tracing::{info, warn, error};
+use tracing::{error, info, warn};
 
 use crate::domain::Result;
 
+use super::super::PipelineOptions;
+use super::super::stages::IndexStage;
 use super::context::{IndexContext, IndexInput, IndexResult, StageResult};
 use super::policy::FailurePolicy;
-use super::super::stages::IndexStage;
-use super::super::PipelineOptions;
 
 /// Stage entry with metadata for orchestration.
 struct StageEntry {
@@ -155,10 +155,7 @@ impl PipelineOrchestrator {
         S: IndexStage + 'static,
     {
         let trait_deps = stage.depends_on();
-        let mut all_deps: Vec<String> = trait_deps
-            .into_iter()
-            .map(|s| s.to_string())
-            .collect();
+        let mut all_deps: Vec<String> = trait_deps.into_iter().map(|s| s.to_string()).collect();
 
         // Add explicit deps that aren't already included
         for dep in explicit_depends_on {
@@ -235,9 +232,7 @@ impl PipelineOrchestrator {
         }
 
         // Collect stages with no dependencies, sorted by priority
-        let mut ready: Vec<usize> = (0..n)
-            .filter(|&i| in_degree[i] == 0)
-            .collect();
+        let mut ready: Vec<usize> = (0..n).filter(|&i| in_degree[i] == 0).collect();
         ready.sort_by_key(|&i| (self.stages[i].priority, i));
 
         let mut result: Vec<usize> = Vec::new();
@@ -405,19 +400,20 @@ impl PipelineOrchestrator {
         options: PipelineOptions,
     ) -> Result<IndexResult> {
         let total_start = Instant::now();
-        info!("Starting orchestrated pipeline with {} stages", self.stages.len());
+        info!(
+            "Starting orchestrated pipeline with {} stages",
+            self.stages.len()
+        );
 
         // Resolve execution order
         let order = self.resolve_order()?;
-        let stage_names: Vec<&str> = order
-            .iter()
-            .map(|&i| self.stages[i].stage.name())
-            .collect();
+        let stage_names: Vec<&str> = order.iter().map(|&i| self.stages[i].stage.name()).collect();
         info!("Execution order: {:?}", stage_names);
 
         // Compute execution groups for potential parallelization
         let groups = self.compute_execution_groups(&order);
-        info!("Execution groups: {} ({} parallelizable)",
+        info!(
+            "Execution groups: {} ({} parallelizable)",
             groups.len(),
             groups.iter().filter(|g| g.parallel).count()
         );
@@ -432,7 +428,9 @@ impl PipelineOrchestrator {
                     "Executing parallel group {} with {} stages: {:?}",
                     group_idx,
                     group.stage_indices.len(),
-                    group.stage_indices.iter()
+                    group
+                        .stage_indices
+                        .iter()
                         .map(|&i| self.stages[i].stage.name())
                         .collect::<Vec<_>>()
                 );
@@ -447,7 +445,10 @@ impl PipelineOrchestrator {
                 let stage_name = entry.stage.name().to_string();
                 let policy = entry.stage.failure_policy();
 
-                info!("Executing stage: {} (priority {})", stage_name, entry.priority);
+                info!(
+                    "Executing stage: {} (priority {})",
+                    stage_name, entry.priority
+                );
 
                 match Self::execute_stage_with_policy(&mut entry.stage, &mut ctx).await {
                     Ok(result) => {
@@ -455,7 +456,10 @@ impl PipelineOrchestrator {
                     }
                     Err(e) => {
                         if policy.allows_continuation() {
-                            warn!("Stage {} failed but policy allows continuation: {}", stage_name, e);
+                            warn!(
+                                "Stage {} failed but policy allows continuation: {}",
+                                stage_name, e
+                            );
                             ctx.stage_results.insert(
                                 stage_name.clone(),
                                 StageResult::failure(&stage_name, &e.to_string()),
@@ -557,8 +561,8 @@ impl CustomStageBuilder {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::context::StageResult;
+    use super::*;
 
     #[test]
     fn test_orchestrator_creation() {
@@ -592,8 +596,8 @@ mod tests {
 
     #[test]
     fn test_missing_dependency() {
-        let orchestrator = PipelineOrchestrator::new()
-            .stage_with_deps(MockStage::new("a"), 10, &["nonexistent"]);
+        let orchestrator =
+            PipelineOrchestrator::new().stage_with_deps(MockStage::new("a"), 10, &["nonexistent"]);
 
         let result = orchestrator.stage_names();
         assert!(result.is_err());
@@ -631,7 +635,9 @@ mod tests {
 
     impl MockStage {
         fn new(name: &str) -> Self {
-            Self { name: name.to_string() }
+            Self {
+                name: name.to_string(),
+            }
         }
     }
 
@@ -641,10 +647,7 @@ mod tests {
             &self.name
         }
 
-        async fn execute(
-            &mut self,
-            _ctx: &mut IndexContext,
-        ) -> Result<StageResult> {
+        async fn execute(&mut self, _ctx: &mut IndexContext) -> Result<StageResult> {
             Ok(StageResult::success(&self.name))
         }
     }

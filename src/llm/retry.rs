@@ -31,10 +31,7 @@ use super::error::{LlmError, LlmResult};
 /// # Ok(())
 /// # }
 /// ```
-pub async fn with_retry<F, Fut, T>(
-    config: &RetryConfig,
-    operation: F,
-) -> LlmResult<T>
+pub async fn with_retry<F, Fut, T>(config: &RetryConfig, operation: F) -> LlmResult<T>
 where
     F: Fn() -> Fut,
     Fut: Future<Output = LlmResult<T>>,
@@ -94,12 +91,12 @@ fn should_retry(error: &LlmError, config: &RetryConfig) -> bool {
         LlmError::Api(msg) => {
             let msg_lower = msg.to_lowercase();
             // Check for retryable API errors
-            msg_lower.contains("rate limit") ||
-            msg_lower.contains("429") ||
-            msg_lower.contains("503") ||
-            msg_lower.contains("502") ||
-            msg_lower.contains("timeout") ||
-            msg_lower.contains("overloaded")
+            msg_lower.contains("rate limit")
+                || msg_lower.contains("429")
+                || msg_lower.contains("503")
+                || msg_lower.contains("502")
+                || msg_lower.contains("timeout")
+                || msg_lower.contains("overloaded")
         }
         _ => false,
     }
@@ -122,7 +119,8 @@ mod tests {
             } else {
                 Ok("success")
             }
-        }).await;
+        })
+        .await;
 
         assert_eq!(result.unwrap(), "success");
         assert_eq!(attempts.load(Ordering::SeqCst), 2);
@@ -136,7 +134,8 @@ mod tests {
         let result: LlmResult<String> = with_retry(&config, || async {
             attempts.fetch_add(1, Ordering::SeqCst);
             Err(LlmError::Timeout("timeout".to_string()))
-        }).await;
+        })
+        .await;
 
         assert!(matches!(result, Err(LlmError::RetryExhausted { .. })));
         assert_eq!(attempts.load(Ordering::SeqCst), 2);
@@ -150,7 +149,8 @@ mod tests {
         let result: LlmResult<String> = with_retry(&config, || async {
             attempts.fetch_add(1, Ordering::SeqCst);
             Err(LlmError::Config("bad config".to_string()))
-        }).await;
+        })
+        .await;
 
         assert!(matches!(result, Err(LlmError::Config(_))));
         assert_eq!(attempts.load(Ordering::SeqCst), 1); // Should only try once

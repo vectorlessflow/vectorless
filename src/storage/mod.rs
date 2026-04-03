@@ -31,13 +31,8 @@ mod workspace;
 
 // Re-export main types
 pub use persistence::{
-    DocumentMeta,
-    PersistedDocument,
-    PageContent,
-    save_document,
-    load_document,
+    DocumentMeta, PageContent, PersistedDocument, load_document, load_index, save_document,
     save_index,
-    load_index,
 };
 
-pub use workspace::{Workspace, DocumentMetaEntry};
+pub use workspace::{DocumentMetaEntry, Workspace};

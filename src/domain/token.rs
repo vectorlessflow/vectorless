@@ -15,8 +15,7 @@ static BPE: OnceLock<CoreBPE> = OnceLock::new();
 /// Get or initialize the BPE encoder.
 fn get_bpe() -> &'static CoreBPE {
     BPE.get_or_init(|| {
-        tiktoken_rs::cl100k_base()
-            .expect("Failed to initialize cl100k_base tokenizer")
+        tiktoken_rs::cl100k_base().expect("Failed to initialize cl100k_base tokenizer")
     })
 }
 

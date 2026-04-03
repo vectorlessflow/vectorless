@@ -3,23 +3,23 @@
 
 //! Index pipeline stages.
 
-mod parse;
 mod build;
 mod enhance;
 mod enrich;
 mod optimize;
+mod parse;
 mod persist;
 
-pub use parse::ParseStage;
 pub use build::BuildStage;
 pub use enhance::EnhanceStage;
 pub use enrich::EnrichStage;
 pub use optimize::OptimizeStage;
+pub use parse::ParseStage;
 pub use persist::PersistStage;
 
-pub use async_trait::async_trait;
-use crate::domain::Result;
 use super::pipeline::{FailurePolicy, IndexContext, StageResult};
+use crate::domain::Result;
+pub use async_trait::async_trait;
 
 /// Index pipeline stage.
 ///

@@ -92,7 +92,13 @@ impl MarkdownParser {
     }
 
     /// Parse Markdown content and extract nodes.
-    fn extract_nodes(&self, content: &str) -> (Vec<RawNode>, Option<std::collections::HashMap<String, String>>) {
+    fn extract_nodes(
+        &self,
+        content: &str,
+    ) -> (
+        Vec<RawNode>,
+        Option<std::collections::HashMap<String, String>>,
+    ) {
         // 1. Extract frontmatter (if present)
         let (fm, remaining_content) = frontmatter::extract_frontmatter(
             content,
@@ -276,10 +282,10 @@ impl MarkdownParser {
             && (!content_buffer.trim().is_empty() || !preamble_content.is_empty())
         {
             // Use preamble_content if available, otherwise use content_buffer
-            let content = if !preamble_content.is_empty() {
-                preamble_content.trim()
-            } else {
+            let content = if preamble_content.is_empty() {
                 content_buffer.trim()
+            } else {
+                preamble_content.trim()
             };
             nodes.push(RawNode {
                 title: self.config.preamble_title.clone(),
@@ -417,7 +423,12 @@ mod tests {
         let result = parser.parse(content).await.unwrap();
 
         assert!(!result.nodes.is_empty());
-        assert!(result.nodes.iter().any(|n| n.title == "Title" && n.level == 1));
+        assert!(
+            result
+                .nodes
+                .iter()
+                .any(|n| n.title == "Title" && n.level == 1)
+        );
     }
 
     #[tokio::test]

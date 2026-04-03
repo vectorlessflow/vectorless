@@ -5,9 +5,9 @@
 
 use async_trait::async_trait;
 
-use crate::domain::{NodeId, DocumentTree};
-use super::super::types::{NavigationDecision, QueryComplexity};
 use super::super::RetrievalContext;
+use super::super::types::{NavigationDecision, QueryComplexity};
+use crate::domain::{DocumentTree, NodeId};
 
 /// Result of evaluating a single node.
 #[derive(Debug, Clone)]
@@ -89,8 +89,16 @@ pub trait RetrievalStrategy: Send + Sync {
     /// Estimate the cost of evaluating a set of nodes.
     fn estimate_cost(&self, node_count: usize) -> StrategyCost {
         StrategyCost {
-            llm_calls: if self.capabilities().uses_llm { node_count } else { 0 },
-            tokens: if self.capabilities().uses_llm { node_count * 200 } else { 0 },
+            llm_calls: if self.capabilities().uses_llm {
+                node_count
+            } else {
+                0
+            },
+            tokens: if self.capabilities().uses_llm {
+                node_count * 200
+            } else {
+                0
+            },
         }
     }
 }

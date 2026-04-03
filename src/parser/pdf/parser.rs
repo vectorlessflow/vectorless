@@ -145,7 +145,12 @@ impl PdfParser {
     }
 
     /// Extract text from a single page.
-    fn extract_page_text(&self, doc: &LopdfDocument, object_id: lopdf::ObjectId, _page_num: usize) -> String {
+    fn extract_page_text(
+        &self,
+        doc: &LopdfDocument,
+        object_id: lopdf::ObjectId,
+        _page_num: usize,
+    ) -> String {
         let mut text = String::new();
 
         if let Ok(page_obj) = doc.get_object(object_id) {
@@ -319,7 +324,11 @@ impl PdfParser {
     }
 
     /// Convert TOC entries to RawNodes.
-    fn toc_entries_to_raw_nodes(&self, entries: &[crate::parser::toc::TocEntry], pages: &[PdfPage]) -> Vec<RawNode> {
+    fn toc_entries_to_raw_nodes(
+        &self,
+        entries: &[crate::parser::toc::TocEntry],
+        pages: &[PdfPage],
+    ) -> Vec<RawNode> {
         let mut nodes = Vec::new();
 
         for entry in entries {
@@ -341,7 +350,11 @@ impl PdfParser {
     }
 
     /// Get content for a TOC entry from pages.
-    fn get_content_for_entry(&self, entry: &crate::parser::toc::TocEntry, pages: &[PdfPage]) -> String {
+    fn get_content_for_entry(
+        &self,
+        entry: &crate::parser::toc::TocEntry,
+        pages: &[PdfPage],
+    ) -> String {
         let start_page = entry.physical_page.unwrap_or(1);
 
         // Find content on this page
@@ -365,7 +378,7 @@ impl PdfParser {
         pages
             .iter()
             .map(|page| {
-                RawNode::new(&format!("Page {}", page.number))
+                RawNode::new(format!("Page {}", page.number))
                     .with_content(page.text.clone())
                     .with_level(1)
                     .with_page(page.number)
@@ -418,7 +431,10 @@ impl PdfParser {
                     self.pages_to_raw_nodes(&result.pages)
                 }
                 Err(e) => {
-                    warn!("TOC extraction failed: {}, falling back to page-based extraction", e);
+                    warn!(
+                        "TOC extraction failed: {}, falling back to page-based extraction",
+                        e
+                    );
                     self.pages_to_raw_nodes(&result.pages)
                 }
             }

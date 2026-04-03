@@ -12,12 +12,13 @@ use tracing::{info, warn};
 
 use crate::domain::DocumentTree;
 // LlmClient is used via strategy
-use crate::retrieval::pipeline::{
-    FailurePolicy, PipelineContext, RetrievalStage, StageOutcome,
-    CandidateNode, SearchAlgorithm,
-};
-use crate::retrieval::search::{BeamSearch, GreedySearch, SearchConfig as SearchAlgConfig, SearchTree};
 use crate::retrieval::RetrievalContext; // Legacy context
+use crate::retrieval::pipeline::{
+    CandidateNode, FailurePolicy, PipelineContext, RetrievalStage, SearchAlgorithm, StageOutcome,
+};
+use crate::retrieval::search::{
+    BeamSearch, GreedySearch, SearchConfig as SearchAlgConfig, SearchTree,
+};
 use crate::retrieval::strategy::{KeywordStrategy, LlmStrategy, RetrievalStrategy};
 use crate::retrieval::types::StrategyPreference;
 
@@ -124,7 +125,9 @@ impl SearchStage {
 
         // Sort by score descending
         candidates.sort_by(|a, b| {
-            b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal)
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
         });
 
         candidates
@@ -133,7 +136,7 @@ impl SearchStage {
 
 #[async_trait]
 impl RetrievalStage for SearchStage {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "search"
     }
 
@@ -179,7 +182,11 @@ impl RetrievalStage for SearchStage {
         };
 
         // Create legacy context for search algorithms
-        let legacy_ctx = RetrievalContext::new(&ctx.query, ctx.options.max_tokens, ctx.options.sufficiency_check);
+        let legacy_ctx = RetrievalContext::new(
+            &ctx.query,
+            ctx.options.max_tokens,
+            ctx.options.sufficiency_check,
+        );
 
         // Execute search based on algorithm
         let result = match algorithm {

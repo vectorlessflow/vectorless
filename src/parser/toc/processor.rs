@@ -188,7 +188,7 @@ impl TocProcessor {
 
         // Group pages into chunks
         let chunk_size = 10;
-        for (_i, chunk) in pages.chunks(chunk_size).enumerate() {
+        for chunk in pages.chunks(chunk_size) {
             let start_page = chunk.first().map(|p| p.number).unwrap_or(1);
             let end_page = chunk.last().map(|p| p.number).unwrap_or(1);
 
@@ -221,7 +221,10 @@ impl TocProcessor {
             let report = self.verifier.verify(entries, pages).await?;
 
             if report.accuracy >= self.config.accuracy_threshold {
-                debug!("Verification passed: accuracy {:.1}%", report.accuracy * 100.0);
+                debug!(
+                    "Verification passed: accuracy {:.1}%",
+                    report.accuracy * 100.0
+                );
                 return Ok(report);
             }
 

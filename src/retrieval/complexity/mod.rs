@@ -7,5 +7,5 @@
 
 mod detector;
 
-pub use detector::ComplexityDetector;
 pub use super::types::QueryComplexity;
+pub use detector::ComplexityDetector;

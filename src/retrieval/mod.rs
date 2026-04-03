@@ -47,43 +47,43 @@
 //! let response = orchestrator.execute(tree, query, options).await?;
 //! ```
 
-mod types;
-mod retriever;
 mod context;
 mod pipeline_retriever;
+mod retriever;
+mod types;
 
+pub mod cache;
+pub mod complexity;
 pub mod pipeline;
+pub mod search;
 pub mod stages;
 pub mod strategy;
-pub mod search;
 pub mod sufficiency;
-pub mod complexity;
-pub mod cache;
 
-pub use types::*;
-pub use retriever::{Retriever, RetrieverError, RetrieverResult, RetrievalContext};
-pub use pipeline_retriever::PipelineRetriever;
 pub use context::{
-    ContextBuilder, PruningStrategy, TokenEstimation,
-    format_for_llm, format_for_llm_async,
+    ContextBuilder, PruningStrategy, TokenEstimation, format_for_llm, format_for_llm_async,
     format_tree_for_llm, format_tree_for_llm_async,
 };
+pub use pipeline_retriever::PipelineRetriever;
+pub use retriever::{RetrievalContext, Retriever, RetrieverError, RetrieverResult};
+pub use types::*;
 
 // Pipeline exports
 pub use pipeline::{
-    RetrievalOrchestrator, RetrievalStage, PipelineContext,
-    StageOutcome, ExecutionGroup, FailurePolicy,
-    CandidateNode, SearchAlgorithm, SearchConfig, RetrievalMetrics,
+    CandidateNode, ExecutionGroup, FailurePolicy, PipelineContext, RetrievalMetrics,
+    RetrievalOrchestrator, RetrievalStage, SearchAlgorithm, SearchConfig, StageOutcome,
 };
 
 // Re-export PipelineContext as RetrievalContext for stages (alias for clarity)
 pub use pipeline::PipelineContext as StageContext;
 
 // Stage exports
-pub use stages::{AnalyzeStage, PlanStage, SearchStage, JudgeStage};
+pub use stages::{AnalyzeStage, JudgeStage, PlanStage, SearchStage};
 
 // Strategy exports
-pub use strategy::{RetrievalStrategy, StrategyCapabilities, KeywordStrategy, SemanticStrategy, LlmStrategy};
+pub use strategy::{
+    KeywordStrategy, LlmStrategy, RetrievalStrategy, SemanticStrategy, StrategyCapabilities,
+};
 
 // Search exports
 pub use search::{BeamSearch, GreedySearch, SearchConfig as SearchAlgConfig, SearchResult};

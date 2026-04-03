@@ -15,7 +15,7 @@
 //! cargo run --example index
 //! ```
 
-use vectorless::index::{PipelineExecutor, PipelineOptions, IndexInput};
+use vectorless::index::{IndexInput, PipelineExecutor, PipelineOptions};
 
 #[tokio::main]
 async fn main() -> vectorless::Result<()> {
@@ -89,8 +89,15 @@ fn print_tree_structure(
 
     if let Some(node) = tree.get(node_id) {
         let children = tree.children(node_id);
-        let marker = if children.is_empty() { "└─" } else { "├─" };
-        println!("{}{} {} (depth: {})", indent, marker, node.title, node.depth);
+        let marker = if children.is_empty() {
+            "└─"
+        } else {
+            "├─"
+        };
+        println!(
+            "{}{} {} (depth: {})",
+            indent, marker, node.title, node.depth
+        );
 
         for child_id in children {
             print_tree_structure(tree, child_id, current_depth + 1, max_depth);

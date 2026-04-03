@@ -4,9 +4,9 @@
 //! Rate limiter using token bucket algorithm (governor).
 
 use governor::{
+    Quota, RateLimiter as GovernorLimiter,
     clock::{Clock, DefaultClock},
     state::{InMemoryState, NotKeyed},
-    Quota, RateLimiter as GovernorLimiter,
 };
 use std::num::NonZeroU32;
 use std::sync::Arc;

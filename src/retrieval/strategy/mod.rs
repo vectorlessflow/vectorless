@@ -3,12 +3,12 @@
 
 //! Retrieval strategies for different query types.
 
-mod r#trait;
 mod keyword;
-mod semantic;
 mod llm;
+mod semantic;
+mod r#trait;
 
-pub use r#trait::{RetrievalStrategy, StrategyCapabilities, NodeEvaluation, StrategyCost};
 pub use keyword::KeywordStrategy;
-pub use semantic::SemanticStrategy;
 pub use llm::LlmStrategy;
+pub use semantic::SemanticStrategy;
+pub use r#trait::{NodeEvaluation, RetrievalStrategy, StrategyCapabilities, StrategyCost};

@@ -282,14 +282,15 @@ impl RetrievalOrchestrator {
         options: RetrieveOptions,
     ) -> Result<RetrieveResponse> {
         let total_start = Instant::now();
-        info!("Starting retrieval pipeline for query: '{}' ({} stages)", query, self.stages.len());
+        info!(
+            "Starting retrieval pipeline for query: '{}' ({} stages)",
+            query,
+            self.stages.len()
+        );
 
         // Resolve execution order
         let order = self.resolve_order()?;
-        let stage_names: Vec<&str> = order
-            .iter()
-            .map(|&i| self.stages[i].stage.name())
-            .collect();
+        let stage_names: Vec<&str> = order.iter().map(|&i| self.stages[i].stage.name()).collect();
         info!("Execution order: {:?}", stage_names);
 
         // Compute execution groups
@@ -342,11 +343,15 @@ impl RetrievalOrchestrator {
                             }
                             StageOutcome::Complete => {
                                 // Retrieval complete
-                                ctx.metrics.total_time_ms = total_start.elapsed().as_millis() as u64;
+                                ctx.metrics.total_time_ms =
+                                    total_start.elapsed().as_millis() as u64;
                                 info!("Retrieval completed by stage: {}", stage_name);
                                 return Ok(ctx.finalize());
                             }
-                            StageOutcome::NeedMoreData { additional_beam, go_deeper } => {
+                            StageOutcome::NeedMoreData {
+                                additional_beam,
+                                go_deeper,
+                            } => {
                                 // Backtrack to search stage
                                 if let Some(search_idx) =
                                     self.stages.iter().position(|e| e.stage.name() == "search")
@@ -376,11 +381,16 @@ impl RetrievalOrchestrator {
                                     }
                                 }
                             }
-                            StageOutcome::Backtrack { target_stage, reason } => {
+                            StageOutcome::Backtrack {
+                                target_stage,
+                                reason,
+                            } => {
                                 info!("Backtracking to {}: {}", target_stage, reason);
 
-                                if let Some(target_idx) =
-                                    self.stages.iter().position(|e| e.stage.name() == target_stage)
+                                if let Some(target_idx) = self
+                                    .stages
+                                    .iter()
+                                    .position(|e| e.stage.name() == target_stage)
                                 {
                                     ctx.increment_backtrack();
                                     backtrack_count += 1;
@@ -395,7 +405,8 @@ impl RetrievalOrchestrator {
                             }
                             StageOutcome::Skip { reason } => {
                                 info!("Skipping remaining stages: {}", reason);
-                                ctx.metrics.total_time_ms = total_start.elapsed().as_millis() as u64;
+                                ctx.metrics.total_time_ms =
+                                    total_start.elapsed().as_millis() as u64;
                                 return Ok(ctx.finalize());
                             }
                         }
@@ -404,7 +415,10 @@ impl RetrievalOrchestrator {
                         ctx.end_stage(stage_name, false, Some(e.to_string()));
 
                         if policy.allows_continuation() {
-                            warn!("Stage {} failed but policy allows continuation: {}", stage_name, e);
+                            warn!(
+                                "Stage {} failed but policy allows continuation: {}",
+                                stage_name, e
+                            );
                         } else {
                             error!("Stage {} failed: {}", stage_name, e);
                             return Err(e);
@@ -419,9 +433,7 @@ impl RetrievalOrchestrator {
         ctx.metrics.total_time_ms = total_start.elapsed().as_millis() as u64;
         info!(
             "Retrieval completed in {}ms ({} iterations, {} backtracks)",
-            ctx.metrics.total_time_ms,
-            total_iterations,
-            backtrack_count
+            ctx.metrics.total_time_ms, total_iterations, backtrack_count
         );
 
         Ok(ctx.finalize())

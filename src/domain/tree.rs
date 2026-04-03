@@ -7,7 +7,7 @@
 //! lifetime management compared to `Rc<RefCell<PageNode>`.
 
 use indextree::Arena;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 use super::node::{NodeId, TreeNode};
 
@@ -71,7 +71,10 @@ impl DocumentTree {
         };
         let root_id = arena.new_node(root_data);
 
-        Self { arena, root_id: NodeId(root_id) }
+        Self {
+            arena,
+            root_id: NodeId(root_id),
+        }
     }
 
     /// Create a document tree from an existing arena and root ID.
@@ -274,9 +277,11 @@ impl DocumentTree {
     /// Recursively build structure nodes starting from the given node.
     fn build_structure_nodes(&self, node_id: NodeId) -> Vec<StructureNode> {
         let children = self.children(node_id);
-        children.into_iter().enumerate().map(|(idx, child_id)| {
-            self.node_to_structure(child_id, idx)
-        }).collect()
+        children
+            .into_iter()
+            .enumerate()
+            .map(|(idx, child_id)| self.node_to_structure(child_id, idx))
+            .collect()
     }
 
     /// Convert a single node to StructureNode format.
@@ -286,11 +291,22 @@ impl DocumentTree {
 
         StructureNode {
             title: node.title,
-            node_id: node.node_id.clone().unwrap_or_else(|| format!("{:04}", _idx)),
+            node_id: node
+                .node_id
+                .clone()
+                .unwrap_or_else(|| format!("{:04}", _idx)),
             start_index: node.start_index,
             end_index: node.end_index,
-            summary: if node.summary.is_empty() { None } else { Some(node.summary) },
-            nodes: children.into_iter().enumerate().map(|(i, c)| self.node_to_structure(c, i)).collect(),
+            summary: if node.summary.is_empty() {
+                None
+            } else {
+                Some(node.summary)
+            },
+            nodes: children
+                .into_iter()
+                .enumerate()
+                .map(|(i, c)| self.node_to_structure(c, i))
+                .collect(),
         }
     }
 }

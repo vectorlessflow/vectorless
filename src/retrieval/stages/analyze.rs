@@ -13,9 +13,7 @@ use tracing::info;
 
 use crate::domain::{DocumentTree, TocView};
 use crate::retrieval::complexity::ComplexityDetector;
-use crate::retrieval::pipeline::{
-    FailurePolicy, PipelineContext, RetrievalStage, StageOutcome,
-};
+use crate::retrieval::pipeline::{FailurePolicy, PipelineContext, RetrievalStage, StageOutcome};
 // QueryComplexity is used in context
 
 /// Analyze Stage - analyzes queries for retrieval planning.
@@ -69,20 +67,17 @@ impl AnalyzeStage {
         // 5. Remove punctuation
 
         let stop_words = [
-            "the", "a", "an", "is", "are", "was", "were", "be", "been", "being",
-            "have", "has", "had", "do", "does", "did", "will", "would", "could",
-            "should", "may", "might", "must", "shall", "can", "need", "dare",
-            "ought", "used", "to", "of", "in", "for", "on", "with", "at", "by",
-            "from", "as", "into", "through", "during", "before", "after",
-            "above", "below", "between", "under", "again", "further", "then",
-            "once", "here", "there", "when", "where", "why", "how", "all",
-            "each", "few", "more", "most", "other", "some", "such", "no", "nor",
-            "not", "only", "own", "same", "so", "than", "too", "very", "just",
-            "and", "but", "if", "or", "because", "until", "while", "although",
-            "though", "what", "which", "who", "whom", "this", "that", "these",
-            "those", "am", "it", "its", "itself", "he", "him", "his", "she",
-            "her", "hers", "they", "them", "their", "we", "us", "our", "you",
-            "your", "i", "me", "my",
+            "the", "a", "an", "is", "are", "was", "were", "be", "been", "being", "have", "has",
+            "had", "do", "does", "did", "will", "would", "could", "should", "may", "might", "must",
+            "shall", "can", "need", "dare", "ought", "used", "to", "of", "in", "for", "on", "with",
+            "at", "by", "from", "as", "into", "through", "during", "before", "after", "above",
+            "below", "between", "under", "again", "further", "then", "once", "here", "there",
+            "when", "where", "why", "how", "all", "each", "few", "more", "most", "other", "some",
+            "such", "no", "nor", "not", "only", "own", "same", "so", "than", "too", "very", "just",
+            "and", "but", "if", "or", "because", "until", "while", "although", "though", "what",
+            "which", "who", "whom", "this", "that", "these", "those", "am", "it", "its", "itself",
+            "he", "him", "his", "she", "her", "hers", "they", "them", "their", "we", "us", "our",
+            "you", "your", "i", "me", "my",
         ];
 
         query
@@ -92,7 +87,10 @@ impl AnalyzeStage {
                 let word = word.trim_matches(|c: char| !c.is_alphanumeric());
                 word.len() >= 2 && !stop_words.contains(&word)
             })
-            .map(|word| word.trim_matches(|c: char| !c.is_alphanumeric()).to_string())
+            .map(|word| {
+                word.trim_matches(|c: char| !c.is_alphanumeric())
+                    .to_string()
+            })
             .filter(|word| !word.is_empty())
             .collect()
     }
@@ -145,13 +143,17 @@ impl AnalyzeStage {
 
         // Sort by score and return top sections
         matches.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
-        matches.into_iter().take(5).map(|(title, _)| title).collect()
+        matches
+            .into_iter()
+            .take(5)
+            .map(|(title, _)| title)
+            .collect()
     }
 }
 
 #[async_trait]
 impl RetrievalStage for AnalyzeStage {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "analyze"
     }
 
@@ -168,10 +170,7 @@ impl RetrievalStage for AnalyzeStage {
 
         // 1. Detect complexity
         ctx.complexity = Some(self.complexity_detector.detect(&ctx.query));
-        info!(
-            "Query complexity: {:?}",
-            ctx.complexity
-        );
+        info!("Query complexity: {:?}", ctx.complexity);
 
         // 2. Extract keywords
         ctx.keywords = self.extract_keywords(&ctx.query);

@@ -8,8 +8,8 @@
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
-use crate::config::SufficiencyConfig;
 use super::{SufficiencyChecker, SufficiencyLevel};
+use crate::config::SufficiencyConfig;
 
 /// LLM client trait for the judge.
 #[async_trait]
@@ -112,8 +112,14 @@ Be conservative - only mark as sufficient if you're confident the content answer
         let sufficient_keywords = ["sufficient", "yes", "complete", "enough"];
         let insufficient_keywords = ["insufficient", "no", "incomplete", "not enough"];
 
-        let sufficient_count = sufficient_keywords.iter().filter(|k| lower.contains(*k)).count();
-        let insufficient_count = insufficient_keywords.iter().filter(|k| lower.contains(*k)).count();
+        let sufficient_count = sufficient_keywords
+            .iter()
+            .filter(|k| lower.contains(*k))
+            .count();
+        let insufficient_count = insufficient_keywords
+            .iter()
+            .filter(|k| lower.contains(*k))
+            .count();
 
         if sufficient_count > insufficient_count {
             (SufficiencyLevel::PartialSufficient, 0.6)
@@ -172,7 +178,7 @@ impl SufficiencyChecker for LlmJudge {
         }
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "llm_judge"
     }
 }

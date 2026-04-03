@@ -100,11 +100,7 @@ impl DocxParser {
     }
 
     /// Read an XML file from the archive.
-    fn read_xml_file(
-        &self,
-        archive: &mut ZipArchive<Cursor<&[u8]>>,
-        path: &str,
-    ) -> Result<String> {
+    fn read_xml_file(&self, archive: &mut ZipArchive<Cursor<&[u8]>>, path: &str) -> Result<String> {
         let mut file = archive
             .by_name(path)
             .map_err(|e| Error::Parse(format!("Failed to read {} from DOCX: {}", path, e)))?;
@@ -131,7 +127,10 @@ impl DocxParser {
         let mut paragraphs = Vec::new();
 
         // Find all w:p elements (paragraphs)
-        for para_elem in doc.descendants().filter(|n| n.has_tag_name((Self::WORD_NS, "p"))) {
+        for para_elem in doc
+            .descendants()
+            .filter(|n| n.has_tag_name((Self::WORD_NS, "p")))
+        {
             if let Some(para) = self.parse_paragraph(&para_elem, style_resolver) {
                 paragraphs.push(para);
             }
@@ -182,7 +181,10 @@ impl DocxParser {
         let mut text = String::new();
 
         // Find all w:t elements (text runs)
-        for text_elem in elem.descendants().filter(|n| n.has_tag_name((Self::WORD_NS, "t"))) {
+        for text_elem in elem
+            .descendants()
+            .filter(|n| n.has_tag_name((Self::WORD_NS, "t")))
+        {
             if let Some(t) = text_elem.text() {
                 text.push_str(t);
             }
@@ -222,8 +224,7 @@ impl DocxParser {
                 self.finalize_deeper_sections(&mut current_sections, level);
 
                 // Create new section
-                let node = RawNode::new(&para.text)
-                    .with_level(level as usize);
+                let node = RawNode::new(&para.text).with_level(level as usize);
 
                 current_sections.push((level, node));
             } else {
@@ -262,11 +263,7 @@ impl DocxParser {
     }
 
     /// Finalize sections that are deeper than the given level.
-    fn finalize_deeper_sections(
-        &self,
-        sections: &mut Vec<(u8, RawNode)>,
-        new_level: u8,
-    ) {
+    fn finalize_deeper_sections(&self, sections: &mut Vec<(u8, RawNode)>, new_level: u8) {
         // Pop sections that are at the same level or deeper
         while let Some((level, _)) = sections.last() {
             if *level >= new_level {
@@ -348,7 +345,10 @@ mod tests {
         let nodes = parser.build_raw_nodes(paragraphs).unwrap();
 
         assert_eq!(nodes.len(), 1, "Should have exactly one node");
-        assert_eq!(nodes[0].title, "Document", "Node title should be 'Document'");
+        assert_eq!(
+            nodes[0].title, "Document",
+            "Node title should be 'Document'"
+        );
         assert!(
             nodes[0].content.contains("First paragraph"),
             "Content should contain 'First paragraph', got: {:?}",
