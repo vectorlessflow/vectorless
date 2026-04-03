@@ -16,7 +16,7 @@
 //! ```
 
 use std::sync::Arc;
-use vectorless::domain::{DocumentTree, NodeId};
+use vectorless::domain::DocumentTree;
 use vectorless::retrieval::{
     PipelineRetriever, RetrieveOptions, Retriever, StrategyPreference,
     pipeline::RetrievalOrchestrator,
