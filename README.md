@@ -1,6 +1,6 @@
 <div align="center">
 
-![Vectorless](docs/assets/brand/logo-horizontal.svg)
+![Vectorless](docs/design/logo-horizontal.svg)
 
 [![Crates.io](https://img.shields.io/crates/v/vectorless.svg)](https://crates.io/crates/vectorless)
 [![Downloads](https://img.shields.io/crates/d/vectorless.svg)](https://crates.io/crates/vectorless)
