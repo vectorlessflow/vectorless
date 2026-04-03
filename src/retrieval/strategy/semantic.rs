@@ -259,7 +259,7 @@ impl RetrievalStrategy for SemanticStrategy {
             .collect()
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "semantic"
     }
 

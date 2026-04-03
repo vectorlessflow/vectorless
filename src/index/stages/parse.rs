@@ -56,7 +56,7 @@ impl Default for ParseStage {
 
 #[async_trait]
 impl IndexStage for ParseStage {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "parse"
     }
 

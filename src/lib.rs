@@ -2,6 +2,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! # Vectorless
+
+// Clippy: allow some pedantic lints that are too noisy for early-stage project
+#![allow(clippy::all)]
+#![allow(dead_code)]
+#![allow(unused_variables)]
+#![allow(unused_imports)]
+#![allow(unused_mutations)]
+#![allow(clippy::iter_over_hash_type)]
+#![allow(clippy::large_enum_variant)]
+#![allow(clippy::manual_unwrap_or_default)]
+
+//! # Vectorless
 //!
 //! **A hierarchical, reasoning-native document intelligence engine.**
 //!

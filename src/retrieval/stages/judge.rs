@@ -175,7 +175,7 @@ impl JudgeStage {
 
 #[async_trait]
 impl RetrievalStage for JudgeStage {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "judge"
     }
 

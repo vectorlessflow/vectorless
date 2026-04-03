@@ -157,7 +157,7 @@ impl RetrievalStrategy for KeywordStrategy {
         }
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "keyword"
     }
 

@@ -248,7 +248,7 @@ impl RetrievalStrategy for LlmStrategy {
         results
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "llm"
     }
 

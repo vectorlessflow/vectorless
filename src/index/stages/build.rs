@@ -214,7 +214,7 @@ impl Default for BuildStage {
 
 #[async_trait]
 impl IndexStage for BuildStage {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "build"
     }
 

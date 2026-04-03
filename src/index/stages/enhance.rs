@@ -73,7 +73,9 @@ impl EnhanceStage {
         // Generate summary
         match generator.generate(&node.title, &node.content).await {
             Ok(summary) => {
-                if !summary.is_empty() {
+                if summary.is_empty() {
+                    warn!("Empty summary returned for node '{}'", node.title);
+                } else {
                     tree.set_summary(node_id, &summary);
                     info!(
                         "Generated summary for node: {} ({} chars)",
@@ -81,8 +83,6 @@ impl EnhanceStage {
                         summary.len()
                     );
                     metrics.increment_summaries();
-                } else {
-                    warn!("Empty summary returned for node '{}'", node.title);
                 }
             }
             Err(e) => {
@@ -102,7 +102,7 @@ impl Default for EnhanceStage {
 
 #[async_trait]
 impl IndexStage for EnhanceStage {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "enhance"
     }
 

@@ -378,7 +378,7 @@ impl PdfParser {
         pages
             .iter()
             .map(|page| {
-                RawNode::new(&format!("Page {}", page.number))
+                RawNode::new(format!("Page {}", page.number))
                     .with_content(page.text.clone())
                     .with_level(1)
                     .with_page(page.number)

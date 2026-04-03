@@ -142,7 +142,7 @@ impl SufficiencyChecker for ThresholdChecker {
         SufficiencyLevel::Insufficient
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "threshold"
     }
 }

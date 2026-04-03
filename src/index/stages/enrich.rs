@@ -102,7 +102,7 @@ impl Default for EnrichStage {
 
 #[async_trait]
 impl IndexStage for EnrichStage {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "enrich"
     }
 

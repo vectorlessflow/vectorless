@@ -335,7 +335,7 @@ impl Workspace {
         let content = serde_json::to_string_pretty(&self.meta_index)
             .map_err(|e| Error::Parse(format!("Failed to serialize meta index: {}", e)))?;
 
-        fs::write(&self.meta_path(), content).map_err(Error::Io)?;
+        fs::write(self.meta_path(), content).map_err(Error::Io)?;
 
         Ok(())
     }

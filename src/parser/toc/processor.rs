@@ -188,7 +188,7 @@ impl TocProcessor {
 
         // Group pages into chunks
         let chunk_size = 10;
-        for (_i, chunk) in pages.chunks(chunk_size).enumerate() {
+        for chunk in pages.chunks(chunk_size) {
             let start_page = chunk.first().map(|p| p.number).unwrap_or(1);
             let end_page = chunk.last().map(|p| p.number).unwrap_or(1);
 

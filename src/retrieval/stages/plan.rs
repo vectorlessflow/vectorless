@@ -139,7 +139,7 @@ impl PlanStage {
 
 #[async_trait]
 impl RetrievalStage for PlanStage {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "plan"
     }
 

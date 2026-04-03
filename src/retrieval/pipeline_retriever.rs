@@ -132,7 +132,7 @@ impl Retriever for PipelineRetriever {
         Ok(response)
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "pipeline"
     }
 

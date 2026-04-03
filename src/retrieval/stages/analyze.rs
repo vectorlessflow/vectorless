@@ -153,7 +153,7 @@ impl AnalyzeStage {
 
 #[async_trait]
 impl RetrievalStage for AnalyzeStage {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "analyze"
     }
 

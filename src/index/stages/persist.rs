@@ -69,7 +69,7 @@ impl Default for PersistStage {
 
 #[async_trait]
 impl IndexStage for PersistStage {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "persist"
     }
 

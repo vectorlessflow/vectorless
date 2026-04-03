@@ -453,7 +453,7 @@ impl ContextBuilder {
         }
 
         // Yield every few levels to avoid blocking
-        if current_depth > 0 && current_depth % 3 == 0 {
+        if current_depth > 0 && current_depth.is_multiple_of(3) {
             tokio::task::yield_now().await;
         }
 

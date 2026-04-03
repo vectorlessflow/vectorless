@@ -178,7 +178,7 @@ impl SufficiencyChecker for LlmJudge {
         }
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "llm_judge"
     }
 }

@@ -282,10 +282,10 @@ impl MarkdownParser {
             && (!content_buffer.trim().is_empty() || !preamble_content.is_empty())
         {
             // Use preamble_content if available, otherwise use content_buffer
-            let content = if !preamble_content.is_empty() {
-                preamble_content.trim()
-            } else {
+            let content = if preamble_content.is_empty() {
                 content_buffer.trim()
+            } else {
+                preamble_content.trim()
             };
             nodes.push(RawNode {
                 title: self.config.preamble_title.clone(),

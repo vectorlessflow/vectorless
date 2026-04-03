@@ -136,7 +136,7 @@ impl SearchStage {
 
 #[async_trait]
 impl RetrievalStage for SearchStage {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "search"
     }
 

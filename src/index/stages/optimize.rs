@@ -130,7 +130,7 @@ impl Default for OptimizeStage {
 
 #[async_trait]
 impl IndexStage for OptimizeStage {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "optimize"
     }
 

@@ -110,7 +110,7 @@ impl SearchTree for GreedySearch {
         result
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "greedy"
     }
 }

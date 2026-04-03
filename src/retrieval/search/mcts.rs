@@ -255,7 +255,7 @@ impl SearchTree for MctsSearch {
         result
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "mcts"
     }
 }

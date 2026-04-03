@@ -155,7 +155,7 @@ impl SearchTree for BeamSearch {
         result
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "beam"
     }
 }
