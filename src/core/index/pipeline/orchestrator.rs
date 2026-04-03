@@ -28,7 +28,7 @@ use tracing::{info, warn, error};
 
 use crate::core::Result;
 
-use super::context::{IndexContext, IndexInput, IndexResult, StageResult};
+use super::context::{IndexContext, IndexInput, IndexResult};
 use super::super::stages::IndexStage;
 use super::super::PipelineOptions;
 
@@ -373,6 +373,7 @@ impl CustomStageBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use super::super::context::StageResult;
 
     #[test]
     fn test_orchestrator_creation() {
