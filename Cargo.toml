@@ -11,7 +11,7 @@ documentation = "https://docs.rs/vectorless"
 keywords = ["rag", "document", "retrieval", "indexing", "llm"]
 categories = ["text-processing", "data-structures", "algorithms"]
 readme = "README.md"
-exclude = ["samples/", "docs/", "benches/", ".*"]
+exclude = ["samples/", "docs/", ".*"]
 
 [dependencies]
 # Async runtime
@@ -72,12 +72,7 @@ rand = "0.8"
 
 [dev-dependencies]
 tempfile = "3.10"
-criterion = { version = "0.5", features = ["async_tokio"] }
 tokio-test = "0.4"
-
-[[bench]]
-name = "bench"
-harness = false
 
 [profile.release]
 opt-level = 3
