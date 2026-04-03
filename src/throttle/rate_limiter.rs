@@ -32,7 +32,7 @@ impl RateLimiter {
     /// # Example
     ///
     /// ```
-    /// use vectorless::concurrency::RateLimiter;
+    /// use vectorless::throttle::RateLimiter;
     ///
     /// let limiter = RateLimiter::new(100); // 100 requests per minute
     /// ```

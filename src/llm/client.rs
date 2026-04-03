@@ -21,7 +21,7 @@ use super::config::LlmConfig;
 use super::error::{LlmError, LlmResult};
 use super::fallback::FallbackChain;
 use super::retry::with_retry;
-use crate::concurrency::ConcurrencyController;
+use crate::throttle::ConcurrencyController;
 
 /// Unified LLM client.
 ///
@@ -103,7 +103,7 @@ impl LlmClient {
     ///
     /// ```rust,no_run
     /// use vectorless::llm::LlmClient;
-    /// use vectorless::concurrency::{ConcurrencyController, ConcurrencyConfig};
+    /// use vectorless::throttle::{ConcurrencyController, ConcurrencyConfig};
     ///
     /// let config = ConcurrencyConfig::new()
     ///     .with_max_concurrent_requests(10)
@@ -475,7 +475,7 @@ mod tests {
 
     #[test]
     fn test_client_with_concurrency() {
-        use crate::concurrency::ConcurrencyConfig;
+        use crate::throttle::ConcurrencyConfig;
 
         let controller = ConcurrencyController::new(ConcurrencyConfig::conservative());
         let client = LlmClient::for_model("gpt-4o-mini")

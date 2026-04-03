@@ -8,7 +8,7 @@
 use async_trait::async_trait;
 use serde::Deserialize;
 
-use crate::domain::{NodeId, VectorlessTree, TocView};
+use crate::domain::{NodeId, DocumentTree, TocView};
 use crate::llm::LlmClient;
 use super::super::types::{NavigationDecision, QueryComplexity};
 use super::super::RetrievalContext;
@@ -95,7 +95,7 @@ Be concise and focused on finding the most relevant information."#.to_string()
     }
 
     /// Build the navigation prompt for a single node.
-    fn build_prompt(&self, tree: &VectorlessTree, node_id: NodeId, context: &RetrievalContext) -> String {
+    fn build_prompt(&self, tree: &DocumentTree, node_id: NodeId, context: &RetrievalContext) -> String {
         let node = tree.get(node_id);
         let children = tree.children(node_id);
 
@@ -138,7 +138,7 @@ Be concise and focused on finding the most relevant information."#.to_string()
     }
 
     /// Parse LLM response to evaluation.
-    fn parse_response(&self, response: &str, tree: &VectorlessTree, node_id: NodeId) -> NodeEvaluation {
+    fn parse_response(&self, response: &str, tree: &DocumentTree, node_id: NodeId) -> NodeEvaluation {
         // Try to parse as JSON
         if let Ok(parsed) = serde_json::from_str::<NavigationResponse>(response) {
             let score = (parsed.relevance as f32 / 100.0).clamp(0.0, 1.0);
@@ -195,7 +195,7 @@ Be concise and focused on finding the most relevant information."#.to_string()
 impl RetrievalStrategy for LlmStrategy {
     async fn evaluate_node(
         &self,
-        tree: &VectorlessTree,
+        tree: &DocumentTree,
         node_id: NodeId,
         context: &RetrievalContext,
     ) -> NodeEvaluation {
@@ -220,7 +220,7 @@ impl RetrievalStrategy for LlmStrategy {
 
     async fn evaluate_nodes(
         &self,
-        tree: &VectorlessTree,
+        tree: &DocumentTree,
         node_ids: &[NodeId],
         context: &RetrievalContext,
     ) -> Vec<NodeEvaluation> {

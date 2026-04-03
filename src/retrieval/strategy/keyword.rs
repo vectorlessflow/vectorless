@@ -8,7 +8,7 @@
 use async_trait::async_trait;
 use std::collections::{HashMap, HashSet};
 
-use crate::domain::{NodeId, VectorlessTree};
+use crate::domain::{NodeId, DocumentTree};
 use super::super::types::{NavigationDecision, QueryComplexity};
 use super::super::RetrievalContext;
 use super::r#trait::{NodeEvaluation, RetrievalStrategy, StrategyCapabilities};
@@ -91,7 +91,7 @@ impl KeywordStrategy {
     }
 
     /// Get all text from a node for matching.
-    fn get_node_text(tree: &VectorlessTree, node_id: NodeId) -> String {
+    fn get_node_text(tree: &DocumentTree, node_id: NodeId) -> String {
         if let Some(node) = tree.get(node_id) {
             let mut text = format!("{} {}", node.title, node.content);
             if !node.summary.is_empty() {
@@ -108,7 +108,7 @@ impl KeywordStrategy {
 impl RetrievalStrategy for KeywordStrategy {
     async fn evaluate_node(
         &self,
-        tree: &VectorlessTree,
+        tree: &DocumentTree,
         node_id: NodeId,
         context: &RetrievalContext,
     ) -> NodeEvaluation {

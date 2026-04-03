@@ -19,7 +19,7 @@
 //! ```text
 //! ┌─────────────────────────────────────────────────────────────────┐
 //! │                          client                                  │
-//! │                    (Vectorless, Builder)                         │
+//! │                     (Engine, EngineBuilder)                      │
 //! └────────────────────────────┬────────────────────────────────────┘
 //!                              │
 //!           ┌──────────────────┼──────────────────┐
@@ -55,12 +55,12 @@
 //! ## Quick Start
 //!
 //! ```rust,no_run
-//! use vectorless::{VectorlessBuilder, Vectorless};
+//! use vectorless::{EngineBuilder, Engine};
 //!
 //! #[tokio::main]
 //! async fn main() -> vectorless::domain::Result<()> {
 //!     // Create client
-//!     let mut client = VectorlessBuilder::new()
+//!     let mut client = EngineBuilder::new()
 //!         .with_workspace("./workspace")
 //!         .build()?;
 //!
@@ -79,15 +79,15 @@
 //!
 //! | Module | Description |
 //! |--------|-------------|
-//! | [`client`] | High-level API (`Vectorless`, `VectorlessBuilder`) |
-//! | [`domain`] | Core domain types (`VectorlessTree`, `VectorlessNode`, `NodeId`) |
+//! | [`client`] | High-level API (`Engine`, `EngineBuilder`) |
+//! | [`domain`] | Core domain types (`DocumentTree`, `TreeNode`, `NodeId`) |
 //! | [`index`] | Document indexing pipeline |
 //! | [`retrieval`] | Retrieval strategies and search algorithms |
 //! | [`config`] | Configuration management |
 //! | [`llm`] | LLM client with retry & fallback |
 //! | [`parser`] | Document parsers (Markdown, PDF, DOCX) |
 //! | [`storage`] | Workspace persistence |
-//! | [`concurrency`] | Rate limiting |
+//! | [`throttle`] | Rate limiting |
 
 // =============================================================================
 // Modules
@@ -95,7 +95,7 @@
 
 pub mod client;
 pub mod config;
-pub mod concurrency;
+pub mod throttle;
 pub mod domain;
 pub mod index;
 pub mod llm;
@@ -108,22 +108,15 @@ pub mod storage;
 // =============================================================================
 
 // Client API (most common entry point)
-pub use client::{DocumentInfo, IndexedDocument, Vectorless, VectorlessBuilder};
+pub use client::{DocumentInfo, IndexedDocument, Engine, EngineBuilder};
 
 // Domain types
 pub use domain::{
-    Error, Result, NodeId, VectorlessNode, VectorlessTree,
+    Error, Result, NodeId, TreeNode, DocumentTree,
     DocumentStructure, StructureNode,
     TocView, TocNode, TocEntry, TocConfig,
     estimate_tokens, estimate_tokens_fast,
 };
-
-// Backward compatibility aliases
-#[doc(hidden)]
-pub type DocumentTree = VectorlessTree;
-
-#[doc(hidden)]
-pub type TreeNode = VectorlessNode;
 
 // Configuration
 pub use config::{Config, ConfigLoader, RetrievalConfig, SummaryConfig};
@@ -155,5 +148,5 @@ pub use retrieval::{
 // Storage
 pub use storage::{DocumentMeta as StorageDocumentMeta, PersistedDocument, Workspace};
 
-// Concurrency
-pub use concurrency::{ConcurrencyConfig, ConcurrencyController, RateLimiter};
+// Throttle
+pub use throttle::{ConcurrencyConfig, ConcurrencyController, RateLimiter};

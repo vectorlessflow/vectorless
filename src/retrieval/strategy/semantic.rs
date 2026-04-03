@@ -8,7 +8,7 @@
 use async_trait::async_trait;
 
 use crate::config::StrategyConfig;
-use crate::domain::{NodeId, VectorlessTree};
+use crate::domain::{NodeId, DocumentTree};
 use super::super::types::{NavigationDecision, QueryComplexity};
 use super::super::RetrievalContext;
 use super::r#trait::{NodeEvaluation, RetrievalStrategy, StrategyCapabilities};
@@ -99,7 +99,7 @@ impl SemanticStrategy {
     }
 
     /// Get text to embed for a node.
-    fn get_embedding_text(tree: &VectorlessTree, node_id: NodeId) -> String {
+    fn get_embedding_text(tree: &DocumentTree, node_id: NodeId) -> String {
         if let Some(node) = tree.get(node_id) {
             // Prefer summary if available, otherwise use content
             if !node.summary.is_empty() {
@@ -125,7 +125,7 @@ impl SemanticStrategy {
 impl RetrievalStrategy for SemanticStrategy {
     async fn evaluate_node(
         &self,
-        tree: &VectorlessTree,
+        tree: &DocumentTree,
         node_id: NodeId,
         context: &RetrievalContext,
     ) -> NodeEvaluation {
@@ -189,7 +189,7 @@ impl RetrievalStrategy for SemanticStrategy {
 
     async fn evaluate_nodes(
         &self,
-        tree: &VectorlessTree,
+        tree: &DocumentTree,
         node_ids: &[NodeId],
         context: &RetrievalContext,
     ) -> Vec<NodeEvaluation> {

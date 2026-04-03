@@ -7,7 +7,7 @@
 
 use async_trait::async_trait;
 
-use crate::domain::VectorlessTree;
+use crate::domain::DocumentTree;
 use super::super::types::{NavigationDecision, NavigationStep, SearchPath};
 use super::super::RetrievalContext;
 use super::{SearchConfig, SearchResult, SearchTree};
@@ -39,7 +39,7 @@ impl Default for GreedySearch {
 impl SearchTree for GreedySearch {
     async fn search(
         &self,
-        tree: &VectorlessTree,
+        tree: &DocumentTree,
         context: &RetrievalContext,
         config: &SearchConfig,
     ) -> SearchResult {

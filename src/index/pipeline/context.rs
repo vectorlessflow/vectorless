@@ -6,7 +6,7 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use crate::domain::{VectorlessTree, NodeId};
+use crate::domain::{DocumentTree, NodeId};
 use crate::parser::{DocumentFormat, RawNode};
 use crate::llm::LlmClient;
 
@@ -159,7 +159,7 @@ pub struct IndexContext {
     pub raw_nodes: Vec<RawNode>,
 
     /// Built document tree.
-    pub tree: Option<VectorlessTree>,
+    pub tree: Option<DocumentTree>,
 
     /// Index options.
     pub options: PipelineOptions,
@@ -251,12 +251,12 @@ impl IndexContext {
     }
 
     /// Get the tree, returning an error if not built.
-    pub fn tree(&self) -> Result<&VectorlessTree, &'static str> {
+    pub fn tree(&self) -> Result<&DocumentTree, &'static str> {
         self.tree.as_ref().ok_or("Tree not built")
     }
 
     /// Get mutable tree, returning an error if not built.
-    pub fn tree_mut(&mut self) -> Result<&mut VectorlessTree, &'static str> {
+    pub fn tree_mut(&mut self) -> Result<&mut DocumentTree, &'static str> {
         self.tree.as_mut().ok_or("Tree not built")
     }
 
@@ -293,7 +293,7 @@ pub struct IndexResult {
     pub source_path: Option<PathBuf>,
 
     /// Built document tree.
-    pub tree: Option<VectorlessTree>,
+    pub tree: Option<DocumentTree>,
 
     /// Document description.
     pub description: Option<String>,
@@ -318,7 +318,7 @@ impl IndexResult {
     }
 
     /// Get the tree.
-    pub fn tree(&self) -> Option<&VectorlessTree> {
+    pub fn tree(&self) -> Option<&DocumentTree> {
         self.tree.as_ref()
     }
 

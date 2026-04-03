@@ -4,21 +4,21 @@
 //! High-level client API for document indexing and retrieval.
 //!
 //! This module provides the main entry point for using vectorless:
-//! - [`Vectorless`] — The main client for indexing and querying documents
-//! - [`VectorlessBuilder`] — Builder pattern for client configuration
+//! - [`Engine`] — The main client for indexing and querying documents
+//! - [`EngineBuilder`] — Builder pattern for client configuration
 //!
 //! # Quick Start
 //!
 //! ```rust,no_run
-//! use vectorless::client::{Vectorless, VectorlessBuilder};
+//! use vectorless::client::{Engine, EngineBuilder};
 //!
 //! # #[tokio::main]
-//! # async fn main() -> vectorless::core::Result<()> {
+//! # async fn main() -> vectorless::domain::Result<()> {
 //! // Create a client with default settings
-//! let client = Vectorless::new()?;
+//! let client = Engine::new()?;
 //!
 //! // Or use the builder for custom configuration
-//! let client = VectorlessBuilder::new()
+//! let client = EngineBuilder::new()
 //!     .with_api_key("your-api-key")
 //!     .with_workspace("./my_workspace")
 //!     .build()?;
@@ -46,7 +46,7 @@
 
 mod types;
 mod builder;
-mod vectorless;
+mod engine;
 
 // Re-export main types
 pub use types::{
@@ -58,5 +58,5 @@ pub use types::{
     DocumentInfo,
 };
 
-pub use builder::{VectorlessBuilder, BuildError};
-pub use vectorless::Vectorless;
+pub use builder::{EngineBuilder, BuildError};
+pub use engine::Engine;

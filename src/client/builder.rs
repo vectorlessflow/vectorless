@@ -1,7 +1,7 @@
 // Copyright (c) 2026 vectorless developers
 // SPDX-License-Identifier: Apache-2.0
 
-//! Builder pattern for creating Vectorless clients.
+//! Builder pattern for creating Engine clients.
 
 use std::path::PathBuf;
 
@@ -9,12 +9,12 @@ use crate::config::{Config, ConfigLoader, RetrievalConfig};
 use crate::storage::Workspace;
 use crate::retrieval::AdaptiveRetriever;
 
-use super::Vectorless;
+use super::Engine;
 
 /// Default configuration file names to search for.
 const CONFIG_FILE_NAMES: &[&str] = &["vectorless.toml", "config.toml", ".vectorless.toml"];
 
-/// Builder for creating a [`Vectorless`] client.
+/// Builder for creating a [`Engine`] client.
 ///
 /// The builder uses sensible defaults and automatically loads
 /// LLM configuration from environment variables or config files.
@@ -22,15 +22,15 @@ const CONFIG_FILE_NAMES: &[&str] = &["vectorless.toml", "config.toml", ".vectorl
 /// # Example
 ///
 /// ```rust,no_run
-/// use vectorless::client::VectorlessBuilder;
+/// use vectorless::client::EngineBuilder;
 ///
-/// let client = VectorlessBuilder::new()
+/// let client = EngineBuilder::new()
 ///     .with_workspace("./my_workspace")
 ///     .build()?;
 /// # Ok::<(), vectorless::core::Error>(())
 /// ```
 #[derive(Debug)]
-pub struct VectorlessBuilder {
+pub struct EngineBuilder {
     /// Workspace path.
     workspace: Option<PathBuf>,
 
@@ -44,7 +44,7 @@ pub struct VectorlessBuilder {
     retrieval_config: Option<RetrievalConfig>,
 }
 
-impl VectorlessBuilder {
+impl EngineBuilder {
     /// Create a new builder with defaults.
     #[must_use]
     pub fn new() -> Self {
@@ -115,7 +115,7 @@ impl VectorlessBuilder {
         None
     }
 
-    /// Build the Vectorless client.
+    /// Build the Engine client.
     ///
     /// Configuration is loaded from:
     /// 1. Explicitly provided config (via `with_config`)
@@ -127,7 +127,7 @@ impl VectorlessBuilder {
     /// Returns a [`BuildError`] if:
     /// - Configuration loading fails
     /// - Workspace creation fails
-    pub fn build(self) -> Result<Vectorless, BuildError> {
+    pub fn build(self) -> Result<Engine, BuildError> {
         // Load or create configuration
         let config = if let Some(config) = self.config {
             // Use explicitly provided config
@@ -178,11 +178,11 @@ impl VectorlessBuilder {
         let adaptive_config = crate::retrieval::AdaptiveConfig::from_app_config(&retrieval_config);
         let retriever = AdaptiveRetriever::with_config(adaptive_config);
 
-        Ok(Vectorless::with_components(config, workspace, retriever, executor))
+        Ok(Engine::with_components(config, workspace, retriever, executor))
     }
 }
 
-impl Default for VectorlessBuilder {
+impl Default for EngineBuilder {
     fn default() -> Self {
         Self::new()
     }
@@ -206,13 +206,13 @@ mod tests {
 
     #[test]
     fn test_builder_defaults() {
-        let builder = VectorlessBuilder::new();
+        let builder = EngineBuilder::new();
         assert!(builder.workspace.is_none());
     }
 
     #[test]
     fn test_builder_with_workspace() {
-        let builder = VectorlessBuilder::new()
+        let builder = EngineBuilder::new()
             .with_workspace("./test_workspace");
 
         assert_eq!(builder.workspace, Some(PathBuf::from("./test_workspace")));

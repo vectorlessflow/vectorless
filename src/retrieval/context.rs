@@ -28,7 +28,7 @@
 //! ```
 
 use std::collections::HashSet;
-use crate::domain::{VectorlessTree, NodeId, estimate_tokens};
+use crate::domain::{DocumentTree, NodeId, estimate_tokens};
 use super::types::RetrievalResult;
 
 /// Pruning strategy for context building.
@@ -391,7 +391,7 @@ impl ContextBuilder {
     /// Build context from a document tree starting at a node (synchronous).
     pub fn build_from_tree(
         &self,
-        tree: &VectorlessTree,
+        tree: &DocumentTree,
         node_id: NodeId,
         max_depth: usize,
     ) -> String {
@@ -403,7 +403,7 @@ impl ContextBuilder {
     /// Build context from a document tree asynchronously.
     pub async fn build_from_tree_async(
         &self,
-        tree: &VectorlessTree,
+        tree: &DocumentTree,
         node_id: NodeId,
         max_depth: usize,
     ) -> String {
@@ -414,7 +414,7 @@ impl ContextBuilder {
 
     fn collect_sections(
         &self,
-        tree: &VectorlessTree,
+        tree: &DocumentTree,
         node_id: NodeId,
         current_depth: usize,
         max_depth: usize,
@@ -438,7 +438,7 @@ impl ContextBuilder {
 
     async fn collect_sections_async(
         &self,
-        tree: &VectorlessTree,
+        tree: &DocumentTree,
         node_id: NodeId,
         current_depth: usize,
         max_depth: usize,
@@ -471,7 +471,7 @@ impl ContextBuilder {
         }
     }
 
-    fn format_node_section(&self, node: &crate::domain::VectorlessNode, depth: usize) -> String {
+    fn format_node_section(&self, node: &crate::domain::TreeNode, depth: usize) -> String {
         let mut section = String::new();
 
         if self.include_titles {
@@ -530,7 +530,7 @@ pub async fn format_for_llm_async(results: &[RetrievalResult], max_tokens: usize
 
 /// Format a document tree for LLM consumption.
 pub fn format_tree_for_llm(
-    tree: &VectorlessTree,
+    tree: &DocumentTree,
     max_depth: usize,
     max_tokens: usize,
 ) -> String {
@@ -541,7 +541,7 @@ pub fn format_tree_for_llm(
 
 /// Format a document tree asynchronously.
 pub async fn format_tree_for_llm_async(
-    tree: &VectorlessTree,
+    tree: &DocumentTree,
     max_depth: usize,
     max_tokens: usize,
 ) -> String {

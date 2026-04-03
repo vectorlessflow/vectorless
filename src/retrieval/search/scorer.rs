@@ -5,7 +5,7 @@
 //!
 //! Implements the NodeScore formula: `Σ ChunkScore(n) / √(N+1)`
 
-use crate::domain::{NodeId, VectorlessTree};
+use crate::domain::{NodeId, DocumentTree};
 
 /// Context for scoring calculations.
 #[derive(Debug, Clone)]
@@ -48,7 +48,7 @@ impl ScoringContext {
     }
 
     /// Calculate a quick keyword-based score for a node.
-    pub fn quick_score(&self, tree: &VectorlessTree, node_id: NodeId) -> f32 {
+    pub fn quick_score(&self, tree: &DocumentTree, node_id: NodeId) -> f32 {
         if let Some(node) = tree.get(node_id) {
             let title_score = self.term_overlap(&node.title);
             let summary_score = self.term_overlap(&node.summary);
@@ -98,12 +98,12 @@ impl NodeScorer {
     }
 
     /// Score a single node.
-    pub fn score(&self, tree: &VectorlessTree, node_id: NodeId) -> f32 {
+    pub fn score(&self, tree: &DocumentTree, node_id: NodeId) -> f32 {
         self.context.quick_score(tree, node_id)
     }
 
     /// Score multiple nodes and return sorted by score (descending).
-    pub fn score_and_sort(&self, tree: &VectorlessTree, node_ids: &[NodeId]) -> Vec<(NodeId, f32)> {
+    pub fn score_and_sort(&self, tree: &DocumentTree, node_ids: &[NodeId]) -> Vec<(NodeId, f32)> {
         let mut scored: Vec<_> = node_ids
             .iter()
             .map(|&id| (id, self.score(tree, id)))
@@ -124,7 +124,7 @@ impl NodeScorer {
     /// `Σ ChunkScore(n) / √(N+1)`
     ///
     /// Where N is the number of chunks and ChunkScore is calculated for each.
-    pub fn node_score(&self, tree: &VectorlessTree, node_id: NodeId, chunk_size: usize) -> f32 {
+    pub fn node_score(&self, tree: &DocumentTree, node_id: NodeId, chunk_size: usize) -> f32 {
         if let Some(node) = tree.get(node_id) {
             let content = format!("{} {} {}", node.title, node.summary, node.content);
 

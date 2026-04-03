@@ -33,7 +33,7 @@
 //! # Example
 //!
 //! ```rust
-//! use vectorless::concurrency::{ConcurrencyController, ConcurrencyConfig};
+//! use vectorless::throttle::{ConcurrencyController, ConcurrencyConfig};
 //!
 //! # #[tokio::main]
 //! # async fn main() {

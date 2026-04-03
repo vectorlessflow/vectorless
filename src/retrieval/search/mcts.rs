@@ -9,7 +9,7 @@ use async_trait::async_trait;
 use std::collections::HashMap;
 
 use crate::config::StrategyConfig;
-use crate::domain::{NodeId, VectorlessTree};
+use crate::domain::{NodeId, DocumentTree};
 use super::super::types::{NavigationDecision, NavigationStep, SearchPath};
 use super::super::RetrievalContext;
 use super::{SearchConfig, SearchResult, SearchTree};
@@ -78,7 +78,7 @@ impl MctsSearch {
     /// Select best child using UCT.
     fn select_child(
         &self,
-        tree: &VectorlessTree,
+        tree: &DocumentTree,
         node_id: NodeId,
         stats: &HashMap<NodeId, NodeStats>,
     ) -> Option<(NodeId, f32)> {
@@ -108,7 +108,7 @@ impl MctsSearch {
     }
 
     /// Simulate a random rollout from a node.
-    fn simulate(&self, tree: &VectorlessTree, node_id: NodeId, max_depth: usize) -> f32 {
+    fn simulate(&self, tree: &DocumentTree, node_id: NodeId, max_depth: usize) -> f32 {
         let mut current = node_id;
         let mut depth = 0;
         let mut total_score = self.scorer.score(tree, current);
@@ -158,7 +158,7 @@ impl Default for MctsSearch {
 impl SearchTree for MctsSearch {
     async fn search(
         &self,
-        tree: &VectorlessTree,
+        tree: &DocumentTree,
         context: &RetrievalContext,
         config: &SearchConfig,
     ) -> SearchResult {

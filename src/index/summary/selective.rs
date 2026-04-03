@@ -3,7 +3,7 @@
 
 //! Selective summary strategy - generate summaries only for qualifying nodes.
 
-use crate::domain::{NodeId, VectorlessTree};
+use crate::domain::{NodeId, DocumentTree};
 use crate::llm::LlmClient;
 
 use super::{SummaryGenerator, SummaryStrategyConfig};
@@ -70,7 +70,7 @@ impl SelectiveStrategy {
     }
 
     /// Check if a node should have a summary generated.
-    pub fn should_generate(&self, tree: &VectorlessTree, node_id: NodeId, token_count: usize) -> bool {
+    pub fn should_generate(&self, tree: &DocumentTree, node_id: NodeId, token_count: usize) -> bool {
         // Check token threshold
         let enough_tokens = token_count >= self.min_tokens;
 

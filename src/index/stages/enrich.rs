@@ -7,7 +7,7 @@ use super::async_trait;
 use std::time::Instant;
 use tracing::info;
 
-use crate::domain::{NodeId, Result, VectorlessTree, TocView};
+use crate::domain::{NodeId, Result, DocumentTree, TocView};
 
 use super::{IndexStage, StageResult};
 use crate::index::pipeline::IndexContext;
@@ -22,13 +22,13 @@ impl EnrichStage {
     }
 
     /// Calculate page ranges for all nodes.
-    fn calculate_page_ranges(tree: &mut VectorlessTree) {
+    fn calculate_page_ranges(tree: &mut DocumentTree) {
         // Propagate page ranges up the tree
         Self::propagate_page_ranges(tree, tree.root());
     }
 
     /// Recursively propagate page ranges from children to parent.
-    fn propagate_page_ranges(tree: &mut VectorlessTree, node_id: NodeId) {
+    fn propagate_page_ranges(tree: &mut DocumentTree, node_id: NodeId) {
         let children = tree.children(node_id);
 
         if children.is_empty() {
@@ -62,7 +62,7 @@ impl EnrichStage {
     }
 
     /// Calculate token statistics.
-    fn calculate_token_stats(tree: &VectorlessTree) -> (usize, usize) {
+    fn calculate_token_stats(tree: &DocumentTree) -> (usize, usize) {
         let mut total_tokens = 0;
         let mut node_count = 0;
 

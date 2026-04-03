@@ -5,7 +5,7 @@
 
 use async_trait::async_trait;
 
-use crate::domain::{NodeId, VectorlessTree};
+use crate::domain::{NodeId, DocumentTree};
 use super::super::types::{NavigationDecision, QueryComplexity};
 use super::super::RetrievalContext;
 
@@ -55,7 +55,7 @@ pub trait RetrievalStrategy: Send + Sync {
     /// a node is to the current query.
     async fn evaluate_node(
         &self,
-        tree: &VectorlessTree,
+        tree: &DocumentTree,
         node_id: NodeId,
         context: &RetrievalContext,
     ) -> NodeEvaluation;
@@ -66,7 +66,7 @@ pub trait RetrievalStrategy: Send + Sync {
     /// but strategies can override for efficiency (e.g., batch LLM calls).
     async fn evaluate_nodes(
         &self,
-        tree: &VectorlessTree,
+        tree: &DocumentTree,
         node_ids: &[NodeId],
         context: &RetrievalContext,
     ) -> Vec<NodeEvaluation> {

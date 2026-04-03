@@ -445,8 +445,8 @@ impl ConcurrencyConfig {
     }
 
     /// Convert to the runtime concurrency config.
-    pub fn to_runtime_config(&self) -> crate::concurrency::ConcurrencyConfig {
-        crate::concurrency::ConcurrencyConfig {
+    pub fn to_runtime_config(&self) -> crate::throttle::ConcurrencyConfig {
+        crate::throttle::ConcurrencyConfig {
             max_concurrent_requests: self.max_concurrent_requests,
             requests_per_minute: self.requests_per_minute,
             enabled: self.enabled,
@@ -455,7 +455,7 @@ impl ConcurrencyConfig {
     }
 }
 
-impl From<ConcurrencyConfig> for crate::concurrency::ConcurrencyConfig {
+impl From<ConcurrencyConfig> for crate::throttle::ConcurrencyConfig {
     fn from(config: ConcurrencyConfig) -> Self {
         config.to_runtime_config()
     }

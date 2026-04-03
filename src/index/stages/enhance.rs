@@ -8,7 +8,7 @@ use std::sync::Arc;
 use std::time::Instant;
 use tracing::{info, warn};
 
-use crate::domain::{NodeId, Result, VectorlessTree};
+use crate::domain::{NodeId, Result, DocumentTree};
 use crate::llm::LlmClient;
 
 use super::{IndexStage, StageResult};
@@ -45,7 +45,7 @@ impl EnhanceStage {
 
     /// Generate summary for a single node.
     async fn generate_node_summary(
-        tree: &mut VectorlessTree,
+        tree: &mut DocumentTree,
         node_id: NodeId,
         generator: &LlmSummaryGenerator,
         strategy: &SummaryStrategy,

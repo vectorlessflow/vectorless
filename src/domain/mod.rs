@@ -8,8 +8,8 @@
 //!
 //! # Types
 //!
-//! - [`VectorlessNode`] - A node in the document tree
-//! - [`VectorlessTree`] - Arena-based tree structure
+//! - [`TreeNode`] - A node in the document tree
+//! - [`DocumentTree`] - Arena-based tree structure
 //! - [`NodeId`] - Unique identifier for tree nodes
 //! - [`TocView`] - Table of Contents generator
 //! - [`Error`] - Domain error types
@@ -21,14 +21,7 @@ mod toc;
 mod tree;
 
 pub use error::{Error, Result};
-pub use node::{NodeId, VectorlessNode};
+pub use node::{NodeId, TreeNode};
 pub use token::{estimate_tokens, estimate_tokens_fast, estimate_tokens_batch};
 pub use toc::{TocConfig, TocEntry, TocNode, TocView};
-pub use tree::{DocumentStructure, StructureNode, VectorlessTree};
-
-// Backward compatibility aliases
-#[doc(hidden)]
-pub type TreeNode = VectorlessNode;
-
-#[doc(hidden)]
-pub type DocumentTree = VectorlessTree;
+pub use tree::{DocumentStructure, StructureNode, DocumentTree};

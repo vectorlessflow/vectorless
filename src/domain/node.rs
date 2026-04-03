@@ -49,7 +49,7 @@ impl<'de> Deserialize<'de> for NodeId {
 /// When a question is asked, an LLM navigates this tree level by level
 /// to find the right answer.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct VectorlessNode {
+pub struct TreeNode {
     /// Title of this section.
     pub title: String,
 
@@ -89,7 +89,7 @@ pub struct VectorlessNode {
     pub token_count: Option<usize>,
 }
 
-impl Default for VectorlessNode {
+impl Default for TreeNode {
     fn default() -> Self {
         Self {
             title: String::new(),

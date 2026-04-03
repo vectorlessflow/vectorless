@@ -9,8 +9,8 @@
 use serde::{Deserialize, Serialize};
 
 use super::node::NodeId;
-use super::tree::VectorlessTree;
-use super::node::VectorlessNode;
+use super::tree::DocumentTree;
+use super::node::TreeNode;
 
 /// A node in the Table of Contents.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -151,18 +151,18 @@ impl TocView {
     }
 
     /// Generate ToC from a tree.
-    pub fn generate(&self, tree: &VectorlessTree) -> TocNode {
+    pub fn generate(&self, tree: &DocumentTree) -> TocNode {
         self.build_toc_node(tree, tree.root(), 0)
     }
 
     /// Generate ToC starting from a specific node.
-    pub fn generate_from(&self, tree: &VectorlessTree, start: NodeId) -> TocNode {
+    pub fn generate_from(&self, tree: &DocumentTree, start: NodeId) -> TocNode {
         let depth = tree.get(start).map_or(0, |n| n.depth);
         self.build_toc_node(tree, start, depth)
     }
 
     /// Build a ToC node from a tree node.
-    fn build_toc_node(&self, tree: &VectorlessTree, node_id: NodeId, depth: usize) -> TocNode {
+    fn build_toc_node(&self, tree: &DocumentTree, node_id: NodeId, depth: usize) -> TocNode {
         let node = match tree.get(node_id) {
             Some(n) => n,
             None => return TocNode::new("Unknown", depth),
@@ -205,13 +205,13 @@ impl TocView {
     }
 
     /// Generate a flat list of ToC entries.
-    pub fn generate_flat(&self, tree: &VectorlessTree) -> Vec<TocEntry> {
+    pub fn generate_flat(&self, tree: &DocumentTree) -> Vec<TocEntry> {
         let mut entries = Vec::new();
         self.collect_flat_entries(tree, tree.root(), &mut entries);
         entries
     }
 
-    fn collect_flat_entries(&self, tree: &VectorlessTree, node_id: NodeId, entries: &mut Vec<TocEntry>) {
+    fn collect_flat_entries(&self, tree: &DocumentTree, node_id: NodeId, entries: &mut Vec<TocEntry>) {
         if let Some(node) = tree.get(node_id) {
             entries.push(TocEntry {
                 title: node.title.clone(),
@@ -227,18 +227,18 @@ impl TocView {
     }
 
     /// Generate a filtered ToC based on a predicate.
-    pub fn generate_filtered<F>(&self, tree: &VectorlessTree, filter: F) -> Vec<TocNode>
+    pub fn generate_filtered<F>(&self, tree: &DocumentTree, filter: F) -> Vec<TocNode>
     where
-        F: Fn(&VectorlessNode) -> bool,
+        F: Fn(&TreeNode) -> bool,
     {
         let mut result = Vec::new();
         self.collect_filtered(tree, tree.root(), &filter, &mut result);
         result
     }
 
-    fn collect_filtered<F>(&self, tree: &VectorlessTree, node_id: NodeId, filter: &F, result: &mut Vec<TocNode>)
+    fn collect_filtered<F>(&self, tree: &DocumentTree, node_id: NodeId, filter: &F, result: &mut Vec<TocNode>)
     where
-        F: Fn(&VectorlessNode) -> bool,
+        F: Fn(&TreeNode) -> bool,
     {
         if let Some(node) = tree.get(node_id) {
             if filter(node) {

@@ -5,7 +5,7 @@
 
 use async_trait::async_trait;
 
-use crate::domain::VectorlessTree;
+use crate::domain::DocumentTree;
 use super::super::types::{NavigationStep, SearchPath};
 use super::super::RetrievalContext;
 
@@ -79,7 +79,7 @@ pub trait SearchTree: Send + Sync {
     /// A `SearchResult` with paths and trace information.
     async fn search(
         &self,
-        tree: &VectorlessTree,
+        tree: &DocumentTree,
         context: &RetrievalContext,
         config: &SearchConfig,
     ) -> SearchResult;

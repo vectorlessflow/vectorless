@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use super::client::LlmClient;
 use super::config::LlmConfigs;
-use crate::concurrency::ConcurrencyController;
+use crate::throttle::ConcurrencyController;
 
 /// Pool of LLM clients for different purposes.
 ///
@@ -80,7 +80,7 @@ impl LlmPool {
     ///
     /// ```rust,no_run
     /// use vectorless::llm::LlmPool;
-    /// use vectorless::concurrency::{ConcurrencyController, ConcurrencyConfig};
+    /// use vectorless::throttle::{ConcurrencyController, ConcurrencyConfig};
     ///
     /// let config = ConcurrencyConfig::new()
     ///     .with_max_concurrent_requests(10)
@@ -230,7 +230,7 @@ mod tests {
 
     #[test]
     fn test_pool_with_concurrency() {
-        use crate::concurrency::ConcurrencyConfig;
+        use crate::throttle::ConcurrencyConfig;
 
         let controller = ConcurrencyController::new(ConcurrencyConfig::conservative());
         let pool = LlmPool::from_defaults().with_concurrency(controller);

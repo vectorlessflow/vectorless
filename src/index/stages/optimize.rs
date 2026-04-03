@@ -23,7 +23,7 @@ impl OptimizeStage {
 
     /// Merge adjacent small leaf nodes.
     fn merge_small_leaves(
-        tree: &mut crate::domain::VectorlessTree,
+        tree: &mut crate::domain::DocumentTree,
         min_tokens: usize,
         metrics: &mut crate::index::IndexMetrics,
     ) -> usize {
@@ -91,7 +91,7 @@ impl OptimizeStage {
     }
 
     /// Remove empty intermediate nodes.
-    fn remove_empty_nodes(tree: &mut crate::domain::VectorlessTree) -> usize {
+    fn remove_empty_nodes(tree: &mut crate::domain::DocumentTree) -> usize {
         let mut removed_count = 0;
 
         // Find nodes with no content and only one child

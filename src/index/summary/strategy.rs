@@ -5,7 +5,7 @@
 
 use async_trait::async_trait;
 
-use crate::domain::{NodeId, VectorlessTree};
+use crate::domain::{NodeId, DocumentTree};
 use crate::llm::{LlmClient, LlmResult};
 
 /// Configuration for summary strategies.
@@ -106,7 +106,7 @@ impl SummaryStrategy {
     }
 
     /// Check if we should generate a summary for a node.
-    pub fn should_generate(&self, tree: &VectorlessTree, node_id: NodeId, token_count: usize) -> bool {
+    pub fn should_generate(&self, tree: &DocumentTree, node_id: NodeId, token_count: usize) -> bool {
         match self {
             Self::None => false,
             Self::Full { .. } => token_count > 0,

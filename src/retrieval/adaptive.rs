@@ -33,7 +33,7 @@ use super::types::{
     StrategyPreference,
 };
 use crate::config::RetrievalConfig as AppRetrievalConfig;
-use crate::domain::{NodeId, VectorlessTree, TocView};
+use crate::domain::{NodeId, DocumentTree, TocView};
 use crate::llm::LlmClient;
 
 /// Configuration for the adaptive retriever.
@@ -213,7 +213,7 @@ impl AdaptiveRetriever {
     /// Execute tree search using the selected strategy.
     async fn execute_search(
         &self,
-        tree: &VectorlessTree,
+        tree: &DocumentTree,
         query: &str,
         options: &RetrieveOptions,
         context: &RetrievalContext,
@@ -243,7 +243,7 @@ impl AdaptiveRetriever {
     /// Execute keyword-based search (no LLM calls).
     async fn execute_keyword_search(
         &self,
-        tree: &VectorlessTree,
+        tree: &DocumentTree,
         query: &str,
         options: &RetrieveOptions,
         context: &RetrievalContext,
@@ -332,7 +332,7 @@ impl AdaptiveRetriever {
     /// The query is taken from `context.query`.
     async fn execute_llm_search(
         &self,
-        tree: &VectorlessTree,
+        tree: &DocumentTree,
         options: &RetrieveOptions,
         context: &RetrievalContext,
     ) -> RetrieverResult<SearchResult> {
@@ -429,7 +429,7 @@ impl AdaptiveRetriever {
     /// Convert search paths to retrieval results.
     fn paths_to_results(
         &self,
-        tree: &VectorlessTree,
+        tree: &DocumentTree,
         paths: Vec<super::types::SearchPath>,
         options: &RetrieveOptions,
     ) -> RetrieverResult<Vec<RetrievalResult>> {
@@ -466,7 +466,7 @@ impl AdaptiveRetriever {
     /// Execute semantic-based search (requires embedding model).
     async fn execute_semantic_search(
         &self,
-        tree: &VectorlessTree,
+        tree: &DocumentTree,
         query: &str,
         options: &RetrieveOptions,
         context: &RetrievalContext,
@@ -600,30 +600,30 @@ impl AdaptiveRetriever {
     ///
     /// This creates a hierarchical view of the document structure
     /// that can be used for LLM-guided navigation.
-    pub fn generate_toc_view(&self, tree: &VectorlessTree) -> String {
+    pub fn generate_toc_view(&self, tree: &DocumentTree) -> String {
         let toc = self.toc_view.generate(tree);
         self.toc_view.format_markdown(&toc)
     }
 
     /// Generate a ToC view from a specific node.
-    pub fn generate_toc_from(&self, tree: &VectorlessTree, node_id: NodeId) -> String {
+    pub fn generate_toc_from(&self, tree: &DocumentTree, node_id: NodeId) -> String {
         let toc = self.toc_view.generate_from(tree, node_id);
         self.toc_view.format_markdown(&toc)
     }
 
     /// Generate a flat ToC list for quick scanning.
-    pub fn generate_flat_toc(&self, tree: &VectorlessTree) -> Vec<crate::domain::TocEntry> {
+    pub fn generate_flat_toc(&self, tree: &DocumentTree) -> Vec<crate::domain::TocEntry> {
         self.toc_view.generate_flat(tree)
     }
 
     /// Generate a filtered ToC based on criteria.
     pub fn generate_filtered_toc<F>(
         &self,
-        tree: &VectorlessTree,
+        tree: &DocumentTree,
         filter: F,
     ) -> Vec<crate::domain::TocNode>
     where
-        F: Fn(&crate::domain::VectorlessNode) -> bool,
+        F: Fn(&crate::domain::TreeNode) -> bool,
     {
         self.toc_view.generate_filtered(tree, filter)
     }
@@ -649,7 +649,7 @@ impl std::fmt::Debug for AdaptiveRetriever {
 impl Retriever for AdaptiveRetriever {
     async fn retrieve(
         &self,
-        tree: &VectorlessTree,
+        tree: &DocumentTree,
         query: &str,
         options: &RetrieveOptions,
     ) -> RetrieverResult<RetrieveResponse> {
@@ -743,7 +743,7 @@ impl Retriever for AdaptiveRetriever {
         "adaptive"
     }
 
-    fn estimate_cost(&self, tree: &VectorlessTree, options: &RetrieveOptions) -> CostEstimate {
+    fn estimate_cost(&self, tree: &DocumentTree, options: &RetrieveOptions) -> CostEstimate {
         let node_count = tree.node_count();
         // Estimate based on strategy
         let complexity = self.complexity_detector.detect("sample query");

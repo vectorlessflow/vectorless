@@ -9,7 +9,7 @@
 use indextree::Arena;
 use serde::{Serialize, Deserialize};
 
-use super::node::{NodeId, VectorlessNode};
+use super::node::{NodeId, TreeNode};
 
 /// JSON structure for exporting document tree (matches PageIndex format).
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -44,19 +44,19 @@ pub struct DocumentStructure {
 /// Uses an arena-based tree representation for efficient traversal
 /// and node manipulation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct VectorlessTree {
+pub struct DocumentTree {
     /// The underlying arena storing all nodes.
-    arena: Arena<VectorlessNode>,
+    arena: Arena<TreeNode>,
 
     /// The root node ID.
     root_id: NodeId,
 }
 
-impl VectorlessTree {
+impl DocumentTree {
     /// Create a new document tree with a root node.
     pub fn new(title: &str, content: &str) -> Self {
         let mut arena = Arena::new();
-        let root_data = VectorlessNode {
+        let root_data = TreeNode {
             title: title.to_string(),
             content: content.to_string(),
             summary: String::new(),
@@ -77,7 +77,7 @@ impl VectorlessTree {
     /// Create a document tree from an existing arena and root ID.
     ///
     /// This is useful for deserialization and testing.
-    pub fn from_raw(arena: Arena<VectorlessNode>, root_id: NodeId) -> Self {
+    pub fn from_raw(arena: Arena<TreeNode>, root_id: NodeId) -> Self {
         Self { arena, root_id }
     }
 
@@ -87,21 +87,21 @@ impl VectorlessTree {
     }
 
     /// Get a reference to the underlying arena.
-    pub fn arena(&self) -> &Arena<VectorlessNode> {
+    pub fn arena(&self) -> &Arena<TreeNode> {
         &self.arena
     }
 
     /// Get a node by its ID.
     ///
     /// Returns None if the node doesn't exist.
-    pub fn get(&self, id: NodeId) -> Option<&VectorlessNode> {
+    pub fn get(&self, id: NodeId) -> Option<&TreeNode> {
         self.arena.get(id.0).map(|n| n.get())
     }
 
     /// Get a mutable reference to a node by its ID.
     ///
     /// Returns None if the node doesn't exist.
-    pub fn get_mut(&mut self, id: NodeId) -> Option<&mut VectorlessNode> {
+    pub fn get_mut(&mut self, id: NodeId) -> Option<&mut TreeNode> {
         self.arena.get_mut(id.0).map(|n| n.get_mut())
     }
 
@@ -110,7 +110,7 @@ impl VectorlessTree {
     /// Returns the ID of the newly created child node.
     pub fn add_child(&mut self, parent: NodeId, title: &str, content: &str) -> NodeId {
         let parent_depth = self.arena.get(parent.0).map(|n| n.get().depth).unwrap_or(0);
-        let child_data = VectorlessNode {
+        let child_data = TreeNode {
             title: title.to_string(),
             content: content.to_string(),
             summary: String::new(),
@@ -295,7 +295,7 @@ impl VectorlessTree {
     }
 }
 
-impl Default for VectorlessTree {
+impl Default for DocumentTree {
     fn default() -> Self {
         Self::new("Root", "")
     }

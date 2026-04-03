@@ -5,7 +5,7 @@
 
 use tracing::info;
 
-use crate::domain::{NodeId, Result, VectorlessTree};
+use crate::domain::{NodeId, Result, DocumentTree};
 use crate::parser::RawNode;
 
 use super::detector::ChangeDetector;
@@ -66,9 +66,9 @@ impl PartialUpdater {
     /// 3. Regenerating summaries for changed nodes
     pub fn update(
         &self,
-        old_tree: &VectorlessTree,
+        old_tree: &DocumentTree,
         new_raw_nodes: Vec<RawNode>,
-    ) -> Result<(VectorlessTree, UpdateResult)> {
+    ) -> Result<(DocumentTree, UpdateResult)> {
         let mut result = UpdateResult::default();
 
         // Build new tree from raw nodes
@@ -98,11 +98,11 @@ impl PartialUpdater {
     }
 
     /// Build a tree from raw nodes (simple implementation).
-    fn build_tree_from_raw(&self, raw_nodes: Vec<RawNode>) -> Result<VectorlessTree> {
+    fn build_tree_from_raw(&self, raw_nodes: Vec<RawNode>) -> Result<DocumentTree> {
         // This is a simplified implementation
         // In production, use the BuildStage
 
-        let mut tree = VectorlessTree::new("Document", "");
+        let mut tree = DocumentTree::new("Document", "");
 
         // Stack to track parent nodes at each level
         let mut level_stack: Vec<Option<NodeId>> = vec![Some(tree.root())];

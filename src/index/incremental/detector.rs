@@ -8,7 +8,7 @@ use std::hash::{Hash, Hasher};
 use std::path::Path;
 use std::time::SystemTime;
 
-use crate::domain::VectorlessTree;
+use crate::domain::DocumentTree;
 
 /// Type of change detected.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -149,7 +149,7 @@ impl ChangeDetector {
     }
 
     /// Compare two trees and detect changes.
-    pub fn detect_changes(&self, old_tree: &VectorlessTree, new_tree: &VectorlessTree) -> ChangeSet {
+    pub fn detect_changes(&self, old_tree: &DocumentTree, new_tree: &DocumentTree) -> ChangeSet {
         let mut changes = ChangeSet::new();
 
         // Collect nodes from both trees
@@ -195,7 +195,7 @@ impl ChangeDetector {
     }
 
     /// Collect node information from a tree.
-    fn collect_node_info(&self, tree: &VectorlessTree) -> HashMap<String, NodeInfo> {
+    fn collect_node_info(&self, tree: &DocumentTree) -> HashMap<String, NodeInfo> {
         let mut info = HashMap::new();
 
         for node_id in tree.traverse() {

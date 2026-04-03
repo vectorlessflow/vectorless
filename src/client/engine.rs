@@ -1,7 +1,7 @@
 // Copyright (c) 2026 vectorless developers
 // SPDX-License-Identifier: Apache-2.0
 
-//! Main Vectorless client for document indexing and retrieval.
+//! Main Engine client for document indexing and retrieval.
 //!
 //! This module provides the high-level API for:
 //! - Indexing documents (Markdown, PDF, DOCX, HTML)
@@ -19,18 +19,18 @@
 //!
 //! # Thread Safety
 //!
-//! `Vectorless` is `Clone + Send + Sync`. Cloning is cheap (reference count increment).
+//! `Engine` is `Clone + Send + Sync`. Cloning is cheap (reference count increment).
 //! All clones share the same underlying resources.
 //!
 //! # Example
 //!
 //! ```rust,no_run
-//! use vectorless::client::{Vectorless, VectorlessBuilder};
+//! use vectorless::client::{Engine, EngineBuilder};
 //!
 //! # #[tokio::main]
 //! # async fn main() -> vectorless::core::Result<()> {
 //! // Create a client
-//! let client = VectorlessBuilder::new()
+//! let client = EngineBuilder::new()
 //!     .with_workspace("./my_workspace")
 //!     .build()?;
 //!
@@ -60,7 +60,7 @@ use crate::index::{PipelineExecutor, PipelineOptions, IndexInput, SummaryStrateg
 
 use super::types::{IndexMode, IndexOptions, DocumentInfo, QueryResult};
 
-/// The main Vectorless client.
+/// The main Engine client.
 ///
 /// Provides high-level operations for document indexing and retrieval.
 /// Uses interior mutability to allow sharing across async tasks.
@@ -78,7 +78,7 @@ use super::types::{IndexMode, IndexOptions, DocumentInfo, QueryResult};
 /// - Workspace: `Arc<RwLock<Workspace>>` - Multiple readers, single writer
 /// - Executor: `Arc<Mutex<PipelineExecutor>>` - Exclusive access during indexing
 /// - Retriever: `Arc<AdaptiveRetriever>` - Immutable, uses internal synchronization
-pub struct Vectorless {
+pub struct Engine {
     /// Configuration (immutable, shared).
     config: Arc<Config>,
 
@@ -94,16 +94,16 @@ pub struct Vectorless {
     executor: Arc<Mutex<PipelineExecutor>>,
 }
 
-impl Vectorless {
+impl Engine {
     /// Create a builder for custom configuration.
     #[must_use]
-    pub fn builder() -> super::VectorlessBuilder {
-        super::VectorlessBuilder::new()
+    pub fn builder() -> super::EngineBuilder {
+        super::EngineBuilder::new()
     }
 
     /// Create a new client with default configuration.
     ///
-    /// Note: Prefer using [`Vectorless::builder()`] for more control.
+    /// Note: Prefer using [`Engine::builder()`] for more control.
     fn new() -> Result<Self> {
         let config = Config::default();
         Ok(Self {
@@ -136,7 +136,7 @@ impl Vectorless {
     ///
     /// # Errors
     ///
-    /// See [`Vectorless::index`].
+    /// See [`Engine::index`].
     pub async fn index_with_options(
         &self,
         path: impl AsRef<Path>,
@@ -582,7 +582,7 @@ impl Vectorless {
     }
 }
 
-impl Clone for Vectorless {
+impl Clone for Engine {
     fn clone(&self) -> Self {
         Self {
             config: Arc::clone(&self.config),
@@ -593,15 +593,15 @@ impl Clone for Vectorless {
     }
 }
 
-impl Default for Vectorless {
+impl Default for Engine {
     fn default() -> Self {
-        Self::new().expect("Failed to create default Vectorless client")
+        Self::new().expect("Failed to create default Engine client")
     }
 }
 
-impl std::fmt::Debug for Vectorless {
+impl std::fmt::Debug for Engine {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Vectorless")
+        f.debug_struct("Engine")
             .field("has_workspace", &self.workspace.is_some())
             .field("doc_count", &self.len())
             .finish_non_exhaustive()

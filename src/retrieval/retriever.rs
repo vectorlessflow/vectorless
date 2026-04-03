@@ -6,7 +6,7 @@
 use async_trait::async_trait;
 
 use super::types::{RetrieveOptions, RetrieveResponse};
-use crate::domain::VectorlessTree;
+use crate::domain::DocumentTree;
 
 /// Result type for retriever operations.
 pub type RetrieverResult<T> = Result<T, RetrieverError>;
@@ -62,7 +62,7 @@ pub trait Retriever: Send + Sync {
     /// A `RetrieveResponse` containing the retrieved content and metadata.
     async fn retrieve(
         &self,
-        tree: &VectorlessTree,
+        tree: &DocumentTree,
         query: &str,
         options: &RetrieveOptions,
     ) -> RetrieverResult<RetrieveResponse>;
@@ -81,7 +81,7 @@ pub trait Retriever: Send + Sync {
     ///
     /// Returns an estimated number of LLM calls or tokens that will be used.
     /// Useful for cost-aware strategy selection.
-    fn estimate_cost(&self, tree: &VectorlessTree, options: &RetrieveOptions) -> CostEstimate {
+    fn estimate_cost(&self, tree: &DocumentTree, options: &RetrieveOptions) -> CostEstimate {
         let node_count = tree.node_count();
         CostEstimate {
             llm_calls: node_count / 2, // Rough estimate
