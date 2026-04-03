@@ -4,9 +4,23 @@
 //! Main Vectorless client for document indexing and retrieval.
 //!
 //! This module provides the high-level API for:
-//! - Indexing documents (Markdown, PDF)
+//! - Indexing documents (Markdown, PDF, DOCX, HTML)
 //! - Retrieving document structure
-//! - Querying documents
+//! - Querying documents with adaptive retrieval
+//!
+//! # Design
+//!
+//! The client uses **interior mutability** patterns to allow sharing across
+//! async tasks while maintaining thread safety:
+//!
+//! - `Arc<RwLock<Workspace>>` - Thread-safe workspace access (multiple readers, single writer)
+//! - `Arc<Mutex<PipelineExecutor>>` - Exclusive pipeline execution
+//! - `Arc<AdaptiveRetriever>` - Immutable retriever (uses interior mutability internally)
+//!
+//! # Thread Safety
+//!
+//! `Vectorless` is `Clone + Send + Sync`. Cloning is cheap (reference count increment).
+//! All clones share the same underlying resources.
 //!
 //! # Example
 //!
@@ -16,25 +30,23 @@
 //! # #[tokio::main]
 //! # async fn main() -> vectorless::core::Result<()> {
 //! // Create a client
-//! let mut client = VectorlessBuilder::new()
+//! let client = VectorlessBuilder::new()
 //!     .with_workspace("./my_workspace")
 //!     .build()?;
 //!
-//! // Index a document
+//! // Clone for use in multiple tasks (cheap - just Arc clone)
+//! let client1 = client.clone();
+//! let client2 = client.clone();
+//!
+//! // Can use concurrently
 //! let doc_id = client.index("./document.md").await?;
-//!
-//! // Get document structure
-//! let structure = client.get_structure(&doc_id)?;
-//!
-//! // List documents
-//! for doc in client.list_documents() {
-//!     println!("{}: {}", doc.id, doc.name);
-//! }
+//! let result = client.query(&doc_id, "What is this?").await?;
 //! # Ok(())
 //! # }
 //! ```
 
 use std::path::Path;
+use std::sync::{Arc, Mutex, RwLock};
 
 use uuid::Uuid;
 use tracing::info;
@@ -51,36 +63,55 @@ use super::types::{IndexMode, IndexOptions, DocumentInfo, QueryResult};
 /// The main Vectorless client.
 ///
 /// Provides high-level operations for document indexing and retrieval.
-/// Uses Workspace for persistence with built-in LRU cache.
+/// Uses interior mutability to allow sharing across async tasks.
+///
+/// # Cloning
+///
+/// Cloning is cheap - it only increments reference counts (`Arc`). All clones
+/// share the same underlying resources (workspace, retriever, executor).
+///
+/// # Thread Safety
+///
+/// The client is `Clone + Send + Sync` and can be safely shared across
+/// threads. All mutable state is protected by appropriate synchronization:
+///
+/// - Workspace: `Arc<RwLock<Workspace>>` - Multiple readers, single writer
+/// - Executor: `Arc<Mutex<PipelineExecutor>>` - Exclusive access during indexing
+/// - Retriever: `Arc<AdaptiveRetriever>` - Immutable, uses internal synchronization
 pub struct Vectorless {
-    /// Configuration.
-    pub(crate) config: Config,
+    /// Configuration (immutable, shared).
+    config: Arc<Config>,
 
     /// Workspace for persistence (with built-in LRU cache).
-    pub(crate) workspace: Option<Workspace>,
+    /// Uses RwLock for concurrent read access.
+    workspace: Option<Arc<RwLock<Workspace>>>,
 
-    /// Adaptive retriever.
-    pub(crate) retriever: AdaptiveRetriever,
+    /// Adaptive retriever (immutable, uses interior mutability internally).
+    retriever: Arc<AdaptiveRetriever>,
 
     /// Pipeline executor for indexing.
-    pub(crate) executor: PipelineExecutor,
+    /// Uses Mutex for exclusive access during pipeline execution.
+    executor: Arc<Mutex<PipelineExecutor>>,
 }
 
 impl Vectorless {
+    /// Create a builder for custom configuration.
+    #[must_use]
+    pub fn builder() -> super::VectorlessBuilder {
+        super::VectorlessBuilder::new()
+    }
+
     /// Create a new client with default configuration.
+    ///
+    /// Note: Prefer using [`Vectorless::builder()`] for more control.
     fn new() -> Result<Self> {
         let config = Config::default();
         Ok(Self {
-            config,
+            config: Arc::new(config),
             workspace: None,
-            retriever: AdaptiveRetriever::new(),
-            executor: PipelineExecutor::new(),
+            retriever: Arc::new(AdaptiveRetriever::new()),
+            executor: Arc::new(Mutex::new(PipelineExecutor::new())),
         })
-    }
-
-    /// Create a builder for custom configuration.
-    pub fn builder() -> super::VectorlessBuilder {
-        super::VectorlessBuilder::new()
     }
 
     // ============================================================
@@ -90,13 +121,24 @@ impl Vectorless {
     /// Index a document from a file path.
     ///
     /// Returns a unique document ID.
-    pub async fn index(&mut self, path: impl AsRef<Path>) -> Result<String> {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The file does not exist
+    /// - The file format is not supported
+    /// - The pipeline execution fails
+    pub async fn index(&self, path: impl AsRef<Path>) -> Result<String> {
         self.index_with_options(path, IndexOptions::default()).await
     }
 
     /// Index a document with custom options.
+    ///
+    /// # Errors
+    ///
+    /// See [`Vectorless::index`].
     pub async fn index_with_options(
-        &mut self,
+        &self,
         path: impl AsRef<Path>,
         options: IndexOptions,
     ) -> Result<String> {
@@ -126,10 +168,9 @@ impl Vectorless {
             },
             generate_ids: options.generate_ids,
             summary_strategy: if options.generate_summaries {
-                // Use selective strategy with thresholds from config
                 SummaryStrategy::selective(
                     self.config.indexer.min_summary_tokens,
-                    false, // branch_only=false - generate for all qualifying nodes
+                    false,
                 )
             } else {
                 SummaryStrategy::none()
@@ -138,13 +179,19 @@ impl Vectorless {
             ..Default::default()
         };
 
-        // Create pipeline input and execute
+        // Create pipeline input and execute (with mutex lock)
         let input = IndexInput::file(&path);
-        let result = self.executor.execute(input, pipeline_options).await?;
+        let result = {
+            let mut executor = self.executor.lock().map_err(|_| {
+                Error::Other("Pipeline executor lock poisoned".to_string())
+            })?;
+            executor.execute(input, pipeline_options).await?
+        };
 
         // Build persisted document
-        let tree = result.tree.ok_or_else(||
-            Error::Parse("Document tree not generated".to_string()))?;
+        let tree = result.tree.ok_or_else(|| {
+            Error::Parse("Document tree not generated".to_string())
+        })?;
 
         let meta = StorageMeta::new(&doc_id, &result.name, format.extension())
             .with_source_path(path.to_string_lossy().to_string())
@@ -160,8 +207,11 @@ impl Vectorless {
         }
 
         // Save to workspace if configured
-        if let Some(ref mut workspace) = self.workspace {
-            workspace.add(&doc)?;
+        if let Some(ref workspace) = self.workspace {
+            let mut ws = workspace.write().map_err(|_| {
+                Error::Other("Workspace lock poisoned".to_string())
+            })?;
+            ws.add(&doc)?;
             info!("Saved document {} to workspace", doc_id);
         }
 
@@ -191,48 +241,75 @@ impl Vectorless {
     // ============================================================
 
     /// Get a list of all indexed documents.
+    #[must_use]
     pub fn list_documents(&self) -> Vec<DocumentInfo> {
         match &self.workspace {
-            Some(workspace) => workspace.list_documents()
-                .iter()
-                .filter_map(|id| workspace.get_meta(id))
-                .map(|meta| DocumentInfo {
-                    id: meta.id.clone(),
-                    name: meta.doc_name.clone(),
-                    format: meta.doc_type.clone(),
-                    description: meta.doc_description.clone(),
-                    page_count: meta.page_count,
-                    line_count: meta.line_count,
-                })
-                .collect(),
+            Some(workspace) => {
+                let ws = match workspace.read() {
+                    Ok(guard) => guard,
+                    Err(_) => return Vec::new(),
+                };
+                ws.list_documents()
+                    .iter()
+                    .filter_map(|id| ws.get_meta(id))
+                    .map(|meta| DocumentInfo {
+                        id: meta.id.clone(),
+                        name: meta.doc_name.clone(),
+                        format: meta.doc_type.clone(),
+                        description: meta.doc_description.clone(),
+                        page_count: meta.page_count,
+                        line_count: meta.line_count,
+                    })
+                    .collect()
+            }
             None => Vec::new(),
         }
     }
 
     /// Get document structure (tree).
-    pub fn get_structure(&mut self, doc_id: &str) -> Result<DocumentTree> {
-        let workspace = self.workspace.as_mut()
-            .ok_or_else(|| Error::Parse("No workspace configured".to_string()))?;
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - No workspace is configured
+    /// - The document is not found
+    pub fn get_structure(&self, doc_id: &str) -> Result<DocumentTree> {
+        let workspace = self.workspace.as_ref()
+            .ok_or_else(|| Error::Config("No workspace configured".to_string()))?;
 
-        let doc = workspace.load(doc_id)?
+        let mut ws = workspace.write().map_err(|_| {
+            Error::Other("Workspace lock poisoned".to_string())
+        })?;
+
+        let doc = ws.load(doc_id)?
             .ok_or_else(|| Error::DocumentNotFound(format!("Document not found: {}", doc_id)))?;
 
         Ok(doc.tree)
     }
 
     /// Get page content for PDFs.
-    pub fn get_page_content(&mut self, doc_id: &str, pages: &str) -> Result<String> {
-        let workspace = self.workspace.as_mut()
-            .ok_or_else(|| Error::Parse("No workspace configured".to_string()))?;
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - No workspace is configured
+    /// - The document is not found
+    /// - No page content is available
+    pub fn get_page_content(&self, doc_id: &str, pages: &str) -> Result<String> {
+        let workspace = self.workspace.as_ref()
+            .ok_or_else(|| Error::Config("No workspace configured".to_string()))?;
 
-        let doc = workspace.load(doc_id)?
+        let mut ws = workspace.write().map_err(|_| {
+            Error::Other("Workspace lock poisoned".to_string())
+        })?;
+
+        let doc = ws.load(doc_id)?
             .ok_or_else(|| Error::DocumentNotFound(format!("Document not found: {}", doc_id)))?;
 
         if doc.pages.is_empty() {
             return Err(Error::Parse("No page content available".to_string()));
         }
 
-        // Parse page range
         let page_nums = self.parse_page_range(pages)?;
 
         let mut content = String::new();
@@ -276,8 +353,15 @@ impl Vectorless {
 
     /// Query a document.
     ///
-    /// Uses the retriever type configured in `RetrievalConfig`.
-    pub async fn query(&mut self, doc_id: &str, question: &str) -> Result<QueryResult> {
+    /// Uses the adaptive retriever to find relevant content.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - No workspace is configured
+    /// - The document is not found
+    /// - The retrieval fails
+    pub async fn query(&self, doc_id: &str, question: &str) -> Result<QueryResult> {
         let tree = self.get_structure(doc_id)?;
 
         // Build retrieve options from config
@@ -286,7 +370,7 @@ impl Vectorless {
             .with_content(true)
             .with_summaries(true);
 
-        // Use adaptive retriever directly
+        // Use adaptive retriever
         let response = self.retriever.retrieve(&tree, question, &retrieve_options).await
             .map_err(|e| Error::Retrieval(e.to_string()))?;
 
@@ -312,19 +396,16 @@ impl Vectorless {
             .collect();
 
         let content = if content_parts.is_empty() {
-            response.content // Use pre-aggregated content if available
+            response.content
         } else {
             content_parts.join("\n\n---\n\n")
         };
-
-        // Use confidence score from response
-        let avg_score = response.confidence;
 
         Ok(QueryResult {
             doc_id: doc_id.to_string(),
             node_ids,
             content,
-            score: avg_score,
+            score: response.confidence,
         })
     }
 
@@ -332,56 +413,107 @@ impl Vectorless {
     // Persistence
     // ============================================================
 
-    /// Save all documents to the workspace.
-    pub fn save(&self) -> Result<()> {
-        if self.workspace.is_none() {
-            return Err(Error::Parse("No workspace configured".to_string()));
-        }
-
-        // Documents are saved automatically when indexed
-        Ok(())
-    }
-
     /// Load a document from the workspace into cache.
     ///
     /// This preloads the document into the LRU cache for faster access.
-    pub fn load(&mut self, doc_id: &str) -> Result<bool> {
-        let workspace = self.workspace.as_mut()
-            .ok_or_else(|| Error::Parse("No workspace configured".to_string()))?;
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if no workspace is configured.
+    pub fn load(&self, doc_id: &str) -> Result<bool> {
+        let workspace = self.workspace.as_ref()
+            .ok_or_else(|| Error::Config("No workspace configured".to_string()))?;
 
-        if !workspace.contains(doc_id) {
+        let mut ws = workspace.write().map_err(|_| {
+            Error::Other("Workspace lock poisoned".to_string())
+        })?;
+
+        if !ws.contains(doc_id) {
             return Ok(false);
         }
 
-        // Load into cache
-        let _ = workspace.load(doc_id)?;
+        let _ = ws.load(doc_id)?;
         Ok(true)
     }
 
-    /// Remove a document.
-    pub fn remove(&mut self, doc_id: &str) -> Result<bool> {
-        match &mut self.workspace {
-            Some(workspace) => workspace.remove(doc_id),
-            None => Ok(false),
-        }
+    /// Remove a document from the workspace.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if no workspace is configured.
+    pub fn remove(&self, doc_id: &str) -> Result<bool> {
+        let workspace = self.workspace.as_ref()
+            .ok_or_else(|| Error::Config("No workspace configured".to_string()))?;
+
+        let mut ws = workspace.write().map_err(|_| {
+            Error::Other("Workspace lock poisoned".to_string())
+        })?;
+        ws.remove(doc_id)
     }
 
     /// Get the number of indexed documents.
+    #[must_use]
     pub fn len(&self) -> usize {
         match &self.workspace {
-            Some(workspace) => workspace.len(),
+            Some(workspace) => {
+                let ws = match workspace.read() {
+                    Ok(guard) => guard,
+                    Err(_) => return 0,
+                };
+                ws.len()
+            }
             None => 0,
         }
     }
 
     /// Check if there are no documents.
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.len() == 0
+    }
+
+    // ============================================================
+    // Internal API (for Builder)
+    // ============================================================
+
+    /// Create a new client with the given components.
+    pub(crate) fn with_components(
+        config: Config,
+        workspace: Option<Workspace>,
+        retriever: AdaptiveRetriever,
+        executor: PipelineExecutor,
+    ) -> Self {
+        Self {
+            config: Arc::new(config),
+            workspace: workspace.map(|w| Arc::new(RwLock::new(w))),
+            retriever: Arc::new(retriever),
+            executor: Arc::new(Mutex::new(executor)),
+        }
+    }
+}
+
+impl Clone for Vectorless {
+    fn clone(&self) -> Self {
+        Self {
+            config: Arc::clone(&self.config),
+            workspace: self.workspace.as_ref().map(Arc::clone),
+            retriever: Arc::clone(&self.retriever),
+            executor: Arc::clone(&self.executor),
+        }
     }
 }
 
 impl Default for Vectorless {
     fn default() -> Self {
         Self::new().expect("Failed to create default Vectorless client")
+    }
+}
+
+impl std::fmt::Debug for Vectorless {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Vectorless")
+            .field("has_workspace", &self.workspace.is_some())
+            .field("doc_count", &self.len())
+            .finish_non_exhaustive()
     }
 }

@@ -26,6 +26,7 @@ const CONFIG_FILE_NAMES: &[&str] = &["vectorless.toml", "config.toml", ".vectorl
 /// let client = VectorlessBuilder::new()
 ///     .with_workspace("./my_workspace")
 ///     .build()?;
+/// # Ok::<(), vectorless::core::Error>(())
 /// ```
 #[derive(Debug)]
 pub struct VectorlessBuilder {
@@ -41,6 +42,7 @@ pub struct VectorlessBuilder {
 
 impl VectorlessBuilder {
     /// Create a new builder with defaults.
+    #[must_use]
     pub fn new() -> Self {
         Self {
             workspace: None,
@@ -50,18 +52,21 @@ impl VectorlessBuilder {
     }
 
     /// Set the workspace path for document persistence.
+    #[must_use]
     pub fn with_workspace(mut self, path: impl Into<PathBuf>) -> Self {
         self.workspace = Some(path.into());
         self
     }
 
     /// Set the configuration file path.
+    #[must_use]
     pub fn with_config_path(mut self, path: impl Into<PathBuf>) -> Self {
         self.config_path = Some(path.into());
         self
     }
 
     /// Set a custom configuration.
+    #[must_use]
     pub fn with_config(mut self, config: Config) -> Self {
         self.config = Some(config);
         self
@@ -104,6 +109,12 @@ impl VectorlessBuilder {
     /// 1. Default configuration
     /// 2. Configuration file (auto-detected or specified)
     /// 3. Environment variables (VECTORLESS_* or standard LLM vars)
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`BuildError`] if:
+    /// - Configuration loading fails
+    /// - Workspace creation fails
     pub fn build(self) -> Result<Vectorless, BuildError> {
         // Load or create configuration
         let config = if let Some(config) = self.config {
@@ -155,12 +166,10 @@ impl VectorlessBuilder {
             crate::core::index::PipelineExecutor::new()
         };
 
-        Ok(Vectorless {
-            config,
-            workspace,
-            retriever: crate::core::retriever::AdaptiveRetriever::new(),
-            executor,
-        })
+        // Create adaptive retriever
+        let retriever = crate::core::retriever::AdaptiveRetriever::new();
+
+        Ok(Vectorless::with_components(config, workspace, retriever, executor))
     }
 }
 
