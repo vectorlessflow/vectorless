@@ -40,7 +40,7 @@ async fn main() -> vectorless::core::Result<()> {
     // Step 1: Create a Vectorless client (no API key needed - LLM config is automatic)
     println!("Step 1: Creating Vectorless client...");
 
-    let mut client = VectorlessBuilder::new()
+    let client = VectorlessBuilder::new()
         .build()
         .map_err(|e| vectorless::core::Error::Config(e.to_string()))?;
 
