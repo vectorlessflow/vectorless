@@ -60,6 +60,17 @@ pub struct RetrievalIndex {
     /// Siblings for each node (excluding self).
     siblings_cache: HashMap<NodeId, Vec<NodeId>>,
 
+    /// Structure string to NodeId mapping.
+    /// e.g., "1.2.3" -> NodeId
+    structure_index: HashMap<String, NodeId>,
+
+    /// Page number to NodeId mapping.
+    /// Maps each page to the most specific (deepest) node containing it.
+    page_index: HashMap<usize, NodeId>,
+
+    /// NodeId to page range mapping.
+    node_page_range: HashMap<NodeId, (usize, usize)>,
+
     /// Total node count.
     node_count: usize,
 
@@ -97,6 +108,34 @@ impl RetrievalIndex {
     /// Returns None if the node is not in the index or has no siblings.
     pub fn siblings(&self, node: NodeId) -> Option<&[NodeId]> {
         self.siblings_cache.get(&node).map(|v| v.as_slice())
+    }
+
+    /// Find a node by its structure index.
+    ///
+    /// # Example
+    /// ```ignore
+    /// // Find section 2.1.3
+    /// let node = index.find_by_structure("2.1.3");
+    /// ```
+    pub fn find_by_structure(&self, structure: &str) -> Option<NodeId> {
+        self.structure_index.get(structure).copied()
+    }
+
+    /// Find the most specific node containing a page number.
+    ///
+    /// Returns the deepest node whose page range contains the given page.
+    pub fn find_by_page(&self, page: usize) -> Option<NodeId> {
+        self.page_index.get(&page).copied()
+    }
+
+    /// Get the page range for a node.
+    pub fn page_range(&self, node: NodeId) -> Option<(usize, usize)> {
+        self.node_page_range.get(&node).copied()
+    }
+
+    /// Get all structure indices.
+    pub fn structures(&self) -> &HashMap<String, NodeId> {
+        &self.structure_index
     }
 
     /// Get the total number of nodes.
@@ -138,6 +177,7 @@ impl DocumentTree {
         let mut arena = Arena::new();
         let root_data = TreeNode {
             title: title.to_string(),
+            structure: String::new(), // Root has no structure index
             content: content.to_string(),
             summary: String::new(),
             depth: 0,
@@ -199,10 +239,28 @@ impl DocumentTree {
     /// Add a child node to the specified parent.
     ///
     /// Returns the ID of the newly created child node.
+    /// The structure is automatically calculated based on siblings.
     pub fn add_child(&mut self, parent: NodeId, title: &str, content: &str) -> NodeId {
         let parent_depth = self.arena.get(parent.0).map(|n| n.get().depth).unwrap_or(0);
+        let parent_structure = self
+            .arena
+            .get(parent.0)
+            .map(|n| n.get().structure.clone())
+            .unwrap_or_default();
+
+        // Calculate child index (1-based)
+        let child_index = parent.0.children(&self.arena).count() + 1;
+
+        // Calculate structure: parent_structure.child_index
+        let child_structure = if parent_structure.is_empty() {
+            child_index.to_string()
+        } else {
+            format!("{}.{}", parent_structure, child_index)
+        };
+
         let child_data = TreeNode {
             title: title.to_string(),
+            structure: child_structure,
             content: content.to_string(),
             summary: String::new(),
             depth: parent_depth + 1,
@@ -400,6 +458,13 @@ impl DocumentTree {
         }
     }
 
+    /// Update a node's structure index.
+    pub fn set_structure(&mut self, id: NodeId, structure: &str) {
+        if let Some(node) = self.get_mut(id) {
+            node.structure = structure.to_string();
+        }
+    }
+
     /// Set page boundaries for a node.
     pub fn set_page_boundaries(&mut self, id: NodeId, start: usize, end: usize) {
         if let Some(node) = self.get_mut(id) {
@@ -484,12 +549,25 @@ impl DocumentTree {
     /// if let Some(path) = index.path_to(node_id) {
     ///     // path[0] = root, path[-1] = node_id
     /// }
+    ///
+    /// // Fast structure lookup
+    /// if let Some(node) = index.find_by_structure("2.1.3") {
+    ///     // Found section 2.1.3
+    /// }
+    ///
+    /// // Fast page lookup
+    /// if let Some(node) = index.find_by_page(42) {
+    ///     // Found node containing page 42
+    /// }
     /// ```
     pub fn build_retrieval_index(&self) -> RetrievalIndex {
         let mut leaves = Vec::new();
         let mut level_index: Vec<Vec<NodeId>> = Vec::new();
         let mut path_cache: HashMap<NodeId, Vec<NodeId>> = HashMap::new();
         let mut siblings_cache: HashMap<NodeId, Vec<NodeId>> = HashMap::new();
+        let mut structure_index: HashMap<String, NodeId> = HashMap::new();
+        let mut page_index: HashMap<usize, NodeId> = HashMap::new();
+        let mut node_page_range: HashMap<NodeId, (usize, usize)> = HashMap::new();
         let mut max_depth = 0;
         let node_count = self.node_count();
 
@@ -507,9 +585,24 @@ impl DocumentTree {
             for &node_id in &current_level {
                 let children: Vec<NodeId> = self.children(node_id);
 
-                // Update max depth
+                // Get node data
                 if let Some(node) = self.get(node_id) {
                     max_depth = max_depth.max(node.depth);
+
+                    // Build structure index
+                    if !node.structure.is_empty() {
+                        structure_index.insert(node.structure.clone(), node_id);
+                    }
+
+                    // Build page index and page range
+                    if let (Some(start), Some(end)) = (node.start_page, node.end_page) {
+                        node_page_range.insert(node_id, (start, end));
+
+                        // Map each page to this node (will be overwritten by deeper nodes)
+                        for page in start..=end {
+                            page_index.insert(page, node_id);
+                        }
+                    }
                 }
 
                 // Check if leaf
@@ -550,6 +643,9 @@ impl DocumentTree {
             level_index,
             path_cache,
             siblings_cache,
+            structure_index,
+            page_index,
+            node_page_range,
             node_count,
             max_depth,
         }

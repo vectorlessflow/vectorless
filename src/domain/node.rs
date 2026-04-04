@@ -53,6 +53,15 @@ pub struct TreeNode {
     /// Title of this section.
     pub title: String,
 
+    /// Hierarchical structure index (e.g., "1", "1.1", "1.2.3").
+    ///
+    /// This provides a human-readable path to the node and is useful for:
+    /// - LLM navigation (easier to understand "go to section 2.1.3")
+    /// - Table of contents display
+    /// - Cross-referencing
+    #[serde(default)]
+    pub structure: String,
+
     /// Raw text content (populated at leaves).
     #[serde(default)]
     pub content: String,
@@ -93,6 +102,7 @@ impl Default for TreeNode {
     fn default() -> Self {
         Self {
             title: String::new(),
+            structure: String::new(),
             content: String::new(),
             summary: String::new(),
             depth: 0,
