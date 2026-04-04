@@ -10,7 +10,6 @@
 //! 3. Input format
 //! 4. Output format (JSON schema)
 
-use crate::domain::NodeId;
 use super::super::decision::InterventionPoint;
 
 /// Common trait for prompt templates.
@@ -42,10 +41,7 @@ pub struct StartPrompt {
 
 impl Default for StartPrompt {
     fn default() -> Self {
-        Self {
-            system: include_str!("system_start.txt").to_string(),
-            template: include_str!("user_start.txt").to_string(),
-        }
+        Self::with_fallback()
     }
 }
 
@@ -97,10 +93,7 @@ pub struct ForkPrompt {
 
 impl Default for ForkPrompt {
     fn default() -> Self {
-        Self {
-            system: include_str!("system_fork.txt").to_string(),
-            template: include_str!("user_fork.txt").to_string(),
-        }
+        Self::with_fallback()
     }
 }
 
@@ -155,10 +148,7 @@ pub struct BacktrackPrompt {
 
 impl Default for BacktrackPrompt {
     fn default() -> Self {
-        Self {
-            system: include_str!("system_backtrack.txt").to_string(),
-            template: include_str!("user_backtrack.txt").to_string(),
-        }
+        Self::with_fallback()
     }
 }
 
@@ -213,10 +203,7 @@ pub struct EvaluatePrompt {
 
 impl Default for EvaluatePrompt {
     fn default() -> Self {
-        Self {
-            system: include_str!("system_evaluate.txt").to_string(),
-            template: include_str!("user_evaluate.txt").to_string(),
-        }
+        Self::with_fallback()
     }
 }
 

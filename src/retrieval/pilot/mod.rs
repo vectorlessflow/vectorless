@@ -52,26 +52,25 @@
 //! ```
 
 mod budget;
+mod builder;
 mod config;
 mod decision;
+mod llm_pilot;
+mod noop;
+mod parser;
+mod prompts;
 mod r#trait;
 
 pub use budget::{BudgetController, BudgetUsage};
+pub use builder::{ContextBuilder, PilotContext, TokenBudget};
 pub use config::{
     BudgetConfig, InterventionConfig, PilotConfig, PilotMode,
 };
 pub use decision::{
     InterventionPoint, PilotDecision, RankedCandidate, SearchDirection,
 };
-pub use r#trait::{Pilot, SearchState};
-
-// Re-export for convenience
-#[cfg(feature = "llm-pilot")]
-mod llm_pilot;
-
-#[cfg(feature = "llm-pilot")]
 pub use llm_pilot::LlmPilot;
-
-/// NoopPilot - A no-op implementation for testing and fallback.
-mod noop;
 pub use noop::NoopPilot;
+pub use parser::ResponseParser;
+pub use prompts::PromptBuilder;
+pub use r#trait::{Pilot, PilotExt, SearchState};

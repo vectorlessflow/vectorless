@@ -219,17 +219,20 @@ impl ResponseParser {
         let ranking_pattern = Regex::new(r"(\d+)[.\)]\s*(?:Candidate\s*)?(\d+)[\s:]+(?:score[:\s]*)?([0-9.]+)?").unwrap();
 
         for caps in ranking_pattern.captures_iter(response) {
-            let index: usize = caps.get(2)?.as_str().parse().ok()?;
-            let score: f32 = caps.get(3)
-                .and_then(|m| m.as_str().parse().ok())
-                .unwrap_or(0.5);
+            if let Some(index_match) = caps.get(2) {
+                if let Ok(index) = index_match.as_str().parse::<usize>() {
+                    let score: f32 = caps.get(3)
+                        .and_then(|m| m.as_str().parse().ok())
+                        .unwrap_or(0.5);
 
-            if index < candidates.len() {
-                ranked.push(RankedCandidate {
-                    node_id: candidates[index],
-                    score: score.clamp(0.0, 1.0),
-                    reason: None,
-                });
+                    if index < candidates.len() {
+                        ranked.push(RankedCandidate {
+                            node_id: candidates[index],
+                            score: score.clamp(0.0, 1.0),
+                            reason: None,
+                        });
+                    }
+                }
             }
         }
 
@@ -243,13 +246,15 @@ impl ResponseParser {
         let mut seen = std::collections::HashSet::new();
 
         for caps in number_pattern.captures_iter(response) {
-            if let Ok(idx) = caps.get(1)?.as_str().parse::<usize>() {
-                if idx < candidates.len() && seen.insert(idx) {
-                    ranked.push(RankedCandidate {
-                        node_id: candidates[idx],
-                        score: 1.0 - (ranked.len() as f32 * 0.1), // Decreasing scores
-                        reason: None,
-                    });
+            if let Some(match_1) = caps.get(1) {
+                if let Ok(idx) = match_1.as_str().parse::<usize>() {
+                    if idx < candidates.len() && seen.insert(idx) {
+                        ranked.push(RankedCandidate {
+                            node_id: candidates[idx],
+                            score: 1.0 - (ranked.len() as f32 * 0.1), // Decreasing scores
+                            reason: None,
+                        });
+                    }
                 }
             }
 
@@ -337,11 +342,34 @@ impl ResponseParser {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use indextree::Arena;
+
+    fn create_test_node_ids(count: usize) -> Vec<NodeId> {
+        let mut arena = Arena::new();
+        let mut ids = Vec::new();
+        for i in 0..count {
+            let node = crate::domain::TreeNode {
+                title: format!("Node {}", i),
+                content: String::new(),
+                summary: String::new(),
+                depth: 0,
+                start_index: 1,
+                end_index: 1,
+                start_page: None,
+                end_page: None,
+                node_id: None,
+                physical_index: None,
+                token_count: None,
+            };
+            ids.push(NodeId(arena.new_node(node)));
+        }
+        ids
+    }
 
     #[test]
     fn test_parse_json_response() {
         let parser = ResponseParser::new();
-        let candidates = vec![NodeId::new(0), NodeId::new(1), NodeId::new(2)];
+        let candidates = create_test_node_ids(3);
 
         let response = r#"{
             "ranked_candidates": [
@@ -364,7 +392,7 @@ mod tests {
     #[test]
     fn test_parse_json_in_code_block() {
         let parser = ResponseParser::new();
-        let candidates = vec![NodeId::new(0), NodeId::new(1)];
+        let candidates = create_test_node_ids(2);
 
         let response = r#"
 Here's my analysis:
@@ -386,7 +414,7 @@ Here's my analysis:
     #[test]
     fn test_parse_with_regex_fallback() {
         let parser = ResponseParser::new();
-        let candidates = vec![NodeId::new(0), NodeId::new(1)];
+        let candidates = create_test_node_ids(2);
 
         // Non-JSON response with some structure
         let response = r#"
@@ -404,7 +432,7 @@ Direction: go_deeper
     #[test]
     fn test_default_decision() {
         let parser = ResponseParser::new();
-        let candidates = vec![NodeId::new(0), NodeId::new(1)];
+        let candidates = create_test_node_ids(2);
 
         let decision = parser.parse(
             "This is unparseable gibberish",
@@ -421,7 +449,7 @@ Direction: go_deeper
     #[test]
     fn test_confidence_clamping() {
         let parser = ResponseParser::new();
-        let candidates = vec![NodeId::new(0)];
+        let candidates = create_test_node_ids(1);
 
         let response = r#"{
             "ranked_candidates": [{"index": 0, "score": 1.5}],
@@ -438,7 +466,7 @@ Direction: go_deeper
     #[test]
     fn test_direction_conversion() {
         let parser = ResponseParser::new();
-        let candidates = vec![NodeId::new(0)];
+        let candidates = create_test_node_ids(1);
 
         let test_cases = vec![
             ("\"direction\": \"go_deeper\"", true),

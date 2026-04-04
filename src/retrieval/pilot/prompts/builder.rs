@@ -89,11 +89,12 @@ impl PromptBuilder {
         let template = &self.start_template;
         let system = template.system_prompt().to_string();
         let user = self.fill_template(template.user_prompt_template(), context);
+        let estimated_tokens = self.estimate_tokens(&system) + self.estimate_tokens(&user);
 
         BuiltPrompt {
             system,
-            estimated_tokens: self.estimate_tokens(&system) + self.estimate_tokens(&user),
             user,
+            estimated_tokens,
         }
     }
 
@@ -102,11 +103,12 @@ impl PromptBuilder {
         let template = &self.fork_template;
         let system = template.system_prompt().to_string();
         let user = self.fill_template(template.user_prompt_template(), context);
+        let estimated_tokens = self.estimate_tokens(&system) + self.estimate_tokens(&user);
 
         BuiltPrompt {
             system,
-            estimated_tokens: self.estimate_tokens(&system) + self.estimate_tokens(&user),
             user,
+            estimated_tokens,
         }
     }
 
@@ -115,11 +117,12 @@ impl PromptBuilder {
         let template = &self.backtrack_template;
         let system = template.system_prompt().to_string();
         let user = self.fill_template(template.user_prompt_template(), context);
+        let estimated_tokens = self.estimate_tokens(&system) + self.estimate_tokens(&user);
 
         BuiltPrompt {
             system,
-            estimated_tokens: self.estimate_tokens(&system) + self.estimate_tokens(&user),
             user,
+            estimated_tokens,
         }
     }
 
@@ -128,11 +131,12 @@ impl PromptBuilder {
         let template = &self.evaluate_template;
         let system = template.system_prompt().to_string();
         let user = self.fill_template(template.user_prompt_template(), context);
+        let estimated_tokens = self.estimate_tokens(&system) + self.estimate_tokens(&user);
 
         BuiltPrompt {
             system,
-            estimated_tokens: self.estimate_tokens(&system) + self.estimate_tokens(&user),
             user,
+            estimated_tokens,
         }
     }
 

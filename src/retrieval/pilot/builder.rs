@@ -460,10 +460,10 @@ mod tests {
             ..Default::default()
         });
 
-        root.append(child1, &mut arena).unwrap();
-        root.append(child2, &mut arena).unwrap();
+        root.append(child1, &mut arena);
+        root.append(child2, &mut arena);
 
-        DocumentTree::from_arena(arena, root)
+        DocumentTree::from_raw(arena, crate::domain::NodeId(root))
     }
 
     #[test]
@@ -493,10 +493,10 @@ mod tests {
 
     #[test]
     fn test_build_query_section_truncation() {
-        let builder = ContextBuilder::new(100); // Small budget
+        let builder = ContextBuilder::new(20); // Very small budget - 20 * 0.30 = 6 tokens for query = ~24 chars
         let long_query = "This is a very long query that should be truncated because it exceeds the token budget";
         let result = builder.build_query_section(long_query);
-        assert!(result.contains("..."));
+        assert!(result.contains("..."), "Expected truncation, got: {}", result);
     }
 
     #[test]
