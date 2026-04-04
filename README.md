@@ -58,6 +58,25 @@ Uses adaptive, multi-stage retrieval with backtracking:
 
 This mimics how humans navigate documentation: skim the TOC, drill into relevant sections, and backtrack when needed.
 
+### Pilot: The Brain
+
+**Pilot** is the intelligence layer that guides retrieval:
+
+- **Intervention Points** — Pilot acts at key decision moments:
+  - **START** — Analyze query intent, set initial direction
+  - **FORK** — Rank candidates at branch points
+  - **BACKTRACK** — Suggest alternatives when search fails
+  - **EVALUATE** — Assess content sufficiency
+
+- **Score Merging** — Combines algorithm scores with LLM reasoning:
+  ```
+  final_score = α × algorithm_score + β × llm_score
+  ```
+
+- **Fallback Strategy** — 4-level degradation (Normal → Retry → Simplified → Algorithm-only)
+
+- **Budget Control** — Token and call limits with intelligent allocation
+
 ## Comparison
 
 | Aspect | Vectorless | Traditional RAG |
@@ -115,6 +134,12 @@ async fn main() -> vectorless::domain::Result<()> {
 See the [examples/](examples/) directory for complete working examples:
 
 ## Architecture
+
+### Pilot Architecture
+
+![Pilot Architecture](docs/design/pilot-architecture.svg)
+
+### System Overview
 
 ![Architecture](docs/design/architecture-v2.svg)
 
