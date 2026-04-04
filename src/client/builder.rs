@@ -194,6 +194,13 @@ impl EngineBuilder {
         let llm_client = crate::llm::LlmClient::new(llm_config);
         retriever = retriever.with_llm_client(llm_client);
 
+        // Configure content aggregator if enabled
+        if retrieval_config.content.enabled {
+            retriever = retriever.with_content_config(
+                retrieval_config.content.to_aggregator_config()
+            );
+        }
+
         Ok(Engine::with_components(
             config, workspace, retriever, executor,
         ))

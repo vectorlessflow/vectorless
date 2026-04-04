@@ -9,6 +9,7 @@
 use async_trait::async_trait;
 use std::sync::Arc;
 
+use super::content::ContentAggregatorConfig;
 use super::pipeline::RetrievalOrchestrator;
 use super::retriever::{CostEstimate, Retriever, RetrieverError, RetrieverResult};
 use super::stages::{AnalyzeStage, JudgeStage, PlanStage, SearchStage};
@@ -38,6 +39,8 @@ pub struct PipelineRetriever {
     llm_client: Option<LlmClient>,
     max_backtracks: usize,
     max_iterations: usize,
+    /// Content aggregator configuration.
+    content_config: Option<ContentAggregatorConfig>,
 }
 
 impl Default for PipelineRetriever {
@@ -53,6 +56,7 @@ impl PipelineRetriever {
             llm_client: None,
             max_backtracks: 5,
             max_iterations: 10,
+            content_config: None,
         }
     }
 
@@ -71,6 +75,15 @@ impl PipelineRetriever {
     /// Set maximum total iterations.
     pub fn with_max_iterations(mut self, n: usize) -> Self {
         self.max_iterations = n;
+        self
+    }
+
+    /// Set content aggregator configuration.
+    ///
+    /// When enabled, the Judge stage uses precision-focused content
+    /// aggregation with relevance scoring and token budget control.
+    pub fn with_content_config(mut self, config: ContentAggregatorConfig) -> Self {
+        self.content_config = Some(config);
         self
     }
 
@@ -99,10 +112,14 @@ impl PipelineRetriever {
         }
         orchestrator = orchestrator.stage(search_stage);
 
-        // Add judge stage
+        // Add judge stage with optional content aggregator
         let mut judge_stage = JudgeStage::new();
         if let Some(ref client) = self.llm_client {
             judge_stage = judge_stage.with_llm_judge(client.clone());
+        }
+        // Configure content aggregator if provided
+        if let Some(ref config) = self.content_config {
+            judge_stage = judge_stage.with_content_aggregator(config.clone());
         }
         orchestrator = orchestrator.stage(judge_stage);
 
@@ -161,6 +178,7 @@ impl Clone for PipelineRetriever {
             llm_client: self.llm_client.clone(),
             max_backtracks: self.max_backtracks,
             max_iterations: self.max_iterations,
+            content_config: self.content_config.clone(),
         }
     }
 }
@@ -182,5 +200,12 @@ mod tests {
         let cloned = retriever.clone();
         assert_eq!(cloned.name(), "pipeline");
         assert_eq!(cloned.max_backtracks, 3);
+    }
+
+    #[test]
+    fn test_pipeline_retriever_with_content_config() {
+        let config = ContentAggregatorConfig::default();
+        let retriever = PipelineRetriever::new().with_content_config(config);
+        assert!(retriever.content_config.is_some());
     }
 }

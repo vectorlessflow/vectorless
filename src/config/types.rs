@@ -225,6 +225,10 @@ pub struct RetrievalConfig {
     /// Strategy-specific configuration.
     #[serde(default)]
     pub strategy: StrategyConfig,
+
+    /// Content aggregator configuration.
+    #[serde(default)]
+    pub content: ContentAggregatorConfig,
 }
 
 impl Default for RetrievalConfig {
@@ -240,6 +244,7 @@ impl Default for RetrievalConfig {
             sufficiency: SufficiencyConfig::default(),
             cache: CacheConfig::default(),
             strategy: StrategyConfig::default(),
+            content: ContentAggregatorConfig::default(),
         }
     }
 }
@@ -359,6 +364,121 @@ impl Default for StrategyConfig {
             similarity_threshold: 0.5,
             high_similarity_threshold: 0.8,
             low_similarity_threshold: 0.3,
+        }
+    }
+}
+
+/// Content aggregator configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ContentAggregatorConfig {
+    /// Whether content aggregator is enabled.
+    /// When disabled, uses simple content collection (legacy behavior).
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+
+    /// Maximum tokens for aggregated content.
+    #[serde(default)]
+    pub token_budget: usize,
+
+    /// Minimum relevance score threshold (0.0 - 1.0).
+    /// Content below this threshold will be filtered out.
+    #[serde(default)]
+    pub min_relevance_score: f32,
+
+    /// Scoring strategy: "keyword_only" | "keyword_bm25" | "hybrid"
+    #[serde(default)]
+    pub scoring_strategy: String,
+
+    /// Output format: "markdown" | "json" | "tree" | "flat"
+    #[serde(default)]
+    pub output_format: String,
+
+    /// Include relevance scores in output.
+    #[serde(default)]
+    pub include_scores: bool,
+
+    /// Minimum budget allocation per depth level (0.0 - 1.0).
+    #[serde(default)]
+    pub hierarchical_min_per_level: f32,
+
+    /// Enable content deduplication.
+    #[serde(default = "default_true")]
+    pub deduplicate: bool,
+
+    /// Similarity threshold for deduplication (0.0 - 1.0).
+    #[serde(default)]
+    pub dedup_threshold: f32,
+}
+
+impl Default for ContentAggregatorConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            token_budget: 4000,
+            min_relevance_score: 0.2,
+            scoring_strategy: "keyword_bm25".to_string(),
+            output_format: "markdown".to_string(),
+            include_scores: false,
+            hierarchical_min_per_level: 0.1,
+            deduplicate: true,
+            dedup_threshold: 0.9,
+        }
+    }
+}
+
+impl ContentAggregatorConfig {
+    /// Create a new config with defaults.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Disable content aggregator (use legacy behavior).
+    pub fn disabled() -> Self {
+        Self {
+            enabled: false,
+            ..Self::default()
+        }
+    }
+
+    /// Set the token budget.
+    pub fn with_token_budget(mut self, budget: usize) -> Self {
+        self.token_budget = budget;
+        self
+    }
+
+    /// Set the minimum relevance score.
+    pub fn with_min_relevance(mut self, score: f32) -> Self {
+        self.min_relevance_score = score.clamp(0.0, 1.0);
+        self
+    }
+
+    /// Convert to the retrieval content aggregator config.
+    pub fn to_aggregator_config(&self) -> crate::retrieval::content::ContentAggregatorConfig {
+        use crate::retrieval::content::{ContentAggregatorConfig as RetrievalContentConfig,
+            OutputFormatConfig, ScoringStrategyConfig};
+
+        let scoring_strategy = match self.scoring_strategy.as_str() {
+            "keyword_only" => ScoringStrategyConfig::KeywordOnly,
+            "hybrid" => ScoringStrategyConfig::Hybrid,
+            _ => ScoringStrategyConfig::KeywordWithBM25,
+        };
+
+        let output_format = match self.output_format.as_str() {
+            "json" => OutputFormatConfig::Json,
+            "tree" => OutputFormatConfig::Tree,
+            "flat" => OutputFormatConfig::Flat,
+            _ => OutputFormatConfig::Markdown,
+        };
+
+        RetrievalContentConfig {
+            token_budget: self.token_budget,
+            min_relevance_score: self.min_relevance_score,
+            scoring_strategy,
+            output_format,
+            include_scores: self.include_scores,
+            hierarchical_min_per_level: self.hierarchical_min_per_level,
+            deduplicate: self.deduplicate,
+            dedup_threshold: self.dedup_threshold,
         }
     }
 }
