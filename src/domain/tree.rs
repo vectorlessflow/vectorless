@@ -126,6 +126,10 @@ pub struct DocumentTree {
 
     /// The root node ID.
     root_id: NodeId,
+
+    /// Cached leaf nodes (rebuilt on demand).
+    #[serde(skip)]
+    leaves_cache: Option<Vec<NodeId>>,
 }
 
 impl DocumentTree {
@@ -147,9 +151,13 @@ impl DocumentTree {
         };
         let root_id = arena.new_node(root_data);
 
+        // Root is initially a leaf
+        let leaves_cache = Some(vec![NodeId(root_id)]);
+
         Self {
             arena,
             root_id: NodeId(root_id),
+            leaves_cache,
         }
     }
 
@@ -157,7 +165,11 @@ impl DocumentTree {
     ///
     /// This is useful for deserialization and testing.
     pub fn from_raw(arena: Arena<TreeNode>, root_id: NodeId) -> Self {
-        Self { arena, root_id }
+        Self {
+            arena,
+            root_id,
+            leaves_cache: None, // Will be rebuilt on demand
+        }
     }
 
     /// Get the root node ID.
@@ -204,6 +216,15 @@ impl DocumentTree {
         };
         let child_id = self.arena.new_node(child_data);
         parent.0.append(child_id, &mut self.arena);
+
+        // Update leaves cache
+        if let Some(ref mut cache) = self.leaves_cache {
+            // Remove parent from leaves (it's no longer a leaf)
+            cache.retain(|&id| id != parent);
+            // Add child to leaves
+            cache.push(NodeId(child_id));
+        }
+
         NodeId(child_id)
     }
 
@@ -307,11 +328,41 @@ impl DocumentTree {
     }
 
     /// Get all leaf nodes in the tree.
+    ///
+    /// Uses cached leaves if available, otherwise rebuilds the cache.
     pub fn leaves(&self) -> Vec<NodeId> {
-        self.traverse()
+        if let Some(ref cache) = self.leaves_cache {
+            return cache.clone();
+        }
+
+        // Rebuild cache on demand
+        let leaves: Vec<NodeId> = self
+            .traverse()
             .into_iter()
             .filter(|id| self.is_leaf(*id))
-            .collect()
+            .collect();
+
+        // Note: Can't mutate self here, caller should use rebuild_leaves_cache()
+        leaves
+    }
+
+    /// Rebuild the leaves cache.
+    ///
+    /// Call this after deserialization or batch modifications.
+    pub fn rebuild_leaves_cache(&mut self) {
+        self.leaves_cache = Some(
+            self.traverse()
+                .into_iter()
+                .filter(|id| self.is_leaf(*id))
+                .collect(),
+        );
+    }
+
+    /// Invalidate the leaves cache.
+    ///
+    /// Called automatically by mutation methods.
+    pub fn invalidate_leaves_cache(&mut self) {
+        self.leaves_cache = None;
     }
 
     /// Get all nodes in the tree (depth-first order).
