@@ -128,9 +128,62 @@ impl RetrievalIndex {
         self.page_index.get(&page).copied()
     }
 
+    /// Find all nodes whose page range overlaps with the given range.
+    ///
+    /// This is useful for retrieving all content that spans a range of pages.
+    ///
+    /// # Example
+    /// ```ignore
+    /// // Find all nodes covering pages 10-15
+    /// let nodes = index.find_nodes_by_page_range(10, 15);
+    /// ```
+    pub fn find_nodes_by_page_range(&self, start: usize, end: usize) -> Vec<NodeId> {
+        let mut result = Vec::new();
+        for (&node_id, &(node_start, node_end)) in &self.node_page_range {
+            // Check if ranges overlap: node_start <= end && start <= node_end
+            if node_start <= end && start <= node_end {
+                result.push(node_id);
+            }
+        }
+        // Sort by start page for consistent ordering
+        result.sort_by_key(|&id| {
+            self.node_page_range.get(&id).map(|(s, _)| *s).unwrap_or(0)
+        });
+        result
+    }
+
+    /// Get all page numbers covered by a node.
+    ///
+    /// Returns None if the node has no page information.
+    pub fn get_pages_for_node(&self, node: NodeId) -> Option<Vec<usize>> {
+        let (start, end) = self.node_page_range.get(&node)?;
+        Some((*start..=*end).collect())
+    }
+
     /// Get the page range for a node.
     pub fn page_range(&self, node: NodeId) -> Option<(usize, usize)> {
         self.node_page_range.get(&node).copied()
+    }
+
+    /// Get all nodes that are leaves within a page range.
+    ///
+    /// This returns only leaf nodes (nodes with no children) that
+    /// overlap with the given page range.
+    pub fn find_leaves_by_page_range(&self, start: usize, end: usize) -> Vec<NodeId> {
+        let leaves_set: std::collections::HashSet<NodeId> = self.leaves.iter().copied().collect();
+        self.find_nodes_by_page_range(start, end)
+            .into_iter()
+            .filter(|id| leaves_set.contains(id))
+            .collect()
+    }
+
+    /// Get the total number of pages in the document.
+    pub fn total_pages(&self) -> usize {
+        self.node_page_range
+            .values()
+            .map(|(_, end)| *end)
+            .max()
+            .unwrap_or(0)
     }
 
     /// Get all structure indices.
@@ -497,6 +550,62 @@ impl DocumentTree {
         } else {
             false
         }
+    }
+
+    /// Find a node by its structure index.
+    ///
+    /// This is a convenience method that builds an index if needed.
+    /// For repeated queries, build a RetrievalIndex once.
+    pub fn find_by_structure(&self, structure: &str) -> Option<NodeId> {
+        // Linear search - for repeated use, build RetrievalIndex
+        for node_id in self.traverse() {
+            if let Some(node) = self.get(node_id) {
+                if node.structure == structure {
+                    return Some(node_id);
+                }
+            }
+        }
+        None
+    }
+
+    /// Find the most specific node containing a page.
+    ///
+    /// This is a convenience method that builds an index if needed.
+    /// For repeated queries, build a RetrievalIndex once.
+    pub fn find_by_page(&self, page: usize) -> Option<NodeId> {
+        let mut best_match: Option<(NodeId, usize)> = None;
+
+        // Find the deepest node containing this page
+        for node_id in self.traverse() {
+            if let Some((start, end)) = self.page_range(node_id) {
+                if page >= start && page <= end {
+                    let depth = self.get(node_id).map(|n| n.depth).unwrap_or(0);
+                    match &best_match {
+                        None => best_match = Some((node_id, depth)),
+                        Some((_, best_depth)) if depth > *best_depth => {
+                            best_match = Some((node_id, depth));
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+
+        best_match.map(|(id, _)| id)
+    }
+
+    /// Get all nodes whose page range overlaps with the given range.
+    pub fn find_nodes_by_page_range(&self, start: usize, end: usize) -> Vec<NodeId> {
+        self.traverse()
+            .into_iter()
+            .filter(|&id| {
+                if let Some((node_start, node_end)) = self.page_range(id) {
+                    node_start <= end && start <= node_end
+                } else {
+                    false
+                }
+            })
+            .collect()
     }
 
     /// Set the node ID (identifier string).
