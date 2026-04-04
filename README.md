@@ -11,9 +11,11 @@
 
 </div>
 
-Ultra performant document intelligence engine for RAG, with core written in **Rust**. Zero vector database, zero embedding model — just LLM-powered tree navigation. Incremental indexing and multi-format support out-of-box.
+Ultra performant document intelligence engine for RAG, with written in **Rust**. Zero vector database, zero embedding model — just LLM-powered tree navigation. Incremental indexing and multi-format support out-of-box.
 
 ⭐ **Drop a star to help us grow!**
+
+**⚠️ Early Development**: This project is in active development. The API and features are likely to evolve, and breaking changes may occur.
 
 
 ## Why Vectorless?
