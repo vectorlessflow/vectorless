@@ -1,0 +1,436 @@
+// Copyright (c) 2026 vectorless developers
+// SPDX-License-Identifier: Apache-2.0
+
+//! LLM-based Pilot implementation.
+//!
+//! This module provides the main Pilot implementation that uses LLM
+//! for semantic navigation guidance.
+
+use async_trait::async_trait;
+use std::sync::Arc;
+use tracing::{debug, info, warn};
+
+use crate::domain::DocumentTree;
+use crate::llm::LlmClient;
+
+use super::builder::ContextBuilder;
+use super::budget::BudgetController;
+use super::config::PilotConfig;
+use super::decision::{InterventionPoint, PilotDecision};
+use super::parser::ResponseParser;
+use super::prompts::PromptBuilder;
+use super::r#trait::{Pilot, SearchState};
+
+/// LLM-based Pilot implementation.
+///
+/// Uses an LLM client to provide semantic navigation guidance
+/// at key decision points during tree search.
+///
+/// # Architecture
+///
+/// ```text
+/// ┌─────────────────────────────────────────────────────────────┐
+/// │                         LlmPilot                             │
+/// ├─────────────────────────────────────────────────────────────┤
+/// │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐         │
+/// │  │ Context     │  │ Prompt      │  │ Response    │         │
+/// │  │ Builder     │─▶│ Builder     │─▶│ Parser      │         │
+/// │  └─────────────┘  └─────────────┘  └─────────────┘         │
+/// │                                                              │
+/// │  ┌─────────────┐  ┌─────────────┐                          │
+/// │  │ Budget      │  │ LLM         │                          │
+/// │  │ Controller  │  │ Client      │                          │
+/// │  └─────────────┘  └─────────────┘                          │
+/// └─────────────────────────────────────────────────────────────┘
+/// ```
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use vectorless::retrieval::pilot::{LlmPilot, PilotConfig};
+/// use vectorless::llm::LlmClient;
+///
+/// let client = LlmClient::for_model("gpt-4o-mini");
+/// let pilot = LlmPilot::new(client, PilotConfig::default());
+///
+/// // Use in search
+/// if pilot.should_intervene(&state) {
+///     let decision = pilot.decide(&state).await;
+/// }
+/// ```
+pub struct LlmPilot {
+    /// LLM client for making requests.
+    client: LlmClient,
+    /// Pilot configuration.
+    config: PilotConfig,
+    /// Budget controller.
+    budget: BudgetController,
+    /// Context builder.
+    context_builder: ContextBuilder,
+    /// Prompt builder.
+    prompt_builder: PromptBuilder,
+    /// Response parser.
+    response_parser: ResponseParser,
+}
+
+impl std::fmt::Debug for LlmPilot {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("LlmPilot")
+            .field("config", &self.config)
+            .field("budget", &self.budget.usage())
+            .finish()
+    }
+}
+
+impl LlmPilot {
+    /// Create a new LLM-based Pilot.
+    pub fn new(client: LlmClient, config: PilotConfig) -> Self {
+        let budget = BudgetController::new(config.budget.clone());
+        let token_budget = config.budget.max_tokens_per_call;
+
+        Self {
+            client,
+            config,
+            budget,
+            context_builder: ContextBuilder::new(token_budget),
+            prompt_builder: PromptBuilder::new(),
+            response_parser: ResponseParser::new(),
+        }
+    }
+
+    /// Create with custom builders.
+    pub fn with_builders(
+        client: LlmClient,
+        config: PilotConfig,
+        context_builder: ContextBuilder,
+        prompt_builder: PromptBuilder,
+    ) -> Self {
+        let budget = BudgetController::new(config.budget.clone());
+
+        Self {
+            client,
+            config,
+            budget,
+            context_builder,
+            prompt_builder,
+            response_parser: ResponseParser::new(),
+        }
+    }
+
+    /// Check if budget allows LLM calls.
+    fn has_budget(&self) -> bool {
+        self.budget.can_call()
+    }
+
+    /// Check if scores are too close (algorithm uncertain).
+    fn scores_are_close(&self, state: &SearchState<'_>) -> bool {
+        // Use the config's score_gap_threshold with the state's best_score
+        // If best_score is low, consider scores as close
+        state.candidates.len() >= 2 && state.best_score < self.config.intervention.score_gap_threshold
+    }
+
+    /// Determine the intervention point type.
+    fn get_intervention_point(&self, state: &SearchState<'_>) -> InterventionPoint {
+        if state.is_at_root() || state.iteration == 0 {
+            InterventionPoint::Start
+        } else if state.is_backtracking {
+            InterventionPoint::Backtrack
+        } else if state.is_fork_point() {
+            InterventionPoint::Fork
+        } else {
+            InterventionPoint::Evaluate
+        }
+    }
+
+    /// Make an LLM call and return the decision.
+    async fn call_llm(
+        &self,
+        point: InterventionPoint,
+        context: &super::builder::PilotContext,
+        candidates: &[crate::domain::NodeId],
+    ) -> PilotDecision {
+        // Build prompt
+        let prompt = self.prompt_builder.build(point, context);
+
+        // Check if we can afford this call
+        if !self.budget.can_afford(prompt.estimated_tokens) {
+            warn!("Budget cannot afford LLM call (estimated: {} tokens)", prompt.estimated_tokens);
+            return self.default_decision(candidates, point);
+        }
+
+        debug!(
+            "Calling LLM for {:?} point (estimated: {} tokens)",
+            point, prompt.estimated_tokens
+        );
+
+        // Make LLM call
+        match self.client.complete(&prompt.system, &prompt.user).await {
+            Ok(response) => {
+                // Record usage (estimate output tokens)
+                let output_tokens = self.estimate_tokens(&response);
+                self.budget.record_usage(prompt.estimated_tokens, output_tokens, 0);
+
+                // Parse response
+                let decision = self.response_parser.parse(&response, candidates, point);
+
+                info!(
+                    "LLM decision: direction={:?}, confidence={:.2}, candidates={}",
+                    std::mem::discriminant(&decision.direction),
+                    decision.confidence,
+                    decision.ranked_candidates.len()
+                );
+
+                decision
+            }
+            Err(e) => {
+                warn!("LLM call failed: {}", e);
+                self.default_decision(candidates, point)
+            }
+        }
+    }
+
+    /// Create a default decision when LLM fails.
+    fn default_decision(
+        &self,
+        candidates: &[crate::domain::NodeId],
+        point: InterventionPoint,
+    ) -> PilotDecision {
+        let ranked = candidates
+            .iter()
+            .enumerate()
+            .map(|(i, &node_id)| super::decision::RankedCandidate {
+                node_id,
+                score: 1.0 / (i + 1) as f32,
+                reason: None,
+            })
+            .collect();
+
+        PilotDecision {
+            ranked_candidates: ranked,
+            direction: super::decision::SearchDirection::GoDeeper {
+                reason: "Default decision (LLM unavailable)".to_string(),
+            },
+            confidence: 0.0,
+            reasoning: "LLM call failed or budget exhausted".to_string(),
+            intervention_point: point,
+        }
+    }
+
+    /// Estimate token count for a string.
+    fn estimate_tokens(&self, text: &str) -> usize {
+        let char_count = text.chars().count();
+        let chinese_count = text
+            .chars()
+            .filter(|c| ('\u{4E00}'..='\u{9FFF}').contains(c))
+            .count();
+        let english_count = char_count - chinese_count;
+
+        (chinese_count as f32 / 1.5 + english_count as f32 / 4.0).ceil() as usize
+    }
+}
+
+#[async_trait]
+impl Pilot for LlmPilot {
+    fn name(&self) -> &str {
+        "llm_pilot"
+    }
+
+    fn should_intervene(&self, state: &SearchState<'_>) -> bool {
+        // Check mode
+        if !self.config.mode.uses_llm() {
+            return false;
+        }
+
+        // Check budget
+        if !self.has_budget() {
+            debug!("Budget exhausted, skipping intervention");
+            return false;
+        }
+
+        let intervention = &self.config.intervention;
+
+        // Condition 1: Fork point with enough candidates
+        if state.candidates.len() > intervention.fork_threshold {
+            debug!("Intervening: fork point with {} candidates", state.candidates.len());
+            return true;
+        }
+
+        // Condition 2: Scores are too close (algorithm uncertain)
+        if self.scores_are_close(state) {
+            debug!("Intervening: scores are close");
+            return true;
+        }
+
+        // Condition 3: Low confidence (best score too low)
+        if intervention.is_low_confidence(state.best_score) {
+            debug!("Intervening: low confidence (best_score={:.2})", state.best_score);
+            return true;
+        }
+
+        // Condition 4: Backtracking and guide_at_backtrack is enabled
+        if state.is_backtracking && self.config.guide_at_backtrack {
+            debug!("Intervening: backtracking");
+            return true;
+        }
+
+        false
+    }
+
+    async fn decide(&self, state: &SearchState<'_>) -> PilotDecision {
+        let point = self.get_intervention_point(state);
+
+        // Build context
+        let context = self.context_builder.build(state);
+
+        // Make LLM call
+        self.call_llm(point, &context, state.candidates).await
+    }
+
+    async fn guide_start(
+        &self,
+        tree: &DocumentTree,
+        query: &str,
+    ) -> Option<PilotDecision> {
+        // Check if guide_at_start is enabled
+        if !self.config.guide_at_start {
+            return None;
+        }
+
+        // Check budget
+        if !self.has_budget() {
+            return None;
+        }
+
+        // Build start context
+        let context = self.context_builder.build_start_context(tree, query);
+
+        // Get root's children as candidates
+        let candidates = tree.children(tree.root());
+
+        // Make LLM call
+        Some(self.call_llm(InterventionPoint::Start, &context, &candidates).await)
+    }
+
+    async fn guide_backtrack(
+        &self,
+        state: &SearchState<'_>,
+    ) -> Option<PilotDecision> {
+        // Check if guide_at_backtrack is enabled
+        if !self.config.guide_at_backtrack {
+            return None;
+        }
+
+        // Check budget
+        if !self.has_budget() {
+            return None;
+        }
+
+        // Build backtrack context
+        let context = self.context_builder.build_backtrack_context(state, state.path);
+
+        // Make LLM call
+        Some(self.call_llm(InterventionPoint::Backtrack, &context, state.candidates).await)
+    }
+
+    fn config(&self) -> &PilotConfig {
+        &self.config
+    }
+
+    fn is_active(&self) -> bool {
+        self.config.mode.uses_llm() && self.has_budget()
+    }
+
+    fn reset(&self) {
+        self.budget.reset();
+        debug!("LlmPilot reset for new query");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::domain::NodeId;
+    use indextree::Arena;
+
+    fn create_test_node_ids(count: usize) -> Vec<NodeId> {
+        let mut arena = Arena::new();
+        let mut ids = Vec::new();
+        for i in 0..count {
+            let node = crate::domain::TreeNode {
+                title: format!("Node {}", i),
+                content: String::new(),
+                summary: String::new(),
+                depth: 0,
+                start_index: 1,
+                end_index: 1,
+                start_page: None,
+                end_page: None,
+                node_id: None,
+                physical_index: None,
+                token_count: None,
+            };
+            ids.push(NodeId(arena.new_node(node)));
+        }
+        ids
+    }
+
+    #[test]
+    fn test_llm_pilot_creation() {
+        let client = LlmClient::for_model("gpt-4o-mini");
+        let config = PilotConfig::default();
+        let pilot = LlmPilot::new(client, config);
+
+        assert_eq!(pilot.name(), "llm_pilot");
+        assert!(pilot.is_active());
+    }
+
+    #[test]
+    fn test_llm_pilot_algorithm_only_mode() {
+        let client = LlmClient::for_model("gpt-4o-mini");
+        let config = PilotConfig::algorithm_only();
+        let pilot = LlmPilot::new(client, config);
+
+        assert!(!pilot.config().mode.uses_llm());
+    }
+
+    #[test]
+    fn test_llm_pilot_budget_exhausted() {
+        let client = LlmClient::for_model("gpt-4o-mini");
+        let config = PilotConfig::default();
+        let pilot = LlmPilot::new(client, config);
+
+        // Exhaust budget
+        pilot.budget.record_usage(3000, 500, 0);
+
+        assert!(!pilot.has_budget());
+    }
+
+    #[test]
+    fn test_default_decision() {
+        let client = LlmClient::for_model("gpt-4o-mini");
+        let config = PilotConfig::default();
+        let pilot = LlmPilot::new(client, config);
+
+        let candidates = create_test_node_ids(2);
+        let decision = pilot.default_decision(&candidates, InterventionPoint::Fork);
+
+        assert_eq!(decision.ranked_candidates.len(), 2);
+        assert_eq!(decision.confidence, 0.0);
+        assert!(decision.reasoning.contains("LLM"));
+    }
+
+    #[test]
+    fn test_reset() {
+        let client = LlmClient::for_model("gpt-4o-mini");
+        let config = PilotConfig::default();
+        let pilot = LlmPilot::new(client, config);
+
+        // Use some budget
+        pilot.budget.record_usage(100, 50, 0);
+        assert!(pilot.budget.total_tokens() > 0);
+
+        // Reset
+        pilot.reset();
+        assert_eq!(pilot.budget.total_tokens(), 0);
+    }
+}

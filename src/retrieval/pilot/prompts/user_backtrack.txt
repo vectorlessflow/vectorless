@@ -1,0 +1,9 @@
+The current search path did not find a satisfactory answer. Analyze the situation and suggest alternative branches.
+
+{context}
+
+Provide your response as a JSON object with:
+- alternative_branches: array of suggested branches with index, score, and reason
+- direction: should be "backtrack"
+- confidence: your confidence in these alternatives (0.0-1.0)
+- reasoning: explanation of why the original path failed and why these alternatives are promising

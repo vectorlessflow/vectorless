@@ -1,10 +1,11 @@
 // Copyright (c) 2026 vectorless developers
 // SPDX-License-Identifier: Apache-2.0
 
-//! Search Stage - Execute tree search.
+//! Search Stage - Execute tree search with Pilot integration.
 //!
 //! This stage executes the selected search algorithm using
-//! the selected retrieval strategy.
+//! the selected retrieval strategy. When a Pilot is provided,
+//! it can provide semantic guidance at key decision points.
 
 use async_trait::async_trait;
 use std::sync::Arc;
@@ -12,6 +13,7 @@ use tracing::{info, warn};
 
 use crate::domain::DocumentTree;
 // LlmClient is used via strategy
+use crate::retrieval::pilot::Pilot;
 use crate::retrieval::RetrievalContext; // Legacy context
 use crate::retrieval::pipeline::{
     CandidateNode, FailurePolicy, PipelineContext, RetrievalStage, SearchAlgorithm, StageOutcome,
@@ -22,23 +24,36 @@ use crate::retrieval::search::{
 use crate::retrieval::strategy::{KeywordStrategy, LlmStrategy, RetrievalStrategy};
 use crate::retrieval::types::StrategyPreference;
 
-/// Search Stage - executes tree search.
+/// Search Stage - executes tree search with optional Pilot guidance.
 ///
 /// This stage:
 /// 1. Instantiates the selected search algorithm
 /// 2. Creates the appropriate strategy
-/// 3. Executes search and collects candidates
+/// 3. Executes search with optional Pilot intervention
+/// 4. Collects candidates
+///
+/// # Pilot Integration
+///
+/// When a Pilot is provided via [`with_pilot`], the search algorithm
+/// can consult it at key decision points for semantic guidance.
+/// Without a Pilot, the search uses pure algorithm scoring.
 ///
 /// # Example
 ///
 /// ```rust,ignore
+/// use vectorless::retrieval::pilot::{LlmPilot, PilotConfig};
+///
+/// let pilot = LlmPilot::new(llm_client, PilotConfig::default());
 /// let stage = SearchStage::new()
+///     .with_pilot(Arc::new(pilot))
 ///     .with_llm_strategy(llm_strategy);
 /// ```
 pub struct SearchStage {
     keyword_strategy: KeywordStrategy,
     llm_strategy: Option<Arc<LlmStrategy>>,
     semantic_strategy: Option<Arc<dyn RetrievalStrategy>>,
+    /// Pilot for navigation guidance (optional).
+    pilot: Option<Arc<dyn Pilot>>,
 }
 
 impl Default for SearchStage {
@@ -48,13 +63,24 @@ impl Default for SearchStage {
 }
 
 impl SearchStage {
-    /// Create a new search stage.
+    /// Create a new search stage without Pilot.
     pub fn new() -> Self {
         Self {
             keyword_strategy: KeywordStrategy::new(),
             llm_strategy: None,
             semantic_strategy: None,
+            pilot: None,
         }
+    }
+
+    /// Add Pilot for semantic navigation guidance.
+    ///
+    /// When provided, the search algorithm will consult the Pilot
+    /// at key decision points to get semantic guidance on which
+    /// branches are most relevant to the query.
+    pub fn with_pilot(mut self, pilot: Arc<dyn Pilot>) -> Self {
+        self.pilot = Some(pilot);
+        self
     }
 
     /// Add LLM strategy for complex queries.
@@ -67,6 +93,11 @@ impl SearchStage {
     pub fn with_semantic_strategy(mut self, strategy: Arc<dyn RetrievalStrategy>) -> Self {
         self.semantic_strategy = Some(strategy);
         self
+    }
+
+    /// Check if Pilot is available and active.
+    pub fn has_pilot(&self) -> bool {
+        self.pilot.as_ref().map(|p| p.is_active()).unwrap_or(false)
     }
 
     /// Get the strategy to use based on context.
@@ -136,7 +167,7 @@ impl SearchStage {
 
 #[async_trait]
 impl RetrievalStage for SearchStage {
-    fn name(&self) -> &'static str {
+    fn name(&self) -> &str {
         "search"
     }
 
@@ -160,13 +191,20 @@ impl RetrievalStage for SearchStage {
         let start = std::time::Instant::now();
 
         // Get strategy and algorithm
-        let strategy = self.get_strategy(ctx);
+        let _strategy = self.get_strategy(ctx);
         let algorithm = ctx.selected_algorithm.unwrap_or(SearchAlgorithm::Beam);
         let config = ctx.search_config.clone().unwrap_or_default();
 
+        // Reset Pilot state for new query
+        if let Some(ref pilot) = self.pilot {
+            pilot.reset();
+        }
+
         info!(
-            "Executing search: algorithm={:?}, beam_width={}",
-            algorithm, config.beam_width
+            "Executing search: algorithm={:?}, beam_width={}, pilot={}",
+            algorithm,
+            config.beam_width,
+            if self.has_pilot() { "enabled" } else { "disabled" }
         );
 
         // Increment search iteration
@@ -188,24 +226,31 @@ impl RetrievalStage for SearchStage {
             ctx.options.sufficiency_check,
         );
 
-        // Execute search based on algorithm
+        // Get Pilot reference (or None if not available)
+        let pilot_ref: Option<&dyn Pilot> = self.pilot.as_deref();
+
+        // Execute search based on algorithm with Pilot
         let result = match algorithm {
             SearchAlgorithm::Greedy => {
                 let search = GreedySearch::new();
-                search.search(&ctx.tree, &legacy_ctx, &search_config).await
+                search.search(&ctx.tree, &legacy_ctx, &search_config, pilot_ref).await
             }
             SearchAlgorithm::Beam => {
                 let search = BeamSearch::new();
-                search.search(&ctx.tree, &legacy_ctx, &search_config).await
+                search.search(&ctx.tree, &legacy_ctx, &search_config, pilot_ref).await
             }
             SearchAlgorithm::Mcts => {
                 // Use beam search as fallback for now
                 let search = BeamSearch::new();
-                search.search(&ctx.tree, &legacy_ctx, &search_config).await
+                search.search(&ctx.tree, &legacy_ctx, &search_config, pilot_ref).await
             }
         };
 
-        info!("Search found {} paths", result.paths.len());
+        info!(
+            "Search found {} paths (pilot interventions: {})",
+            result.paths.len(),
+            result.pilot_interventions
+        );
 
         // Update context with results
         ctx.search_paths = result.paths.clone();
@@ -228,17 +273,28 @@ impl RetrievalStage for SearchStage {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::retrieval::pilot::NoopPilot;
 
     #[test]
     fn test_search_stage_creation() {
         let stage = SearchStage::new();
         assert!(stage.llm_strategy.is_none());
         assert!(stage.semantic_strategy.is_none());
+        assert!(!stage.has_pilot());
     }
 
     #[test]
     fn test_search_stage_dependencies() {
         let stage = SearchStage::new();
         assert_eq!(stage.depends_on(), vec!["plan"]);
+    }
+
+    #[test]
+    fn test_search_stage_with_noop_pilot() {
+        let pilot = Arc::new(NoopPilot::new());
+        let stage = SearchStage::new().with_pilot(pilot);
+
+        // NoopPilot is not active
+        assert!(!stage.has_pilot());
     }
 }

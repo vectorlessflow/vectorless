@@ -54,6 +54,7 @@ mod types;
 
 pub mod cache;
 pub mod complexity;
+pub mod pilot;
 pub mod pipeline;
 pub mod search;
 pub mod stages;
@@ -96,3 +97,10 @@ pub use complexity::ComplexityDetector;
 
 // Cache exports
 pub use cache::PathCache;
+
+// Pilot exports
+pub use pilot::{
+    BudgetConfig, InterventionConfig, InterventionPoint, Pilot, PilotConfig, PilotDecision,
+    PilotMode, RankedCandidate, SearchDirection, SearchState,
+};
+pub use pilot::NoopPilot;

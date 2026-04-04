@@ -1,0 +1,8 @@
+Analyze the following document structure and user query to identify the best entry points for search.
+
+{context}
+
+Provide your response as a JSON object with:
+- entry_points: list of section titles to start searching from
+- reasoning: brief explanation of why these entry points
+- confidence: your confidence in this recommendation (0.0-1.0)

@@ -8,6 +8,7 @@ use async_trait::async_trait;
 use super::super::RetrievalContext;
 use super::super::types::{NavigationStep, SearchPath};
 use crate::domain::DocumentTree;
+use crate::retrieval::pilot::Pilot;
 
 /// Result of a search operation.
 #[derive(Debug, Clone)]
@@ -20,6 +21,8 @@ pub struct SearchResult {
     pub nodes_visited: usize,
     /// Number of iterations performed.
     pub iterations: usize,
+    /// Number of Pilot interventions.
+    pub pilot_interventions: usize,
 }
 
 impl Default for SearchResult {
@@ -29,6 +32,7 @@ impl Default for SearchResult {
             trace: Vec::new(),
             nodes_visited: 0,
             iterations: 0,
+            pilot_interventions: 0,
         }
     }
 }
@@ -64,6 +68,18 @@ impl Default for SearchConfig {
 ///
 /// Implementations provide different strategies for exploring
 /// the document tree to find relevant content.
+///
+/// # Pilot Integration
+///
+/// Search algorithms can optionally accept a [`Pilot`] for intelligent
+/// navigation guidance at key decision points. When a Pilot is provided,
+/// the algorithm consults it at:
+/// - Fork points (multiple candidates)
+/// - Low confidence situations
+/// - Backtracking decisions
+///
+/// When no Pilot is provided (None), the algorithm uses its default
+/// scoring mechanism.
 #[async_trait]
 pub trait SearchTree: Send + Sync {
     /// Search the tree for relevant nodes.
@@ -73,6 +89,7 @@ pub trait SearchTree: Send + Sync {
     /// * `tree` - The document tree to search
     /// * `context` - Retrieval context with query information
     /// * `config` - Search configuration
+    /// * `pilot` - Optional Pilot for navigation guidance
     ///
     /// # Returns
     ///
@@ -82,7 +99,18 @@ pub trait SearchTree: Send + Sync {
         tree: &DocumentTree,
         context: &RetrievalContext,
         config: &SearchConfig,
+        pilot: Option<&dyn Pilot>,
     ) -> SearchResult;
+
+    /// Search without Pilot (uses default algorithm scoring).
+    async fn search_without_pilot(
+        &self,
+        tree: &DocumentTree,
+        context: &RetrievalContext,
+        config: &SearchConfig,
+    ) -> SearchResult {
+        self.search(tree, context, config, None).await
+    }
 
     /// Get the name of this search algorithm.
     fn name(&self) -> &str;

@@ -8,17 +8,19 @@
 //! - Parallel execution of independent stages
 //! - Backtracking for incremental retrieval
 //! - Failure policies
+//! - Pilot integration for navigation guidance
 
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 
 use crate::domain::{DocumentTree, Result};
+use crate::retrieval::pilot::{Pilot, SearchState};
 // FailurePolicy is re-exported for stages
 use crate::retrieval::types::{RetrieveOptions, RetrieveResponse};
 
-use super::context::PipelineContext;
+use super::context::{CandidateNode, PipelineContext};
 use super::outcome::StageOutcome;
 use super::stage::RetrievalStage;
 
@@ -55,6 +57,7 @@ pub struct ExecutionGroup {
 /// - Parallel execution of independent stages
 /// - Backtracking support for incremental retrieval
 /// - Configurable failure policies
+/// - Pilot integration for intelligent navigation
 ///
 /// # Example
 ///
@@ -64,12 +67,14 @@ pub struct ExecutionGroup {
 ///     .stage(PlanStage::new())
 ///     .stage(SearchStage::new())
 ///     .stage(JudgeStage::new())
+///     .with_pilot(pilot)
 ///     .with_max_backtracks(3);
 ///
 /// let response = orchestrator.execute(tree, query, options).await?;
 /// ```
 pub struct RetrievalOrchestrator {
     stages: Vec<StageEntry>,
+    pilot: Option<Arc<dyn Pilot>>,
     max_backtracks: usize,
     max_total_iterations: usize,
 }
@@ -85,6 +90,7 @@ impl RetrievalOrchestrator {
     pub fn new() -> Self {
         Self {
             stages: Vec::new(),
+            pilot: None,
             max_backtracks: 5,
             max_total_iterations: 10,
         }
@@ -104,6 +110,15 @@ impl RetrievalOrchestrator {
             priority,
             depends_on: deps.into_iter().map(|s| s.to_string()).collect(),
         });
+        self
+    }
+
+    /// Add Pilot for navigation guidance during backtracking.
+    ///
+    /// When set, the Pilot will be consulted during backtracking
+    /// to provide intelligent guidance on alternative search paths.
+    pub fn with_pilot(mut self, pilot: Arc<dyn Pilot>) -> Self {
+        self.pilot = Some(pilot);
         self
     }
 
@@ -301,8 +316,8 @@ impl RetrievalOrchestrator {
             groups.iter().filter(|g| g.parallel).count()
         );
 
-        // Create context
-        let mut ctx = PipelineContext::new(tree, query, options);
+        // Create context with Pilot
+        let mut ctx = PipelineContext::with_pilot(tree, query, options, self.pilot.clone());
 
         // Track execution state
         let mut backtrack_count = 0;
@@ -361,6 +376,54 @@ impl RetrievalOrchestrator {
                                         additional_beam, go_deeper
                                     );
 
+                                    // Consult Pilot for backtrack guidance
+                                    if let Some(ref pilot) = self.pilot {
+                                        if pilot.config().guide_at_backtrack {
+                                            // Build search state for Pilot
+                                            let visited: std::collections::HashSet<_> =
+                                                ctx.search_paths
+                                                    .iter()
+                                                    .flat_map(|p| p.nodes.iter().copied())
+                                                    .collect();
+                                            let candidates: Vec<_> =
+                                                ctx.candidates.iter().map(|c| c.node_id).collect();
+
+                                            let state = SearchState::new(
+                                                &ctx.tree,
+                                                &ctx.query,
+                                                &[],
+                                                &candidates,
+                                                &visited,
+                                            );
+
+                                            match pilot.guide_backtrack(&state).await {
+                                                Some(guidance) => {
+                                                    debug!(
+                                                        "Pilot backtrack guidance: confidence={}, candidates={}",
+                                                        guidance.confidence,
+                                                        guidance.ranked_candidates.len()
+                                                    );
+                                                    // Update candidates with Pilot's suggestions
+                                                    if guidance.has_candidates() {
+                                                        ctx.candidates = guidance
+                                                            .ranked_candidates
+                                                            .iter()
+                                                            .map(|rc| CandidateNode {
+                                                                node_id: rc.node_id,
+                                                                score: rc.score,
+                                                                depth: 0,
+                                                                is_leaf: false,
+                                                            })
+                                                            .collect();
+                                                    }
+                                                }
+                                                None => {
+                                                    debug!("Pilot provided no backtrack guidance");
+                                                }
+                                            }
+                                        }
+                                    }
+
                                     // Update search config
                                     if let Some(ref mut config) = ctx.search_config {
                                         config.beam_width += additional_beam;
@@ -392,6 +455,48 @@ impl RetrievalOrchestrator {
                                     .iter()
                                     .position(|e| e.stage.name() == target_stage)
                                 {
+                                    // Consult Pilot for backtrack guidance if going to search
+                                    if target_stage == "search" {
+                                        if let Some(ref pilot) = self.pilot {
+                                            if pilot.config().guide_at_backtrack {
+                                                let visited: std::collections::HashSet<_> =
+                                                    ctx.search_paths
+                                                        .iter()
+                                                        .flat_map(|p| p.nodes.iter().copied())
+                                                        .collect();
+                                                let candidates: Vec<_> =
+                                                    ctx.candidates.iter().map(|c| c.node_id).collect();
+
+                                                let state = SearchState::new(
+                                                    &ctx.tree,
+                                                    &ctx.query,
+                                                    &[],
+                                                    &candidates,
+                                                    &visited,
+                                                );
+
+                                                if let Some(guidance) = pilot.guide_backtrack(&state).await {
+                                                    debug!(
+                                                        "Pilot backtrack guidance for explicit backtrack: confidence={}",
+                                                        guidance.confidence
+                                                    );
+                                                    if guidance.has_candidates() {
+                                                        ctx.candidates = guidance
+                                                            .ranked_candidates
+                                                            .iter()
+                                                            .map(|rc| CandidateNode {
+                                                                node_id: rc.node_id,
+                                                                score: rc.score,
+                                                                depth: 0,
+                                                                is_leaf: false,
+                                                            })
+                                                            .collect();
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+
                                     ctx.increment_backtrack();
                                     backtrack_count += 1;
 

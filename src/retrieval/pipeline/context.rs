@@ -11,6 +11,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use crate::domain::{DocumentTree, NodeId};
+use crate::retrieval::pilot::Pilot;
 use crate::retrieval::types::{
     NavigationStep, QueryComplexity, RetrieveOptions, RetrieveResponse, SearchPath,
     StrategyPreference, SufficiencyLevel,
@@ -196,6 +197,8 @@ pub struct PipelineContext {
     pub tree: Arc<DocumentTree>,
     /// Retrieval options.
     pub options: RetrieveOptions,
+    /// Optional Pilot for navigation guidance.
+    pub pilot: Option<Arc<dyn Pilot>>,
 
     // ============ Analyze Stage Output ============
     /// Detected query complexity.
@@ -255,6 +258,7 @@ impl PipelineContext {
             query: query.into(),
             tree,
             options,
+            pilot: None,
             complexity: None,
             keywords: Vec::new(),
             target_sections: Vec::new(),
@@ -273,6 +277,28 @@ impl PipelineContext {
             metrics: RetrievalMetrics::default(),
             stage_start: None,
         }
+    }
+
+    /// Create a new retrieval context with Pilot.
+    pub fn with_pilot(
+        tree: Arc<DocumentTree>,
+        query: impl Into<String>,
+        options: RetrieveOptions,
+        pilot: Option<Arc<dyn Pilot>>,
+    ) -> Self {
+        let mut ctx = Self::new(tree, query, options);
+        ctx.pilot = pilot;
+        ctx
+    }
+
+    /// Set the Pilot for this context.
+    pub fn set_pilot(&mut self, pilot: Option<Arc<dyn Pilot>>) {
+        self.pilot = pilot;
+    }
+
+    /// Get the Pilot reference, if available.
+    pub fn pilot(&self) -> Option<&dyn Pilot> {
+        self.pilot.as_deref()
     }
 
     /// Start timing a stage.

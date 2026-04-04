@@ -1,9 +1,10 @@
 // Copyright (c) 2026 vectorless developers
 // SPDX-License-Identifier: Apache-2.0
 
-//! Monte Carlo Tree Search (MCTS) algorithm.
+//! Monte Carlo Tree Search (MCTS) algorithm with Pilot integration.
 //!
 //! Balances exploration and exploitation using UCT formula.
+//! When a Pilot is provided, it can provide semantic guidance at decision points.
 
 use async_trait::async_trait;
 use std::collections::HashMap;
@@ -14,6 +15,7 @@ use super::scorer::NodeScorer;
 use super::{SearchConfig, SearchResult, SearchTree};
 use crate::config::StrategyConfig;
 use crate::domain::{DocumentTree, NodeId};
+use crate::retrieval::pilot::Pilot;
 
 /// Statistics for a node in MCTS.
 #[derive(Debug, Clone, Default)]
@@ -150,7 +152,10 @@ impl SearchTree for MctsSearch {
         tree: &DocumentTree,
         context: &RetrievalContext,
         config: &SearchConfig,
+        _pilot: Option<&dyn Pilot>,
     ) -> SearchResult {
+        // Note: Pilot integration for MCTS can be added in Phase 2
+        // For now, we keep the original behavior
         let mut result = SearchResult::default();
         let mut stats: HashMap<NodeId, NodeStats> = HashMap::new();
         let root = tree.root();
