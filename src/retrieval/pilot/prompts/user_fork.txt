@@ -1,0 +1,9 @@
+Given the current search context and candidate branches, rank them by relevance to the user's query.
+
+{context}
+
+Provide your response as a JSON object with:
+- ranked_candidates: array of objects with index, score (0.0-1.0), and reason
+- direction: one of "go_deeper", "explore_siblings", "backtrack", or "found_answer"
+- confidence: your overall confidence (0.0-1.0)
+- reasoning: brief explanation of your decision

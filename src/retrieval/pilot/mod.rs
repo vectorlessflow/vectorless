@@ -51,10 +51,12 @@
 //! }
 //! ```
 
+mod budget;
 mod config;
 mod decision;
 mod r#trait;
 
+pub use budget::{BudgetController, BudgetUsage};
 pub use config::{
     BudgetConfig, InterventionConfig, PilotConfig, PilotMode,
 };

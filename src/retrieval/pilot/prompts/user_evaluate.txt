@@ -1,0 +1,10 @@
+Evaluate whether this node's content answers the user's query.
+
+{context}
+
+Provide your response as a JSON object with:
+- relevance_score: how relevant is this content (0.0-1.0)
+- is_answer: true if this content answers the query, false otherwise
+- direction: "go_deeper" if children might have the answer, or "found_answer"
+- confidence: your confidence in this evaluation (0.0-1.0)
+- reasoning: explanation of your evaluation
