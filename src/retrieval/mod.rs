@@ -54,6 +54,7 @@ mod types;
 
 pub mod cache;
 pub mod complexity;
+pub mod content;
 pub mod pilot;
 pub mod pipeline;
 pub mod search;
@@ -97,6 +98,13 @@ pub use complexity::ComplexityDetector;
 
 // Cache exports
 pub use cache::PathCache;
+
+// Content aggregation exports
+pub use content::{
+    AggregationResult, AllocationResult, AllocationStrategy, BudgetAllocator, ContentAggregator,
+    ContentAggregatorConfig, ContentChunk, ContentRelevance, OutputFormat, RelevanceScorer,
+    ScoreComponents, ScoringStrategyConfig, SelectedContent, StructureBuilder, StructuredContent,
+};
 
 // Pilot exports
 pub use pilot::{
