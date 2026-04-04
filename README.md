@@ -105,7 +105,7 @@ vectorless = "0.1"
 Create a configuration file `vectorless.toml` in your project root:
 
 ```bash
-cp templates/template.toml ./vectorless.toml
+cp vectorless.example.toml ./vectorless.toml
 ```
 
 Basic usage:
