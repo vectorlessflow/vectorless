@@ -12,7 +12,7 @@ use tracing::{debug, trace};
 
 use super::super::RetrievalContext;
 use super::super::types::{NavigationDecision, NavigationStep, SearchPath};
-use super::scorer::NodeScorer;
+use super::scorer::{NodeScorer, ScoringContext};
 use super::{SearchConfig, SearchResult, SearchTree};
 use crate::domain::{DocumentTree, NodeId};
 use crate::retrieval::pilot::{Pilot, SearchState};
@@ -28,34 +28,36 @@ use crate::retrieval::pilot::{Pilot, SearchState};
 /// (when multiple candidates are available) to get semantic guidance
 /// on which branches are most relevant to the query.
 pub struct BeamSearch {
-    scorer: NodeScorer,
     beam_width: usize,
 }
 
 impl BeamSearch {
     /// Create a new beam search with default beam width.
     pub fn new() -> Self {
-        Self {
-            scorer: NodeScorer::new(Default::default()),
-            beam_width: 3,
-        }
+        Self { beam_width: 3 }
     }
 
     /// Create beam search with specified width.
     pub fn with_width(width: usize) -> Self {
         Self {
-            scorer: NodeScorer::new(Default::default()),
             beam_width: width.max(1),
         }
     }
 
-    /// Score candidates using the algorithm's scorer.
-    fn score_candidates(
+    /// Create a scorer for the given query.
+    fn create_scorer(&self, query: &str) -> NodeScorer {
+        NodeScorer::new(ScoringContext::new(query))
+    }
+
+    /// Score candidates using a query-specific scorer.
+    fn score_candidates_with_query(
         &self,
         tree: &DocumentTree,
         candidates: &[NodeId],
+        query: &str,
     ) -> Vec<(NodeId, f32)> {
-        self.scorer.score_and_sort(tree, candidates)
+        let scorer = self.create_scorer(query);
+        scorer.score_and_sort(tree, candidates)
     }
 
     /// Merge algorithm scores with Pilot decision.
@@ -67,7 +69,9 @@ impl BeamSearch {
         tree: &DocumentTree,
         candidates: &[NodeId],
         pilot_decision: &crate::retrieval::pilot::PilotDecision,
+        query: &str,
     ) -> Vec<(NodeId, f32)> {
+        let scorer = self.create_scorer(query);
         let alpha = 0.4;
         let beta = 0.6 * pilot_decision.confidence;
 
@@ -81,7 +85,7 @@ impl BeamSearch {
         let mut merged: Vec<(NodeId, f32)> = candidates
             .iter()
             .map(|&node_id| {
-                let algo_score = self.scorer.score(tree, node_id);
+                let algo_score = scorer.score(tree, node_id);
                 let pilot_score = pilot_scores.get(&node_id).copied().unwrap_or(0.0);
 
                 // Weighted combination
@@ -138,18 +142,18 @@ impl SearchTree for BeamSearch {
 
                     // Use Pilot's ranked order if available
                     if guidance.has_candidates() {
-                        self.merge_with_pilot_decision(tree, &root_children, &guidance)
+                        self.merge_with_pilot_decision(tree, &root_children, &guidance, &context.query)
                     } else {
-                        self.score_candidates(tree, &root_children)
+                        self.score_candidates_with_query(tree, &root_children, &context.query)
                     }
                 } else {
-                    self.score_candidates(tree, &root_children)
+                    self.score_candidates_with_query(tree, &root_children, &context.query)
                 }
             } else {
-                self.score_candidates(tree, &root_children)
+                self.score_candidates_with_query(tree, &root_children, &context.query)
             }
         } else {
-            self.score_candidates(tree, &root_children)
+            self.score_candidates_with_query(tree, &root_children, &context.query)
         };
 
         let mut current_beam: Vec<SearchPath> = initial_candidates
@@ -211,16 +215,16 @@ impl SearchTree for BeamSearch {
                                     );
 
                                     // Merge algorithm scores with Pilot decision
-                                    self.merge_with_pilot_decision(tree, &children, &decision)
+                                    self.merge_with_pilot_decision(tree, &children, &decision, &context.query)
                                 }
                             }
                         } else {
                             // No intervention, use algorithm scoring
-                            self.score_candidates(tree, &children)
+                            self.score_candidates_with_query(tree, &children, &context.query)
                         }
                     } else {
                         // No Pilot, use algorithm scoring
-                        self.score_candidates(tree, &children)
+                        self.score_candidates_with_query(tree, &children, &context.query)
                     };
                     // ==============================================
 
@@ -265,6 +269,16 @@ impl SearchTree for BeamSearch {
         for path in current_beam {
             if path.score >= config.min_score && result.paths.len() < config.top_k {
                 result.paths.push(path);
+            }
+        }
+
+        // Fallback: if no results found, add best candidates regardless of score
+        if result.paths.is_empty() && config.min_score > 0.0 {
+            debug!("No results above min_score, adding best candidates as fallback");
+            // Re-score initial candidates and take top-k
+            let all_candidates = self.score_candidates_with_query(tree, &tree.children(tree.root()), &context.query);
+            for (node_id, score) in all_candidates.into_iter().take(config.top_k) {
+                result.paths.push(SearchPath::from_node(node_id, score));
             }
         }
 

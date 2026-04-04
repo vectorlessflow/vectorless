@@ -298,6 +298,7 @@ impl Pilot for LlmPilot {
 
         // Check budget
         if !self.has_budget() {
+            debug!("Budget exhausted, cannot guide start");
             return None;
         }
 
@@ -308,7 +309,14 @@ impl Pilot for LlmPilot {
         let candidates = tree.children(tree.root());
 
         // Make LLM call
-        Some(self.call_llm(InterventionPoint::Start, &context, &candidates).await)
+        let decision = self.call_llm(InterventionPoint::Start, &context, &candidates).await;
+        info!(
+            "Pilot start guidance: confidence={}, candidates={}",
+            decision.confidence,
+            decision.ranked_candidates.len()
+        );
+
+        Some(decision)
     }
 
     async fn guide_backtrack(

@@ -16,6 +16,7 @@ use super::strategy::LlmStrategy;
 use super::types::{RetrieveOptions, RetrieveResponse};
 use crate::domain::DocumentTree;
 use crate::llm::LlmClient;
+use crate::retrieval::pilot::{LlmPilot, PilotConfig};
 
 /// Pipeline-based retriever using the stage architecture.
 ///
@@ -89,10 +90,12 @@ impl PipelineRetriever {
         }
         orchestrator = orchestrator.stage(plan_stage);
 
-        // Add search stage
+        // Add search stage with Pilot for semantic navigation
         let mut search_stage = SearchStage::new();
         if let Some(ref client) = self.llm_client {
-            search_stage = search_stage.with_llm_strategy(LlmStrategy::new(client.clone()));
+            // Create LLM-based Pilot for semantic navigation guidance
+            let pilot = LlmPilot::new(client.clone(), PilotConfig::default());
+            search_stage = search_stage.with_pilot(Arc::new(pilot));
         }
         orchestrator = orchestrator.stage(search_stage);
 
