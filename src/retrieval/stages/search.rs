@@ -147,7 +147,7 @@ impl SearchStage {
                 // Get node info
                 if let Some(node) = tree.get(leaf_id) {
                     let depth = node.depth;
-                    let is_leaf = tree.children(leaf_id).is_empty();
+                    let is_leaf = tree.is_leaf(leaf_id);
 
                     candidates.push(CandidateNode::new(leaf_id, path.score, depth, is_leaf));
                 }

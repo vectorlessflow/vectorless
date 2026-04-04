@@ -155,9 +155,27 @@ impl DocumentTree {
         id.0.children(&self.arena).next().is_none()
     }
 
+    /// Get the number of children of a node.
+    ///
+    /// This is more efficient than `children().len()` as it doesn't allocate.
+    pub fn child_count(&self, id: NodeId) -> usize {
+        id.0.children(&self.arena).count()
+    }
+
+    /// Get the children of a node as an iterator.
+    ///
+    /// Use this instead of `children()` when you only need to iterate,
+    /// as it avoids allocating a Vec.
+    pub fn children_iter(&self, id: NodeId) -> impl Iterator<Item = NodeId> + '_ {
+        id.0.children(&self.arena).map(NodeId)
+    }
+
     /// Get the children of a node.
+    ///
+    /// Returns a Vec for cases where you need owned access to the children.
+    /// Consider using `children_iter()` if you only need to iterate.
     pub fn children(&self, id: NodeId) -> Vec<NodeId> {
-        id.0.children(&self.arena).map(NodeId).collect()
+        self.children_iter(id).collect()
     }
 
     /// Get the parent of a node.
@@ -165,6 +183,51 @@ impl DocumentTree {
     /// Returns None if the node is the root or doesn't have a parent.
     pub fn parent(&self, id: NodeId) -> Option<NodeId> {
         id.0.parent(&self.arena).map(NodeId)
+    }
+
+    /// Get the siblings of a node (excluding the node itself).
+    ///
+    /// Returns an empty iterator for the root node.
+    pub fn siblings_iter(&self, id: NodeId) -> impl Iterator<Item = NodeId> + '_ {
+        id.0.preceding_siblings(&self.arena)
+            .chain(id.0.following_siblings(&self.arena))
+            .map(NodeId)
+    }
+
+    /// Get the ancestors of a node from parent to root.
+    ///
+    /// Returns an empty iterator for the root node.
+    pub fn ancestors_iter(&self, id: NodeId) -> impl Iterator<Item = NodeId> + '_ {
+        id.0.ancestors(&self.arena).map(NodeId)
+    }
+
+    /// Get the path from root to a node (inclusive).
+    ///
+    /// Returns the path as a Vec starting from the root.
+    pub fn path_from_root(&self, id: NodeId) -> Vec<NodeId> {
+        let mut path: Vec<NodeId> = self.ancestors_iter(id).collect();
+        path.reverse();
+        path.push(id);
+        path
+    }
+
+    /// Get the depth of a node (root = 0).
+    pub fn depth(&self, id: NodeId) -> usize {
+        self.get(id).map(|n| n.depth).unwrap_or(0)
+    }
+
+    /// Get the first child of a node.
+    ///
+    /// Returns None if the node has no children.
+    pub fn first_child(&self, id: NodeId) -> Option<NodeId> {
+        self.children_iter(id).next()
+    }
+
+    /// Get the last child of a node.
+    ///
+    /// Returns None if the node has no children.
+    pub fn last_child(&self, id: NodeId) -> Option<NodeId> {
+        self.children_iter(id).last()
     }
 
     /// Get all leaf nodes in the tree.
