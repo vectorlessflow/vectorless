@@ -55,7 +55,9 @@ mod budget;
 mod builder;
 mod config;
 mod decision;
+mod fallback;
 mod llm_pilot;
+mod metrics;
 mod noop;
 mod parser;
 mod prompts;
@@ -69,7 +71,9 @@ pub use config::{
 pub use decision::{
     InterventionPoint, PilotDecision, RankedCandidate, SearchDirection,
 };
+pub use fallback::{FallbackAction, FallbackConfig, FallbackError, FallbackLevel, FallbackManager};
 pub use llm_pilot::LlmPilot;
+pub use metrics::{CallRecord, MetricsCollector, PilotMetrics};
 pub use noop::NoopPilot;
 pub use parser::ResponseParser;
 pub use prompts::PromptBuilder;
