@@ -1,9 +1,10 @@
 // Copyright (c) 2026 vectorless developers
 // SPDX-License-Identifier: Apache-2.0
 
-//! Greedy search algorithm.
+//! Greedy search algorithm with Pilot integration.
 //!
 //! Simple depth-first search that always follows the highest-scoring child.
+//! When a Pilot is provided, it can provide semantic guidance at decision points.
 
 use async_trait::async_trait;
 
@@ -12,6 +13,7 @@ use super::super::types::{NavigationDecision, NavigationStep, SearchPath};
 use super::scorer::NodeScorer;
 use super::{SearchConfig, SearchResult, SearchTree};
 use crate::domain::DocumentTree;
+use crate::retrieval::pilot::Pilot;
 
 /// Greedy search - always follows the best single path.
 ///
@@ -42,7 +44,10 @@ impl SearchTree for GreedySearch {
         tree: &DocumentTree,
         context: &RetrievalContext,
         config: &SearchConfig,
+        _pilot: Option<&dyn Pilot>,
     ) -> SearchResult {
+        // Note: Pilot integration for GreedySearch can be added in Phase 2
+        // For now, we keep the original behavior
         let mut result = SearchResult::default();
         let mut current_path = SearchPath::new();
         let mut current_node = tree.root();

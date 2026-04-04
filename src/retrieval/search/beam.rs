@@ -1,22 +1,32 @@
 // Copyright (c) 2026 vectorless developers
 // SPDX-License-Identifier: Apache-2.0
 
-//! Beam search algorithm.
+//! Beam search algorithm with Pilot integration.
 //!
 //! Explores multiple paths in parallel, keeping only the top-k candidates at each level.
+//! When a Pilot is provided, it can intervene at fork points to provide semantic guidance.
 
 use async_trait::async_trait;
+use std::collections::HashSet;
+use tracing::{debug, trace};
 
 use super::super::RetrievalContext;
 use super::super::types::{NavigationDecision, NavigationStep, SearchPath};
 use super::scorer::NodeScorer;
 use super::{SearchConfig, SearchResult, SearchTree};
-use crate::domain::DocumentTree;
+use crate::domain::{DocumentTree, NodeId};
+use crate::retrieval::pilot::{Pilot, SearchState};
 
 /// Beam search - explores multiple paths simultaneously.
 ///
 /// Keeps top `beam_width` candidates at each level, providing
 /// a balance between exploration and computational cost.
+///
+/// # Pilot Integration
+///
+/// When a Pilot is provided, the algorithm consults it at fork points
+/// (when multiple candidates are available) to get semantic guidance
+/// on which branches are most relevant to the query.
 pub struct BeamSearch {
     scorer: NodeScorer,
     beam_width: usize,
@@ -38,6 +48,60 @@ impl BeamSearch {
             beam_width: width.max(1),
         }
     }
+
+    /// Score candidates using the algorithm's scorer.
+    fn score_candidates(
+        &self,
+        tree: &DocumentTree,
+        candidates: &[NodeId],
+    ) -> Vec<(NodeId, f32)> {
+        self.scorer.score_and_sort(tree, candidates)
+    }
+
+    /// Merge algorithm scores with Pilot decision.
+    ///
+    /// Uses weighted combination: `final = α * algo + β * pilot`
+    /// where α = 0.4 and β = 0.6 * confidence
+    fn merge_with_pilot_decision(
+        &self,
+        tree: &DocumentTree,
+        candidates: &[NodeId],
+        pilot_decision: &crate::retrieval::pilot::PilotDecision,
+    ) -> Vec<(NodeId, f32)> {
+        let alpha = 0.4;
+        let beta = 0.6 * pilot_decision.confidence;
+
+        // Build a map from node_id to pilot score
+        let mut pilot_scores: std::collections::HashMap<NodeId, f32> = std::collections::HashMap::new();
+        for ranked in &pilot_decision.ranked_candidates {
+            pilot_scores.insert(ranked.node_id, ranked.score);
+        }
+
+        // Merge scores
+        let mut merged: Vec<(NodeId, f32)> = candidates
+            .iter()
+            .map(|&node_id| {
+                let algo_score = self.scorer.score(tree, node_id);
+                let pilot_score = pilot_scores.get(&node_id).copied().unwrap_or(0.0);
+
+                // Weighted combination
+                let final_score = if beta > 0.0 {
+                    (alpha * algo_score + beta * pilot_score) / (alpha + beta)
+                } else {
+                    algo_score
+                };
+
+                (node_id, final_score)
+            })
+            .collect();
+
+        // Sort by merged score
+        merged.sort_by(|a, b| {
+            b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal)
+        });
+
+        merged
+    }
 }
 
 impl Default for BeamSearch {
@@ -53,26 +117,47 @@ impl SearchTree for BeamSearch {
         tree: &DocumentTree,
         context: &RetrievalContext,
         config: &SearchConfig,
+        pilot: Option<&dyn Pilot>,
     ) -> SearchResult {
         let mut result = SearchResult::default();
         let beam_width = config.beam_width.min(self.beam_width);
+        let mut visited: HashSet<NodeId> = HashSet::new();
+
+        // Track Pilot interventions
+        let mut pilot_interventions = 0;
 
         // Initialize with root's children
         let root_children = tree.children(tree.root());
-        let mut current_beam: Vec<SearchPath> = root_children
-            .iter()
-            .map(|&child_id| {
-                let score = self.scorer.score(tree, child_id);
-                SearchPath::from_node(child_id, score)
-            })
+
+        // Check if Pilot wants to guide the start
+        let initial_candidates = if let Some(p) = pilot {
+            if p.config().guide_at_start {
+                if let Some(guidance) = p.guide_start(tree, &context.query).await {
+                    debug!("Pilot provided start guidance with confidence {}", guidance.confidence);
+                    pilot_interventions += 1;
+
+                    // Use Pilot's ranked order if available
+                    if guidance.has_candidates() {
+                        self.merge_with_pilot_decision(tree, &root_children, &guidance)
+                    } else {
+                        self.score_candidates(tree, &root_children)
+                    }
+                } else {
+                    self.score_candidates(tree, &root_children)
+                }
+            } else {
+                self.score_candidates(tree, &root_children)
+            }
+        } else {
+            self.score_candidates(tree, &root_children)
+        };
+
+        let mut current_beam: Vec<SearchPath> = initial_candidates
+            .into_iter()
+            .map(|(node_id, score)| SearchPath::from_node(node_id, score))
             .collect();
 
-        // Sort by score and keep top beam_width
-        current_beam.sort_by(|a, b| {
-            b.score
-                .partial_cmp(&a.score)
-                .unwrap_or(std::cmp::Ordering::Equal)
-        });
+        // Keep top beam_width
         current_beam.truncate(beam_width);
 
         for iteration in 0..config.max_iterations {
@@ -86,6 +171,8 @@ impl SearchTree for BeamSearch {
 
             for path in &current_beam {
                 if let Some(leaf_id) = path.leaf {
+                    visited.insert(leaf_id);
+
                     // Check if this is a leaf node
                     if tree.is_leaf(leaf_id) {
                         // Add to final results
@@ -98,7 +185,44 @@ impl SearchTree for BeamSearch {
 
                     // Expand this path
                     let children = tree.children(leaf_id);
-                    let scored_children = self.scorer.score_and_sort(tree, &children);
+
+                    // ========== Pilot Intervention Point ==========
+                    let scored_children = if let Some(p) = pilot {
+                        // Build search state for Pilot
+                        let state = SearchState::new(
+                            tree,
+                            &context.query,
+                            &path.nodes,
+                            &children,
+                            &visited,
+                        );
+
+                        // Check if Pilot wants to intervene
+                        if p.should_intervene(&state) {
+                            trace!("Pilot intervening at fork with {} candidates", children.len());
+
+                            match p.decide(&state).await {
+                                decision => {
+                                    pilot_interventions += 1;
+                                    debug!(
+                                        "Pilot decision: confidence={}, direction={:?}",
+                                        decision.confidence,
+                                        std::mem::discriminant(&decision.direction)
+                                    );
+
+                                    // Merge algorithm scores with Pilot decision
+                                    self.merge_with_pilot_decision(tree, &children, &decision)
+                                }
+                            }
+                        } else {
+                            // No intervention, use algorithm scoring
+                            self.score_candidates(tree, &children)
+                        }
+                    } else {
+                        // No Pilot, use algorithm scoring
+                        self.score_candidates(tree, &children)
+                    };
+                    // ==============================================
 
                     for (child_id, child_score) in scored_children.into_iter().take(beam_width) {
                         let new_path = path.extend(child_id, child_score);
@@ -152,10 +276,33 @@ impl SearchTree for BeamSearch {
         });
         result.paths.truncate(config.top_k);
 
+        // Record Pilot interventions
+        result.pilot_interventions = pilot_interventions;
+
         result
     }
 
     fn name(&self) -> &'static str {
         "beam"
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_beam_search_creation() {
+        let search = BeamSearch::new();
+        assert_eq!(search.beam_width, 3);
+
+        let search_wide = BeamSearch::with_width(5);
+        assert_eq!(search_wide.beam_width, 5);
+    }
+
+    #[test]
+    fn test_beam_search_minimum_width() {
+        let search = BeamSearch::with_width(0);
+        assert_eq!(search.beam_width, 1);
     }
 }
