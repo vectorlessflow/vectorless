@@ -68,6 +68,11 @@ impl JudgeStage {
     }
 
     /// Aggregate content from candidates.
+    ///
+    /// Always includes:
+    /// 1. Node's own content (if available)
+    /// 2. All descendant leaf content (for complete context)
+    /// 3. Falls back to summary only if no content at all
     fn aggregate_content(&self, ctx: &PipelineContext) -> (String, usize) {
         let mut content_parts = Vec::new();
         let mut total_tokens = 0;
@@ -77,13 +82,27 @@ impl JudgeStage {
                 // Add title
                 content_parts.push(format!("## {}\n", node.title));
 
-                // Add summary if available, otherwise content preview
-                if !node.summary.is_empty() {
+                // Always collect all content: own content + descendant leaf content
+                let mut has_content = false;
+
+                // Add node's own content if available
+                if !node.content.is_empty() {
+                    content_parts.push(format!("{}\n\n", node.content));
+                    has_content = true;
+                    eprintln!("[JUDGE] Node '{}' has own content: {} chars", node.title, node.content.len());
+                }
+
+                // Also collect content from leaf descendants (for intermediate nodes)
+                let leaf_content = self.collect_leaf_content(&ctx.tree, candidate.node_id);
+                if !leaf_content.is_empty() {
+                    eprintln!("[JUDGE] Collected leaf content for '{}': {} chars", node.title, leaf_content.len());
+                    content_parts.push(format!("{}\n\n", leaf_content));
+                    has_content = true;
+                }
+
+                // Fall back to summary only if no content available
+                if !has_content && !node.summary.is_empty() {
                     content_parts.push(format!("{}\n\n", node.summary));
-                } else if !node.content.is_empty() {
-                    // Limit content preview
-                    let preview: String = node.content.chars().take(500).collect();
-                    content_parts.push(format!("{}\n\n", preview));
                 }
 
                 // Estimate tokens
@@ -92,6 +111,43 @@ impl JudgeStage {
         }
 
         (content_parts.join(""), total_tokens)
+    }
+
+    /// Collect content from leaf descendants of a node (excluding the node itself).
+    fn collect_leaf_content(&self, tree: &crate::domain::DocumentTree, node_id: crate::domain::NodeId) -> String {
+        let mut content_parts = Vec::new();
+
+        // Start with children, not the node itself
+        let children = tree.children(node_id);
+        if children.is_empty() {
+            // Node is already a leaf, no descendants to collect
+            return String::new();
+        }
+
+        let mut stack: Vec<crate::domain::NodeId> = children;
+        let mut visited_count = 0;
+
+        while let Some(current_id) = stack.pop() {
+            let current_children = tree.children(current_id);
+
+            if current_children.is_empty() {
+                // Leaf node - collect its content
+                if let Some(node) = tree.get(current_id) {
+                    if !node.content.is_empty() {
+                        eprintln!("[JUDGE] Found leaf '{}' with {} chars content", node.title, node.content.len());
+                        content_parts.push(format!("### {}\n{}", node.title, node.content));
+                        visited_count += 1;
+                    }
+                }
+            } else {
+                // Non-leaf node - add children to stack
+                eprintln!("[JUDGE] Node has {} children, adding to stack", current_children.len());
+                stack.extend(current_children);
+            }
+        }
+
+        eprintln!("[JUDGE] Collected content from {} leaf nodes", visited_count);
+        content_parts.join("\n\n")
     }
 
     /// Check sufficiency level.
@@ -118,14 +174,34 @@ impl JudgeStage {
 
         for candidate in &ctx.candidates {
             if let Some(node) = ctx.tree.get(candidate.node_id) {
+                // Build content: node's own content + all descendant leaf content
+                let content = if ctx.options.include_content {
+                    let mut content_parts = Vec::new();
+
+                    // Add node's own content
+                    if !node.content.is_empty() {
+                        content_parts.push(node.content.clone());
+                    }
+
+                    // Add content from leaf descendants
+                    let leaf_content = self.collect_leaf_content(&ctx.tree, candidate.node_id);
+                    if !leaf_content.is_empty() {
+                        content_parts.push(leaf_content);
+                    }
+
+                    if content_parts.is_empty() {
+                        None
+                    } else {
+                        Some(content_parts.join("\n\n"))
+                    }
+                } else {
+                    None
+                };
+
                 results.push(RetrievalResult {
                     node_id: Some(format!("{:?}", candidate.node_id)),
                     title: node.title.clone(),
-                    content: if ctx.options.include_content {
-                        Some(node.content.clone())
-                    } else {
-                        None
-                    },
+                    content,
                     summary: if ctx.options.include_summaries {
                         Some(node.summary.clone())
                     } else {

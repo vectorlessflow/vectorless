@@ -141,7 +141,7 @@ See the [examples/](examples/) directory for complete working examples:
 
 ### System Overview
 
-![Architecture](docs/design/architecture-v2.svg)
+![Architecture](docs/design/architecture.svg)
 
 ## Contributing
 

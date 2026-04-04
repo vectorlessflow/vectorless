@@ -181,19 +181,18 @@ impl EngineBuilder {
         let mut retriever =
             PipelineRetriever::new().with_max_iterations(retrieval_config.search.max_iterations);
 
-        // Add LLM client if API key is available
+        // LLM API key is REQUIRED for retrieval (Pilot needs it for semantic navigation)
         // Try retrieval config first, then fall back to summary config
         let retrieval_api_key = retrieval_config.api_key.clone()
-            .or_else(|| config.summary.api_key.clone());
+            .or_else(|| config.summary.api_key.clone())
+            .ok_or(BuildError::MissingApiKey)?;
 
-        if let Some(api_key) = retrieval_api_key {
-            let llm_config = crate::llm::LlmConfig::new(&retrieval_config.model)
-                .with_endpoint(retrieval_config.endpoint.clone())
-                .with_api_key(api_key)
-                .with_temperature(retrieval_config.temperature);
-            let llm_client = crate::llm::LlmClient::new(llm_config);
-            retriever = retriever.with_llm_client(llm_client);
-        }
+        let llm_config = crate::llm::LlmConfig::new(&retrieval_config.model)
+            .with_endpoint(retrieval_config.endpoint.clone())
+            .with_api_key(retrieval_api_key)
+            .with_temperature(retrieval_config.temperature);
+        let llm_client = crate::llm::LlmClient::new(llm_config);
+        retriever = retriever.with_llm_client(llm_client);
 
         Ok(Engine::with_components(
             config, workspace, retriever, executor,
@@ -217,6 +216,10 @@ pub enum BuildError {
     /// Workspace error.
     #[error("Workspace error: {0}")]
     Workspace(String),
+
+    /// Missing API key for retrieval.
+    #[error("Missing API key: LLM API key is required for retrieval. Set OPENAI_API_KEY environment variable or configure retrieval.api_key")]
+    MissingApiKey,
 }
 
 #[cfg(test)]
