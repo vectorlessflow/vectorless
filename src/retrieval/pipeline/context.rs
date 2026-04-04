@@ -10,7 +10,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
-use crate::domain::{DocumentTree, NodeId};
+use crate::domain::{DocumentTree, NodeId, RetrievalIndex};
 use crate::retrieval::pilot::Pilot;
 use crate::retrieval::types::{
     NavigationStep, QueryComplexity, RetrieveOptions, RetrieveResponse, SearchPath,
@@ -195,6 +195,8 @@ pub struct PipelineContext {
     pub query: String,
     /// Document tree to search.
     pub tree: Arc<DocumentTree>,
+    /// Pre-computed retrieval index for efficient operations.
+    pub retrieval_index: Option<RetrievalIndex>,
     /// Retrieval options.
     pub options: RetrieveOptions,
     /// Optional Pilot for navigation guidance.
@@ -254,9 +256,13 @@ impl PipelineContext {
         query: impl Into<String>,
         options: RetrieveOptions,
     ) -> Self {
+        // Build retrieval index for efficient operations
+        let retrieval_index = Some(tree.build_retrieval_index());
+
         Self {
             query: query.into(),
             tree,
+            retrieval_index,
             options,
             pilot: None,
             complexity: None,

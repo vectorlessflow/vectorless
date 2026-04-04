@@ -4,7 +4,9 @@
 //! Document tree using arena-based allocation.
 //!
 //! This structure provides better memory locality and simpler
-//! lifetime management compared to `Rc<RefCell<PageNode>`.
+//! lifetime management compared to `Rc<RefCell<PageNode>}`.
+
+use std::collections::HashMap;
 
 use indextree::Arena;
 use serde::{Deserialize, Serialize};
@@ -37,6 +39,80 @@ pub struct DocumentStructure {
     pub doc_name: String,
     /// Tree structure.
     pub structure: Vec<StructureNode>,
+}
+
+/// Pre-computed index for efficient retrieval operations.
+///
+/// Built once after the document tree is fully constructed.
+/// Provides O(1) access to commonly needed traversal data.
+#[derive(Debug, Clone)]
+pub struct RetrievalIndex {
+    /// All leaf nodes in the tree.
+    leaves: Vec<NodeId>,
+
+    /// Nodes grouped by depth level.
+    /// level_index[0] = root, level_index[1] = level 1 nodes, etc.
+    level_index: Vec<Vec<NodeId>>,
+
+    /// Path from root to each node (inclusive).
+    path_cache: HashMap<NodeId, Vec<NodeId>>,
+
+    /// Siblings for each node (excluding self).
+    siblings_cache: HashMap<NodeId, Vec<NodeId>>,
+
+    /// Total node count.
+    node_count: usize,
+
+    /// Maximum depth in the tree.
+    max_depth: usize,
+}
+
+impl RetrievalIndex {
+    /// Get all leaf nodes.
+    pub fn leaves(&self) -> &[NodeId] {
+        &self.leaves
+    }
+
+    /// Get nodes at a specific depth level.
+    ///
+    /// Returns None if the level doesn't exist.
+    pub fn level(&self, depth: usize) -> Option<&[NodeId]> {
+        self.level_index.get(depth).map(|v| v.as_slice())
+    }
+
+    /// Get all levels.
+    pub fn levels(&self) -> &[Vec<NodeId>] {
+        &self.level_index
+    }
+
+    /// Get the path from root to a node (inclusive).
+    ///
+    /// Returns None if the node is not in the index.
+    pub fn path_to(&self, node: NodeId) -> Option<&[NodeId]> {
+        self.path_cache.get(&node).map(|v| v.as_slice())
+    }
+
+    /// Get siblings of a node (excluding the node itself).
+    ///
+    /// Returns None if the node is not in the index or has no siblings.
+    pub fn siblings(&self, node: NodeId) -> Option<&[NodeId]> {
+        self.siblings_cache.get(&node).map(|v| v.as_slice())
+    }
+
+    /// Get the total number of nodes.
+    pub fn node_count(&self) -> usize {
+        self.node_count
+    }
+
+    /// Get the maximum depth in the tree.
+    pub fn max_depth(&self) -> usize {
+        self.max_depth
+    }
+
+    /// Get the number of levels.
+    pub fn level_count(&self) -> usize {
+        self.level_index.len()
+    }
 }
 
 /// A hierarchical document tree structure.
@@ -334,6 +410,97 @@ impl DocumentTree {
         DocumentStructure {
             doc_name: doc_name.to_string(),
             structure,
+        }
+    }
+
+    /// Build a retrieval index for efficient operations.
+    ///
+    /// This should be called once after the tree is fully constructed.
+    /// The index provides O(1) access to commonly needed traversal data.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// let tree = /* build tree */;
+    /// let index = tree.build_retrieval_index();
+    ///
+    /// // Fast access to leaves
+    /// for leaf in index.leaves() {
+    ///     // process leaf
+    /// }
+    ///
+    /// // Fast path lookup
+    /// if let Some(path) = index.path_to(node_id) {
+    ///     // path[0] = root, path[-1] = node_id
+    /// }
+    /// ```
+    pub fn build_retrieval_index(&self) -> RetrievalIndex {
+        let mut leaves = Vec::new();
+        let mut level_index: Vec<Vec<NodeId>> = Vec::new();
+        let mut path_cache: HashMap<NodeId, Vec<NodeId>> = HashMap::new();
+        let mut siblings_cache: HashMap<NodeId, Vec<NodeId>> = HashMap::new();
+        let mut max_depth = 0;
+        let node_count = self.node_count();
+
+        // BFS to build level index
+        let mut current_level = vec![self.root_id];
+
+        // Initialize root path
+        path_cache.insert(self.root_id, vec![self.root_id]);
+
+        while !current_level.is_empty() {
+            level_index.push(current_level.clone());
+
+            let mut next_level = Vec::new();
+
+            for &node_id in &current_level {
+                let children: Vec<NodeId> = self.children(node_id);
+
+                // Update max depth
+                if let Some(node) = self.get(node_id) {
+                    max_depth = max_depth.max(node.depth);
+                }
+
+                // Check if leaf
+                if children.is_empty() {
+                    leaves.push(node_id);
+                }
+
+                // Build siblings cache for children
+                if children.len() > 1 {
+                    for (i, &child) in children.iter().enumerate() {
+                        let siblings: Vec<NodeId> = children
+                            .iter()
+                            .enumerate()
+                            .filter(|(j, _)| *j != i)
+                            .map(|(_, &c)| c)
+                            .collect();
+                        siblings_cache.insert(child, siblings);
+                    }
+                }
+
+                // Build path cache for children
+                if let Some(parent_path) = path_cache.get(&node_id).cloned() {
+                    for &child in &children {
+                        let mut child_path = parent_path.clone();
+                        child_path.push(child);
+                        path_cache.insert(child, child_path);
+                    }
+                }
+
+                next_level.extend(children);
+            }
+
+            current_level = next_level;
+        }
+
+        RetrievalIndex {
+            leaves,
+            level_index,
+            path_cache,
+            siblings_cache,
+            node_count,
+            max_depth,
         }
     }
 
