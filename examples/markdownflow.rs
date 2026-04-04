@@ -35,6 +35,9 @@ Vectorless is a document indexing and retrieval library that uses tree-based nav
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Initialize tracing for debug output (set RUST_LOG=debug to see more)
+    tracing_subscriber::fmt::init();
+
     println!("=== Vectorless Markdown Flow Example ===\n");
 
     // Step 1: Create a Vectorless client (no API key needed - LLM config is automatic)
