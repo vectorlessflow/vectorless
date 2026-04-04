@@ -397,10 +397,8 @@ impl Engine {
             .map(|r| {
                 let mut parts = vec![format!("## {}", r.title)];
 
-                if let Some(ref summary) = r.summary {
-                    parts.push(format!("Summary: {}", summary));
-                }
-
+                // Only include original content, not summary
+                // (per design: retrieval should return original text, not summary)
                 if let Some(ref content) = r.content {
                     parts.push(content.clone());
                 }

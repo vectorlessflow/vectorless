@@ -89,13 +89,11 @@ impl JudgeStage {
                 if !node.content.is_empty() {
                     content_parts.push(format!("{}\n\n", node.content));
                     has_content = true;
-                    eprintln!("[JUDGE] Node '{}' has own content: {} chars", node.title, node.content.len());
                 }
 
                 // Also collect content from leaf descendants (for intermediate nodes)
                 let leaf_content = self.collect_leaf_content(&ctx.tree, candidate.node_id);
                 if !leaf_content.is_empty() {
-                    eprintln!("[JUDGE] Collected leaf content for '{}': {} chars", node.title, leaf_content.len());
                     content_parts.push(format!("{}\n\n", leaf_content));
                     has_content = true;
                 }
@@ -125,7 +123,6 @@ impl JudgeStage {
         }
 
         let mut stack: Vec<crate::domain::NodeId> = children;
-        let mut visited_count = 0;
 
         while let Some(current_id) = stack.pop() {
             let current_children = tree.children(current_id);
@@ -134,19 +131,15 @@ impl JudgeStage {
                 // Leaf node - collect its content
                 if let Some(node) = tree.get(current_id) {
                     if !node.content.is_empty() {
-                        eprintln!("[JUDGE] Found leaf '{}' with {} chars content", node.title, node.content.len());
                         content_parts.push(format!("### {}\n{}", node.title, node.content));
-                        visited_count += 1;
                     }
                 }
             } else {
                 // Non-leaf node - add children to stack
-                eprintln!("[JUDGE] Node has {} children, adding to stack", current_children.len());
                 stack.extend(current_children);
             }
         }
 
-        eprintln!("[JUDGE] Collected content from {} leaf nodes", visited_count);
         content_parts.join("\n\n")
     }
 
