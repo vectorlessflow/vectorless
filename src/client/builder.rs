@@ -9,7 +9,8 @@ use crate::config::{Config, ConfigLoader, RetrievalConfig};
 use crate::retrieval::PipelineRetriever;
 use crate::storage::Workspace;
 
-use super::Engine;
+use super::engine::Engine;
+use super::events::EventEmitter;
 
 /// Default configuration file names to search for.
 const CONFIG_FILE_NAMES: &[&str] = &["vectorless.toml", "config.toml", ".vectorless.toml"];
@@ -42,6 +43,9 @@ pub struct EngineBuilder {
 
     /// Custom retrieval config.
     retrieval_config: Option<RetrievalConfig>,
+
+    /// Event emitter.
+    events: Option<EventEmitter>,
 }
 
 impl EngineBuilder {
@@ -53,6 +57,7 @@ impl EngineBuilder {
             config_path: None,
             config: None,
             retrieval_config: None,
+            events: None,
         }
     }
 
@@ -81,6 +86,13 @@ impl EngineBuilder {
     #[must_use]
     pub fn with_retrieval_config(mut self, config: RetrievalConfig) -> Self {
         self.retrieval_config = Some(config);
+        self
+    }
+
+    /// Set the event emitter for callbacks.
+    #[must_use]
+    pub fn with_events(mut self, events: EventEmitter) -> Self {
+        self.events = Some(events);
         self
     }
 
@@ -127,32 +139,33 @@ impl EngineBuilder {
     /// Returns a [`BuildError`] if:
     /// - Configuration loading fails
     /// - Workspace creation fails
+    /// - Required API key is missing
     pub fn build(self) -> Result<Engine, BuildError> {
         // Load or create configuration
-        let config = if let Some(config) = self.config {
-            // Use explicitly provided config
+        let mut config = if let Some(config) = self.config {
             config
         } else if let Some(path) = self.config_path {
-            // Load from specified path
             ConfigLoader::new()
                 .file(&path)
                 .load()
                 .map_err(|e| BuildError::Config(e.to_string()))?
         } else if let Some(config_path) = Self::find_config_file() {
-            // Auto-detect config file
             ConfigLoader::new().file(&config_path).load().map_err(|e| {
                 BuildError::Config(format!("Failed to load {}: {}", config_path.display(), e))
             })?
         } else {
-            // Use defaults
             Config::default()
         };
+
+        // Override retrieval config if provided
+        if let Some(retrieval_config) = self.retrieval_config {
+            config.retrieval = retrieval_config;
+        }
 
         // Open workspace: prefer explicit path, fallback to config
         let workspace = if let Some(path) = &self.workspace {
             Some(Workspace::open(path).map_err(|e| BuildError::Workspace(e.to_string()))?)
         } else {
-            // Use workspace_dir from config
             Some(
                 Workspace::open(&config.storage.workspace_dir)
                     .map_err(|e| BuildError::Workspace(e.to_string()))?,
@@ -175,9 +188,7 @@ impl EngineBuilder {
         };
 
         // Create pipeline retriever with config
-        let retrieval_config = self
-            .retrieval_config
-            .unwrap_or_else(|| config.retrieval.clone());
+        let retrieval_config = config.retrieval.clone();
         let mut retriever =
             PipelineRetriever::new().with_max_iterations(retrieval_config.search.max_iterations);
 
@@ -201,9 +212,9 @@ impl EngineBuilder {
             );
         }
 
-        Ok(Engine::with_components(
-            config, workspace, retriever, executor,
-        ))
+        // Build engine
+        Engine::with_components(config, workspace, retriever, executor)
+            .map_err(|e| BuildError::Other(e.to_string()))
     }
 }
 
@@ -227,6 +238,10 @@ pub enum BuildError {
     /// Missing API key for retrieval.
     #[error("Missing API key: LLM API key is required for retrieval. Set OPENAI_API_KEY environment variable or configure retrieval.api_key")]
     MissingApiKey,
+
+    /// Other error.
+    #[error("{0}")]
+    Other(String),
 }
 
 #[cfg(test)]

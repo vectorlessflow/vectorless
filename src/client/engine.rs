@@ -1,26 +1,20 @@
 // Copyright (c) 2026 vectorless developers
 // SPDX-License-Identifier: Apache-2.0
 
-//! Main Engine client for document indexing and retrieval.
+//! Main Engine client - the entry point for vectorless.
 //!
-//! This module provides the high-level API for:
-//! - Indexing documents (Markdown, PDF, DOCX, HTML)
-//! - Retrieving document structure
-//! - Querying documents with adaptive retrieval
+//! This module provides the main client for document indexing and retrieval.
+//! The Engine is an orchestrator that delegates to specialized sub-clients.
 //!
-//! # Design
+//! # Architecture
 //!
-//! The client uses **interior mutability** patterns to allow sharing across
-//! async tasks while maintaining thread safety:
-//!
-//! - `Arc<RwLock<Workspace>>` - Thread-safe workspace access (multiple readers, single writer)
-//! - `Arc<Mutex<PipelineExecutor>>` - Exclusive pipeline execution
-//! - `Arc<PipelineRetriever>` - Immutable retriever (uses interior mutability internally)
-//!
-//! # Thread Safety
-//!
-//! `Engine` is `Clone + Send + Sync`. Cloning is cheap (reference count increment).
-//! All clones share the same underlying resources.
+//! ```text
+//! Engine (Orchestrator)
+//! ├── IndexerClient   → Document indexing
+//! ├── RetrieverClient → Query and retrieval
+//! ├── WorkspaceClient → Document persistence
+//! └── EventEmitter    → Progress and events
+//! ```
 //!
 //! # Example
 //!
@@ -34,13 +28,13 @@
 //!     .with_workspace("./my_workspace")
 //!     .build()?;
 //!
-//! // Clone for use in multiple tasks (cheap - just Arc clone)
-//! let client1 = client.clone();
-//! let client2 = client.clone();
-//!
-//! // Can use concurrently
+//! // Index a document
 //! let doc_id = client.index("./document.md").await?;
+//!
+//! // Query the document
 //! let result = client.query(&doc_id, "What is this?").await?;
+//!
+//! println!("Found: {}", result.content);
 //! # Ok(())
 //! # }
 //! ```
@@ -49,16 +43,20 @@ use std::path::Path;
 use std::sync::{Arc, Mutex, RwLock};
 
 use tracing::info;
-use uuid::Uuid;
 
 use crate::config::Config;
 use crate::domain::{DocumentTree, Error, Result};
-use crate::index::{IndexInput, PipelineExecutor, PipelineOptions, SummaryStrategy};
-use crate::parser::DocumentFormat;
-use crate::retrieval::{PipelineRetriever, Retriever};
-use crate::storage::{DocumentMeta as StorageMeta, PersistedDocument, Workspace};
+use crate::index::PipelineExecutor;
+use crate::retrieval::{PipelineRetriever, RetrieveOptions};
+use crate::storage::Workspace;
 
-use super::types::{DocumentInfo, IndexMode, IndexOptions, QueryResult};
+use super::context::ClientContext;
+use super::events::EventEmitter;
+use super::indexer::IndexerClient;
+use super::retriever::RetrieverClient;
+use super::session::Session;
+use super::types::{DocumentInfo, IndexOptions, QueryResult};
+use super::workspace::WorkspaceClient;
 
 /// The main Engine client.
 ///
@@ -68,30 +66,26 @@ use super::types::{DocumentInfo, IndexMode, IndexOptions, QueryResult};
 /// # Cloning
 ///
 /// Cloning is cheap - it only increments reference counts (`Arc`). All clones
-/// share the same underlying resources (workspace, retriever, executor).
+/// share the same underlying resources.
 ///
 /// # Thread Safety
 ///
-/// The client is `Clone + Send + Sync` and can be safely shared across
-/// threads. All mutable state is protected by appropriate synchronization:
-///
-/// - Workspace: `Arc<RwLock<Workspace>>` - Multiple readers, single writer
-/// - Executor: `Arc<Mutex<PipelineExecutor>>` - Exclusive access during indexing
-/// - Retriever: `Arc<PipelineRetriever>` - Immutable, uses internal synchronization
+/// The client is `Clone + Send + Sync` and can be safely shared across threads.
 pub struct Engine {
     /// Configuration (immutable, shared).
     config: Arc<Config>,
 
-    /// Workspace for persistence (with built-in LRU cache).
-    /// Uses RwLock for concurrent read access.
-    workspace: Option<Arc<RwLock<Workspace>>>,
+    /// Indexer client for document indexing.
+    indexer: IndexerClient,
 
-    /// Pipeline retriever (immutable, uses interior mutability internally).
-    retriever: Arc<PipelineRetriever>,
+    /// Retriever client for queries.
+    retriever: RetrieverClient,
 
-    /// Pipeline executor for indexing.
-    /// Uses Mutex for exclusive access during pipeline execution.
-    executor: Arc<Mutex<PipelineExecutor>>,
+    /// Workspace client for persistence.
+    workspace: Option<WorkspaceClient>,
+
+    /// Event emitter.
+    events: EventEmitter,
 }
 
 impl Engine {
@@ -106,11 +100,47 @@ impl Engine {
     /// Note: Prefer using [`Engine::builder()`] for more control.
     fn new() -> Result<Self> {
         let config = Config::default();
+        Self::with_components(
+            config,
+            None,
+            PipelineRetriever::new(),
+            PipelineExecutor::new(),
+        )
+    }
+
+    // ============================================================
+    // Constructor (for Builder)
+    // ============================================================
+
+    /// Create a new client with the given components.
+    pub(crate) fn with_components(
+        config: Config,
+        workspace: Option<Workspace>,
+        retriever: PipelineRetriever,
+        executor: PipelineExecutor,
+    ) -> Result<Self> {
+        let config = Arc::new(config);
+        let events = EventEmitter::new();
+
+        // Create indexer client
+        let indexer = IndexerClient::new(executor)
+            .with_events(events.clone());
+
+        // Create retriever client
+        let retriever = RetrieverClient::new(retriever, Arc::clone(&config))
+            .with_events(events.clone());
+
+        // Create workspace client (if workspace provided)
+        let workspace_client = workspace.map(|ws| {
+            WorkspaceClient::new(ws).with_events(events.clone())
+        });
+
         Ok(Self {
-            config: Arc::new(config),
-            workspace: None,
-            retriever: Arc::new(PipelineRetriever::new()),
-            executor: Arc::new(Mutex::new(PipelineExecutor::new())),
+            config,
+            indexer,
+            retriever,
+            workspace: workspace_client,
+            events,
         })
     }
 
@@ -142,94 +172,101 @@ impl Engine {
         path: impl AsRef<Path>,
         options: IndexOptions,
     ) -> Result<String> {
-        let path = path.as_ref();
-        let path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
-
-        if !path.exists() {
-            return Err(Error::Parse(format!("File not found: {}", path.display())));
-        }
-
-        // Generate document ID
-        let doc_id = Uuid::new_v4().to_string();
-
-        // Detect format
-        let format = self.detect_format(&path, &options)?;
-
-        info!("Indexing {:?} document: {}", format, path.display());
-
-        // Convert client options to pipeline options
-        let pipeline_options = PipelineOptions {
-            mode: match options.mode {
-                IndexMode::Auto => crate::index::IndexMode::Auto,
-                IndexMode::Pdf => crate::index::IndexMode::Pdf,
-                IndexMode::Markdown => crate::index::IndexMode::Markdown,
-                IndexMode::Html => crate::index::IndexMode::Html,
-                IndexMode::Docx => crate::index::IndexMode::Docx,
-            },
-            generate_ids: options.generate_ids,
-            summary_strategy: if options.generate_summaries {
-                SummaryStrategy::selective(self.config.indexer.min_summary_tokens, false)
-            } else {
-                SummaryStrategy::none()
-            },
-            generate_description: options.generate_description,
-            ..Default::default()
-        };
-
-        // Create pipeline input and execute (with mutex lock)
-        let input = IndexInput::file(&path);
-        let result = {
-            let mut executor = self
-                .executor
-                .lock()
-                .map_err(|_| Error::Other("Pipeline executor lock poisoned".to_string()))?;
-            executor.execute(input, pipeline_options).await?
-        };
-
-        // Build persisted document
-        let tree = result
-            .tree
-            .ok_or_else(|| Error::Parse("Document tree not generated".to_string()))?;
-
-        let meta = StorageMeta::new(&doc_id, &result.name, format.extension())
-            .with_source_path(path.to_string_lossy().to_string())
-            .with_description(result.description.clone().unwrap_or_default());
-
-        let mut doc = PersistedDocument::new(meta, tree);
-
-        // Add page count if available
-        if let Some(page_count) = result.page_count {
-            for i in 1..=page_count {
-                doc.add_page(i, "");
-            }
-        }
+        let doc = self.indexer.index_with_options(path, options).await?;
+        let persisted = self.indexer.to_persisted(doc);
 
         // Save to workspace if configured
         if let Some(ref workspace) = self.workspace {
-            let mut ws = workspace
-                .write()
-                .map_err(|_| Error::Other("Workspace lock poisoned".to_string()))?;
-            ws.add(&doc)?;
-            info!("Saved document {} to workspace", doc_id);
+            workspace.save(&persisted)?;
         }
 
-        info!("Indexing complete. Document ID: {}", doc_id);
+        let doc_id = persisted.meta.id.clone();
+        info!("Indexed document: {}", doc_id);
         Ok(doc_id)
     }
 
-    /// Detect document format from path and options.
-    fn detect_format(&self, path: &Path, options: &IndexOptions) -> Result<DocumentFormat> {
-        match options.mode {
-            IndexMode::Auto => {
-                let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
-                DocumentFormat::from_extension(ext)
-                    .ok_or_else(|| Error::Parse(format!("Unknown format: {}", ext)))
-            }
-            IndexMode::Pdf => Ok(DocumentFormat::Pdf),
-            IndexMode::Markdown => Ok(DocumentFormat::Markdown),
-            IndexMode::Html => Ok(DocumentFormat::Html),
-            IndexMode::Docx => Ok(DocumentFormat::Docx),
+    // ============================================================
+    // Document Querying
+    // ============================================================
+
+    /// Query a document.
+    ///
+    /// Uses the adaptive retriever to find relevant content.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - No workspace is configured
+    /// - The document is not found
+    /// - The retrieval fails
+    pub async fn query(&self, doc_id: &str, question: &str) -> Result<QueryResult> {
+        let tree = self.get_structure(doc_id)?;
+
+        let options = RetrieveOptions::new()
+            .with_top_k(self.config.retrieval.top_k)
+            .with_include_content(true)
+            .with_include_summaries(true);
+
+        let mut result = self.retriever.query(&tree, question, &options).await?;
+        result.doc_id = doc_id.to_string();
+
+        Ok(result)
+    }
+
+    /// Query a document with context.
+    ///
+    /// Allows request-specific configuration overrides.
+    pub async fn query_with_context(
+        &self,
+        doc_id: &str,
+        question: &str,
+        ctx: &ClientContext,
+    ) -> Result<QueryResult> {
+        let tree = self.get_structure(doc_id)?;
+
+        let mut options = RetrieveOptions::new()
+            .with_top_k(self.config.retrieval.top_k)
+            .with_include_content(true)
+            .with_include_summaries(true);
+
+        // Apply context overrides
+        if let Some(top_k) = ctx.config.top_k {
+            options.top_k = top_k;
         }
+        if let Some(token_budget) = ctx.config.token_budget {
+            options.max_tokens = token_budget;
+        }
+
+        let mut result = self.retriever.query_with_context(&tree, question, &options, ctx).await?;
+        result.doc_id = doc_id.to_string();
+
+        Ok(result)
+    }
+
+    // ============================================================
+    // Session Management
+    // ============================================================
+
+    /// Create a session for multi-document operations.
+    ///
+    /// Sessions provide:
+    /// - Automatic caching of document trees
+    /// - Cross-document queries
+    /// - Session statistics
+    pub fn session(&self) -> Session {
+        let workspace = self.workspace.clone().unwrap_or_else(|| {
+            WorkspaceClient::from_arc(
+                Arc::new(RwLock::new(Workspace::open("./temp_workspace").unwrap())),
+                self.events.clone(),
+            )
+        });
+
+        Session::new(
+            self.indexer.clone(),
+            self.retriever.clone(),
+            workspace,
+            self.events.clone(),
+        )
     }
 
     // ============================================================
@@ -240,24 +277,7 @@ impl Engine {
     #[must_use]
     pub fn list_documents(&self) -> Vec<DocumentInfo> {
         match &self.workspace {
-            Some(workspace) => {
-                let ws = match workspace.read() {
-                    Ok(guard) => guard,
-                    Err(_) => return Vec::new(),
-                };
-                ws.list_documents()
-                    .iter()
-                    .filter_map(|id| ws.get_meta(id))
-                    .map(|meta| DocumentInfo {
-                        id: meta.id.clone(),
-                        name: meta.doc_name.clone(),
-                        format: meta.doc_type.clone(),
-                        description: meta.doc_description.clone(),
-                        page_count: meta.page_count,
-                        line_count: meta.line_count,
-                    })
-                    .collect()
-            }
+            Some(workspace) => workspace.list().unwrap_or_default(),
             None => Vec::new(),
         }
     }
@@ -270,18 +290,10 @@ impl Engine {
     /// - No workspace is configured
     /// - The document is not found
     pub fn get_structure(&self, doc_id: &str) -> Result<DocumentTree> {
-        let workspace = self
-            .workspace
-            .as_ref()
+        let workspace = self.workspace.as_ref()
             .ok_or_else(|| Error::Config("No workspace configured".to_string()))?;
 
-        // Use read lock - Workspace::load now uses interior mutability for cache
-        let ws = workspace
-            .read()
-            .map_err(|_| Error::Other("Workspace lock poisoned".to_string()))?;
-
-        let doc = ws
-            .load(doc_id)?
+        let doc = workspace.load(doc_id)?
             .ok_or_else(|| Error::DocumentNotFound(format!("Document not found: {}", doc_id)))?;
 
         Ok(doc.tree)
@@ -296,18 +308,10 @@ impl Engine {
     /// - The document is not found
     /// - No page content is available
     pub fn get_page_content(&self, doc_id: &str, pages: &str) -> Result<String> {
-        let workspace = self
-            .workspace
-            .as_ref()
+        let workspace = self.workspace.as_ref()
             .ok_or_else(|| Error::Config("No workspace configured".to_string()))?;
 
-        // Use read lock - Workspace::load now uses interior mutability for cache
-        let ws = workspace
-            .read()
-            .map_err(|_| Error::Other("Workspace lock poisoned".to_string()))?;
-
-        let doc = ws
-            .load(doc_id)?
+        let doc = workspace.load(doc_id)?
             .ok_or_else(|| Error::DocumentNotFound(format!("Document not found: {}", doc_id)))?;
 
         if doc.pages.is_empty() {
@@ -358,71 +362,8 @@ impl Engine {
         Ok(result)
     }
 
-    /// Query a document.
-    ///
-    /// Uses the adaptive retriever to find relevant content.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if:
-    /// - No workspace is configured
-    /// - The document is not found
-    /// - The retrieval fails
-    pub async fn query(&self, doc_id: &str, question: &str) -> Result<QueryResult> {
-        let tree = self.get_structure(doc_id)?;
-
-        // Build retrieve options from config
-        let retrieve_options = crate::retrieval::RetrieveOptions::new()
-            .with_top_k(self.config.retrieval.top_k)
-            .with_include_content(true)
-            .with_include_summaries(true);
-
-        // Use adaptive retriever
-        let response = self
-            .retriever
-            .retrieve(&tree, question, &retrieve_options)
-            .await
-            .map_err(|e| Error::Retrieval(e.to_string()))?;
-
-        // Extract node IDs and build content from results
-        let node_ids: Vec<String> = response
-            .results
-            .iter()
-            .filter_map(|r| r.node_id.clone())
-            .collect();
-
-        let content_parts: Vec<String> = response
-            .results
-            .iter()
-            .map(|r| {
-                let mut parts = vec![format!("## {}", r.title)];
-
-                // Only include original content, not summary
-                // (per design: retrieval should return original text, not summary)
-                if let Some(ref content) = r.content {
-                    parts.push(content.clone());
-                }
-
-                parts.join("\n\n")
-            })
-            .collect();
-
-        let content = if content_parts.is_empty() {
-            response.content
-        } else {
-            content_parts.join("\n\n---\n\n")
-        };
-
-        Ok(QueryResult {
-            doc_id: doc_id.to_string(),
-            node_ids,
-            content,
-            score: response.confidence,
-        })
-    }
-
     // ============================================================
-    // Persistence
+    // Persistence Operations
     // ============================================================
 
     /// Load a document from the workspace into cache.
@@ -433,21 +374,14 @@ impl Engine {
     ///
     /// Returns an error if no workspace is configured.
     pub fn load(&self, doc_id: &str) -> Result<bool> {
-        let workspace = self
-            .workspace
-            .as_ref()
+        let workspace = self.workspace.as_ref()
             .ok_or_else(|| Error::Config("No workspace configured".to_string()))?;
 
-        // Use read lock - Workspace::load now uses interior mutability for cache
-        let ws = workspace
-            .read()
-            .map_err(|_| Error::Other("Workspace lock poisoned".to_string()))?;
-
-        if !ws.contains(doc_id) {
+        if !workspace.exists(doc_id)? {
             return Ok(false);
         }
 
-        let _ = ws.load(doc_id)?;
+        let _ = workspace.load(doc_id)?;
         Ok(true)
     }
 
@@ -457,15 +391,10 @@ impl Engine {
     ///
     /// Returns an error if no workspace is configured.
     pub fn remove(&self, doc_id: &str) -> Result<bool> {
-        let workspace = self
-            .workspace
-            .as_ref()
+        let workspace = self.workspace.as_ref()
             .ok_or_else(|| Error::Config("No workspace configured".to_string()))?;
 
-        let mut ws = workspace
-            .write()
-            .map_err(|_| Error::Other("Workspace lock poisoned".to_string()))?;
-        ws.remove(doc_id)
+        workspace.remove(doc_id)
     }
 
     /// Check if a document exists in the workspace.
@@ -474,15 +403,10 @@ impl Engine {
     ///
     /// Returns an error if no workspace is configured.
     pub fn exists(&self, doc_id: &str) -> Result<bool> {
-        let workspace = self
-            .workspace
-            .as_ref()
+        let workspace = self.workspace.as_ref()
             .ok_or_else(|| Error::Config("No workspace configured".to_string()))?;
 
-        let ws = workspace
-            .read()
-            .map_err(|_| Error::Other("Workspace lock poisoned".to_string()))?;
-        Ok(ws.contains(doc_id))
+        workspace.exists(doc_id)
     }
 
     /// Get metadata for a document.
@@ -491,23 +415,10 @@ impl Engine {
     ///
     /// Returns an error if no workspace is configured.
     pub fn get_metadata(&self, doc_id: &str) -> Result<Option<DocumentInfo>> {
-        let workspace = self
-            .workspace
-            .as_ref()
+        let workspace = self.workspace.as_ref()
             .ok_or_else(|| Error::Config("No workspace configured".to_string()))?;
 
-        let ws = workspace
-            .read()
-            .map_err(|_| Error::Other("Workspace lock poisoned".to_string()))?;
-
-        Ok(ws.get_meta(doc_id).map(|meta| DocumentInfo {
-            id: meta.id.clone(),
-            name: meta.doc_name.clone(),
-            format: meta.doc_type.clone(),
-            description: meta.doc_description.clone(),
-            page_count: meta.page_count,
-            line_count: meta.line_count,
-        }))
+        workspace.get_document_info(doc_id)
     }
 
     /// Remove multiple documents from the workspace.
@@ -518,22 +429,10 @@ impl Engine {
     ///
     /// Returns an error if no workspace is configured.
     pub fn batch_remove(&self, doc_ids: &[&str]) -> Result<usize> {
-        let workspace = self
-            .workspace
-            .as_ref()
+        let workspace = self.workspace.as_ref()
             .ok_or_else(|| Error::Config("No workspace configured".to_string()))?;
 
-        let mut ws = workspace
-            .write()
-            .map_err(|_| Error::Other("Workspace lock poisoned".to_string()))?;
-
-        let mut removed = 0;
-        for doc_id in doc_ids {
-            if ws.remove(doc_id)? {
-                removed += 1;
-            }
-        }
-        Ok(removed)
+        workspace.batch_remove(doc_ids)
     }
 
     /// Remove all documents from the workspace.
@@ -544,38 +443,16 @@ impl Engine {
     ///
     /// Returns an error if no workspace is configured.
     pub fn clear(&self) -> Result<usize> {
-        let workspace = self
-            .workspace
-            .as_ref()
+        let workspace = self.workspace.as_ref()
             .ok_or_else(|| Error::Config("No workspace configured".to_string()))?;
 
-        let mut ws = workspace
-            .write()
-            .map_err(|_| Error::Other("Workspace lock poisoned".to_string()))?;
-
-        let doc_ids: Vec<String> = ws.list_documents().iter().map(|s| s.to_string()).collect();
-        let count = doc_ids.len();
-
-        for doc_id in &doc_ids {
-            let _ = ws.remove(doc_id);
-        }
-
-        Ok(count)
+        workspace.clear()
     }
 
     /// Get the number of indexed documents.
     #[must_use]
     pub fn len(&self) -> usize {
-        match &self.workspace {
-            Some(workspace) => {
-                let ws = match workspace.read() {
-                    Ok(guard) => guard,
-                    Err(_) => return 0,
-                };
-                ws.len()
-            }
-            None => 0,
-        }
+        self.workspace.as_ref().map(|w| w.len()).unwrap_or(0)
     }
 
     /// Check if there are no documents.
@@ -585,22 +462,27 @@ impl Engine {
     }
 
     // ============================================================
-    // Internal API (for Builder)
+    // Sub-Client Access
     // ============================================================
 
-    /// Create a new client with the given components.
-    pub(crate) fn with_components(
-        config: Config,
-        workspace: Option<Workspace>,
-        retriever: PipelineRetriever,
-        executor: PipelineExecutor,
-    ) -> Self {
-        Self {
-            config: Arc::new(config),
-            workspace: workspace.map(|w| Arc::new(RwLock::new(w))),
-            retriever: Arc::new(retriever),
-            executor: Arc::new(Mutex::new(executor)),
-        }
+    /// Get the indexer client.
+    pub fn indexer(&self) -> &IndexerClient {
+        &self.indexer
+    }
+
+    /// Get the retriever client.
+    pub fn retriever(&self) -> &RetrieverClient {
+        &self.retriever
+    }
+
+    /// Get the workspace client.
+    pub fn workspace(&self) -> Option<&WorkspaceClient> {
+        self.workspace.as_ref()
+    }
+
+    /// Get the configuration.
+    pub fn config(&self) -> &Config {
+        &self.config
     }
 }
 
@@ -608,9 +490,10 @@ impl Clone for Engine {
     fn clone(&self) -> Self {
         Self {
             config: Arc::clone(&self.config),
-            workspace: self.workspace.as_ref().map(Arc::clone),
-            retriever: Arc::clone(&self.retriever),
-            executor: Arc::clone(&self.executor),
+            indexer: self.indexer.clone(),
+            retriever: self.retriever.clone(),
+            workspace: self.workspace.clone(),
+            events: self.events.clone(),
         }
     }
 }
@@ -627,5 +510,17 @@ impl std::fmt::Debug for Engine {
             .field("has_workspace", &self.workspace.is_some())
             .field("doc_count", &self.len())
             .finish_non_exhaustive()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_engine_builder() {
+        let builder = Engine::builder();
+        // Builder exists
+        let _ = builder;
     }
 }
