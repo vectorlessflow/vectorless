@@ -24,4 +24,4 @@ pub use error::{Error, Result};
 pub use node::{NodeId, TreeNode};
 pub use toc::{TocConfig, TocEntry, TocNode, TocView};
 pub use token::{estimate_tokens, estimate_tokens_batch, estimate_tokens_fast};
-pub use tree::{DocumentStructure, DocumentTree, StructureNode};
+pub use tree::{DocumentStructure, DocumentTree, RetrievalIndex, StructureNode};

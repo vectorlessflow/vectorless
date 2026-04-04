@@ -350,6 +350,7 @@ mod tests {
         for i in 0..count {
             let node = crate::domain::TreeNode {
                 title: format!("Node {}", i),
+                structure: String::new(),
                 content: String::new(),
                 summary: String::new(),
                 depth: 0,

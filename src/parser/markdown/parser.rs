@@ -320,12 +320,14 @@ fn finish_current_node(
     config: &MarkdownConfig,
     current_line: usize,
 ) -> Option<RawNode> {
-    // Handle preamble content
+    // Handle preamble content (content before first heading)
     if nodes.is_empty() && !content_buffer.trim().is_empty() {
         if config.create_preamble_node {
             let content = content_buffer.trim();
             *preamble_content = content.to_string();
         }
+        // Clear the buffer after storing as preamble to avoid duplication
+        content_buffer.clear();
     }
 
     // Finish current heading node

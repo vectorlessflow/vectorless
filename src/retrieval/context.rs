@@ -434,7 +434,7 @@ impl ContextBuilder {
                 sections.push(section);
             }
 
-            for child_id in tree.children(node_id) {
+            for child_id in tree.children_iter(node_id) {
                 self.collect_sections(tree, child_id, current_depth + 1, max_depth, sections);
             }
         }
@@ -463,7 +463,7 @@ impl ContextBuilder {
                 sections.push(section);
             }
 
-            for child_id in tree.children(node_id) {
+            for child_id in tree.children_iter(node_id) {
                 Box::pin(self.collect_sections_async(
                     tree,
                     child_id,

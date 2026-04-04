@@ -108,6 +108,47 @@ high_similarity_threshold = 0.8
 # Low similarity threshold for "explore" decision
 low_similarity_threshold = 0.3
 
+# Content aggregator configuration
+# Controls how retrieved content is aggregated and returned
+[retrieval.content]
+# Enable/disable content aggregator
+# When disabled, uses simple content collection (legacy behavior)
+enabled = true
+
+# Maximum tokens for aggregated content
+token_budget = 4000
+
+# Minimum relevance score threshold (0.0 - 1.0)
+# Content below this threshold will be filtered out
+min_relevance_score = 0.2
+
+# Scoring strategy: "keyword_only" | "keyword_bm25" | "hybrid"
+# - keyword_only: Fast keyword matching (no BM25)
+# - keyword_bm25: Keyword + BM25 scoring (recommended)
+# - hybrid: Keyword + LLM reranking (most accurate, slower)
+scoring_strategy = "keyword_bm25"
+
+# Output format: "markdown" | "json" | "tree" | "flat"
+# - markdown: Structured markdown with headers (default)
+# - json: JSON format for programmatic use
+# - tree: Tree structure preserving hierarchy
+# - flat: Flat text format
+output_format = "markdown"
+
+# Include relevance scores in output (useful for debugging)
+include_scores = false
+
+# Minimum budget allocation per depth level (0.0 - 1.0)
+# Ensures each tree level gets representation
+hierarchical_min_per_level = 0.1
+
+# Enable content deduplication
+deduplicate = true
+
+# Similarity threshold for deduplication (0.0 - 1.0)
+# Higher = more aggressive deduplication
+dedup_threshold = 0.9
+
 [storage]
 # Workspace directory for persisted documents
 #

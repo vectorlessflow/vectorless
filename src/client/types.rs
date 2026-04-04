@@ -1,13 +1,19 @@
 // Copyright (c) 2026 vectorless developers
 // SPDX-License-Identifier: Apache-2.0
 
-//! Client type definitions.
+//! Public API types for the client module.
+//!
+//! This module contains all types exposed in the public API.
 
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 use crate::domain::DocumentTree;
 use crate::parser::DocumentFormat;
+
+// ============================================================
+// Document Types
+// ============================================================
 
 /// An indexed document with its tree structure and metadata.
 #[derive(Debug, Clone)]
@@ -116,6 +122,10 @@ pub struct PageContent {
     pub content: String,
 }
 
+// ============================================================
+// Index Types
+// ============================================================
+
 /// Document indexing mode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IndexMode {
@@ -164,7 +174,7 @@ impl Default for IndexOptions {
     fn default() -> Self {
         Self {
             mode: IndexMode::Auto,
-            generate_summaries: false, // Disabled by default, requires API key
+            generate_summaries: false,
             include_text: true,
             generate_ids: true,
             generate_description: false,
@@ -189,7 +199,17 @@ impl IndexOptions {
         self.generate_description = true;
         self
     }
+
+    /// Set the indexing mode.
+    pub fn with_mode(mut self, mode: IndexMode) -> Self {
+        self.mode = mode;
+        self
+    }
 }
+
+// ============================================================
+// Query Types
+// ============================================================
 
 /// Result of a document query.
 #[derive(Debug, Clone)]
@@ -206,6 +226,32 @@ pub struct QueryResult {
     /// Relevance score.
     pub score: f32,
 }
+
+impl QueryResult {
+    /// Create a new query result.
+    pub fn new(doc_id: impl Into<String>) -> Self {
+        Self {
+            doc_id: doc_id.into(),
+            node_ids: Vec::new(),
+            content: String::new(),
+            score: 0.0,
+        }
+    }
+
+    /// Check if the result is empty.
+    pub fn is_empty(&self) -> bool {
+        self.node_ids.is_empty()
+    }
+
+    /// Get the number of results.
+    pub fn len(&self) -> usize {
+        self.node_ids.len()
+    }
+}
+
+// ============================================================
+// Document Info Types
+// ============================================================
 
 /// Document info for listing.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -227,4 +273,90 @@ pub struct DocumentInfo {
 
     /// Line count (for text files).
     pub line_count: Option<usize>,
+}
+
+impl DocumentInfo {
+    /// Create a new document info.
+    pub fn new(id: impl Into<String>, name: impl Into<String>) -> Self {
+        Self {
+            id: id.into(),
+            name: name.into(),
+            format: String::new(),
+            description: None,
+            page_count: None,
+            line_count: None,
+        }
+    }
+
+    /// Set the format.
+    pub fn with_format(mut self, format: impl Into<String>) -> Self {
+        self.format = format.into();
+        self
+    }
+}
+
+// ============================================================
+// Error Types
+// ============================================================
+
+/// Client error types.
+#[derive(Debug, Clone, thiserror::Error)]
+pub enum ClientError {
+    /// Document not found.
+    #[error("Document not found: {0}")]
+    NotFound(String),
+
+    /// Invalid operation.
+    #[error("Invalid operation: {0}")]
+    InvalidOperation(String),
+
+    /// Configuration error.
+    #[error("Configuration error: {0}")]
+    Config(String),
+
+    /// Timeout error.
+    #[error("Operation timed out")]
+    Timeout,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_indexed_document() {
+        let doc = IndexedDocument::new("doc-1", DocumentFormat::Markdown)
+            .with_name("Test Document")
+            .with_description("A test document");
+
+        assert_eq!(doc.id, "doc-1");
+        assert_eq!(doc.name, "Test Document");
+        assert!(doc.tree.is_none());
+    }
+
+    #[test]
+    fn test_index_options() {
+        let options = IndexOptions::new()
+            .with_summaries()
+            .with_mode(IndexMode::Pdf);
+
+        assert!(options.generate_summaries);
+        assert_eq!(options.mode, IndexMode::Pdf);
+    }
+
+    #[test]
+    fn test_query_result() {
+        let result = QueryResult::new("doc-1");
+        assert!(result.is_empty());
+        assert_eq!(result.len(), 0);
+    }
+
+    #[test]
+    fn test_document_info() {
+        let info = DocumentInfo::new("doc-1", "Test")
+            .with_format("markdown");
+
+        assert_eq!(info.id, "doc-1");
+        assert_eq!(info.format, "markdown");
+    }
 }

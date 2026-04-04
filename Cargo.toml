@@ -1,6 +1,6 @@
 [package]
 name = "vectorless"
-version = "0.1.10"
+version = "0.1.11"
 edition = "2024"
 authors = ["zTgx <beautifularea@gmail.com>"]
 description = "Hierarchical, reasoning-native document intelligence engine"
@@ -73,6 +73,7 @@ rand = "0.8"
 [dev-dependencies]
 tempfile = "3.10"
 tokio-test = "0.4"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 [profile.release]
 opt-level = 3

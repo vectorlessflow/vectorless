@@ -12,6 +12,7 @@ use tracing::{info, warn};
 
 use crate::domain::estimate_tokens;
 use crate::llm::LlmClient;
+use crate::retrieval::content::{ContentAggregator, ContentAggregatorConfig};
 use crate::retrieval::pipeline::{FailurePolicy, PipelineContext, RetrievalStage, StageOutcome};
 use crate::retrieval::sufficiency::{LlmJudge, SufficiencyChecker, ThresholdChecker};
 use crate::retrieval::types::{RetrievalResult, RetrieveResponse, SufficiencyLevel};
@@ -23,18 +24,26 @@ use crate::retrieval::types::{RetrievalResult, RetrieveResponse, SufficiencyLeve
 /// 2. Checks if content is sufficient to answer the query
 /// 3. Can trigger additional search iterations if needed
 ///
+/// # Content Aggregation
+///
+/// By default, uses simple content collection. For precision-focused
+/// aggregation with token budget control, use `with_content_aggregator()`.
+///
 /// # Example
 ///
 /// ```rust,ignore
 /// let stage = JudgeStage::new()
 ///     .with_llm_judge(llm_client)
-///     .with_max_iterations(3);
+///     .with_max_iterations(3)
+///     .with_content_aggregator(ContentAggregatorConfig::default());
 /// ```
 pub struct JudgeStage {
     threshold_checker: ThresholdChecker,
     llm_judge: Option<LlmJudge>,
     max_iterations: usize,
     use_llm_judge: bool,
+    /// Optional content aggregator for precision-focused aggregation.
+    content_aggregator: Option<ContentAggregator>,
 }
 
 impl Default for JudgeStage {
@@ -51,6 +60,7 @@ impl JudgeStage {
             llm_judge: None,
             max_iterations: 3,
             use_llm_judge: false,
+            content_aggregator: None,
         }
     }
 
@@ -67,8 +77,58 @@ impl JudgeStage {
         self
     }
 
+    /// Add content aggregator for precision-focused aggregation.
+    ///
+    /// When enabled, content aggregation uses:
+    /// - Relevance scoring (keyword + BM25)
+    /// - Token budget allocation
+    /// - Hierarchical content selection
+    pub fn with_content_aggregator(mut self, config: ContentAggregatorConfig) -> Self {
+        self.content_aggregator = Some(ContentAggregator::new(config));
+        self
+    }
+
+    /// Enable content aggregator with default configuration.
+    pub fn with_default_content_aggregator(mut self) -> Self {
+        self.content_aggregator = Some(ContentAggregator::with_defaults());
+        self
+    }
+
     /// Aggregate content from candidates.
+    ///
+    /// When content aggregator is enabled:
+    /// - Uses relevance scoring for content selection
+    /// - Respects token budget
+    /// - Prioritizes high-relevance content
+    ///
+    /// Otherwise falls back to simple collection:
+    /// - Collects node's own content + descendant leaf content
     fn aggregate_content(&self, ctx: &PipelineContext) -> (String, usize) {
+        // Use ContentAggregator if configured
+        if let Some(ref aggregator) = self.content_aggregator {
+            use crate::retrieval::content::CandidateNode;
+
+            let candidates: Vec<CandidateNode> = ctx.candidates
+                .iter()
+                .map(|c| CandidateNode::new(c.node_id, c.score, c.depth))
+                .collect();
+
+            let result = aggregator.aggregate(&candidates, &ctx.tree, &ctx.query);
+            info!(
+                "ContentAggregator: {} nodes, {} tokens, avg score {:.2}",
+                result.nodes_included,
+                result.tokens_used,
+                result.avg_score
+            );
+            return (result.content, result.tokens_used);
+        }
+
+        // Fallback: simple content collection
+        self.aggregate_content_simple(ctx)
+    }
+
+    /// Simple content aggregation (legacy behavior).
+    fn aggregate_content_simple(&self, ctx: &PipelineContext) -> (String, usize) {
         let mut content_parts = Vec::new();
         let mut total_tokens = 0;
 
@@ -77,13 +137,25 @@ impl JudgeStage {
                 // Add title
                 content_parts.push(format!("## {}\n", node.title));
 
-                // Add summary if available, otherwise content preview
-                if !node.summary.is_empty() {
+                // Always collect all content: own content + descendant leaf content
+                let mut has_content = false;
+
+                // Add node's own content if available
+                if !node.content.is_empty() {
+                    content_parts.push(format!("{}\n\n", node.content));
+                    has_content = true;
+                }
+
+                // Also collect content from leaf descendants (for intermediate nodes)
+                let leaf_content = self.collect_leaf_content(&ctx.tree, candidate.node_id);
+                if !leaf_content.is_empty() {
+                    content_parts.push(format!("{}\n\n", leaf_content));
+                    has_content = true;
+                }
+
+                // Fall back to summary only if no content available
+                if !has_content && !node.summary.is_empty() {
                     content_parts.push(format!("{}\n\n", node.summary));
-                } else if !node.content.is_empty() {
-                    // Limit content preview
-                    let preview: String = node.content.chars().take(500).collect();
-                    content_parts.push(format!("{}\n\n", preview));
                 }
 
                 // Estimate tokens
@@ -92,6 +164,38 @@ impl JudgeStage {
         }
 
         (content_parts.join(""), total_tokens)
+    }
+
+    /// Collect content from leaf descendants of a node (excluding the node itself).
+    fn collect_leaf_content(&self, tree: &crate::domain::DocumentTree, node_id: crate::domain::NodeId) -> String {
+        let mut content_parts = Vec::new();
+
+        // Start with children, not the node itself
+        let children = tree.children(node_id);
+        if children.is_empty() {
+            // Node is already a leaf, no descendants to collect
+            return String::new();
+        }
+
+        let mut stack: Vec<crate::domain::NodeId> = children;
+
+        while let Some(current_id) = stack.pop() {
+            let current_children = tree.children(current_id);
+
+            if current_children.is_empty() {
+                // Leaf node - collect its content
+                if let Some(node) = tree.get(current_id) {
+                    if !node.content.is_empty() {
+                        content_parts.push(format!("### {}\n{}", node.title, node.content));
+                    }
+                }
+            } else {
+                // Non-leaf node - add children to stack
+                stack.extend(current_children);
+            }
+        }
+
+        content_parts.join("\n\n")
     }
 
     /// Check sufficiency level.
@@ -118,14 +222,34 @@ impl JudgeStage {
 
         for candidate in &ctx.candidates {
             if let Some(node) = ctx.tree.get(candidate.node_id) {
+                // Build content: node's own content + all descendant leaf content
+                let content = if ctx.options.include_content {
+                    let mut content_parts = Vec::new();
+
+                    // Add node's own content
+                    if !node.content.is_empty() {
+                        content_parts.push(node.content.clone());
+                    }
+
+                    // Add content from leaf descendants
+                    let leaf_content = self.collect_leaf_content(&ctx.tree, candidate.node_id);
+                    if !leaf_content.is_empty() {
+                        content_parts.push(leaf_content);
+                    }
+
+                    if content_parts.is_empty() {
+                        None
+                    } else {
+                        Some(content_parts.join("\n\n"))
+                    }
+                } else {
+                    None
+                };
+
                 results.push(RetrievalResult {
                     node_id: Some(format!("{:?}", candidate.node_id)),
                     title: node.title.clone(),
-                    content: if ctx.options.include_content {
-                        Some(node.content.clone())
-                    } else {
-                        None
-                    },
+                    content,
                     summary: if ctx.options.include_summaries {
                         Some(node.summary.clone())
                     } else {
