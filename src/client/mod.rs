@@ -112,7 +112,7 @@
 mod builder;
 mod context;
 mod engine;
-mod events;
+pub mod events;
 mod indexer;
 mod retriever;
 mod session;
