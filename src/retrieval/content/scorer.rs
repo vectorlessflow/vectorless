@@ -9,6 +9,7 @@
 use std::collections::HashMap;
 
 use crate::document::NodeId;
+use crate::retrieval::search::{extract_keywords, Bm25Params, STOPWORDS};
 use crate::util::estimate_tokens;
 
 use super::config::ScoringStrategyConfig;
@@ -130,8 +131,7 @@ pub struct RelevanceScorer {
     /// Scoring strategy to use.
     strategy: ScoringStrategyConfig,
     /// BM25 parameters.
-    k1: f32,
-    b: f32,
+    params: Bm25Params,
 }
 
 impl RelevanceScorer {
@@ -142,8 +142,7 @@ impl RelevanceScorer {
         Self {
             query_keywords,
             strategy,
-            k1: 1.2,
-            b: 0.75,
+            params: Bm25Params::default(),
         }
     }
 
@@ -153,8 +152,7 @@ impl RelevanceScorer {
         Self {
             query_keywords: keywords,
             strategy,
-            k1: 1.2,
-            b: 0.75,
+            params: Bm25Params::default(),
         }
     }
 
@@ -240,13 +238,15 @@ impl RelevanceScorer {
                 continue;
             }
 
-            // IDF calculation
+            // IDF calculation using BM25L variant
             let df = ctx.doc_freq.get(&term_lower).copied().unwrap_or(1) as f32;
             let idf = ((ctx.doc_count as f32 - df + 0.5) / (df + 0.5) + 1.0).ln();
 
             // BM25 formula
-            let numerator = tf * (self.k1 + 1.0);
-            let denominator = tf + self.k1 * (1.0 - self.b + self.b * doc_len / ctx.avg_doc_len);
+            let k1 = self.params.k1;
+            let b = self.params.b;
+            let numerator = tf * (k1 + 1.0);
+            let denominator = tf + k1 * (1.0 - b + b * doc_len / ctx.avg_doc_len);
 
             score += idf * numerator / denominator;
         }
@@ -263,145 +263,6 @@ impl RelevanceScorer {
     }
 }
 
-/// Extract keywords from a query string.
-fn extract_keywords(query: &str) -> Vec<String> {
-    // Common English stop words
-    const STOPWORDS: &[&str] = &[
-        "a",
-        "an",
-        "the",
-        "is",
-        "are",
-        "was",
-        "were",
-        "be",
-        "been",
-        "being",
-        "have",
-        "has",
-        "had",
-        "do",
-        "does",
-        "did",
-        "will",
-        "would",
-        "could",
-        "should",
-        "may",
-        "might",
-        "must",
-        "shall",
-        "can",
-        "need",
-        "dare",
-        "ought",
-        "used",
-        "to",
-        "of",
-        "in",
-        "for",
-        "on",
-        "with",
-        "at",
-        "by",
-        "from",
-        "as",
-        "into",
-        "through",
-        "during",
-        "before",
-        "after",
-        "above",
-        "below",
-        "between",
-        "under",
-        "again",
-        "further",
-        "then",
-        "once",
-        "here",
-        "there",
-        "when",
-        "where",
-        "why",
-        "how",
-        "all",
-        "each",
-        "few",
-        "more",
-        "most",
-        "other",
-        "some",
-        "such",
-        "no",
-        "nor",
-        "not",
-        "only",
-        "own",
-        "same",
-        "so",
-        "than",
-        "too",
-        "very",
-        "just",
-        "and",
-        "but",
-        "if",
-        "or",
-        "because",
-        "until",
-        "while",
-        "about",
-        "what",
-        "which",
-        "who",
-        "whom",
-        "this",
-        "that",
-        "these",
-        "those",
-        "i",
-        "me",
-        "my",
-        "myself",
-        "we",
-        "our",
-        "ours",
-        "ourselves",
-        "you",
-        "your",
-        "yours",
-        "yourself",
-        "yourselves",
-        "he",
-        "him",
-        "his",
-        "himself",
-        "she",
-        "her",
-        "hers",
-        "herself",
-        "it",
-        "its",
-        "itself",
-        "they",
-        "them",
-        "their",
-        "theirs",
-        "themselves",
-    ];
-
-    query
-        .to_lowercase()
-        .split(|c: char| !c.is_alphanumeric())
-        .filter(|s| {
-            let s = *s;
-            !s.is_empty() && s.len() > 1 && !STOPWORDS.contains(&s)
-        })
-        .map(String::from)
-        .collect()
-}
-
 /// Compute information density of content.
 fn compute_density(content: &str) -> f32 {
     let words: Vec<&str> = content.split_whitespace().collect();
@@ -409,13 +270,7 @@ fn compute_density(content: &str) -> f32 {
         return 0.0;
     }
 
-    // Stopword ratio (lower is better)
-    const STOPWORDS: &[&str] = &[
-        "a", "an", "the", "is", "are", "was", "were", "be", "been", "being", "have", "has", "had",
-        "do", "does", "did", "will", "would", "could", "should", "may", "might", "must", "shall",
-        "can", "to", "of", "in", "for", "on", "with", "at", "by", "from", "and", "but", "or", "as",
-    ];
-
+    // Use shared STOPWORDS from bm25 module
     let stopword_count = words
         .iter()
         .filter(|w| STOPWORDS.contains(&w.to_lowercase().as_str()))

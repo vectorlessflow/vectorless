@@ -80,6 +80,9 @@ roxmltree = "0.20"
 # Random number generation (for sampling)
 rand = "0.8"
 
+# BM25 scoring
+bm25 = { version = "2.3.2", features = ["parallelism"] }
+
 [dev-dependencies]
 tempfile = "3.10"
 tokio-test = "0.4"
