@@ -175,10 +175,7 @@ impl Workspace {
     }
 
     /// Create a new async workspace with custom options.
-    pub async fn with_options(
-        path: impl Into<PathBuf>,
-        options: WorkspaceOptions,
-    ) -> Result<Self> {
+    pub async fn with_options(path: impl Into<PathBuf>, options: WorkspaceOptions) -> Result<Self> {
         let root = path.into();
         let backend = Arc::new(FileBackend::new(&root)?);
 

@@ -142,7 +142,9 @@ impl Engine {
             RetrieverClient::new(retriever, Arc::clone(&config)).with_events(events.clone());
 
         // Create workspace client
-        let workspace_client = WorkspaceClient::new(workspace).await.with_events(events.clone());
+        let workspace_client = WorkspaceClient::new(workspace)
+            .await
+            .with_events(events.clone());
 
         Ok(Self {
             config,

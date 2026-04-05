@@ -8,7 +8,7 @@ use std::time::Instant;
 use tracing::info;
 
 use crate::error::Result;
-use crate::storage::{Workspace, DocumentMeta as StorageMeta, PersistedDocument};
+use crate::storage::{DocumentMeta as StorageMeta, PersistedDocument, Workspace};
 
 use super::{IndexStage, StageResult};
 use crate::index::pipeline::IndexContext;

@@ -62,10 +62,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Check if we should generate summaries (requires API key)
     println!("  - API key detected, generating summaries...");
-    let doc_id = client.index(
-        IndexContext::from_path(&md_path)
-            .with_options(IndexOptions::new().with_summaries())
-    ).await?;
+    let doc_id = client
+        .index(IndexContext::from_path(&md_path).with_options(IndexOptions::new().with_summaries()))
+        .await?;
 
     println!("  - Document indexed successfully");
     println!("  - Document ID: {}", doc_id);

@@ -16,7 +16,7 @@
 //! ```
 
 use vectorless::document::DocumentTree;
-use vectorless::storage::{Workspace, DocumentMeta, PersistedDocument};
+use vectorless::storage::{DocumentMeta, PersistedDocument, Workspace};
 
 #[tokio::main]
 async fn main() -> vectorless::Result<()> {
@@ -45,7 +45,10 @@ async fn main() -> vectorless::Result<()> {
 
     // 3. Add document to workspace
     println!("3. Adding document to workspace...");
-    workspace.add(&doc).await.map_err(|e| vectorless::Error::Workspace(e.to_string()))?;
+    workspace
+        .add(&doc)
+        .await
+        .map_err(|e| vectorless::Error::Workspace(e.to_string()))?;
     println!("   ✓ Document saved\n");
 
     // 4. List all documents

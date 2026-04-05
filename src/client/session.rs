@@ -403,11 +403,10 @@ impl Session {
         self.stats.increment_cache_misses();
 
         // Load from workspace
-        let doc = self
-            .workspace
-            .load(doc_id)
-            .await?
-            .ok_or_else(|| Error::DocumentNotFound(format!("Document not found: {}", doc_id)))?;
+        let doc =
+            self.workspace.load(doc_id).await?.ok_or_else(|| {
+                Error::DocumentNotFound(format!("Document not found: {}", doc_id))
+            })?;
 
         let tree = doc.tree;
 

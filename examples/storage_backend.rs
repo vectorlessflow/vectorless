@@ -17,7 +17,7 @@ use std::sync::{Arc, RwLock};
 
 use vectorless::Result;
 use vectorless::document::DocumentTree;
-use vectorless::storage::{Workspace, DocumentMeta, PersistedDocument, StorageBackend};
+use vectorless::storage::{DocumentMeta, PersistedDocument, StorageBackend, Workspace};
 
 /// A simple in-memory backend with logging.
 ///

@@ -28,7 +28,7 @@ use std::sync::Arc;
 use tracing::{debug, info, warn};
 
 use crate::error::Result;
-use crate::storage::{Workspace, PersistedDocument};
+use crate::storage::{PersistedDocument, Workspace};
 
 use super::events::{EventEmitter, WorkspaceEvent};
 use super::types::DocumentInfo;
@@ -207,14 +207,18 @@ impl WorkspaceClient {
     ///
     /// Returns an error if the workspace read fails.
     pub async fn get_document_info(&self, doc_id: &str) -> Result<Option<DocumentInfo>> {
-        Ok(self.workspace.get_meta(doc_id).await.map(|meta| DocumentInfo {
-            id: meta.id,
-            name: meta.doc_name,
-            format: meta.doc_type,
-            description: meta.doc_description,
-            page_count: meta.page_count,
-            line_count: meta.line_count,
-        }))
+        Ok(self
+            .workspace
+            .get_meta(doc_id)
+            .await
+            .map(|meta| DocumentInfo {
+                id: meta.id,
+                name: meta.doc_name,
+                format: meta.doc_type,
+                description: meta.doc_description,
+                page_count: meta.page_count,
+                line_count: meta.line_count,
+            }))
     }
 
     /// Remove multiple documents from the workspace.
