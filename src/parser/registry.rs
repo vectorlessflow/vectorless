@@ -130,6 +130,39 @@ impl ParserRegistry {
             .ok_or_else(|| Error::Parse(format!("Unsupported format: {:?}", format)))?;
         parser.parse_file(path).await
     }
+
+    /// Parse binary data using the appropriate parser.
+    ///
+    /// For text-based formats, the bytes are converted to UTF-8 string first.
+    /// For binary formats (PDF, DOCX), the parser handles the bytes directly.
+    pub async fn parse_bytes(&self, bytes: &[u8], format: DocumentFormat) -> Result<ParseResult> {
+        match format {
+            DocumentFormat::Markdown | DocumentFormat::Html | DocumentFormat::Text => {
+                // Text formats - convert to string first
+                let content = std::str::from_utf8(bytes)
+                    .map_err(|e| Error::Parse(format!("Invalid UTF-8 content: {}", e)))?;
+                self.parse(content, format).await
+            }
+            DocumentFormat::Pdf | DocumentFormat::Docx => {
+                // Binary formats - write to temp file and parse
+                // This is a temporary solution until parsers support bytes directly
+                let temp_dir = std::env::temp_dir();
+                let ext = format.extension();
+                let temp_file =
+                    temp_dir.join(format!("vectorless_temp_{}.{}", uuid::Uuid::new_v4(), ext));
+
+                std::fs::write(&temp_file, bytes)
+                    .map_err(|e| Error::Parse(format!("Failed to write temp file: {}", e)))?;
+
+                let result = self.parse_file_as(&temp_file, format).await;
+
+                // Clean up temp file
+                let _ = std::fs::remove_file(&temp_file);
+
+                result
+            }
+        }
+    }
 }
 
 impl Default for ParserRegistry {

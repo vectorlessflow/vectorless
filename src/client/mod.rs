@@ -6,6 +6,7 @@
 //! This module provides the main entry point for using vectorless:
 //! - [`Engine`] — The main client for indexing and querying documents
 //! - [`EngineBuilder`] — Builder pattern for client configuration
+//! - [`IndexContext`] — Unified input for document indexing
 //! - [`Session`] — Multi-document session management
 //!
 //! # Architecture
@@ -14,22 +15,23 @@
 //!
 //! ```text
 //! client/
-//! ├── mod.rs          → Re-exports and documentation
-//! ├── engine.rs       → Main orchestrator
-//! ├── builder.rs      → Builder pattern
-//! ├── types.rs        → Public API types
-//! ├── context.rs      → Request context and configuration
-//! ├── session.rs      → Session management
-//! ├── indexer.rs      → Document indexing operations
-//! ├── retriever.rs    → Query and retrieval operations
-//! ├── workspace.rs    → Workspace CRUD operations
-//! └── events.rs       → Event system and callbacks
+//! ├── mod.rs           → Re-exports and documentation
+//! ├── engine.rs        → Main orchestrator
+//! ├── builder.rs       → Builder pattern
+//! ├── index_context.rs → Index input types
+//! ├── types.rs         → Public API types
+//! ├── context.rs       → Request context and configuration
+//! ├── session.rs       → Session management
+//! ├── indexer.rs       → Document indexing operations
+//! ├── retriever.rs     → Query and retrieval operations
+//! ├── workspace.rs     → Workspace CRUD operations
+//! └── events.rs        → Event system and callbacks
 //! ```
 //!
 //! # Quick Start
 //!
 //! ```rust,no_run
-//! use vectorless::client::{Engine, EngineBuilder};
+//! use vectorless::client::{Engine, EngineBuilder, IndexContext};
 //!
 //! # #[tokio::main]
 //! # async fn main() -> vectorless::domain::Result<()> {
@@ -38,18 +40,22 @@
 //!     .with_workspace("./my_workspace")
 //!     .build()?;
 //!
-//! // Index a document
-//! let doc_id = client.index("./document.md").await?;
+//! // Index a document from file
+//! let doc_id = client.index(IndexContext::from_path("./document.md")).await?;
 //!
-//! // Get document structure
-//! let structure = client.get_structure(&doc_id)?;
+//! // Index HTML content directly
+//! let html = "<html><body><h1>Title</h1><p>Content</p></body></html>";
+//! let doc_id2 = client.index(
+//!     IndexContext::from_content(html, vectorless::parser::DocumentFormat::Html)
+//!         .with_name("webpage")
+//! ).await?;
 //!
 //! // Query the document
 //! let result = client.query(&doc_id, "What is this?").await?;
 //! println!("{}", result.content);
 //!
 //! // List all documents
-//! for doc in client.list_documents() {
+//! for doc in client.list_documents().await? {
 //!     println!("{}: {}", doc.id, doc.name);
 //! }
 //! # Ok(())
@@ -61,7 +67,7 @@
 //! For multi-document operations, use sessions:
 //!
 //! ```rust,no_run
-//! # use vectorless::client::{Engine, EngineBuilder};
+//! # use vectorless::client::{Engine, EngineBuilder, IndexContext};
 //! # #[tokio::main]
 //! # async fn main() -> vectorless::domain::Result<()> {
 //! let client = EngineBuilder::new()
@@ -71,8 +77,8 @@
 //! let session = client.session();
 //!
 //! // Index multiple documents
-//! let doc1 = session.index("./doc1.md").await?;
-//! let doc2 = session.index("./doc2.md").await?;
+//! let doc1 = session.index(IndexContext::from_path("./doc1.md")).await?;
+//! let doc2 = session.index(IndexContext::from_path("./doc2.md")).await?;
 //!
 //! // Query across all documents
 //! let results = session.query_all("What is the architecture?").await?;
@@ -113,6 +119,7 @@ mod builder;
 mod context;
 mod engine;
 pub mod events;
+mod index_context;
 mod indexer;
 mod retriever;
 mod session;
@@ -125,6 +132,12 @@ mod workspace;
 
 pub use builder::{BuildError, EngineBuilder};
 pub use engine::Engine;
+
+// ============================================================
+// Index Context
+// ============================================================
+
+pub use index_context::{IndexContext, IndexSource};
 
 // ============================================================
 // Sub-Clients

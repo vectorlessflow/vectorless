@@ -126,29 +126,29 @@ pub struct PageContent {
 // Index Types
 // ============================================================
 
-/// Document indexing mode.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Document indexing behavior mode.
+///
+/// Controls how the indexer handles existing documents and re-indexing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum IndexMode {
-    /// Automatically detect format from file extension.
-    Auto,
+    /// Default mode - skip if already indexed.
+    ///
+    /// If a document with the same source has already been indexed,
+    /// the operation is skipped and the existing document ID is returned.
+    #[default]
+    Default,
 
-    /// Force PDF parsing.
-    Pdf,
+    /// Force re-indexing.
+    ///
+    /// Always re-index the document, even if it has been indexed before.
+    /// A new document ID is generated.
+    Force,
 
-    /// Force Markdown parsing.
-    Markdown,
-
-    /// Force HTML parsing.
-    Html,
-
-    /// Force DOCX parsing.
-    Docx,
-}
-
-impl Default for IndexMode {
-    fn default() -> Self {
-        Self::Auto
-    }
+    /// Incremental mode - only re-index changed files.
+    ///
+    /// Re-index only if the file has been modified since the last index.
+    /// For content/bytes sources, this behaves like [`IndexMode::Default`].
+    Incremental,
 }
 
 /// Options for indexing a document.
@@ -173,7 +173,7 @@ pub struct IndexOptions {
 impl Default for IndexOptions {
     fn default() -> Self {
         Self {
-            mode: IndexMode::Auto,
+            mode: IndexMode::Default,
             generate_summaries: false,
             include_text: true,
             generate_ids: true,
@@ -201,6 +201,12 @@ impl IndexOptions {
     }
 
     /// Set the indexing mode.
+    ///
+    /// # Modes
+    ///
+    /// - [`IndexMode::Default`] - Skip if already indexed
+    /// - [`IndexMode::Force`] - Always re-index
+    /// - [`IndexMode::Incremental`] - Only re-index changed files
     pub fn with_mode(mut self, mode: IndexMode) -> Self {
         self.mode = mode;
         self
@@ -338,10 +344,10 @@ mod tests {
     fn test_index_options() {
         let options = IndexOptions::new()
             .with_summaries()
-            .with_mode(IndexMode::Pdf);
+            .with_mode(IndexMode::Force);
 
         assert!(options.generate_summaries);
-        assert_eq!(options.mode, IndexMode::Pdf);
+        assert_eq!(options.mode, IndexMode::Force);
     }
 
     #[test]

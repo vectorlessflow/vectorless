@@ -38,6 +38,7 @@ impl ParseStage {
                         .ok_or_else(|| crate::Error::Parse(format!("Unknown format: {}", ext)))
                 }
                 IndexInput::Content { format, .. } => Ok(*format),
+                IndexInput::Bytes { format, .. } => Ok(*format),
             },
             IndexMode::Markdown => Ok(DocumentFormat::Markdown),
             IndexMode::Pdf => Ok(DocumentFormat::Pdf),
@@ -95,6 +96,13 @@ impl IndexStage for ParseStage {
 
                 // Parse content directly
                 self.parser_registry.parse(content, *format).await?
+            }
+            IndexInput::Bytes { data, name, format } => {
+                // Set name
+                ctx.name = name.clone();
+
+                // Parse bytes
+                self.parser_registry.parse_bytes(data, *format).await?
             }
         };
 

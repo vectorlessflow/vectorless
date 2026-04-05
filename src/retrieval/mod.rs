@@ -70,6 +70,9 @@ pub use pipeline_retriever::PipelineRetriever;
 pub use retriever::{RetrievalContext, Retriever, RetrieverError, RetrieverResult};
 pub use types::*;
 
+// Re-export StrategyPreference as Strategy for convenience
+pub use types::StrategyPreference as Strategy;
+
 // Pipeline exports
 pub use pipeline::{
     CandidateNode, ExecutionGroup, FailurePolicy, PipelineContext, RetrievalMetrics,

@@ -121,7 +121,10 @@ pub mod util;
 // =============================================================================
 
 // Client API (most common entry point)
-pub use client::{DocumentInfo, Engine, EngineBuilder, IndexedDocument};
+pub use client::{
+    BuildError, DocumentInfo, Engine, EngineBuilder, IndexContext, IndexMode, IndexOptions,
+    IndexSource, IndexedDocument,
+};
 
 // Error types
 pub use error::{Error, Result};
@@ -149,8 +152,9 @@ pub use parser::{
 // Indexing
 pub use index::pipeline::{CustomStageBuilder, PipelineOrchestrator};
 pub use index::{
-    ChangeDetector, ChangeSet, IndexContext, IndexInput, IndexMetrics, IndexMode, IndexResult,
-    IndexStage, PartialUpdater, PipelineExecutor, PipelineOptions, SummaryStrategy,
+    ChangeDetector, ChangeSet, IndexContext as PipelineIndexContext, IndexInput, IndexMetrics,
+    IndexMode as PipelineIndexMode, IndexResult, IndexStage, PartialUpdater, PipelineExecutor,
+    PipelineOptions, SummaryStrategy,
 };
 
 // Retrieval
