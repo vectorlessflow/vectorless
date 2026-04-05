@@ -51,3 +51,6 @@ config.toml
 vectorless.toml
 config.toml
 .vectorless.toml
+
+# Test fixtures
+test_workspace/
