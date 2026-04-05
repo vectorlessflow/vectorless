@@ -1,41 +1,43 @@
-# Pilot 设计文档
+这里是为您翻译的英文版 Pilot 设计文档。
 
-> Pilot - Retriever Pipeline 的大脑
+# Pilot Design Document
 
-## 概述
+> Pilot - The Brain of the Retriever Pipeline
 
-Pilot 是 Vectorless 检索系统的核心智能组件，负责理解查询、分析文档结构、做出搜索决策。与传统的向量检索不同，Pilot 使用 LLM 进行语义理解和导航决策，同时保持算法的高效执行。
+## Overview
 
-### 设计哲学
+Pilot is the core intelligent component of the Vectorless retrieval system. It is responsible for understanding queries, analyzing document structures, and making search decisions. Unlike traditional vector retrieval, Pilot uses LLMs for semantic understanding and navigation decisions while maintaining efficient algorithmic execution.
+
+### Design Philosophy
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                    设计哲学                                      │
+│                        Design Philosophy                        │
 ├─────────────────────────────────────────────────────────────────┤
-│  1. 算法负责 "怎么走" - 高效、确定性、低延迟                        │
-│  2. Pilot 负责 "去哪里" - 语义理解、歧义消解、方向判断               │
-│  3. 关键决策点介入 - 不是每步都问 LLM，而是在需要时才问               │
-│  4. 分层 fallback - LLM 失败时算法接管，算法失败时 Pilot 救援        │
+│  1. Algorithm handles "How to walk" - Efficient, deterministic, low latency                      │
+│  2. Pilot handles "Where to go" - Semantic understanding, ambiguity resolution, direction judgment │
+│  3. Key decision point intervention - Not asking the LLM at every step, but only when needed     │
+│  4. Layered fallback - Algorithm takes over when LLM fails, Pilot rescues when algorithm fails  │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### 命名由来
+### Naming Origin
 
-**Pilot (驾驶员)** - 像飞机的驾驶员一样，Pilot 不直接操作每个机械部件（那是 Algorithm 的职责），而是负责：
-- 理解目的地（用户查询）
-- 规划航线（搜索策略）
-- 在关键节点做决策（介入点）
-- 应对突发情况（fallback）
+**Pilot** - Like the pilot of an airplane, Pilot does not directly operate every mechanical part (that is the Algorithm's responsibility), but is responsible for:
+- Understanding the destination (User Query)
+- Planning the route (Search Strategy)
+- Making decisions at key nodes (Intervention Points)
+- Responding to emergencies (Fallback)
 
 ---
 
-## 1. Pilot 详细设计
+## 1. Pilot Detailed Design
 
-### 1.1 整体架构
+### 1.1 Overall Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                              Pilot 架构                                      │
+│                              Pilot Architecture                             │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
 │  ┌───────────────────────────────────────────────────────────────────────┐  │
@@ -44,14 +46,14 @@ Pilot 是 Vectorless 检索系统的核心智能组件，负责理解查询、�
 │  │   ┌─────────────┐   ┌─────────────┐   ┌─────────────┐                │  │
 │  │   │   Query     │   │  Context    │   │  Decision   │                │  │
 │  │   │  Analyzer   │──▶│   Builder   │──▶│   Engine    │                │  │
-│  │   │  查询分析器  │   │  上下文构建  │   │   决策引擎   │                │  │
+│  │   │  (Query Analyzer)│  │ (Context Builder)│  │ (Decision Engine)│     │  │
 │  │   └─────────────┘   └─────────────┘   └──────┬──────┘                │  │
 │  │                                              │                        │  │
 │  │                                              ▼                        │  │
 │  │   ┌─────────────┐   ┌─────────────┐   ┌─────────────┐                │  │
 │  │   │   Response  │◀──│     LLM     │◀──│   Prompt    │                │  │
 │  │   │   Parser    │   │   Client    │   │   Builder   │                │  │
-│  │   │  响应解析器  │   │   客户端     │   │  提示词构建  │                │  │
+│  │   │ (Response Parser)│  │  (LLM Client)  │  │ (Prompt Builder) │     │  │
 │  │   └─────────────┘   └─────────────┘   └─────────────┘                │  │
 │  │                                                                       │  │
 │  └───────────────────────────────────────────────────────────────────────┘  │
@@ -62,13 +64,13 @@ Pilot 是 Vectorless 检索系统的核心智能组件，负责理解查询、�
 │  │   ┌─────────────┐   ┌─────────────┐   ┌─────────────┐                │  │
 │  │   │   Budget    │   │    Fallback │   │   Metrics   │                │  │
 │  │   │  Controller │   │   Manager   │   │  Collector  │                │  │
-│  │   │  预算控制器  │   │   降级管理   │   │  指标收集器  │                │  │
+│  │   │ (Budget Controller)│ (Fallback Manager)│ (Metrics Collector)│   │  │
 │  │   └─────────────┘   └─────────────┘   └─────────────┘                │  │
 │  │                                                                       │  │
 │  │   ┌─────────────┐   ┌─────────────┐   ┌─────────────┐                │  │
 │  │   │   Policy    │   │    Cache    │   │   Logger    │                │  │
 │  │   │   Manager   │   │  (Optional) │   │  (Tracing)  │                │  │
-│  │   │  策略管理器  │   │    缓存      │   │   日志追踪   │                │  │
+│  │   │ (Policy Manager)│  │   (Cache)     │  │ (Logger/Tracing) │      │  │
 │  │   └─────────────┘   └─────────────┘   └─────────────┘                │  │
 │  │                                                                       │  │
 │  └───────────────────────────────────────────────────────────────────────┘  │
@@ -78,38 +80,38 @@ Pilot 是 Vectorless 检索系统的核心智能组件，负责理解查询、�
 
 ---
 
-## 1.4 Pilot 决策的信息来源
+## 1.4 Information Sources for Pilot Decisions
 
-Pilot 的决策依赖于多层信息，其中 TOC View 是核心——它就像导航电子地图。
+Pilot's decisions rely on multi-layered information, with the TOC View being the core—it is like a navigation electronic map.
 
-### 信息来源架构
+### Information Source Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                      Pilot 的"导航地图"                                      │
+│                      Pilot's "Navigation Map"                                │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
 │                         ┌─────────────────┐                                │
 │                         │   User Query    │                                │
 │                         │   "PostgreSQL   │                                │
-│                         │   连接池配置"    │                                │
+│                         │   Connection Pool Config"│                       │
 │                         └────────┬────────┘                                │
 │                                  │                                          │
 │                                  ▼                                          │
 │  ┌───────────────────────────────────────────────────────────────────────┐  │
-│  │                        Pilot 上下文                                    │  │
+│  │                        Pilot Context                                   │  │
 │  │                                                                       │  │
 │  │   ┌─────────────┐   ┌─────────────┐   ┌─────────────┐                │  │
 │  │   │  TOC View   │   │ Current     │   │ Candidates  │                │  │
-│  │   │  (电子地图)  │   │ Path        │   │ Info        │                │  │
-│  │   │             │   │ (当前位置)   │   │ (候选路口)   │                │  │
+│  │   │ (E-Map)     │   │ Path        │   │ Info        │                │  │
+│  │   │             │   │ (Current Pos)│   │ (Candidates)│                │  │
 │  │   └──────┬──────┘   └──────┬──────┘   └──────┬──────┘                │  │
 │  │          │                 │                 │                        │  │
 │  │          └─────────────────┼─────────────────┘                        │  │
 │  │                            ▼                                          │  │
 │  │                   ┌─────────────────┐                                 │  │
 │  │                   │   LLM Decision  │                                 │  │
-│  │                   │   (去哪里)       │                                 │  │
+│  │                   │   (Where to go) │                                 │  │
 │  │                   └─────────────────┘                                 │  │
 │  │                                                                       │  │
 │  └───────────────────────────────────────────────────────────────────────┘  │
@@ -117,248 +119,248 @@ Pilot 的决策依赖于多层信息，其中 TOC View 是核心——它就像�
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### TOC View - 电子地图（核心）
+### TOC View - Electronic Map (Core)
 
-TOC View 是 Pilot 决策的核心依据，由 Index 阶段生成的内容构建：
+The TOC View is the core basis for Pilot's decisions, built from content generated during the Index phase:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                          TOC View - 电子地图                                 │
+│                      TOC View - Electronic Map                              │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
-│  Index 阶段生成的内容:                                                       │
+│  Content generated during Index phase:                                      │
 │  ┌─────────────────────────────────────────────────────────────────────┐   │
 │  │  TreeNode {                                                         │   │
-│  │    title: "配置",           // 标题                                  │   │
-│  │    summary: "本章介绍...",   // LLM 生成的摘要 ← 关键！              │   │
+│  │    title: "Configuration",       // Title                          │   │
+│  │    summary: "This chapter introduces...", // LLM-generated Summary │   │
 │  │    depth: 1,                                                        │   │
 │  │    children: [...],                                                 │   │
 │  │  }                                                                  │   │
 │  └─────────────────────────────────────────────────────────────────────┘   │
 │                                                                             │
-│  TOC View 构建逻辑:                                                         │
+│  TOC View Construction Logic:                                               │
 │  ┌─────────────────────────────────────────────────────────────────────┐   │
 │  │  generate_toc_view(tree, current_node):                             │   │
 │  │                                                                     │   │
-│  │    // 1. 从当前节点视角生成                                          │   │
-│  │    // 2. 包含兄弟节点（横向视野）                                     │   │
-│  │    // 3. 包含子节点（纵向视野）                                       │   │
-│  │    // 4. 每个节点包含 title + summary                               │   │
+│  │    // 1. Generate from current node perspective                      │   │
+│  │    // 2. Include sibling nodes (horizontal view)                     │   │
+│  │    // 3. Include child nodes (vertical view)                        │   │
+│  │    // 4. Each node contains title + summary                         │   │
 │  │                                                                     │   │
-│  │  输出示例:                                                          │   │
+│  │  Example Output:                                                     │   │
 │  │  ┌─────────────────────────────────────────────────────────────┐   │   │
-│  │  │  📍 当前位置: Root → 配置                                    │   │   │
+│  │  │  📍 Current Location: Root → Configuration                  │   │   │
 │  │  │                                                             │   │   │
-│  │  │  📂 兄弟节点:                                               │   │   │
-│  │  │  ├─ 简介 [概述项目功能和架构]                                │   │   │
-│  │  │  ├─ 安装 [安装步骤和环境要求]                                │   │   │
-│  │  │  ├─ 配置 ⭐ [配置项详解]              ← 当前节点             │   │   │
-│  │  │  │   ├─ 基本配置 [基础参数设置]                              │   │   │
-│  │  │  │   ├─ 数据库配置 [数据库连接相关]  ← 关键匹配！            │   │   │
-│  │  │  │   └─ 高级配置 [性能调优选项]                              │   │   │
-│  │  │  └─ API 参考 [接口文档]                                     │   │   │
+│  │  │  📂 Sibling Nodes:                                          │   │   │
+│  │  │  ├─ Introduction [Overview of features and architecture]    │   │   │
+│  │  │  ├─ Installation [Installation steps and requirements]      │   │   │
+│  │  │  ├─ Configuration ⭐ [Detailed config items]  ← Current    │   │   │
+│  │  │  │   ├─ Basic Config [Basic parameter settings]            │   │   │
+│  │  │  │   ├─ Database Config [DB connection related] ← Match!   │   │   │
+│  │  │  │   └─ Advanced Config [Performance tuning options]        │   │   │
+│  │  │  └─ API Reference [Interface documentation]                 │   │   │
 │  │  └─────────────────────────────────────────────────────────────┘   │   │
 │  └─────────────────────────────────────────────────────────────────────┘   │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### 三层信息结构
+### Three-Layer Information Structure
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                       Pilot 决策的三层信息                                   │
+│                       Three Layers of Pilot Decision Info                   │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
-│  Layer 1: TOC View (全局地图)                                               │
+│  Layer 1: TOC View (Global Map)                                             │
 │  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │  作用: 提供文档的全局结构视图                                         │   │
-│  │  来源: Index Pipeline 的 Enrich 阶段生成的 summary                   │   │
-│  │  Token: 约 200-500 tokens                                           │   │
+│  │  Role: Provides a global structural view of the document            │   │
+│  │  Source: Summary generated by the Enrich stage of the Index Pipeline│   │
+│  │  Token: ~200-500 tokens                                             │   │
 │  │                                                                     │   │
-│  │  示例:                                                              │   │
-│  │  "本文档结构: 1.简介 2.安装 3.配置(3.1基本 3.2数据库 3.3高级) 4.API" │   │
+│  │  Example:                                                           │   │
+│  │  "Doc Structure: 1.Intro 2.Install 3.Config(3.1Basic 3.2DB 3.3Adv) 4.API"│
 │  └─────────────────────────────────────────────────────────────────────┘   │
 │                                                                             │
-│  Layer 2: Current Path (当前位置)                                           │
+│  Layer 2: Current Path (Current Location)                                   │
 │  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │  作用: 告诉 LLM 我们已经走了哪里                                      │   │
-│  │  来源: 搜索过程的路径记录                                            │   │
-│  │  Token: 约 50-100 tokens                                            │   │
+│  │  Role: Tells the LLM where we have been                             │   │
+│  │  Source: Path records of the search process                         │   │
+│  │  Token: ~50-100 tokens                                              │   │
 │  │                                                                     │   │
-│  │  示例:                                                              │   │
-│  │  "当前路径: Root → 配置 → 数据库配置"                               │   │
+│  │  Example:                                                           │   │
+│  │  "Current Path: Root → Configuration → Database Config"             │   │
 │  └─────────────────────────────────────────────────────────────────────┘   │
 │                                                                             │
-│  Layer 3: Candidates Detail (候选路口详情)                                  │
+│  Layer 3: Candidates Detail (Candidate Intersection Details)               │
 │  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │  作用: 提供候选节点的详细信息，供 LLM 判断                             │   │
-│  │  来源: TreeNode 的 title + summary + 部分内容                       │   │
-│  │  Token: 约 100-300 tokens                                           │   │
+│  │  Role: Provides detailed info on candidate nodes for LLM judgment   │   │
+│  │  Source: TreeNode's title + summary + partial content               │   │
+│  │  Token: ~100-300 tokens                                            │   │
 │  │                                                                     │   │
-│  │  示例:                                                              │   │
-│  │  候选节点:                                                          │   │
-│  │  A. 连接字符串                                                      │   │
-│  │     摘要: 配置数据库连接 URL 和认证信息                              │   │
-│  │  B. 连接池 ⭐                                                       │   │
-│  │     摘要: 配置连接池大小、超时、最大连接数等                          │   │
-│  │  C. 超时设置                                                        │   │
-│  │     摘要: 配置查询和连接超时时间                                     │   │
+│  │  Example:                                                           │   │
+│  │  Candidates:                                                        │   │
+│  │  A. Connection String                                               │   │
+│  │     Summary: Configure DB connection URL and auth info             │   │
+│  │  B. Connection Pool ⭐                                              │   │
+│  │     Summary: Configure pool size, timeouts, max connections, etc.  │   │
+│  │  C. Timeout Settings                                                 │   │
+│  │     Summary: Configure query and connection timeout                 │   │
 │  └─────────────────────────────────────────────────────────────────────┘   │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### 决策过程示例
+### Decision Process Example
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                          Pilot 决策过程示例                                  │
+│                          Pilot Decision Process Example                     │
 └─────────────────────────────────────────────────────────────────────────────┘
 
-Query: "PostgreSQL 连接池的最大连接数怎么配置？"
+Query: "How to configure the max connections for PostgreSQL connection pool?"
 
-Step 1: 构建 TOC View (从 Index 阶段的 summary)
+Step 1: Build TOC View (from Index stage summary)
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│  TOC View (简化版):                                                         │
+│  TOC View (Simplified):                                                    │
 │  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │  文档结构:                                                          │   │
-│  │  1. 快速开始                                                        │   │
-│  │  2. 配置                                                            │   │
-│  │     2.1 基本配置                                                    │   │
-│  │     2.2 数据库配置                                                  │   │
-│  │         - 连接字符串                                                │   │
-│  │         - 连接池 ← 包含"连接池"                                     │   │
-│  │         - 超时设置                                                  │   │
-│  │     2.3 高级配置                                                    │   │
+│  │  Document Structure:                                               │   │
+│  │  1. Quick Start                                                    │   │
+│  │  2. Configuration                                                  │   │
+│  │     2.1 Basic Config                                               │   │
+│  │     2.2 Database Config                                            │   │
+│  │         - Connection String                                        │   │
+│  │         - Connection Pool ← Contains "Connection Pool"            │   │
+│  │         - Timeout Settings                                         │   │
+│  │     2.3 Advanced Config                                            │   │
 │  │  3. API                                                            │   │
 │  └─────────────────────────────────────────────────────────────────────┘   │
 │                                                                             │
-│  这个 TOC 是 Index 阶段 LLM 生成的 summary 构成的！                          │
+│   This TOC is constructed from Index stage LLM-generated summaries!       │
 └─────────────────────────────────────────────────────────────────────────────┘
                                     │
                                     ▼
-Step 2: LLM 分析
+Step 2: LLM Analysis
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│  LLM 看到的信息:                                                            │
+│  Information seen by LLM:                                                   │
 │  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │  用户查询: "PostgreSQL 连接池的最大连接数怎么配置？"                  │   │
+│  │  User Query: "How to configure the max connections for PostgreSQL connection pool?" │
 │  │                                                                     │   │
-│  │  当前位置: 配置 → 数据库配置                                        │   │
+│  │  Current Location: Configuration → Database Config                 │   │
 │  │                                                                     │   │
-│  │  候选节点:                                                          │   │
-│  │  1. 连接字符串 [配置数据库 URL 和认证]                               │   │
-│  │  2. 连接池 [配置池大小、超时、最大连接数]  ← 直接匹配！              │   │
-│  │  3. 超时设置 [配置查询超时时间]                                     │   │
+│  │  Candidates:                                                        │   │
+│  │  1. Connection String [Configure DB URL and auth]                  │   │
+│  │  2. Connection Pool [Configure pool size, timeout, max connections] ← Direct Match! │
+│  │  3. Timeout Settings [Configure query timeout]                     │   │
 │  │                                                                     │   │
-│  │  请判断哪个节点最可能包含答案？                                      │   │
+│  │  Which node is most likely to contain the answer?                  │   │
 │  └─────────────────────────────────────────────────────────────────────┘   │
 │                                                                             │
-│  LLM 推理:                                                                  │
+│  LLM Reasoning:                                                             │
 │  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │  查询关键词: "连接池", "最大连接数"                                  │   │
-│  │  候选 2 的摘要包含: "连接池", "最大连接数"                           │   │
-│  │  → 候选 2 直接匹配，置信度 0.95                                     │   │
+│  │  Query Keywords: "Connection Pool", "Max Connections"               │   │
+│  │  Candidate 2 Summary: "Connection Pool", "Max Connections"          │   │
+│  │  → Candidate 2 matches directly, Confidence 0.95                   │   │
 │  └─────────────────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────────────────┘
                                     │
                                     ▼
-Step 3: 返回决策
+Step 3: Return Decision
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │  PilotDecision {                                                           │
 │    ranked_candidates: [                                                    │
-│      (Node 2 "连接池", score: 0.95, reason: "摘要直接匹配查询关键词"),      │   │
-│      (Node 3 "超时设置", score: 0.30, reason: "不太相关"),                  │   │
-│      (Node 1 "连接字符串", score: 0.20, reason: "不相关"),                  │   │
+│      (Node 2 "Connection Pool", score: 0.95, reason: "Summary directly matches query keywords"), │
+│      (Node 3 "Timeout Settings", score: 0.30, reason: "Not very relevant"),                  │
+│      (Node 1 "Connection String", score: 0.20, reason: "Irrelevant"),                  │
 │    ],                                                                      │
 │    direction: GoDeeper,                                                    │
 │    confidence: 0.95,                                                       │
-│    reasoning: "候选节点'连接池'的摘要明确提到'最大连接数'，直接匹配查询",   │   │
+│    reasoning: "Candidate node 'Connection Pool' summary explicitly mentions 'max connections', direct query match", │
 │  }                                                                         │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### 关键洞察
+### Key Insights
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                          关键洞察                                            │
+│                           Key Insights                                      │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
-│  1. Index 阶段的 summary 质量决定 Pilot 效果                                 │
+│  1. Index stage summary quality determines Pilot effectiveness             │
 │     ┌─────────────────────────────────────────────────────────────────┐    │
-│     │  好的 summary: "配置连接池大小、超时、最大连接数等参数"           │    │
-│     │  差的 summary: "本章介绍连接池相关内容"                          │    │
+│     │   Good summary: "Configure connection pool size, timeout, max connections params" │
+│     │   Bad summary: "This chapter introduces connection pool related content" │
 │     │                                                                 │    │
-│     │  → Index Enrich 阶段的 prompt 很重要！                          │    │
+│     │  → The prompt in the Index Enrich stage is crucial!             │    │
 │     └─────────────────────────────────────────────────────────────────┘    │
 │                                                                             │
-│  2. TOC View 需要动态生成                                                   │
+│  2. TOC View needs to be generated dynamically                             │
 │     ┌─────────────────────────────────────────────────────────────────┐    │
-│     │  不是整个文档的 TOC，而是从"当前节点"视角的局部视图               │    │
-│     │  包含: 兄弟节点 + 子节点 + 父节点链                              │    │
+│     │  Not the TOC of the entire document, but a local view from the "current node" perspective │
+│     │  Includes: Sibling nodes + Child nodes + Parent chain           │    │
 │     │                                                                 │    │
-│     │  这样 Token 消耗可控，且有上下文                                 │    │
+│     │  This keeps Token consumption manageable while providing context│    │
 │     └─────────────────────────────────────────────────────────────────┘    │
 │                                                                             │
-│  3. 类比: 高德地图导航                                                      │
+│  3. Analogy: Gaode Map (or Google Maps) Navigation                         │
 │     ┌─────────────────────────────────────────────────────────────────┐    │
-│     │  TOC View     = 地图 (道路网络)                                  │    │
-│     │  Summary      = 路标 (路口描述)                                  │    │
-│     │  Current Path = GPS 定位 (当前位置)                              │    │
-│     │  Candidates   = 前方路口 (可选方向)                              │    │
-│     │  Query        = 目的地 (要去哪里)                                │    │
+│     │  TOC View     = Map (Road network)                              │    │
+│     │  Summary      = Road signs (Intersection descriptions)           │    │
+│     │  Current Path = GPS Location (Current position)                 │    │
+│     │  Candidates   = Upcoming intersections (Optional directions)   │    │
+│     │  Query        = Destination (Where to go)                       │    │
 │     │                                                                 │    │
-│     │  Pilot        = 驾驶员 (综合以上信息做决策)                      │    │
+│     │  Pilot        = Driver (Integrates above info to make decisions)│    │
 │     └─────────────────────────────────────────────────────────────────┘    │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### ContextBuilder Token 预算分配
+### ContextBuilder Token Budget Allocation
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                    ContextBuilder - Token 预算分配                           │
+│                    ContextBuilder - Token Budget Allocation                  │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
-│  Token 预算分配 (假设 500 tokens 总预算):                                    │
+│  Token Budget Allocation (Assuming 500 tokens total budget):                │
 │                                                                             │
 │  ┌─────────────────────────────────────────────────────────────────────┐   │
 │  │                                                                     │   │
 │  │  ┌────────────────────────────────────────┐  30% (150 tokens)      │   │
 │  │  │  Query + Intent                        │                        │   │
-│  │  │  "PostgreSQL 连接池最大连接数配置"      │                        │   │
+│  │  │  "PostgreSQL connection pool max connections config"│           │   │
 │  │  └────────────────────────────────────────┘                        │   │
 │  │                                                                     │   │
-│  │  ┌────────────────────────────────────────┐  20% (100 tokens)      │   │
+│  │  ┌────────────────────────────────────────────────┐  20% (100 tokens) │   │
 │  │  │  Current Path                          │                        │   │
-│  │  │  Root → 配置 → 数据库配置              │                        │   │
+│  │  │  Root → Configuration → Database Config       │                        │   │
 │  │  └────────────────────────────────────────┘                        │   │
 │  │                                                                     │   │
-│  │  ┌────────────────────────────────────────┐  40% (200 tokens)      │   │
+│  │  ┌────────────────────────────────────────────────┐  40% (200 tokens) │   │
 │  │  │  Candidates (title + summary each)     │                        │   │
-│  │  │  A. 连接字符串 [配置URL和认证]         │                        │   │
-│  │  │  B. 连接池 [配置池大小、最大连接数]     │                        │   │
-│  │  │  C. 超时设置 [配置超时时间]            │                        │   │
+│  │  │  A. Connection String [Configure URL and auth] │                        │   │
+│  │  │  B. Connection Pool [Configure pool size, max connections] │    │   │
+│  │  │  C. Timeout Settings [Configure timeout]            │                        │   │
 │  │  └────────────────────────────────────────┘                        │   │
 │  │                                                                     │   │
-│  │  ┌────────────────────────────────────────┐  10% (50 tokens)       │   │
-│  │  │  Sibling Context (兄弟节点概览)        │                        │   │
-│  │  │  同级还有: 基本配置、高级配置          │                        │   │
+│  │  ┌────────────────────────────────────────────────┐  10% (50 tokens)  │   │
+│  │  │  Sibling Context (Sibling overview)        │                        │   │
+│  │  │  Other siblings: Basic Config, Advanced Config │                        │   │
 │  │  └────────────────────────────────────────┘                        │   │
 │  │                                                                     │   │
 │  └─────────────────────────────────────────────────────────────────────┘   │
 │                                                                             │
-│  动态调整策略:                                                              │
+│  Dynamic Adjustment Strategy:                                              │
 │  ┌─────────────────────────────────────────────────────────────────────┐   │
 │  │  if candidates.len() > 5:                                           │   │
-│  │      // 候选太多，减少每个候选的 detail                              │   │
-│  │      只包含 title，不包含 summary                                   │   │
+│  │      // Too many candidates, reduce detail per candidate            │   │
+│  │      Include only title, exclude summary                            │   │
 │  │                                                                     │   │
 │  │  if depth > 3:                                                      │   │
-│  │      // 深层搜索，减少 TOC 范围                                      │   │
-│  │      只显示当前层和子层                                              │   │
+│  │      // Deep search, reduce TOC range                               │   │
+│  │      Show only current layer and child layers                        │   │
 │  └─────────────────────────────────────────────────────────────────────┘   │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -366,91 +368,91 @@ Step 3: 返回决策
 
 ---
 
-## 2. 介入点详细设计
+## 2. Intervention Point Detailed Design
 
-### 2.1 介入点类型
+### 2.1 Intervention Point Types
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                          Pilot 介入点                                        │
+│                          Pilot Intervention Points                          │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
 │  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │  START - 搜索开始                                                    │   │
+│  │  START - Search Start                                               │   │
 │  ├─────────────────────────────────────────────────────────────────────┤   │
-│  │  时机: 搜索算法开始前                                                 │   │
-│  │  任务: 理解查询意图，确定搜索起点和优先方向                             │   │
-│  │  输入: query, tree (ToC view)                                        │   │
-│  │  输出: entry_points, initial_direction, confidence                   │   │
-│  │  配置: guide_at_start: bool                                          │   │
+│  │  Timing: Before search algorithm starts                             │   │
+│  │  Task: Understand query intent, determine entry points and priority  │   │
+│  │  Input: query, tree (ToC view)                                      │   │
+│  │  Output: entry_points, initial_direction, confidence                │   │
+│  │  Config: guide_at_start: bool                                        │   │
 │  └─────────────────────────────────────────────────────────────────────┘   │
 │                                                                             │
 │  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │  FORK - 分叉路口                                                     │   │
+│  │  FORK - Fork in the Road                                            │   │
 │  ├─────────────────────────────────────────────────────────────────────┤   │
-│  │  时机: 当前节点有多个候选子节点时                                      │   │
-│  │  任务: 判断哪个分支更可能包含答案                                      │   │
-│  │  输入: path, candidates, query                                       │   │
-│  │  输出: ranked_candidates, direction, confidence                      │   │
-│  │  触发条件: candidates.len() > fork_threshold                         │   │
+│  │  Timing: When current node has multiple candidate child nodes       │   │
+│  │  Task: Determine which branch is more likely to contain the answer  │   │
+│  │  Input: path, candidates, query                                     │   │
+│  │  Output: ranked_candidates, direction, confidence                    │   │
+│  │  Trigger: candidates.len() > fork_threshold                         │   │
 │  └─────────────────────────────────────────────────────────────────────┘   │
 │                                                                             │
 │  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │  BACKTRACK - 回溯                                                    │   │
+│  │  BACKTRACK - Backtrack                                             │   │
 │  ├─────────────────────────────────────────────────────────────────────┤   │
-│  │  时机: Judge 判断内容不足，需要回溯时                                  │   │
-│  │  任务: 分析失败原因，建议新的搜索方向                                   │   │
-│  │  输入: failed_path, visited, query                                   │   │
-│  │  输出: alternative_branches, backtrack_reason                        │   │
-│  │  配置: guide_at_backtrack: bool                                      │   │
+│  │  Timing: When Judge determines content is insufficient, needs backtracking │
+│  │  Task: Analyze failure reason, suggest new search direction        │   │
+│  │  Input: failed_path, visited, query                                 │   │
+│  │  Output: alternative_branches, backtrack_reason                    │   │
+│  │  Config: guide_at_backtrack: bool                                   │   │
 │  └─────────────────────────────────────────────────────────────────────┘   │
 │                                                                             │
 │  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │  EVALUATE - 节点评估                                                  │   │
+│  │  EVALUATE - Node Evaluation                                        │   │
 │  ├─────────────────────────────────────────────────────────────────────┤   │
-│  │  时机: 需要判断当前节点是否包含答案时                                   │   │
-│  │  任务: 评估节点内容与查询的相关性                                       │   │
-│  │  输入: node_content, query                                           │   │
-│  │  输出: relevance_score, is_answer, reasoning                         │   │
-│  │  触发条件: 到达叶子节点或算法不确定时                                   │   │
+│  │  Timing: When needing to determine if current node contains answer │   │
+│  │  Task: Evaluate relevance of node content to query                  │   │
+│  │  Input: node_content, query                                         │   │
+│  │  Output: relevance_score, is_answer, reasoning                      │   │
+│  │  Trigger: Reaching leaf node or when algorithm is uncertain         │   │
 │  └─────────────────────────────────────────────────────────────────────┘   │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### 2.2 介入判断逻辑
+### 2.2 Intervention Judgment Logic
 
 ```rust
 impl Pilot for LlmPilot {
     fn should_intervene(&self, state: &SearchState<'_>) -> bool {
         let config = &self.config.intervention;
         
-        // 条件 1: 预算检查（最高优先级）
+        // Condition 1: Budget check (Highest priority)
         if !self.budget.can_call() {
             return false;
         }
         
-        // 条件 2: 候选数量超过阈值（分叉路口）
+        // Condition 2: Number of candidates exceeds threshold (Fork)
         if state.candidates.len() > config.fork_threshold {
             return true;
         }
         
-        // 条件 3: 候选分数接近（算法无法区分）
+        // Condition 3: Candidate scores are close (Algorithm cannot distinguish)
         if self.scores_are_close(state.candidates, state.tree, config.score_gap_threshold) {
             return true;
         }
         
-        // 条件 4: 当前分数过低（可能走错方向）
+        // Condition 4: Current score is too low (May be going the wrong way)
         if state.best_score < config.low_score_threshold {
             return true;
         }
         
-        // 条件 5: 回溯时且配置允许
+        // Condition 5: During backtracking and config allows
         if state.is_backtracking && self.config.guide_at_backtrack {
             return true;
         }
         
-        // 条件 6: 每层介入次数限制
+        // Condition 6: Intervention limit per level
         let level_calls = self.get_level_calls(state.depth);
         if level_calls >= config.max_interventions_per_level {
             return false;
@@ -460,7 +462,7 @@ impl Pilot for LlmPilot {
     }
 }
 
-/// 判断候选分数是否接近
+/// Check if candidate scores are close
 fn scores_are_close(&self, candidates: &[NodeId], tree: &DocumentTree, threshold: f32) -> bool {
     if candidates.len() < 2 {
         return false;
@@ -477,29 +479,29 @@ fn scores_are_close(&self, candidates: &[NodeId], tree: &DocumentTree, threshold
 }
 ```
 
-### 2.3 介入配置
+### 2.3 Intervention Configuration
 
 ```rust
-/// 介入配置
+/// Intervention Configuration
 #[derive(Debug, Clone)]
 pub struct InterventionConfig {
-    /// 候选数量阈值（超过此值考虑介入）
+    /// Candidate count threshold (Consider intervention if exceeded)
     pub fork_threshold: usize,
-    /// 分数差距阈值（差距小于此值时介入）
+    /// Score gap threshold (Intervene if gap is smaller than this)
     pub score_gap_threshold: f32,
-    /// 低分阈值（最高分低于此值时介入）
+    /// Low score threshold (Intervene if highest score is lower than this)
     pub low_score_threshold: f32,
-    /// 每层最大介入次数
+    /// Max interventions per level
     pub max_interventions_per_level: usize,
 }
 
 impl Default for InterventionConfig {
     fn default() -> Self {
         Self {
-            fork_threshold: 3,           // 3 个以上候选时介入
-            score_gap_threshold: 0.15,   // 分数差距 < 0.15 时介入
-            low_score_threshold: 0.3,    // 分数 < 0.3 时介入
-            max_interventions_per_level: 2,  // 每层最多介入 2 次
+            fork_threshold: 3,           // Intervene when > 3 candidates
+            score_gap_threshold: 0.15,  // Intervene if score gap < 0.15
+            low_score_threshold: 0.3,    // Intervene if score < 0.3
+            max_interventions_per_level: 2,  // Max 2 interventions per level
         }
     }
 }
@@ -507,78 +509,78 @@ impl Default for InterventionConfig {
 
 ---
 
-## 3. Fallback 机制
+## 3. Fallback Mechanism
 
-### 3.1 降级层级
+### 3.1 Fallback Levels
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                          Fallback 降级层级                                   │
+│                          Fallback Levels                                    │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
-│  Level 0: 正常 LLM 调用                                                      │
+│  Level 0: Normal LLM Call                                                   │
 │  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │  条件: 预算充足，LLM 服务可用                                         │   │
-│  │  行为: 正常调用 LLM，获取决策                                          │   │
+│  │  Condition: Budget sufficient, LLM service available                │   │
+│  │  Behavior: Normal LLM call, get decision                           │   │
 │  └─────────────────────────────────────────────────────────────────────┘   │
-│                          │ 失败                                             │
-│                          ▼                                                  │
-│  Level 1: 重试                                                              │
+│                          │ Failure                                        │
+│                          ▼                                                │
+│  Level 1: Retry                                                           │
 │  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │  条件: 网络错误、超时、rate limit                                     │   │
-│  │  行为: 指数退避重试，最多 3 次                                         │   │
-│  │  参数: initial_delay=1s, max_delay=10s, max_attempts=3              │   │
+│  │  Condition: Network error, timeout, rate limit                      │   │
+│  │  Behavior: Exponential backoff retry, max 3 times                  │   │
+│  │  Params: initial_delay=1s, max_delay=10s, max_attempts=3           │   │
 │  └─────────────────────────────────────────────────────────────────────┘   │
-│                          │ 失败                                             │
-│                          ▼                                                  │
-│  Level 2: 简化上下文                                                        │
+│                          │ Failure                                        │
+│                          ▼                                                │
+│  Level 2: Simplify Context                                                │
 │  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │  条件: token 超限、上下文过长                                         │   │
-│  │  行为: 减少上下文信息，只保留核心内容                                   │   │
-│  │  策略: 移除 ToC，只保留当前节点和候选标题                               │   │
+│  │  Condition: Token limit exceeded, context too long                  │   │
+│  │  Behavior: Reduce context info, keep only core content              │   │
+│  │  Strategy: Remove ToC, keep only current node and candidate titles  │   │
 │  └─────────────────────────────────────────────────────────────────────┘   │
-│                          │ 失败                                             │
-│                          ▼                                                  │
-│  Level 3: 纯算法模式                                                        │
+│                          │ Failure                                        │
+│                          ▼                                                │
+│  Level 3: Pure Algorithm Mode                                             │
 │  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │  条件: LLM 完全不可用、预算耗尽                                        │   │
-│  │  行为: 完全依赖算法打分，不调用 LLM                                     │   │
-│  │  结果: 使用 NodeScorer 的关键词匹配                                    │   │
+│  │  Condition: LLM completely unavailable, budget exhausted            │   │
+│  │  Behavior: Rely entirely on algorithm scoring, no LLM calls         │   │
+│  │  Result: Use NodeScorer keyword matching                            │   │
 │  └─────────────────────────────────────────────────────────────────────┘   │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### 3.2 Fallback 策略定义
+### 3.2 Fallback Strategy Definition
 
 ```rust
-/// 降级策略
+/// Fallback Strategy
 #[derive(Debug, Clone)]
 pub enum FallbackStrategy {
-    /// 重试策略
+    /// Retry strategy
     Retry {
         max_attempts: usize,
         backoff: BackoffPolicy,
     },
-    /// 简化上下文
+    /// Simplify context
     SimplifyContext {
         remove_toc: bool,
         max_candidates: usize,
     },
-    /// 使用算法替代
+    /// Use algorithm instead
     UseAlgorithm,
-    /// 返回默认决策
+    /// Return default decision
     ReturnDefault,
 }
 
-/// 退避策略
+/// Backoff Policy
 #[derive(Debug, Clone)]
 pub enum BackoffPolicy {
-    /// 固定间隔
+    /// Fixed interval
     Fixed { delay_ms: u64 },
-    /// 线性增长
+    /// Linear increase
     Linear { initial_ms: u64, increment_ms: u64 },
-    /// 指数增长
+    /// Exponential increase
     Exponential { initial_ms: u64, multiplier: f64, max_ms: u64 },
 }
 
@@ -593,20 +595,20 @@ impl Default for BackoffPolicy {
 }
 ```
 
-### 3.3 FallbackManager 实现
+### 3.3 FallbackManager Implementation
 
 ```rust
-/// 降级管理器
+/// Fallback Manager
 pub struct FallbackManager {
     config: FallbackConfig,
-    /// 当前降级级别
+    /// Current fallback level
     current_level: AtomicU8,
-    /// 连续失败次数
+    /// Consecutive failure count
     consecutive_failures: AtomicUsize,
 }
 
 impl FallbackManager {
-    /// 执行带降级的调用
+    /// Execute with fallback
     pub async fn execute_with_fallback<F, T>(
         &self,
         operation: F,
@@ -619,7 +621,7 @@ impl FallbackManager {
         loop {
             match level {
                 0 => {
-                    // Level 0: 正常调用
+                    // Level 0: Normal call
                     match operation().await {
                         Ok(result) => {
                             self.on_success();
@@ -636,7 +638,7 @@ impl FallbackManager {
                     }
                 }
                 1 => {
-                    // Level 1: 重试
+                    // Level 1: Retry
                     match self.retry_operation(&operation).await {
                         Ok(result) => {
                             self.on_success();
@@ -649,12 +651,12 @@ impl FallbackManager {
                     }
                 }
                 2 => {
-                    // Level 2: 简化上下文
-                    // 由调用方处理，返回特定错误
+                    // Level 2: Simplify context
+                    // Handled by caller, return specific error
                     return Err(FallbackError::SimplifyContextRequired);
                 }
                 3 => {
-                    // Level 3: 纯算法模式
+                    // Level 3: Pure algorithm mode
                     return Err(FallbackError::AlgorithmFallback);
                 }
                 _ => unreachable!(),
@@ -662,7 +664,7 @@ impl FallbackManager {
         }
     }
     
-    /// 重试操作
+    /// Retry operation
     async fn retry_operation<F, T>(&self, operation: &F) -> Result<T, PilotError>
     where
         F: Fn() -> std::pin::Pin<Box<dyn Future<Output = Result<T, PilotError>> + Send>>,
@@ -688,7 +690,7 @@ impl FallbackManager {
     
     fn on_success(&self) {
         self.consecutive_failures.store(0, Ordering::Relaxed);
-        // 逐渐恢复到更高级别
+        // Gradually recover to higher level
         let current = self.current_level.load(Ordering::Relaxed);
         if current > 0 {
             self.current_level.fetch_sub(1, Ordering::Relaxed);
@@ -697,7 +699,7 @@ impl FallbackManager {
     
     fn on_failure(&self) {
         let failures = self.consecutive_failures.fetch_add(1, Ordering::Relaxed);
-        // 连续失败 3 次后升级降级级别
+        // Escalate fallback level after 3 consecutive failures
         if failures >= 2 {
             let current = self.current_level.load(Ordering::Relaxed);
             if current < 3 {
@@ -715,55 +717,55 @@ impl FallbackManager {
 
 ---
 
-## 4. Token 消耗衡量
+## 4. Token Consumption Measurement
 
-### 4.1 预算配置
+### 4.1 Budget Configuration
 
 ```rust
-/// 预算配置
+/// Budget Configuration
 #[derive(Debug, Clone)]
 pub struct BudgetConfig {
-    /// 单次检索最大 token 数
+    /// Max tokens per single query retrieval
     pub max_tokens_per_query: usize,
-    /// 单次 LLM 调用最大 token 数
+    /// Max tokens per single LLM call
     pub max_tokens_per_call: usize,
-    /// 单次检索最大 LLM 调用次数
+    /// Max LLM calls per single query
     pub max_calls_per_query: usize,
-    /// 每层（深度）最大调用次数
+    /// Max calls per level (depth)
     pub max_calls_per_level: usize,
-    /// 是否硬性限制（true: 超预算直接拒绝；false: 尝试继续）
+    /// Hard limit flag (true: reject if over budget; false: try to continue)
     pub hard_limit: bool,
 }
 
 impl Default for BudgetConfig {
     fn default() -> Self {
         Self {
-            max_tokens_per_query: 2000,   // 单次检索最多 2000 tokens
-            max_tokens_per_call: 500,     // 单次调用最多 500 tokens
-            max_calls_per_query: 5,       // 最多调用 5 次
-            max_calls_per_level: 2,       // 每层最多 2 次
+            max_tokens_per_query: 2000,   // Max 2000 tokens per query
+            max_tokens_per_call: 500,     // Max 500 tokens per call
+            max_calls_per_query: 5,       // Max 5 calls
+            max_calls_per_level: 2,      // Max 2 calls per level
             hard_limit: true,
         }
     }
 }
 ```
 
-### 4.2 预算控制器
+### 4.2 Budget Controller
 
 ```rust
-/// 预算控制器
+/// Budget Controller
 pub struct BudgetController {
     config: BudgetConfig,
-    /// 已使用的 token 数
+    /// Tokens used
     tokens_used: AtomicUsize,
-    /// 已调用的次数
+    /// Calls made
     calls_made: AtomicUsize,
-    /// 每层调用次数
+    /// Calls per level
     level_calls: RwLock<HashMap<usize, usize>>,
 }
 
 impl BudgetController {
-    /// 创建新的预算控制器
+    /// Create new budget controller
     pub fn new(config: BudgetConfig) -> Self {
         Self {
             config,
@@ -773,7 +775,7 @@ impl BudgetController {
         }
     }
     
-    /// 检查是否可以调用 LLM
+    /// Check if LLM can be called
     pub fn can_call(&self) -> bool {
         let calls = self.calls_made.load(Ordering::Relaxed);
         let tokens = self.tokens_used.load(Ordering::Relaxed);
@@ -782,7 +784,7 @@ impl BudgetController {
             && tokens < self.config.max_tokens_per_query
     }
     
-    /// 检查特定层是否可以调用
+    /// Check if call is possible at specific level
     pub fn can_call_at_level(&self, level: usize) -> bool {
         if !self.can_call() {
             return false;
@@ -793,39 +795,39 @@ impl BudgetController {
         calls < self.config.max_calls_per_level
     }
     
-    /// 预估调用成本
+    /// Estimate call cost
     pub fn estimate_cost(&self, context: &str) -> usize {
-        // 使用 tiktoken 或简单的字符估算
-        // 粗略估算：1 token ≈ 4 chars (英文) 或 1.5 chars (中文)
+        // Use tiktoken or simple character estimation
+        // Rough estimate: 1 token ≈ 4 chars (English) or 1.5 chars (Chinese)
         let char_count = context.chars().count();
-        // 保守估计，按中文计算
-        char_count / 2 + 100  // +100 为输出预留
+        // Conservative estimate, based on Chinese
+        char_count / 2 + 100  // +100 reserved for output
     }
     
-    /// 检查预估成本是否在预算内
+    /// Check if estimated cost is within budget
     pub fn can_afford(&self, estimated_cost: usize) -> bool {
         let remaining = self.remaining_budget();
         estimated_cost <= remaining && estimated_cost <= self.config.max_tokens_per_call
     }
     
-    /// 获取剩余预算
+    /// Get remaining budget
     pub fn remaining_budget(&self) -> usize {
         let used = self.tokens_used.load(Ordering::Relaxed);
         self.config.max_tokens_per_query.saturating_sub(used)
     }
     
-    /// 记录 token 使用
+    /// Record token usage
     pub fn record_usage(&self, input_tokens: usize, output_tokens: usize, level: usize) {
         let total = input_tokens + output_tokens;
         self.tokens_used.fetch_add(total, Ordering::Relaxed);
         self.calls_made.fetch_add(1, Ordering::Relaxed);
         
-        // 记录层级调用
+        // Record level calls
         let mut level_calls = self.level_calls.write().unwrap();
         *level_calls.entry(level).or_insert(0) += 1;
     }
     
-    /// 获取使用统计
+    /// Get usage statistics
     pub fn get_usage_stats(&self) -> BudgetUsage {
         BudgetUsage {
             tokens_used: self.tokens_used.load(Ordering::Relaxed),
@@ -835,7 +837,7 @@ impl BudgetController {
         }
     }
     
-    /// 重置（新查询开始时）
+    /// Reset (when new query starts)
     pub fn reset(&self) {
         self.tokens_used.store(0, Ordering::Relaxed);
         self.calls_made.store(0, Ordering::Relaxed);
@@ -843,7 +845,7 @@ impl BudgetController {
     }
 }
 
-/// 预算使用统计
+/// Budget Usage Statistics
 #[derive(Debug, Clone)]
 pub struct BudgetUsage {
     pub tokens_used: usize,
@@ -859,42 +861,42 @@ impl BudgetUsage {
 }
 ```
 
-### 4.3 Token 消耗流程
+### 4.3 Token Consumption Flow
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                        Token 消耗流程                                        │
+│                        Token Consumption Flow                               │
 └─────────────────────────────────────────────────────────────────────────────┘
 
-LLM 调用前:
+Before LLM Call:
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │  1. BudgetController.can_call()                                             │
-│     └─ 检查: calls_made < max_calls_per_query                               │
-│     └─ 检查: tokens_used < max_tokens_per_query                             │
+│     └─ Check: calls_made < max_calls_per_query                              │
+│     └─ Check: tokens_used < max_tokens_per_query                           │
 │                                                                             │
 │  2. BudgetController.can_call_at_level(depth)                               │
-│     └─ 检查: level_calls[depth] < max_calls_per_level                       │
+│     └─ Check: level_calls[depth] < max_calls_per_level                     │
 │                                                                             │
 │  3. BudgetController.estimate_cost(context)                                 │
-│     └─ 预估: input_tokens + output_tokens (预留)                            │
+│     └─ Estimate: input_tokens + output_tokens (reserved)                    │
 │                                                                             │
 │  4. BudgetController.can_afford(estimated_cost)                             │
-│     └─ 检查: estimated_cost <= remaining_budget                             │
-│     └─ 检查: estimated_cost <= max_tokens_per_call                          │
+│     └─ Check: estimated_cost <= remaining_budget                            │
+│     └─ Check: estimated_cost <= max_tokens_per_call                         │
 │                                                                             │
-│  决策: 全部通过 → 继续调用；任一失败 → 跳过或降级                              │
+│  Decision: All pass → Continue call; Any fail → Skip or Fallback            │
 └─────────────────────────────────────────────────────────────────────────────┘
                                     │
                                     ▼
-LLM 调用:
+LLM Call:
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│  LLM Client 返回:                                                           │
-│  - usage.prompt_tokens (输入 tokens)                                        │
-│  - usage.completion_tokens (输出 tokens)                                    │
+│  LLM Client Returns:                                                        │
+│  - usage.prompt_tokens (Input tokens)                                       │
+│  - usage.completion_tokens (Output tokens)                                 │
 └─────────────────────────────────────────────────────────────────────────────┘
                                     │
                                     ▼
-LLM 调用后:
+After LLM Call:
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │  BudgetController.record_usage(input_tokens, output_tokens, level)          │
 │  └─ tokens_used += input_tokens + output_tokens                             │
@@ -910,157 +912,157 @@ LLM 调用后:
 
 ---
 
-## 5. 职责划分
+## 5. Responsibility Division
 
-### 5.1 模块职责
+### 5.1 Module Responsibilities
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                          Pilot 模块职责划分                                  │
+│                          Pilot Module Responsibilities                      │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
 │  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │  QueryAnalyzer - 查询分析器                                          │   │
+│  │  QueryAnalyzer - Query Analyzer                                      │   │
 │  ├─────────────────────────────────────────────────────────────────────┤   │
-│  │  职责:                                                              │   │
-│  │  • 分析查询复杂度（简单/中等/复杂）                                   │   │
-│  │  • 提取关键词和实体                                                  │   │
-│  │  • 识别查询意图（事实查询/对比/解释/操作指南）                         │   │
-│  │  • 判断是否需要 Pilot 介入                                           │   │
-│  │                                                                     │   │
-│  │  输入: query: String                                                │   │
-│  │  输出: QueryAnalysis { complexity, keywords, intent, needs_pilot }  │   │
-│  │                                                                     │   │
-│  │  实现策略:                                                          │   │
-│  │  • 轻量级：基于规则（关键词计数、句子结构）                            │   │
-│  │  • 重量级：LLM 分析（复杂查询）                                       │   │
+│  │  Responsibilities:                                                   │   │
+│  │  • Analyze query complexity (Simple/Medium/Complex)                  │   │
+│  │  • Extract keywords and entities                                     │   │
+│  │  • Identify query intent (Fact/Compare/Explain/How-To)              │   │
+│  │  • Determine if Pilot intervention is needed                         │   │
+│  │                                                                      │   │
+│  │  Input: query: String                                                │   │
+│  │  Output: QueryAnalysis { complexity, keywords, intent, needs_pilot } │   │
+│  │                                                                      │   │
+│  │  Implementation Strategy:                                            │   │
+│  │  • Lightweight: Rule-based (keyword count, sentence structure)       │   │
+│  │  • Heavyweight: LLM analysis (complex queries)                       │   │
 │  └─────────────────────────────────────────────────────────────────────┘   │
 │                                                                             │
 │  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │  ContextBuilder - 上下文构建器                                       │   │
+│  │  ContextBuilder - Context Builder                                    │   │
 │  ├─────────────────────────────────────────────────────────────────────┤   │
-│  │  职责:                                                              │   │
-│  │  • 构建发送给 LLM 的上下文信息                                       │   │
-│  │  • 提取当前路径的节点信息（标题、摘要、深度）                          │   │
-│  │  • 构建候选节点的描述                                                │   │
-│  │  • 生成 ToC 视图（从当前节点视角）                                    │   │
-│  │  • 控制 token 预算分配                                               │   │
-│  │                                                                     │   │
-│  │  输入: tree, path, candidates, query                                │   │
-│  │  输出: PilotContext { path_info, candidates_info, toc_view }        │   │
-│  │                                                                     │   │
-│  │  Token 预算分配:                                                    │   │
-│  │  • path_info: 20%                                                   │   │
-│  │  • candidates_info: 50%                                             │   │
-│  │  • toc_view: 30%                                                    │   │
+│  │  Responsibilities:                                                   │   │
+│  │  • Build context information to send to LLM                          │   │
+│  │  • Extract node information (title, summary, depth) of current path  │   │
+│  │  • Build descriptions of candidate nodes                             │   │
+│  │  • Generate ToC view (from current node perspective)                 │   │
+│  │  • Control token budget allocation                                   │   │
+│  │                                                                      │   │
+│  │  Input: tree, path, candidates, query                               │   │
+│  │  Output: PilotContext { path_info, candidates_info, toc_view }       │   │
+│  │                                                                      │   │
+│  │  Token Budget Allocation:                                            │   │
+│  │  • path_info: 20%                                                    │   │
+│  │  • candidates_info: 50%                                              │   │
+│  │  • toc_view: 30%                                                     │   │
 │  └─────────────────────────────────────────────────────────────────────┘   │
 │                                                                             │
 │  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │  PromptBuilder - 提示词构建器                                        │   │
+│  │  PromptBuilder - Prompt Builder                                     │   │
 │  ├─────────────────────────────────────────────────────────────────────┤   │
-│  │  职责:                                                              │   │
-│  │  • 根据场景选择合适的 prompt 模板                                    │   │
-│  │  • 填充模板变量                                                      │   │
-│  │  • 管理 system prompt 和 user prompt                                │   │
-│  │  • 支持多语言                                                        │   │
-│  │                                                                     │   │
-│  │  场景类型:                                                          │   │
-│  │  • START: 搜索开始，确定起点                                        │   │
-│  │  • FORK: 分叉路口，选择分支                                         │   │
-│  │  • BACKTRACK: 回溯时，分析失败原因                                   │   │
-│  │  • EVALUATE: 评估节点是否包含答案                                    │   │
-│  │                                                                     │   │
-│  │  设计要点:                                                          │   │
-│  │  • 模板可配置（用户可自定义）                                        │   │
-│  │  • 包含 few-shot 示例（提高质量）                                    │   │
-│  │  • 输出格式明确（JSON schema）                                       │   │
+│  │  Responsibilities:                                                   │   │
+│  │  • Select appropriate prompt template based on scenario              │   │
+│  │  • Fill template variables                                           │   │
+│  │  • Manage system prompt and user prompt                              │   │
+│  │  • Support multiple languages                                        │   │
+│  │                                                                      │   │
+│  │  Scenario Types:                                                     │   │
+│  │  • START: Search start, determine entry point                        │   │
+│  │  • FORK: Fork in road, choose branch                                │   │
+│  │  • BACKTRACK: When backtracking, analyze failure reason              │   │
+│  │  • EVALUATE: Evaluate if node contains answer                        │   │
+│  │                                                                      │   │
+│  │  Design Points:                                                      │   │
+│  │  • Configurable templates (user-customizable)                        │   │
+│  │  • Include few-shot examples (improve quality)                       │   │
+│  │  • Clear output format (JSON schema)                                 │   │
 │  └─────────────────────────────────────────────────────────────────────┘   │
 │                                                                             │
 │  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │  DecisionEngine - 决策引擎                                           │   │
+│  │  DecisionEngine - Decision Engine                                    │   │
 │  ├─────────────────────────────────────────────────────────────────────┤   │
-│  │  职责:                                                              │   │
-│  │  • 判断何时需要调用 LLM（should_intervene）                           │   │
-│  │  • 协调 LLM 调用                                                    │   │
-│  │  • 融合算法打分和 LLM 建议                                          │   │
-│  │  • 做出最终决策                                                      │   │
-│  │                                                                     │   │
-│  │  决策逻辑:                                                          │   │
+│  │  Responsibilities:                                                   │   │
+│  │  • Determine when to call LLM (should_intervene)                     │   │
+│  │  • Coordinate LLM calls                                              │   │
+│  │  • Fuse algorithm scoring and LLM suggestions                        │   │
+│  │  • Make final decision                                               │   │
+│  │                                                                      │   │
+│  │  Decision Logic:                                                     │   │
 │  │  ┌─────────────────────────────────────────────────────────────┐    │   │
 │  │  │  should_intervene(state) -> bool                             │    │   │
 │  │  │                                                              │    │   │
-│  │  │  // 策略 1: 分叉路口                                          │    │   │
+│  │  │  // Strategy 1: Fork in road                                │    │   │
 │  │  │  if candidates.len() > config.fork_threshold { return true } │    │   │
 │  │  │                                                              │    │   │
-│  │  │  // 策略 2: 算法不确定                                        │    │   │
+│  │  │  // Strategy 2: Algorithm uncertain                          │    │   │
 │  │  │  if scores_are_close(candidates) { return true }             │    │   │
 │  │  │                                                              │    │   │
-│  │  │  // 策略 3: 低置信度                                          │    │   │
+│  │  │  // Strategy 3: Low confidence                               │    │   │
 │  │  │  if best_score < config.low_confidence_threshold { return true }│  │
 │  │  │                                                              │    │   │
-│  │  │  // 策略 4: 预算检查                                          │    │   │
+│  │  │  // Strategy 4: Budget check                                 │    │   │
 │  │  │  if budget_exhausted() { return false }                      │    │   │
 │  │  │                                                              │    │   │
 │  │  │  return false                                                │    │   │
 │  │  └─────────────────────────────────────────────────────────────┘    │   │
-│  │                                                                     │   │
-│  │  融合逻辑:                                                          │   │
+│  │                                                                      │   │
+│  │  Fusion Logic:                                                       │   │
 │  │  ┌─────────────────────────────────────────────────────────────┐    │   │
 │  │  │  final_score = α * algo_score + β * llm_confidence          │    │   │
 │  │  │                                                              │    │   │
-│  │  │  // α 和 β 根据场景动态调整                                   │    │   │
-│  │  │  // - LLM 高置信度时 β 更高                                   │    │   │
-│  │  │  // - 算法高分且 LLM 低置信度时 α 更高                         │    │   │
+│  │  │  // α and β dynamically adjust based on scenario            │    │   │
+│  │  │  // - Higher β when LLM confidence is high                  │    │   │
+│  │  │  // - Higher α when algorithm score is high and LLM confidence is low││
 │  │  └─────────────────────────────────────────────────────────────┘    │   │
-│  │                                                                     │   │
+│  │                                                                      │   │
 │  └─────────────────────────────────────────────────────────────────────┘   │
 │                                                                             │
 │  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │  ResponseParser - 响应解析器                                         │   │
+│  │  ResponseParser - Response Parser                                   │   │
 │  ├─────────────────────────────────────────────────────────────────────┤   │
-│  │  职责:                                                              │   │
-│  │  • 解析 LLM 返回的 JSON                                             │   │
-│  │  • 处理格式错误                                                      │   │
-│  │  • 提取结构化信息（ranked_candidates, direction, confidence）         │   │
-│  │  • 验证响应有效性                                                    │   │
-│  │                                                                     │   │
-│  │  解析策略:                                                          │   │
+│  │  Responsibilities:                                                   │   │
+│  │  • Parse JSON returned by LLM                                        │   │
+│  │  • Handle format errors                                              │   │
+│  │  • Extract structured information (ranked_candidates, direction, confidence)│
+│  │  • Validate response effectiveness                                   │   │
+│  │                                                                      │   │
+│  │  Parsing Strategy:                                                   │   │
 │  │  ┌─────────────────────────────────────────────────────────────┐    │   │
 │  │  │  parse(response: String) -> Result<PilotDecision>            │    │   │
 │  │  │                                                              │    │   │
-│  │  │  // 优先级 1: JSON 解析                                       │    │   │
+│  │  │  // Priority 1: JSON parsing                                 │    │   │
 │  │  │  if let Ok(json) = parse_json(response) { return json }      │    │   │
 │  │  │                                                              │    │   │
-│  │  │  // 优先级 2: 正则提取                                        │    │   │
+│  │  │  // Priority 2: Regex extraction                             │    │   │
 │  │  │  if let Some(data) = extract_by_regex(response) { return data }│   │
 │  │  │                                                              │    │   │
-│  │  │  // 优先级 3: 默认值                                          │    │   │
+│  │  │  // Priority 3: Default value                                │    │   │
 │  │  │  return PilotDecision::default()                             │    │   │
 │  │  └─────────────────────────────────────────────────────────────┘    │   │
-│  │                                                                     │   │
+│  │                                                                      │   │
 │  └─────────────────────────────────────────────────────────────────────┘   │
 │                                                                             │
 │                                                                             │
 │  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │  BudgetController - 预算控制器                                       │   │
+│  │  BudgetController - Budget Controller                               │   │
 │  ├─────────────────────────────────────────────────────────────────────┤   │
-│  │  职责:                                                              │   │
-│  │  • 追踪 token 消耗                                                  │   │
-│  │  • 控制 LLM 调用次数                                                │   │
-│  │  • 预估调用成本                                                     │   │
-│  │  • 强制执行预算限制     
-│  │  │                                                              │    │   │                                            │   │
-│  │  配置:                                                              │   │
+│  │  Responsibilities:                                                   │   │
+│  │  • Track token consumption                                          │   │
+│  │  • Control LLM call frequency                                       │   │
+│  │  • Estimate call cost                                               │   │
+│  │  • Enforce budget limits                                            │   │
+│  │                                                                      │   │
+│  │  Configuration:                                                     │   │
 │  │  ┌─────────────────────────────────────────────────────────────┐    │   │
 │  │  │  BudgetConfig {                                             │    │   │
-│  │  │    max_tokens_per_query: usize,    // 单次检索总预算         │    │   │
-│  │  │    max_tokens_per_call: usize,     // 单次调用预算           │    │   │
-│  │  │    max_calls_per_query: usize,     // 最大调用次数           │    │   │
-│  │  │    max_calls_per_level: usize,     // 每层最大调用           │    │   │
-│  │  │    hard_limit: bool,               // 是否硬性限制           │    │   │
+│  │  │    max_tokens_per_query: usize,    // Total budget per query│    │   │
+│  │  │    max_tokens_per_call: usize,     // Budget per call       │    │   │
+│  │  │    max_calls_per_query: usize,     // Max calls per query   │    │   │
+│  │  │    max_calls_per_level: usize,     // Max calls per level   │    │   │
+│  │  │    hard_limit: bool,               // Whether hard limit    │    │   │
 │  │  │  }                                                          │    │   │
 │  │  └─────────────────────────────────────────────────────────────┘    │   │
-│  │  接口:                                                              │   │
+│  │  Interface:                                                         │   │
 │  │  • can_call() -> bool                                               │   │
 │  │  • can_call_at_level(level) -> bool                                 │   │
 │  │  • estimate_cost(context) -> usize                                  │   │
@@ -1070,151 +1072,149 @@ LLM 调用后:
 │  └─────────────────────────────────────────────────────────────────────┘   │
 │                                                                             │
 │  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │  FallbackManager - 降级管理器                                        │   │
+│  │  FallbackManager - Fallback Manager                                 │   │
 │  ├─────────────────────────────────────────────────────────────────────┤   │
-│  │  职责:                                                              │   │
-│  │  • 处理 LLM 调用失败                                                │   │
-│  │  • 提供降级策略                                                     │   │
-│  │  • 记录失败原因                                                     │   │
-│  │  • 自动恢复机制                                                     │   │
-│  │                                                                     │   │
-│  │  降级层级:                                                          │   │
+│  │  Responsibilities:                                                   │   │
+│  │  • Handle LLM call failures                                          │   │
+│  │  • Provide fallback strategies                                       │   │
+│  │  • Record failure reasons                                            │   │
+│  │  • Automatic recovery mechanism                                      │   │
+│  │                                                                      │   │
+│  │  Fallback Levels:                                                    │   │
 │  │  ┌─────────────────────────────────────────────────────────────┐    │   │
-│  │  │  Level 0: 正常 LLM 调用                                     │    │   │
-│  │  │     ↓ 失败                                                  │    │   │
-│  │  │  Level 1: 重试 (最多 3 次，指数退避)                         │    │   │
-│  │  │     ↓ 失败                                                  │    │   │
-│  │  │  Level 2: 简化 prompt (减少上下文)                          │    │   │
-│  │  │     ↓ 失败                                                  │    │   │
-│  │  │  Level 3: 纯算法模式 (完全降级)                              │    │   │
+│  │  │  Level 0: Normal LLM call                                   │    │   │
+│  │  │     ↓ Failure                                               │    │   │
+│  │  │  Level 1: Retry (max 3 times, exponential backoff)         │    │   │
+│  │  │     ↓ Failure                                               │    │   │
+│  │  │  Level 2: Simplify prompt (reduce context)                 │    │   │
+│  │  │     ↓ Failure                                               │    │   │
+│  │  │  Level 3: Pure algorithm mode (complete fallback)          │    │   │
 │  │  └─────────────────────────────────────────────────────────────┘    │   │
-│  │                                                                     │   │
-│  │  降级策略:                                                          │   │
+│  │                                                                      │   │
+│  │  Fallback Strategies:                                                │   │
 │  │  ┌─────────────────────────────────────────────────────────────┐    │   │
 │  │  │  enum FallbackStrategy {                                    │    │   │
 │  │  │    Retry { max_attempts: usize, backoff: BackoffPolicy },   │    │   │
-│  │  │    SimplifyContext,  // 减少上下文信息                       │    │   │
-│  │  │    UseAlgorithm,     // 使用算法打分                         │    │   │
-│  │  │    ReturnDefault,    // 返回默认决策                         │    │   │
+│  │  │    SimplifyContext,  // Reduce context info                 │    │   │
+│  │  │    UseAlgorithm,     // Use algorithm scoring               │    │   │
+│  │  │    ReturnDefault,    // Return default decision             │    │   │
 │  │  │  }                                                          │    │   │
 │  │  └─────────────────────────────────────────────────────────────┘    │   │
-│  │                                                                     │   │
+│  │                                                                      │   │
 │  └─────────────────────────────────────────────────────────────────────┘   │
 │                                                                             │
 │  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │  PolicyManager - 策略管理器                                          │   │
+│  │  PolicyManager - Policy Manager                                     │   │
 │  ├─────────────────────────────────────────────────────────────────────┤   │
-│  │  职责:                                                              │   │
-│  │  • 管理介入策略配置                                                 │   │
-│  │  • 支持多种运行模式                                                 │   │
-│  │  • 动态调整参数（可选）                                              │   │
-│  │                                                                     │   │
-│  │  策略模式:                                                          │   │
+│  │  Responsibilities:                                                   │   │
+│  │  • Manage intervention strategy configuration                       │   │
+│  │  • Support multiple operation modes                                │   │
+│  │  • Dynamic parameter adjustment (optional)                          │   │
+│  │                                                                      │   │
+│  │  Policy Modes:                                                       │   │
 │  │  ┌─────────────────────────────────────────────────────────────┐    │   │
 │  │  │  enum PilotMode {                                           │    │   │
-│  │  │    Aggressive,   // 激进模式：频繁调用 LLM                   │    │   │
-│  │  │    Balanced,     // 平衡模式：按需调用 (默认)                 │    │   │
-│  │  │    Conservative, // 保守模式：尽量少调用                     │    │   │
-│  │  │    AlgorithmOnly,// 纯算法模式：不调用 LLM                   │    │   │
+│  │  │    Aggressive,   // Aggressive mode: frequent LLM calls     │    │   │
+│  │  │    Balanced,     // Balanced mode: call as needed (default) │    │   │
+│  │  │    Conservative, // Conservative mode: minimize LLM calls   │    │   │
+│  │  │    AlgorithmOnly,// Pure algorithm mode: no LLM calls       │    │   │
 │  │  │  }                                                          │    │   │
 │  │  └─────────────────────────────────────────────────────────────┘    │   │
-│  │                                                                     │   │
-│  │  参数调整:                                                          │   │
+│  │                                                                      │   │
+│  │  Parameter Adjustment:                                               │   │
 │  │  ┌─────────────────────────────────────────────────────────────┐    │   │
-│  │  │  // 根据历史效果动态调整                                      │    │   │
-│  │  │  fn adjust_threshold(&mut self, performance: &PerformanceMetrics) {│  │
-│  │  │    // 如果 LLM 建议准确率高，降低介入阈值                     │    │   │
+│  │  │  // Dynamic adjustment based on historical performance      │    │   │
+│  │  │  fn adjust_threshold(&mut self, performance: &PerformanceMetrics) {│
+│  │  │    // If LLM suggestion accuracy is high, lower intervention threshold│
 │  │  │    if performance.llm_accuracy > 0.8 {                      │    │   │
 │  │  │      self.fork_threshold = 2;                               │    │   │
 │  │  │    }                                                        │    │   │
 │  │  │  }                                                          │    │   │
 │  │  └─────────────────────────────────────────────────────────────┘    │   │
-│  │                                                                     │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                             │
+│  │                                                                      │   │
 │  └─────────────────────────────────────────────────────────────────────┘   │
 │                                                                             │
 │  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │  MetricsCollector - 指标收集器                                       │   │
+│  │  MetricsCollector - Metrics Collector                               │   │
 │  ├─────────────────────────────────────────────────────────────────────┤   │
-│  │  职责:                                                              │   │
-│  │  • 收集性能指标                                                     │   │
-│  │  • 追踪 LLM 调用详情                                                │   │
-│  │  • 计算成本                                                        │   │
-│  │  • 支持可观测性                                                     │   │
-│  │                                                                     │   │
-│  │  指标类型:                                                          │   │
+│  │  Responsibilities:                                                   │   │
+│  │  • Collect performance metrics                                       │   │
+│  │  • Track LLM call details                                            │   │
+│  │  • Calculate costs                                                   │   │
+│  │  • Support observability                                             │   │
+│  │                                                                      │   │
+│  │  Metric Types:                                                       │   │
 │  │  ┌─────────────────────────────────────────────────────────────┐    │   │
 │  │  │  PilotMetrics {                                             │    │   │
-│  │  │    // 调用统计                                               │    │   │
+│  │  │    // Call statistics                                        │    │   │
 │  │  │    total_calls: usize,                                      │    │   │
 │  │  │    successful_calls: usize,                                 │    │   │
 │  │  │    failed_calls: usize,                                     │    │   │
 │  │  │    fallback_count: usize,                                   │    │   │
 │  │  │                                                             │    │   │
-│  │  │    // Token 统计                                             │    │   │
+│  │  │    // Token statistics                                       │    │   │
 │  │  │    total_input_tokens: usize,                               │    │   │
 │  │  │    total_output_tokens: usize,                              │    │   │
 │  │  │    avg_tokens_per_call: f64,                                │    │   │
 │  │  │                                                             │    │   │
-│  │  │    // 延迟统计                                               │    │   │
+│  │  │    // Latency statistics                                     │    │   │
 │  │  │    total_latency_ms: u64,                                   │    │   │
 │  │  │    avg_latency_ms: f64,                                     │    │   │
 │  │  │    p50_latency_ms: u64,                                     │    │   │
 │  │  │    p99_latency_ms: u64,                                     │    │   │
 │  │  │                                                             │    │   │
-│  │  │    // 效果统计 (需要反馈)                                     │    │   │
-│  │  │    llm_decision_accuracy: Option<f64>,  // LLM 决策准确率    │    │   │
-│  │  │    retrieval_precision: Option<f64>,     // 检索准确率       │    │   │
+│  │  │    // Effectiveness statistics (requires feedback)          │    │   │
+│  │  │    llm_decision_accuracy: Option<f64>,  // LLM decision accuracy│
+│  │  │    retrieval_precision: Option<f64>,     // Retrieval precision │
 │  │  │  }                                                          │    │   │
 │  │  └─────────────────────────────────────────────────────────────┘    │   │
-│  │                                                                     │   │
+│  │                                                                      │   │
 │  └─────────────────────────────────────────────────────────────────────┘   │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### 5.2 Pilot 与 Algorithm 的协作
+### 5.2 Pilot and Algorithm Collaboration
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                      Pilot 与 Algorithm 协作关系                             │
+│                      Pilot and Algorithm Collaboration                      │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
 │  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │                    职责边界                                          │   │
+│  │                    Responsibility Boundaries                         │   │
 │  ├─────────────────────────────────────────────────────────────────────┤   │
 │  │                                                                     │   │
-│  │  Pilot (大脑)                    Algorithm (手脚)                   │   │
+│  │  Pilot (Brain)                 Algorithm (Hands and Feet)           │   │
 │  │  ┌─────────────────────┐        ┌─────────────────────┐            │   │
-│  │  │ • 理解查询意图       │        │ • 执行树遍历         │            │   │
-│  │  │ • 分析文档结构       │        │ • 高效搜索路径       │            │   │
-│  │  │ • 语义判断          │        │ • 计算节点分数       │            │   │
-│  │  │ • 方向决策          │        │ • 管理搜索状态       │            │   │
-│  │  │ • 歧义消解          │        │ • 返回搜索结果       │            │   │
+│  │  │ • Understand query intent│        │ • Execute tree traversal     │   │
+│  │  │ • Analyze document structure│        │ • Efficient search path    │   │
+│  │  │ • Semantic judgment   │        │ • Calculate node scores       │   │
+│  │  │ • Direction decision  │        │ • Manage search state       │   │
+│  │  │ • Ambiguity resolution│        │ • Return search results      │   │
 │  │  └─────────────────────┘        └─────────────────────┘            │   │
 │  │                                                                     │   │
 │  └─────────────────────────────────────────────────────────────────────┘   │
 │                                                                             │
 │  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │                    协作流程                                          │   │
+│  │                    Collaboration Process                            │   │
 │  ├─────────────────────────────────────────────────────────────────────┤   │
 │  │                                                                     │   │
-│  │  1. Algorithm 执行搜索                                              │   │
+│  │  1. Algorithm executes search                                       │   │
 │  │     │                                                               │   │
 │  │     ▼                                                               │   │
-│  │  2. Algorithm 遇到决策点，询问 Pilot                                 │   │
+│  │  2. Algorithm encounters decision point, asks Pilot                 │   │
 │  │     │  Pilot.should_intervene(state)                                │   │
 │  │     ▼                                                               │   │
-│  │  3a. Pilot 返回 false → Algorithm 继续用自己的 scorer               │   │
+│  │  3a. Pilot returns false → Algorithm continues with its own scorer  │   │
 │  │     │                                                               │   │
-│  │  3b. Pilot 返回 true → Pilot.decide(state)                          │   │
+│  │  3b. Pilot returns true → Pilot.decide(state)                       │   │
 │  │     │  │                                                            │   │
 │  │     │  ▼                                                            │   │
-│  │     │  Pilot 返回决策 → Algorithm 融合决策继续搜索                   │   │
+│  │     │  Pilot returns decision → Algorithm fuses decision and continues search│
 │  │     │                                                               │   │
 │  │     ▼                                                               │   │
-│  │  4. 重复直到搜索完成                                                 │   │
+│  │  4. Repeat until search completes                                   │   │
 │  │                                                                     │   │
 │  └─────────────────────────────────────────────────────────────────────┘   │
 │                                                                             │
@@ -1223,145 +1223,146 @@ LLM 调用后:
 
 ---
 
-## 6. Pilot 完整调用流程 
+## 6. Complete Pilot Call Flow
 
+```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                        Pilot 完整调用流程                                    │
+│                      Complete Pilot Call Flow                               │
 └─────────────────────────────────────────────────────────────────────────────┘
 
-用户查询: "如何配置 PostgreSQL 连接池的最大连接数？"
+User Query: "How to configure max connections for PostgreSQL connection pool?"
                     │
                     ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│ Step 1: QueryAnalyzer 分析查询                                               │
+│ Step 1: QueryAnalyzer analyzes query                                        │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
 │  QueryAnalysis {                                                            │
-│    complexity: Medium,           // 中等复杂度                               │
-│    keywords: ["PostgreSQL", "连接池", "最大连接数", "配置"],                  │
-│    intent: HowTo,               // 操作指南类                                │
-│    needs_pilot: true,           // 需要 Pilot 介入                           │
+│    complexity: Medium,           // Medium complexity                        │
+│    keywords: ["PostgreSQL", "connection pool", "max connections", "configure"],│
+│    intent: HowTo,               // How-To type                               │
+│    needs_pilot: true,           // Needs Pilot intervention                  │
 │  }                                                                          │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
                     │
                     ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│ Step 2: Pilot.guide_start() - 搜索前指导                                     │
+│ Step 2: Pilot.guide_start() - Pre-search guidance                          │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
-│  BudgetController: 检查预算 (通过)                                           │
+│  BudgetController: Check budget (pass)                                      │
 │                                                                             │
 │  ContextBuilder:                                                            │
 │  ┌─────────────────────────────────────────────────────────────────────┐   │
 │  │  ToC View:                                                          │   │
-│  │  1. 简介                                                            │   │
-│  │  2. 安装                                                            │   │
-│  │  3. 配置                                                            │   │
-│  │     3.1 基本配置                                                    │   │
-│  │     3.2 数据库配置                                                  │   │
-│  │     3.3 高级配置                                                    │   │
-│  │  4. API 参考                                                        │   │
+│  │  1. Introduction                                                    │   │
+│  │  2. Installation                                                    │   │
+│  │  3. Configuration                                                   │   │
+│  │     3.1 Basic Config                                                │   │
+│  │     3.2 Database Config                                             │   │
+│  │     3.3 Advanced Config                                             │   │
+│  │  4. API Reference                                                   │   │
 │  │  ...                                                                │   │
 │  └─────────────────────────────────────────────────────────────────────┘   │
 │                                                                             │
-│  PromptBuilder: 构建 START 场景 prompt                                       │
+│  PromptBuilder: Build START scenario prompt                                 │
 │                                                                             │
 │  LLM Response:                                                              │
 │  ┌─────────────────────────────────────────────────────────────────────┐   │
 │  │  {                                                                   │   │
-│  │    "entry_points": ["配置", "数据库配置"],                           │   │
-│  │    "reasoning": "查询关于数据库连接池配置，应从配置章节开始",         │   │
+│  │    "entry_points": ["Configuration", "Database Config"],            │   │
+│  │    "reasoning": "Query about database connection pool configuration, should start from Configuration chapter", │
 │  │    "confidence": 0.9                                                │   │
 │  │  }                                                                   │   │
 │  └─────────────────────────────────────────────────────────────────────┘   │
 │                                                                             │
-│  MetricsCollector: 记录 (input: 150, output: 50, latency: 230ms)            │
+│  MetricsCollector: Record (input: 150, output: 50, latency: 230ms)         │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
                     │
                     ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│ Step 3: BeamSearch 开始搜索                                                  │
+│ Step 3: BeamSearch starts search                                           │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
-│  迭代 1: Root → [简介, 安装, 配置, API, ...]                                 │
+│  Iteration 1: Root → [Introduction, Installation, Configuration, API, ...] │
 │                                                                             │
-│  Algorithm 打分:                                                            │
-│    "配置" -> 0.75 (关键词匹配)                                               │
-│    "API"   -> 0.35                                                          │
-│    "安装"  -> 0.10                                                          │
+│  Algorithm scoring:                                                         │
+│    "Configuration" -> 0.75 (keyword match)                                 │
+│    "API"          -> 0.35                                                  │
+│    "Installation" -> 0.10                                                  │
 │                                                                             │
 │  Pilot.should_intervene():                                                  │
 │  ┌─────────────────────────────────────────────────────────────────────┐   │
 │  │  candidates.len() (6) > fork_threshold (3)  → true                  │   │
-│  │  → 需要介入                                                         │   │
+│  │  → Intervention needed                                              │   │
 │  └─────────────────────────────────────────────────────────────────────┘   │
 │                                                                             │
 │  Pilot.decide():                                                            │
 │  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │  LLM 分析:                                                          │   │
-│  │  "查询明确指向配置相关内容，'配置'章节最相关"                          │   │
+│  │  LLM Analysis:                                                      │   │
+│  │  "Query clearly points to configuration-related content, 'Configuration' chapter most relevant" │
 │  │                                                                     │   │
 │  │  ranked_candidates: [                                               │   │
-│  │    ("配置", 0.95, "明确提到配置"),                                   │   │
-│  │    ("API", 0.40, "可能有相关 API"),                                 │   │
+│  │    ("Configuration", 0.95, "Explicitly mentions configuration"),    │   │
+│  │    ("API", 0.40, "May have relevant API"),                          │   │
 │  │  ]                                                                  │   │
 │  │  confidence: 0.9                                                    │   │
 │  └─────────────────────────────────────────────────────────────────────┘   │
 │                                                                             │
-│  融合打分:                                                                   │
-│    "配置" -> 0.75*0.4 + 0.95*0.6*0.9 = 0.84                                 │
+│  Fusion scoring:                                                           │
+│    "Configuration" -> 0.75*0.4 + 0.95*0.6*0.9 = 0.84                      │
 │                                                                             │
-│  选择: "配置" 节点深入                                                       │
+│  Choice: Deep dive into "Configuration" node                               │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
                     │
                     ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│ Step 4: 继续搜索 - 迭代 2                                                    │
+│ Step 4: Continue search - Iteration 2                                      │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
-│  当前位置: Root → 配置                                                       │
-│  候选: [基本配置, 数据库配置, 高级配置, 性能调优]                              │
+│  Current position: Root → Configuration                                    │
+│  Candidates: [Basic Config, Database Config, Advanced Config, Performance Tuning] │
 │                                                                             │
-│  Algorithm 打分:                                                            │
-│    "数据库配置" -> 0.92 (强匹配!)                                            │
-│    "高级配置"   -> 0.45                                                     │
+│  Algorithm scoring:                                                         │
+│    "Database Config" -> 0.92 (strong match!)                               │
+│    "Advanced Config" -> 0.45                                               │
 │                                                                             │
 │  Pilot.should_intervene():                                                  │
 │  ┌─────────────────────────────────────────────────────────────────────┐   │
 │  │  best_score (0.92) > low_score_threshold (0.3)  → OK               │   │
 │  │  score_gap (0.47) > threshold (0.15)           → OK               │   │
-│  │  → 不需要介入，算法很确定                                            │   │
+│  │  → No intervention needed, algorithm is confident                 │   │
 │  └─────────────────────────────────────────────────────────────────────┘   │
 │                                                                             │
-│  直接使用算法打分，选择 "数据库配置"                                          │
+│  Use algorithm score directly, choose "Database Config"                    │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
                     │
                     ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│ Step 5: 继续搜索 - 迭代 3                                                    │
+│ Step 5: Continue search - Iteration 3                                      │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
-│  当前位置: Root → 配置 → 数据库配置                                          │
-│  候选: [连接字符串, 连接池, 超时设置, SSL配置]                                 │
+│  Current position: Root → Configuration → Database Config                  │
+│  Candidates: [Connection String, Connection Pool, Timeout Settings, SSL Config] │
 │                                                                             │
-│  Algorithm 打分:                                                            │
-│    "连接池" -> 0.98 (完美匹配!)                                              │
+│  Algorithm scoring:                                                         │
+│    "Connection Pool" -> 0.98 (perfect match!)                              │
 │                                                                             │
-│  → 找到目标，搜索结束                                                        │
+│  → Target found, search ends                                               │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
                     │
                     ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│ Step 6: 返回结果                                                             │
+│ Step 6: Return result                                                       │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
 │  SearchResult {                                                             │
-│    path: [Root → 配置 → 数据库配置 → 连接池],                                │
+│    path: [Root → Configuration → Database Config → Connection Pool],        │
 │    nodes_visited: 8,                                                        │
 │  }                                                                          │
 │                                                                             │
@@ -1373,18 +1374,18 @@ LLM 调用后:
 │  }                                                                          │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
+```
 
-
-7. 代码结构
+## 7. Code Structure
 
 ```
 src/retrieval/
 ├── mod.rs
-├── pilot/                      # Pilot 模块
-│   ├── mod.rs                  # 模块入口
-│   ├── trait.rs                # Pilot trait 定义
-│   ├── config.rs               # 配置类型（PilotConfig, BudgetConfig, InterventionConfig）
-│   ├── decision.rs             # 决策类型（PilotDecision, SearchDirection）
+├── pilot/                      # Pilot module
+│   ├── mod.rs                  # Module entry
+│   ├── trait.rs                # Pilot trait definition
+│   ├── config.rs               # Configuration types (PilotConfig, BudgetConfig, InterventionConfig)
+│   ├── decision.rs             # Decision types (PilotDecision, SearchDirection)
 │   ├── analyzer.rs             # QueryAnalyzer
 │   ├── builder.rs              # ContextBuilder
 │   ├── engine.rs               # DecisionEngine
@@ -1393,33 +1394,33 @@ src/retrieval/
 │   ├── budget.rs               # BudgetController
 │   ├── fallback.rs             # FallbackManager
 │   ├── metrics.rs              # MetricsCollector
-│   ├── llm_pilot.rs            # LlmPilot 实现
-│   ├── noop_pilot.rs           # NoopPilot 实现（空实现，用于纯算法模式）
-│   └── prompts/                # Prompt 模板
+│   ├── llm_pilot.rs            # LlmPilot implementation
+│   ├── noop_pilot.rs           # NoopPilot implementation (empty impl, for pure algorithm mode)
+│   └── prompts/                # Prompt templates
 │       ├── mod.rs
-│       ├── start.rs            # START 场景模板
-│       ├── fork.rs             # FORK 场景模板
-│       ├── backtrack.rs        # BACKTRACK 场景模板
-│       └── evaluate.rs         # EVALUATE 场景模板
+│       ├── start.rs            # START scenario template
+│       ├── fork.rs             # FORK scenario template
+│       ├── backtrack.rs        # BACKTRACK scenario template
+│       └── evaluate.rs         # EVALUATE scenario template
 ├── search/
 │   ├── mod.rs
-│   ├── trait.rs                # SearchTree trait（修改：增加 pilot 参数）
-│   ├── scorer.rs               # NodeScorer（现有）
-│   ├── beam.rs                 # BeamSearch（修改：集成 Pilot）
-│   ├── greedy.rs               # GreedySearch（修改：集成 Pilot）
-│   └── mcts.rs                 # MctsSearch（修改：集成 Pilot）
+│   ├── trait.rs                # SearchTree trait (modified: add pilot parameter)
+│   ├── scorer.rs               # NodeScorer (existing)
+│   ├── beam.rs                 # BeamSearch (modified: integrate Pilot)
+│   ├── greedy.rs               # GreedySearch (modified: integrate Pilot)
+│   └── mcts.rs                 # MctsSearch (modified: integrate Pilot)
 ├── stages/
-│   ├── search.rs               # SearchStage（修改：注入 Pilot）
+│   ├── search.rs               # SearchStage (modified: inject Pilot)
 │   └── ...
 └── ...
 ```
 
 ---
 
-## 7. 配置示例
+## 8. Configuration Examples
 
 ```rust
-// 默认配置
+// Default configuration
 let config = PilotConfig {
     mode: PilotMode::Balanced,
     budget: BudgetConfig::default(),
@@ -1429,7 +1430,7 @@ let config = PilotConfig {
     prompt_template_path: None,
 };
 
-// 高质量模式（更多 LLM 调用）
+// High-quality mode (more LLM calls)
 let high_quality_config = PilotConfig {
     mode: PilotMode::Aggressive,
     budget: BudgetConfig {
@@ -1450,7 +1451,7 @@ let high_quality_config = PilotConfig {
     prompt_template_path: None,
 };
 
-// 低成本模式（最少 LLM 调用）
+// Low-cost mode (minimum LLM calls)
 let low_cost_config = PilotConfig {
     mode: PilotMode::Conservative,
     budget: BudgetConfig {
@@ -1471,7 +1472,7 @@ let low_cost_config = PilotConfig {
     prompt_template_path: None,
 };
 
-// 纯算法模式（不调用 LLM）
+// Pure algorithm mode (no LLM calls)
 let algorithm_only_config = PilotConfig {
     mode: PilotMode::AlgorithmOnly,
     ..Default::default()
@@ -1480,24 +1481,24 @@ let algorithm_only_config = PilotConfig {
 
 ---
 
-## 8. 使用示例
+## 9. Usage Example
 
 ```rust
 use vectorless::retrieval::pilot::{LlmPilot, PilotConfig, PilotMode};
 use vectorless::retrieval::search::BeamSearch;
 use vectorless::llm::LlmClient;
 
-// 创建 Pilot
+// Create Pilot
 let llm_client = LlmClient::from_env()?;
 let pilot = LlmPilot::new(llm_client, PilotConfig::default());
 
-// 创建搜索引擎（注入 Pilot）
+// Create search engine (inject Pilot)
 let search = BeamSearch::new().with_pilot(pilot);
 
-// 执行搜索
+// Execute search
 let result = search.search(&tree, &context, &config).await?;
 
-// 查看指标
+// View metrics
 println!("LLM calls: {}", result.metrics.llm_calls);
 println!("Tokens used: {}", result.metrics.tokens_used);
 println!("Avg latency: {}ms", result.metrics.avg_latency_ms);

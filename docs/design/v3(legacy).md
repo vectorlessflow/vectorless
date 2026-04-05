@@ -1,25 +1,29 @@
-# V3 Design: LLM Navigator + Algorithm 协同检索
+# V3 Design: LLM Navigator + Algorithm Collaborative Retrieval
 
-## 🏗️ 架构设计：LLM + 算法协同的 Retriever Pipeline
+## 🏗️ Architecture Design: LLM + Algorithm Collaborative Retriever Pipeline
 
-### 核心设计原则
+### Core Design Principles
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                    设计哲学                                      │
+│                    Design Philosophy                             │
 ├─────────────────────────────────────────────────────────────────┤
-│  1. 算法负责 "怎么走" - 高效、确定性、低延迟                        │
-│  2. LLM 负责 "去哪里" - 语义理解、歧义消解、方向判断                 │
-│  3. 关键决策点介入 - 不是每步都问 LLM，而是在需要时才问               │
-│  4. 分层 fallback - LLM 失败时算法接管，算法失败时 LLM 救援          │
+│  1. Algorithm handles "how to go" - efficient, deterministic,    │
+│     low latency                                                  │
+│  2. LLM handles "where to go" - semantic understanding,          │
+│     ambiguity resolution, direction judgment                     │
+│  3. Intervene at key decision points - not every step asks LLM,  │
+│     only when needed                                             │
+│  4. Layered fallback - algorithm takes over when LLM fails,      │
+│     LLM rescues when algorithm fails                             │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### 整体架构
+### Overall Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                          Index Pipeline (不变)                           │
+│                          Index Pipeline (Unchanged)                      │
 │   Parse → Build → Enhance → Enrich(LLM) → Optimize                      │
 └─────────────────────────────────────────────────────────────────────────┘
                                     │
@@ -31,7 +35,7 @@
                                     │
                                     ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                        Retrieval Pipeline (增强)                         │
+│                        Retrieval Pipeline (Enhanced)                     │
 │                                                                         │
 │  ┌─────────┐    ┌─────────┐    ┌─────────────────────┐    ┌─────────┐  │
 │  │ Analyze │───▶│  Plan   │───▶│       Search        │───▶│  Judge  │  │
@@ -42,7 +46,7 @@
 │       ▼              ▼         │  │ │ Algorithm │ │  │         ▼       │
 │  ┌─────────────────────────┐   │  │ └───────────┘ │  │   ┌───────────┐ │
 │  │     LLM Navigator       │◀──┼──┤               │  │   │  NeedMore │ │
-│  │  (关键决策点介入)         │   │  │  Search Alg   │  │   │  ◀───────│ │
+│  │  (Key Decision Points)  │   │  │  Search Alg   │  │   │  ◀───────│ │
 │  └─────────────────────────┘   │  │  (Greedy/Beam)│  │   └───────────┘ │
 │              │                  │  └───────────────┘  │         │       │
 │              └──────────────────┴─────────────────────┘         │       │
@@ -55,85 +59,94 @@
 
 ---
 
-## 🧭 LLM Navigator 设计
+## 🧭 LLM Navigator Design
 
-### Navigator 的职责
+### Navigator Responsibilities
 
-Navigator 不是替代 Search 算法，而是**在关键决策点提供语义判断**：
+Navigator doesn't replace the Search algorithm, but **provides semantic judgment at key decision points**:
 
 ```
 ┌────────────────────────────────────────────────────────────┐
-│                    LLM Navigator 职责                       │
+│                    LLM Navigator Responsibilities          │
 ├────────────────┬───────────────────────────────────────────┤
-│     时机       │                LLM 任务                    │
+│     Timing     │                LLM Task                   │
 ├────────────────┼───────────────────────────────────────────┤
-│ 搜索开始前     │ 理解 query，确定搜索起点和优先方向           │
-│ 分叉路口       │ 多个候选路径时，判断哪个更相关               │
-│ 迷路时         │ 算法陷入低分路径时，提供纠正建议             │
-│ 不确定时       │ 算法评分接近时，做语义判断                   │
-│ 回溯时         │ 分析失败原因，建议新的搜索方向               │
+│ Before search  │ Understand query, determine search        │
+│ starts         │ starting point and priority directions    │
+├────────────────┼───────────────────────────────────────────┤
+│ At fork/branch │ When multiple candidate paths exist,      │
+│ points         │ judge which is more relevant              │
+├────────────────┼───────────────────────────────────────────┤
+│ When lost      │ When algorithm is stuck in low-score      │
+│                │ paths, provide correction suggestions     │
+├────────────────┼───────────────────────────────────────────┤
+│ When uncertain │ When algorithm scores are close,          │
+│                │ make semantic judgments                    │
+├────────────────┼───────────────────────────────────────────┤
+│ When           │ Analyze failure reasons, suggest new      │
+│ backtracking   │ search directions                          │
 └────────────────┴───────────────────────────────────────────┘
 ```
 
-### Navigator 接口设计
+### Navigator Interface Design
 
 ```rust
-/// LLM Navigator - 在关键决策点提供语义导航
+/// LLM Navigator - Provides semantic navigation at key decision points
 pub struct LlmNavigator {
     client: LlmClient,
     config: NavigatorConfig,
 }
 
-/// Navigator 配置
+/// Navigator Configuration
 pub struct NavigatorConfig {
-    /// 是否在搜索开始前介入
+    /// Whether to intervene before search starts
     pub guide_at_start: bool,
-    /// 是否在分叉路口介入 (候选数 > threshold 时)
+    /// Whether to intervene at fork points (when candidates > threshold)
     pub guide_at_fork: bool,
-    /// 分叉路口阈值
+    /// Fork point threshold
     pub fork_threshold: usize,
-    /// 是否在回溯时介入
+    /// Whether to intervene during backtracking
     pub guide_at_backtrack: bool,
-    /// 低分阈值 (低于此值时请求 LLM 干预)
+    /// Low score threshold (request LLM intervention when below this value)
     pub low_score_threshold: f32,
-    /// 最大 LLM 调用次数 (控制成本)
+    /// Maximum LLM calls (cost control)
     pub max_llm_calls: usize,
 }
 
-/// 导航建议
+/// Navigation Guidance
 pub struct NavigationGuidance {
-    /// 推荐的节点顺序 (按相关性排序)
+    /// Recommended node order (sorted by relevance)
     pub preferred_order: Vec<NodeId>,
-    /// 推荐的搜索方向
+    /// Recommended search direction
     pub direction: SearchDirection,
-    /// LLM 的推理过程 (可解释性)
+    /// LLM's reasoning process (explainability)
     pub reasoning: String,
-    /// 置信度
+    /// Confidence level
     pub confidence: f32,
 }
 
 pub enum SearchDirection {
-    /// 深入当前分支
+    /// Go deeper into current branch
     GoDeeper,
-    /// 探索兄弟节点
+    /// Explore sibling nodes
     ExploreSiblings,
-    /// 回溯到父节点
+    /// Backtrack to parent node
     Backtrack,
-    /// 跳转到特定节点
+    /// Jump to a specific node
     JumpTo(NodeId),
-    /// 当前路径就是答案
+    /// Current path is the answer
     ThisIsIt,
 }
 
 impl LlmNavigator {
-    /// 搜索开始前：理解 query，确定起点
+    /// Before search starts: Understand query, determine starting point
     pub async fn guide_start(
         &self,
         tree: &DocumentTree,
         query: &str,
     ) -> Result<StartGuidance>;
 
-    /// 分叉路口：选择最佳分支
+    /// At fork point: Choose the best branch
     pub async fn guide_fork(
         &self,
         tree: &DocumentTree,
@@ -142,7 +155,7 @@ impl LlmNavigator {
         query: &str,
     ) -> Result<NavigationGuidance>;
 
-    /// 回溯时：分析失败，建议新方向
+    /// During backtracking: Analyze failure, suggest new direction
     pub async fn guide_backtrack(
         &self,
         tree: &DocumentTree,
@@ -155,28 +168,28 @@ impl LlmNavigator {
 
 ---
 
-## 🔄 Search 阶段集成方案
+## 🔄 Search Stage Integration Plan
 
-### 新的 Search 架构
+### New Search Architecture
 
 ```rust
-/// 增强 Search 阶段 - 算法 + LLM 协同
+/// Enhanced Search Stage - Algorithm + LLM Collaboration
 pub struct SearchStage {
-    /// 搜索算法
+    /// Search algorithm
     algorithm: SearchAlgorithm,
-    /// LLM Navigator (可选)
+    /// LLM Navigator (optional)
     navigator: Option<Arc<LlmNavigator>>,
-    /// 配置
+    /// Configuration
     config: SearchConfig,
 }
 
-/// 协同搜索器
+/// Collaborative Searcher
 pub struct CollaborativeSearch {
-    /// 底层搜索算法
+    /// Underlying search algorithm
     algorithm: Box<dyn SearchTree>,
     /// LLM Navigator
     navigator: LlmNavigator,
-    /// 调用统计
+    /// Call statistics
     stats: SearchStats,
 }
 
@@ -185,18 +198,18 @@ impl CollaborativeSearch {
         let mut result = SearchResult::default();
         let mut state = SearchState::new(tree.root());
 
-        // 1. 开始前：LLM 指导起点
+        // 1. Before starting: LLM guides starting point
         if self.navigator.config.guide_at_start {
             let guidance = self.navigator.guide_start(tree, &ctx.query).await?;
             state.apply_guidance(guidance);
         }
 
-        // 2. 搜索循环
+        // 2. Search loop
         while !state.is_complete() {
-            // 2.1 算法选择候选
+            // 2.1 Algorithm selects candidates
             let candidates = self.algorithm.select_candidates(tree, &state);
 
-            // 2.2 判断是否需要 LLM 介入
+            // 2.2 Determine if LLM consultation is needed
             if self.should_consult_llm(&candidates, &state) {
                 let guidance = self.navigator.guide_fork(
                     tree,
@@ -205,17 +218,17 @@ impl CollaborativeSearch {
                     &ctx.query
                 ).await?;
 
-                // 2.3 用 LLM 建议重排序候选
+                // 2.3 Re-rank candidates using LLM suggestions
                 state.candidates = self.merge_algorithm_and_llm(
                     candidates,
                     guidance
                 );
             }
 
-            // 2.4 算法执行下一步
+            // 2.4 Algorithm executes next step
             self.algorithm.step(tree, &mut state);
 
-            // 2.5 检查是否需要回溯
+            // 2.5 Check if backtracking is needed
             if state.needs_backtrack() {
                 if self.navigator.config.guide_at_backtrack {
                     let guidance = self.navigator.guide_backtrack(
@@ -236,24 +249,24 @@ impl CollaborativeSearch {
         result
     }
 
-    /// 判断是否需要咨询 LLM
+    /// Determine whether to consult LLM
     fn should_consult_llm(&self, candidates: &[NodeId], state: &SearchState) -> bool {
-        // 条件 1: 候选数量超过阈值 (分叉路口)
+        // Condition 1: Candidate count exceeds threshold (fork point)
         if candidates.len() > self.navigator.config.fork_threshold {
             return true;
         }
 
-        // 条件 2: 候选分数接近 (算法无法区分)
+        // Condition 2: Candidate scores are close (algorithm cannot distinguish)
         if self.scores_are_close(candidates) {
             return true;
         }
 
-        // 条件 3: 当前分数过低 (可能走错方向)
+        // Condition 3: Current score is too low (might be wrong direction)
         if state.best_score < self.navigator.config.low_score_threshold {
             return true;
         }
 
-        // 条件 4: 未超过 LLM 调用限制
+        // Condition 4: Haven't exceeded LLM call limit
         self.stats.llm_calls < self.navigator.config.max_llm_calls
     }
 }
@@ -261,7 +274,7 @@ impl CollaborativeSearch {
 
 ---
 
-## 📊 Pipeline 各阶段的 LLM 介入点
+## 📊 LLM Intervention Points in Pipeline Stages
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
@@ -270,15 +283,17 @@ impl CollaborativeSearch {
 │                                                                         │
 │  Analyze Stage                                                          │
 │  ┌─────────────────────────────────────────────────────────────────┐   │
-│  │  [算法] 关键词提取、复杂度估计                                      │   │
-│  │  [LLM]  可选：深度语义分析、意图识别                               │   │
+│  │  [Algorithm] Keyword extraction, complexity estimation           │   │
+│  │  [LLM]      Optional: Deep semantic analysis, intent detection   │   │
 │  └─────────────────────────────────────────────────────────────────┘   │
 │                              │                                          │
 │                              ▼                                          │
 │  Plan Stage                                                             │
 │  ┌─────────────────────────────────────────────────────────────────┐   │
-│  │  [算法] 根据复杂度选择策略 (keyword/llm/semantic)                   │   │
-│  │  [LLM]  可选：复杂查询的策略推荐                                   │   │
+│  │  [Algorithm] Select strategy based on complexity                 │   │
+│  │              (keyword/llm/semantic)                              │   │
+│  │  [LLM]      Optional: Strategy recommendation for complex        │   │
+│  │              queries                                             │   │
 │  └─────────────────────────────────────────────────────────────────┘   │
 │                              │                                          │
 │                              ▼                                          │
@@ -287,10 +302,10 @@ impl CollaborativeSearch {
 │  │                                                                  │   │
 │  │  ┌─────────────┐     ┌─────────────────────────────────────┐    │   │
 │  │  │  Algorithm  │────▶│           LLM Navigator              │    │   │
-│  │  │  (主控)      │     │  ┌─────────────────────────────┐    │    │   │
-│  │  │             │     │  │ guide_start()    开始指导    │    │    │   │
-│  │  │ - Greedy    │◀───▶│  │ guide_fork()     分叉选择    │    │    │   │
-│  │  │ - Beam      │     │  │ guide_backtrack()回溯指导    │    │    │   │
+│  │  │  (Primary)  │     │  ┌─────────────────────────────┐    │    │   │
+│  │  │             │     │  │ guide_start()    Start guide │    │    │   │
+│  │  │ - Greedy    │◀───▶│  │ guide_fork()     Fork choice │    │    │   │
+│  │  │ - Beam      │     │  │ guide_backtrack()Backtrack   │    │    │   │
 │  │  │ - MCTS      │     │  └─────────────────────────────┘    │    │   │
 │  │  │             │     │                                     │    │   │
 │  │  └─────────────┘     └─────────────────────────────────────┘    │   │
@@ -300,8 +315,9 @@ impl CollaborativeSearch {
 │                              ▼                                          │
 │  Judge Stage                                                            │
 │  ┌─────────────────────────────────────────────────────────────────┐   │
-│  │  [算法] Token 数量检查、阈值判断                                   │   │
-│  │  [LLM]  内容充分性判断、答案完整性评估                              │   │
+│  │  [Algorithm] Token count check, threshold judgment               │   │
+│  │  [LLM]      Content sufficiency judgment, answer completeness    │   │
+│  │              evaluation                                           │   │
 │  └─────────────────────────────────────────────────────────────────┘   │
 │                              │                                          │
 │                              ▼                                          │
@@ -318,46 +334,47 @@ impl CollaborativeSearch {
 
 ---
 
-## 🎯 实施方案
+## 🎯 Implementation Plan
 
-### 阶段一：基础集成 (1-2 周)
+### Phase 1: Basic Integration (1-2 weeks)
 
 ```rust
-// 1. 定义 Navigator trait 和基础实现
+// 1. Define Navigator trait and basic implementation
 pub trait Navigator: Send + Sync {
     async fn guide_fork(&self, ctx: &NavigationContext) -> NavigationGuidance;
 }
 
-// 2. 在 SearchStage 中集成
+// 2. Integrate into SearchStage
 pub struct SearchStage {
     algorithm: SearchAlgorithm,
-    navigator: Option<Arc<dyn Navigator>>,  // 新增
+    navigator: Option<Arc<dyn Navigator>>,  // New
 }
 
-// 3. 修改搜索循环，在分叉点调用 navigator
+// 3. Modify search loop to call navigator at fork points
 ```
 
-### 阶段二：增强能力 (2-3 周)
+### Phase 2: Enhanced Capabilities (2-3 weeks)
 
 ```rust
-// 1. 实现完整的 LlmNavigator
-// 2. 添加 guide_start, guide_backtrack
-// 3. 实现智能介入判断逻辑
-// 4. 添加缓存 (相同 query + 相同上下文 → 缓存结果)
+// 1. Implement complete LlmNavigator
+// 2. Add guide_start, guide_backtrack
+// 3. Implement intelligent intervention judgment logic
+// 4. Add caching (same query + same context → cached result)
 ```
 
-### 阶段三：优化与监控 (1-2 周)
+### Phase 3: Optimization and Monitoring (1-2 weeks)
 
 ```rust
-// 1. 添加 A/B 测试能力 (纯算法 vs 算法+LLM)
-// 2. 添加成本控制 (max_llm_calls, budget)
-// 3. 添加效果监控 (检索准确率、延迟、成本)
-// 4. 自适应介入 (根据历史效果动态调整介入频率)
+// 1. Add A/B testing capability (pure algorithm vs algorithm+LLM)
+// 2. Add cost control (max_llm_calls, budget)
+// 3. Add effectiveness monitoring (retrieval accuracy, latency, cost)
+// 4. Adaptive intervention (dynamically adjust intervention frequency
+//    based on historical effectiveness)
 ```
 
 ---
 
-## 📁 代码结构建议
+## 📁 Suggested Code Structure
 
 ```
 src/retrieval/
@@ -370,7 +387,7 @@ src/retrieval/
 ├── stages/
 │   ├── analyze.rs
 │   ├── plan.rs
-│   ├── search.rs          # 集成 Navigator
+│   ├── search.rs          # Integrate Navigator
 │   └── judge.rs
 ├── search/
 │   ├── mod.rs
@@ -378,12 +395,12 @@ src/retrieval/
 │   ├── greedy.rs
 │   ├── beam.rs
 │   └── mcts.rs
-├── navigator/              # 新增模块
+├── navigator/              # New module
 │   ├── mod.rs
 │   ├── trait.rs            # Navigator trait
-│   ├── llm_navigator.rs    # LLM 实现
-│   ├── noop_navigator.rs   # 空实现
-│   ├── guidance.rs         # NavigationGuidance 类型
+│   ├── llm_navigator.rs    # LLM implementation
+│   ├── noop_navigator.rs   # No-op implementation
+│   ├── guidance.rs         # NavigationGuidance types
 │   └── config.rs           # NavigatorConfig
 ├── strategy/
 │   ├── mod.rs
@@ -394,43 +411,43 @@ src/retrieval/
 
 ---
 
-## 🤔 几个关键问题
+## 🤔 Key Questions
 
-### Q1: Navigator 和 Strategy 的区别？
+### Q1: Difference between Navigator and Strategy?
 
-| | Strategy | Navigator |
-|---|----------|-----------|
-| 粒度 | 单节点评估 | 全局导航建议 |
-| 输入 | 单个节点信息 | 路径 + 候选 + 上下文 |
-| 输出 | 分数 (0-1) | 方向 + 排序 + 推理 |
-| 调用频率 | 每个候选节点 | 关键决策点 |
+|                    | Strategy                    | Navigator                      |
+|--------------------|-----------------------------|--------------------------------|
+| Granularity        | Single node evaluation      | Global navigation suggestion   |
+| Input              | Single node information     | Path + candidates + context    |
+| Output             | Score (0-1)                 | Direction + ranking + reasoning|
+| Call frequency     | Every candidate node        | Key decision points            |
 
-### Q2: 如何控制 LLM 调用成本？
+### Q2: How to control LLM call costs?
 
 ```rust
 pub struct CostControl {
-    /// 单次检索最大 LLM 调用
+    /// Maximum LLM calls per retrieval
     max_calls_per_query: usize,
-    /// 每日预算
+    /// Daily budget
     daily_budget: Option<Money>,
-    /// 低置信度时才调用
+    /// Only call when confidence is low
     min_uncertainty: f32,
 }
 ```
 
-### Q3: 如何评估效果？
+### Q3: How to evaluate effectiveness?
 
 ```rust
 pub struct RetrievalMetrics {
-    /// 检索准确率
+    /// Retrieval precision
     pub precision: f32,
-    /// 检索召回率
+    /// Retrieval recall
     pub recall: f32,
-    /// LLM 调用次数
+    /// LLM call count
     pub llm_calls: usize,
-    /// 总延迟
+    /// Total latency
     pub latency_ms: u64,
-    /// 成本
+    /// Cost
     pub cost: Money,
 }
 ```
