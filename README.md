@@ -134,22 +134,8 @@ async fn main() -> vectorless::Result<()> {
 
 ## Examples
 
-See the [examples/](examples/) directory for complete working examples:
+See the [examples/](examples/) directory for complete working examples
 
-| Example | Description |
-|---------|-------------|
-| [basic.rs](examples/basic.rs) | Minimal ~30 line example showing core API |
-| [index.rs](examples/index.rs) | Document indexing pipeline |
-| [retrieve.rs](examples/retrieve.rs) | Retrieval pipeline with options |
-| [events.rs](examples/events.rs) | Event-driven indexing with EventEmitter |
-| [session.rs](examples/session.rs) | Session management with statistics |
-| [batch_processing.rs](examples/batch_processing.rs) | Batch document processing |
-| [content_aggregation.rs](examples/content_aggregation.rs) | Content aggregation strategies |
-| [streaming.rs](examples/streaming.rs) | Streaming document processing |
-| [multi_format.rs](examples/multi_format.rs) | Multi-format document support |
-| [custom_pilot.rs](examples/custom_pilot.rs) | Custom pilot implementation |
-| [cli_tool.rs](examples/cli_tool.rs) | CLI application example |
-| [markdownflow.rs](examples/markdownflow.rs) | Markdown workflow example |
 
 ## Architecture
 
