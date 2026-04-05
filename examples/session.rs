@@ -15,7 +15,7 @@
 //! cargo run --example session
 //! ```
 
-use vectorless::client::EngineBuilder;
+use vectorless::client::{EngineBuilder, IndexContext};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -118,13 +118,13 @@ token_budget = 4000
     tokio::fs::write(&doc3_path, doc3_content).await?;
 
     // Index into session
-    let doc1_id = session.index(&doc1_path).await?;
+    let doc1_id = session.index(IndexContext::from_path(&doc1_path)).await?;
     println!("  ✓ Indexed: architecture.md -> {}", &doc1_id[..8]);
 
-    let doc2_id = session.index(&doc2_path).await?;
+    let doc2_id = session.index(IndexContext::from_path(&doc2_path)).await?;
     println!("  ✓ Indexed: api.md -> {}", &doc2_id[..8]);
 
-    let doc3_id = session.index(&doc3_path).await?;
+    let doc3_id = session.index(IndexContext::from_path(&doc3_path)).await?;
     println!("  ✓ Indexed: config.md -> {}", &doc3_id[..8]);
     println!();
 
@@ -194,9 +194,9 @@ token_budget = 4000
 
     // 9. Cleanup
     println!("Step 9: Cleanup...");
-    engine.remove(&doc1_id)?;
-    engine.remove(&doc2_id)?;
-    engine.remove(&doc3_id)?;
+    engine.remove(&doc1_id).await?;
+    engine.remove(&doc2_id).await?;
+    engine.remove(&doc3_id).await?;
     println!("  ✓ Documents removed\n");
 
     println!("=== Example Complete ===");

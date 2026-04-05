@@ -20,7 +20,7 @@
 //! ```
 
 use vectorless::Engine;
-use vectorless::client::IndexOptions;
+use vectorless::client::{IndexContext, IndexOptions};
 
 /// Sample markdown content for demonstration.
 const SAMPLE_MARKDOWN: &str = r#"
@@ -61,8 +61,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Check if we should generate summaries (requires API key)
     println!("  - API key detected, generating summaries...");
-    let options = IndexOptions::new().with_summaries();
-    let doc_id = client.index_with_options(&md_path, options).await?;
+    let doc_id = client.index(
+        IndexContext::from_path(&md_path)
+            .with_options(IndexOptions::new().with_summaries())
+    ).await?;
 
     println!("  - Document indexed successfully");
     println!("  - Document ID: {}", doc_id);
@@ -72,7 +74,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Step 3: Document structure (JSON):");
     println!();
 
-    match client.get_structure(&doc_id) {
+    match client.get_structure(&doc_id).await {
         Ok(tree) => {
             // Export to JSON format (PageIndex compatible)
             let structure = tree.to_structure_json("sample.md");
@@ -121,7 +123,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Step 5: Cleanup
     println!("Step 5: Cleanup...");
 
-    client.remove(&doc_id)?;
+    client.remove(&doc_id).await?;
     println!("  - Document removed");
 
     println!("\n=== Example Complete ===");

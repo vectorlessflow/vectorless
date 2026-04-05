@@ -11,7 +11,7 @@
 //! cargo run --example basic
 //! ```
 
-use vectorless::Engine;
+use vectorless::{Engine, IndexContext};
 
 #[tokio::main]
 async fn main() -> vectorless::Result<()> {
@@ -26,12 +26,12 @@ async fn main() -> vectorless::Result<()> {
     println!("✓ Client created\n");
 
     // 2. Index a document
-    let doc_id = client.index("./README.md").await?;
+    let doc_id = client.index(IndexContext::from_path("./README.md")).await?;
     println!("✓ Indexed: {}\n", doc_id);
 
     // 3. List documents
     println!("Documents:");
-    for doc in client.list_documents() {
+    for doc in client.list_documents().await? {
         println!("  - {} ({})", doc.name, doc.id);
     }
     println!();
@@ -55,7 +55,7 @@ async fn main() -> vectorless::Result<()> {
     println!("✓ Client cloned for concurrent use\n");
 
     // 6. Cleanup
-    client.remove(&doc_id)?;
+    client.remove(&doc_id).await?;
     println!("✓ Removed: {}", doc_id);
 
     println!("\n=== Done ===");

@@ -12,7 +12,7 @@
 //! cargo run --example batch_processing
 //! ```
 
-use vectorless::client::EngineBuilder;
+use vectorless::client::{EngineBuilder, IndexContext};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -1058,7 +1058,7 @@ Implement authentication for production.
 
     for (name, _) in &documents {
         let path = temp_dir.path().join(name);
-        match session.index(&path).await {
+        match session.index(IndexContext::from_path(&path)).await {
             Ok(doc_id) => {
                 doc_ids.push(doc_id);
             }
@@ -1146,7 +1146,7 @@ Implement authentication for production.
     // 7. Cleanup
     println!("Step 7: Cleanup...");
     for doc_id in &doc_ids {
-        engine.remove(doc_id)?;
+        engine.remove(doc_id).await?;
     }
     println!("  ✓ Removed {} documents\n", doc_ids.len());
 
