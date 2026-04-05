@@ -1,6 +1,6 @@
 [package]
 name = "vectorless"
-version = "0.1.15"
+version = "0.1.16"
 edition = "2024"
 authors = ["zTgx <beautifularea@gmail.com>"]
 description = "Hierarchical, reasoning-native document intelligence engine"
@@ -79,6 +79,9 @@ roxmltree = "0.20"
 
 # Random number generation (for sampling)
 rand = "0.8"
+
+# BM25 scoring
+bm25 = { version = "2.3.2", features = ["parallelism"] }
 
 [dev-dependencies]
 tempfile = "3.10"

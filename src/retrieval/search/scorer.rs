@@ -10,37 +10,10 @@ use std::collections::HashMap;
 
 use crate::document::{DocumentTree, NodeId};
 
-/// Common English stop words for keyword filtering.
-const STOPWORDS: &[&str] = &[
-    "a", "an", "the", "is", "are", "was", "were", "be", "been", "being",
-    "have", "has", "had", "do", "does", "did", "will", "would", "could",
-    "should", "may", "might", "must", "shall", "can", "need", "dare",
-    "ought", "used", "to", "of", "in", "for", "on", "with", "at", "by",
-    "from", "as", "into", "through", "during", "before", "after", "above",
-    "below", "between", "under", "again", "further", "then", "once",
-    "here", "there", "when", "where", "why", "how", "all", "each", "few",
-    "more", "most", "other", "some", "such", "no", "nor", "not", "only",
-    "own", "same", "so", "than", "too", "very", "just", "and", "but",
-    "if", "or", "because", "until", "while", "about", "what", "which",
-    "who", "whom", "this", "that", "these", "those", "i", "me", "my",
-    "myself", "we", "our", "ours", "ourselves", "you", "your", "yours",
-    "yourself", "yourselves", "he", "him", "his", "himself", "she", "her",
-    "hers", "herself", "it", "its", "itself", "they", "them", "their",
-    "theirs", "themselves",
-];
+use super::bm25::{Bm25Engine, Bm25Params, FieldDocument, FieldWeights};
 
-/// Extract keywords from a query string, filtering stop words.
-fn extract_keywords(query: &str) -> Vec<String> {
-    query
-        .to_lowercase()
-        .split(|c: char| !c.is_alphanumeric())
-        .filter(|s| {
-            let s = *s;
-            !s.is_empty() && s.len() > 1 && !STOPWORDS.contains(&s)
-        })
-        .map(String::from)
-        .collect()
-}
+// Re-export extract_keywords for other modules to use
+pub use super::bm25::extract_keywords;
 
 /// Scoring strategy to use.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -54,25 +27,9 @@ pub enum ScoringStrategy {
     Hybrid,
 }
 
-/// BM25 parameters.
-#[derive(Debug, Clone, Copy)]
-pub struct Bm25Params {
-    /// Term frequency saturation parameter (k1).
-    pub k1: f32,
-    /// Length normalization parameter (b).
-    pub b: f32,
-}
-
-impl Default for Bm25Params {
-    fn default() -> Self {
-        Self {
-            k1: 1.2,
-            b: 0.75,
-        }
-    }
-}
-
 /// Context for scoring calculations.
+///
+/// This wraps the BM25 engine and provides additional scoring context.
 #[derive(Debug, Clone)]
 pub struct ScoringContext {
     /// Query terms for keyword matching.
@@ -413,4 +370,3 @@ mod tests {
         assert_eq!(scorer.context().strategy, ScoringStrategy::BM25);
     }
 }
-
