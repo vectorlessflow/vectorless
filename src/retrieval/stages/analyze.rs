@@ -11,7 +11,7 @@
 use async_trait::async_trait;
 use tracing::info;
 
-use crate::domain::{DocumentTree, TocView};
+use crate::document::{DocumentTree, TocView};
 use crate::retrieval::complexity::ComplexityDetector;
 use crate::retrieval::pipeline::{FailurePolicy, PipelineContext, RetrievalStage, StageOutcome};
 // QueryComplexity is used in context
@@ -108,7 +108,7 @@ impl AnalyzeStage {
         let mut matches: Vec<(String, f32)> = Vec::new();
 
         fn collect_sections(
-            nodes: &[crate::domain::TocNode],
+            nodes: &[crate::document::TocNode],
             query_lower: &str,
             matches: &mut Vec<(String, f32)>,
         ) {
@@ -165,7 +165,7 @@ impl RetrievalStage for AnalyzeStage {
         FailurePolicy::fail() // Must succeed
     }
 
-    async fn execute(&self, ctx: &mut PipelineContext) -> crate::domain::Result<StageOutcome> {
+    async fn execute(&self, ctx: &mut PipelineContext) -> crate::error::Result<StageOutcome> {
         info!("Analyzing query: '{}'", ctx.query);
 
         // 1. Detect complexity

@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 
 use super::super::types::SearchPath;
 use crate::config::CacheConfig as AppConfig;
-use crate::domain::NodeId;
+use crate::document::NodeId;
 
 /// Cache entry for a search path.
 #[derive(Debug, Clone)]

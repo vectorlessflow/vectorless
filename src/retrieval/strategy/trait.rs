@@ -7,7 +7,7 @@ use async_trait::async_trait;
 
 use super::super::RetrievalContext;
 use super::super::types::{NavigationDecision, QueryComplexity};
-use crate::domain::{DocumentTree, NodeId};
+use crate::document::{DocumentTree, NodeId};
 
 /// Result of evaluating a single node.
 #[derive(Debug, Clone)]

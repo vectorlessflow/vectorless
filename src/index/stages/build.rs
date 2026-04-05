@@ -7,8 +7,10 @@ use super::async_trait;
 use std::time::Instant;
 use tracing::info;
 
-use crate::domain::{DocumentTree, NodeId, Result, estimate_tokens};
+use crate::document::{DocumentTree, NodeId};
+use crate::error::Result;
 use crate::parser::RawNode;
+use crate::util::estimate_tokens;
 
 use super::{IndexStage, StageResult};
 use crate::index::ThinningConfig;

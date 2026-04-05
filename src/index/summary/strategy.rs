@@ -5,7 +5,7 @@
 
 use async_trait::async_trait;
 
-use crate::domain::{DocumentTree, NodeId};
+use crate::document::{DocumentTree, NodeId};
 use crate::llm::{LlmClient, LlmResult};
 
 /// Configuration for summary strategies.

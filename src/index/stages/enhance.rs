@@ -8,7 +8,9 @@ use std::sync::Arc;
 use std::time::Instant;
 use tracing::{info, warn};
 
-use crate::domain::{DocumentTree, NodeId, Result};
+
+use crate::error::Result;
+use crate::document::{DocumentTree, NodeId};
 use crate::llm::LlmClient;
 
 use super::{IndexStage, StageResult};

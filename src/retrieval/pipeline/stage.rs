@@ -9,7 +9,7 @@
 
 use async_trait::async_trait;
 
-use crate::domain::Result;
+use crate::error::Result;
 use crate::index::pipeline::FailurePolicy;
 
 use super::context::PipelineContext;

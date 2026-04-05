@@ -3,41 +3,46 @@
 
 //! Workspace management for document collections.
 //!
-//! A workspace is a directory containing indexed documents and metadata.
+//! A workspace manages indexed documents using a storage backend abstraction.
 //! Uses lazy-loading pattern with LRU cache:
 //! - Metadata index always in memory
 //! - Full documents loaded on demand with LRU eviction
 //!
-//! # Structure
+//! # Backends
 //!
-//! ```text
-//! workspace/
-//! ├── _meta.json           # Lightweight index: all document metadata
-//! ├── {doc_id_1}.json      # Document 1 full data (tree + pages)
-//! ├── {doc_id_2}.json      # Document 2 full data
-//! └── ...
+//! The workspace supports different storage backends:
+//! - **FileBackend**: File system storage (default)
+//! - **MemoryBackend**: In-memory storage (for testing)
+//!
+//! # Example
+//!
+//! ```rust,ignore
+//! use vectorless::storage::{Workspace, FileBackend};
+//!
+//! // Default file-based workspace
+//! let mut workspace = Workspace::new("./my_workspace")?;
+//!
+//! // Or with custom backend
+//! let backend = std::sync::Arc::new(FileBackend::new("./my_workspace")?);
+//! let mut workspace = Workspace::with_backend(backend)?;
 //! ```
-//!
-//! # Thread Safety
-//!
-//! The workspace uses interior mutability for the LRU cache:
-//! - Read operations (`get_meta`, `contains`, `list_documents`) only need `&self`
-//! - Cache updates happen internally via `Mutex`
 
 use std::collections::HashMap;
-use std::fs;
-use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::Arc;
 
-use lru::LruCache;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, info, warn};
 
-use super::persistence::{PersistedDocument, load_document, save_document};
-use crate::domain::{Error, Result};
+use super::backend::{FileBackend, StorageBackend};
+use super::cache::DocumentCache;
+use super::lock::FileLock;
+use super::persistence::{PersistedDocument, load_document_from_bytes, save_document_to_bytes};
+use crate::error::Result;
+use crate::Error;
 
-const META_FILE: &str = "_meta.json";
+const META_KEY: &str = "_meta";
+const LOCK_FILE: &str = ".workspace.lock";
 const DEFAULT_CACHE_SIZE: usize = 100;
 
 /// Lightweight metadata entry for the index.
@@ -63,51 +68,132 @@ pub struct DocumentMetaEntry {
     pub line_count: Option<usize>,
 }
 
-/// Inner state for Workspace (separated for interior mutability).
-#[derive(Debug)]
-struct Inner {
-    /// LRU cache for loaded full documents.
-    document_cache: LruCache<String, PersistedDocument>,
-}
-
 /// A workspace for managing indexed documents.
 ///
 /// Uses LRU cache for loaded documents to balance memory usage
-/// and access performance. The cache uses interior mutability,
-/// so read operations only require `&self`.
+/// and access performance.
+///
+/// # Thread Safety
+///
+/// The workspace is thread-safe when used with a thread-safe backend.
+/// Read operations only require `&self`.
 #[derive(Debug)]
 pub struct Workspace {
-    /// Root directory for the workspace.
-    root: PathBuf,
-
+    /// Storage backend.
+    backend: Arc<dyn StorageBackend>,
+    /// Root path (for file-based backends, used for locking).
+    root: Option<PathBuf>,
     /// Document metadata index (id -> meta).
     /// This is always loaded in memory.
     meta_index: HashMap<String, DocumentMetaEntry>,
+    /// LRU cache for loaded documents.
+    cache: DocumentCache,
+    /// File lock for multi-process safety (file backends only).
+    _lock: Option<FileLock>,
+}
 
-    /// Inner state with LRU cache (protected by Mutex for interior mutability).
-    inner: Mutex<Inner>,
+/// Options for workspace creation.
+#[derive(Debug, Clone)]
+pub struct WorkspaceOptions {
+    /// Enable file locking (default: true, only for file backends).
+    pub file_lock: bool,
+    /// LRU cache size (default: 100).
+    pub cache_size: usize,
+}
+
+impl Default for WorkspaceOptions {
+    fn default() -> Self {
+        Self {
+            file_lock: true,
+            cache_size: DEFAULT_CACHE_SIZE,
+        }
+    }
+}
+
+impl WorkspaceOptions {
+    /// Create new options with defaults.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Set the cache size.
+    pub fn with_cache_size(mut self, size: usize) -> Self {
+        self.cache_size = size;
+        self
+    }
+
+    /// Enable or disable file locking.
+    pub fn with_file_lock(mut self, enabled: bool) -> Self {
+        self.file_lock = enabled;
+        self
+    }
 }
 
 impl Workspace {
-    /// Create a new workspace at the given path with default cache size.
+    /// Create a new workspace with a storage backend.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// let backend = Arc::new(FileBackend::new("./workspace")?);
+    /// let workspace = Workspace::with_backend(backend)?;
+    /// ```
+    pub fn with_backend(backend: Arc<dyn StorageBackend>) -> Result<Self> {
+        Self::with_backend_and_options(backend, WorkspaceOptions::default())
+    }
+
+    /// Create a workspace with backend and options.
+    pub fn with_backend_and_options(
+        backend: Arc<dyn StorageBackend>,
+        options: WorkspaceOptions,
+    ) -> Result<Self> {
+        let mut workspace = Self {
+            backend,
+            root: None,
+            meta_index: HashMap::new(),
+            cache: DocumentCache::with_capacity(options.cache_size),
+            _lock: None,
+        };
+
+        workspace.load_meta_index()?;
+        Ok(workspace)
+    }
+
+    /// Create a new file-based workspace at the given path.
+    ///
+    /// This is a convenience method that creates a `FileBackend` internally.
     pub fn new(path: impl Into<PathBuf>) -> Result<Self> {
-        Self::with_cache_size(path, DEFAULT_CACHE_SIZE)
+        Self::with_options(path, WorkspaceOptions::default())
     }
 
     /// Create a new workspace with custom LRU cache size.
     pub fn with_cache_size(path: impl Into<PathBuf>, cache_size: usize) -> Result<Self> {
-        let root = path.into();
-        fs::create_dir_all(&root).map_err(Error::Io)?;
+        Self::with_options(path, WorkspaceOptions {
+            cache_size,
+            ..Default::default()
+        })
+    }
 
-        let capacity = NonZeroUsize::new(cache_size.max(1))
-            .unwrap_or_else(|| NonZeroUsize::new(DEFAULT_CACHE_SIZE).unwrap());
+    /// Create a new workspace with custom options.
+    pub fn with_options(path: impl Into<PathBuf>, options: WorkspaceOptions) -> Result<Self> {
+        let root = path.into();
+
+        // Acquire file lock if enabled
+        let lock = if options.file_lock {
+            let lock_path = root.join(LOCK_FILE);
+            Some(FileLock::try_lock(&lock_path, true)?)
+        } else {
+            None
+        };
+
+        let backend = Arc::new(FileBackend::new(&root)?);
 
         let mut workspace = Self {
-            root,
+            backend,
+            root: Some(root),
             meta_index: HashMap::new(),
-            inner: Mutex::new(Inner {
-                document_cache: LruCache::new(capacity),
-            }),
+            cache: DocumentCache::with_capacity(options.cache_size),
+            _lock: lock,
         };
 
         workspace.load_meta_index()?;
@@ -116,7 +202,7 @@ impl Workspace {
 
     /// Open an existing workspace, or create if it doesn't exist.
     pub fn open(path: impl Into<PathBuf> + Clone) -> Result<Self> {
-        Self::open_with_cache_size(path, DEFAULT_CACHE_SIZE)
+        Self::open_with_options(path, WorkspaceOptions::default())
     }
 
     /// Open with custom cache size.
@@ -124,28 +210,49 @@ impl Workspace {
         path: impl Into<PathBuf> + Clone,
         cache_size: usize,
     ) -> Result<Self> {
-        let root = path.clone().into();
-        if root.exists() {
-            let capacity = NonZeroUsize::new(cache_size.max(1))
-                .unwrap_or_else(|| NonZeroUsize::new(DEFAULT_CACHE_SIZE).unwrap());
-
-            let mut workspace = Self {
-                root,
-                meta_index: HashMap::new(),
-                inner: Mutex::new(Inner {
-                    document_cache: LruCache::new(capacity),
-                }),
-            };
-            workspace.load_meta_index()?;
-            Ok(workspace)
-        } else {
-            Self::with_cache_size(path, cache_size)
-        }
+        Self::open_with_options(path, WorkspaceOptions {
+            cache_size,
+            ..Default::default()
+        })
     }
 
-    /// Get the workspace root path.
-    pub fn path(&self) -> &Path {
-        &self.root
+    /// Open with custom options.
+    pub fn open_with_options(
+        path: impl Into<PathBuf> + Clone,
+        options: WorkspaceOptions,
+    ) -> Result<Self> {
+        let root = path.clone().into();
+
+        // Acquire file lock if enabled
+        let lock = if options.file_lock && root.exists() {
+            let lock_path = root.join(LOCK_FILE);
+            Some(FileLock::try_lock(&lock_path, true)?)
+        } else {
+            None
+        };
+
+        let backend = Arc::new(FileBackend::new(&root)?);
+
+        let mut workspace = Self {
+            backend,
+            root: Some(root),
+            meta_index: HashMap::new(),
+            cache: DocumentCache::with_capacity(options.cache_size),
+            _lock: lock,
+        };
+
+        workspace.load_meta_index()?;
+        Ok(workspace)
+    }
+
+    /// Get the workspace root path (if file-based).
+    pub fn path(&self) -> Option<&Path> {
+        self.root.as_deref()
+    }
+
+    /// Get the storage backend.
+    pub fn backend(&self) -> &dyn StorageBackend {
+        self.backend.as_ref()
     }
 
     /// List all document IDs in the workspace.
@@ -164,17 +271,15 @@ impl Workspace {
     }
 
     /// Add a document to the workspace.
-    ///
-    /// This saves the full document to disk and updates the meta index.
-    /// The document is NOT cached (lazy loading on first access).
     pub fn add(&mut self, doc: &PersistedDocument) -> Result<()> {
         let doc_id = doc.meta.id.clone();
-        let doc_path = self.document_path(&doc_id);
+        let key = self.doc_key(&doc_id);
 
-        // Save full document to disk
-        save_document(&doc_path, doc)?;
+        // Serialize and save via backend
+        let bytes = save_document_to_bytes(doc)?;
+        self.backend.put(&key, &bytes)?;
 
-        // Update meta index (lightweight)
+        // Update meta index
         let meta_entry = DocumentMetaEntry {
             id: doc_id.clone(),
             doc_name: doc.meta.name.clone(),
@@ -185,17 +290,15 @@ impl Workspace {
                 .source_path
                 .as_ref()
                 .map(|p| p.to_string_lossy().to_string()),
-            page_count: doc.pages.first().map(|p| p.page),
-            line_count: None, // TODO: track this
+            page_count: if doc.pages.is_empty() { None } else { Some(doc.pages.len()) },
+            line_count: doc.meta.line_count,
         };
 
         self.meta_index.insert(doc_id.clone(), meta_entry);
         self.save_meta_index()?;
 
-        // Remove from cache if present (will lazy load on next access)
-        if let Ok(mut inner) = self.inner.lock() {
-            inner.document_cache.pop(&doc_id);
-        }
+        // Remove from cache if present
+        let _ = self.cache.remove(&doc_id);
 
         info!("Saved document {} to workspace", doc_id);
         Ok(())
@@ -204,47 +307,35 @@ impl Workspace {
     /// Load a document from the workspace.
     ///
     /// Uses LRU cache: returns cached version if available,
-    /// otherwise loads from disk and caches it.
-    ///
-    /// This method only requires `&self` (interior mutability for cache).
+    /// otherwise loads from backend and caches it.
     pub fn load(&self, id: &str) -> Result<Option<PersistedDocument>> {
         if !self.contains(id) {
             return Ok(None);
         }
 
-        // Check LRU cache first (with lock)
-        {
-            let mut inner = self
-                .inner
-                .lock()
-                .map_err(|_| Error::Other("Workspace lock poisoned".to_string()))?;
+        // Check LRU cache first
+        if let Some(cached) = self.cache.get(id)? {
+            debug!("Cache hit for document {}", id);
+            return Ok(Some(cached));
+        }
 
-            if let Some(cached) = inner.document_cache.get(id) {
-                debug!("Cache hit for document {}", id);
-                return Ok(Some(cached.clone()));
+        // Load from backend
+        let key = self.doc_key(id);
+        match self.backend.get(&key)? {
+            Some(bytes) => {
+                let doc = load_document_from_bytes(&bytes)?;
+
+                // Add to LRU cache
+                self.cache.put(id.to_string(), doc.clone())?;
+
+                debug!("Loaded document {} from backend (cached)", id);
+                Ok(Some(doc))
+            }
+            None => {
+                warn!("Document {} in meta index but not in backend", id);
+                Ok(None)
             }
         }
-
-        // Load from disk (lock released during I/O)
-        let doc_path = self.document_path(id);
-        if !doc_path.exists() {
-            warn!("Document {} in meta index but file missing", id);
-            return Ok(None);
-        }
-
-        let doc = load_document(&doc_path)?;
-
-        // Add to LRU cache (with lock)
-        {
-            let mut inner = self
-                .inner
-                .lock()
-                .map_err(|_| Error::Other("Workspace lock poisoned".to_string()))?;
-            inner.document_cache.put(id.to_string(), doc.clone());
-        }
-
-        debug!("Loaded document {} from disk (cached)", id);
-        Ok(Some(doc))
     }
 
     /// Remove a document from the workspace.
@@ -253,17 +344,13 @@ impl Workspace {
             return Ok(false);
         }
 
-        let doc_path = self.document_path(id);
-        if doc_path.exists() {
-            fs::remove_file(&doc_path).map_err(Error::Io)?;
-        }
+        let key = self.doc_key(id);
+        self.backend.delete(&key)?;
 
         self.meta_index.remove(id);
 
         // Remove from cache
-        if let Ok(mut inner) = self.inner.lock() {
-            inner.document_cache.pop(id);
-        }
+        let _ = self.cache.remove(id);
 
         self.save_meta_index()?;
 
@@ -283,83 +370,70 @@ impl Workspace {
 
     /// Get the number of items currently in the LRU cache.
     pub fn cache_len(&self) -> usize {
-        self.inner
-            .lock()
-            .map(|inner| inner.document_cache.len())
-            .unwrap_or(0)
+        self.cache.len()
+    }
+
+    /// Get cache utilization (0.0 to 1.0).
+    pub fn cache_utilization(&self) -> f64 {
+        self.cache.utilization()
+    }
+
+    /// Get cache statistics.
+    pub fn cache_stats(&self) -> super::cache::CacheStats {
+        self.cache.stats()
     }
 
     /// Clear the LRU cache (does not remove documents from workspace).
-    pub fn clear_cache(&self) {
-        if let Ok(mut inner) = self.inner.lock() {
-            inner.document_cache.clear();
-            debug!("Cleared document cache");
-        }
+    pub fn clear_cache(&self) -> Result<()> {
+        self.cache.clear()?;
+        debug!("Cleared document cache");
+        Ok(())
     }
 
-    /// Get the path for a document file.
-    fn document_path(&self, id: &str) -> PathBuf {
-        self.root.join(format!("{}.json", id))
+    /// Get the storage key for a document.
+    fn doc_key(&self, id: &str) -> String {
+        format!("doc:{}", id)
     }
 
-    /// Get the path for the meta index file.
-    fn meta_path(&self) -> PathBuf {
-        self.root.join(META_FILE)
-    }
-
-    /// Load the meta index from disk.
+    /// Load the meta index from backend.
     fn load_meta_index(&mut self) -> Result<()> {
-        let meta_path = self.meta_path();
-
-        if !meta_path.exists() {
-            // Try to rebuild from existing files
-            self.rebuild_meta_index()?;
-            return Ok(());
+        match self.backend.get(META_KEY)? {
+            Some(bytes) => {
+                let meta: HashMap<String, DocumentMetaEntry> = serde_json::from_slice(&bytes)
+                    .map_err(|e| Error::Parse(format!("Failed to parse meta index: {}", e)))?;
+                self.meta_index = meta;
+                info!(
+                    "Loaded {} document(s) from workspace index",
+                    self.meta_index.len()
+                );
+            }
+            None => {
+                // Try to rebuild from existing keys
+                self.rebuild_meta_index()?;
+            }
         }
-
-        let content = fs::read_to_string(&meta_path).map_err(Error::Io)?;
-
-        let meta: HashMap<String, DocumentMetaEntry> = serde_json::from_str(&content)
-            .map_err(|e| Error::Parse(format!("Failed to parse meta index: {}", e)))?;
-
-        self.meta_index = meta;
-        info!(
-            "Loaded {} document(s) from workspace index",
-            self.meta_index.len()
-        );
         Ok(())
     }
 
-    /// Save the meta index to disk.
+    /// Save the meta index to backend.
     fn save_meta_index(&self) -> Result<()> {
-        let content = serde_json::to_string_pretty(&self.meta_index)
+        let bytes = serde_json::to_vec_pretty(&self.meta_index)
             .map_err(|e| Error::Parse(format!("Failed to serialize meta index: {}", e)))?;
-
-        fs::write(self.meta_path(), content).map_err(Error::Io)?;
-
+        self.backend.put(META_KEY, &bytes)?;
         Ok(())
     }
 
-    /// Rebuild the meta index from existing document files.
+    /// Rebuild the meta index from existing documents.
     fn rebuild_meta_index(&mut self) -> Result<()> {
-        let entries: Vec<_> = fs::read_dir(&self.root)
-            .map_err(Error::Io)?
-            .filter_map(|entry| entry.ok())
-            .filter(|entry| {
-                entry
-                    .path()
-                    .extension()
-                    .map(|ext| ext == "json")
-                    .unwrap_or(false)
-            })
-            .filter_map(|entry| {
-                let path = entry.path();
-                // Skip the meta file itself
-                if path.file_stem()?.to_str()? == "_meta" {
-                    return None;
-                }
-                // Try to load the document and extract metadata
-                load_document(&path).ok().map(|doc| {
+        let keys = self.backend.keys()?;
+        let doc_keys: Vec<_> = keys
+            .iter()
+            .filter(|k| k.starts_with("doc:"))
+            .collect();
+
+        for key in doc_keys {
+            if let Some(bytes) = self.backend.get(key)? {
+                if let Ok(doc) = load_document_from_bytes(&bytes) {
                     let doc_id = doc.meta.id.clone();
                     let meta_entry = DocumentMetaEntry {
                         id: doc_id.clone(),
@@ -371,26 +445,109 @@ impl Workspace {
                             .source_path
                             .as_ref()
                             .map(|p| p.to_string_lossy().to_string()),
-                        page_count: doc.pages.first().map(|p| p.page),
-                        line_count: None,
+                        page_count: if doc.pages.is_empty() { None } else { Some(doc.pages.len()) },
+                        line_count: doc.meta.line_count,
                     };
-                    (doc_id, meta_entry)
-                })
-            })
-            .collect();
-
-        for (id, entry) in entries {
-            self.meta_index.insert(id, entry);
+                    self.meta_index.insert(doc_id, meta_entry);
+                }
+            }
         }
 
         if !self.meta_index.is_empty() {
             self.save_meta_index()?;
             info!(
-                "Rebuilt index from {} document file(s)",
+                "Rebuilt index from {} document(s)",
                 self.meta_index.len()
             );
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    #[test]
+    fn test_workspace_create() {
+        let temp = TempDir::new().unwrap();
+        let workspace = Workspace::new(temp.path()).unwrap();
+
+        assert!(workspace.is_empty());
+        assert_eq!(workspace.len(), 0);
+    }
+
+    #[test]
+    fn test_workspace_with_memory_backend() {
+        let backend = Arc::new(super::super::backend::MemoryBackend::new());
+        let mut workspace = Workspace::with_backend(backend).unwrap();
+
+        assert!(workspace.is_empty());
+
+        // Add a document
+        let meta = super::super::persistence::DocumentMeta::new("doc-1", "Test", "md");
+        let tree = crate::document::DocumentTree::new("Root", "Content");
+        let doc = PersistedDocument::new(meta, tree);
+
+        workspace.add(&doc).unwrap();
+        assert_eq!(workspace.len(), 1);
+
+        // Load it back
+        let loaded = workspace.load("doc-1").unwrap();
+        assert!(loaded.is_some());
+        assert_eq!(loaded.unwrap().meta.id, "doc-1");
+    }
+
+    #[test]
+    fn test_workspace_open() {
+        let temp = TempDir::new().unwrap();
+        let path = temp.path().join("workspace");
+
+        let options = WorkspaceOptions {
+            file_lock: false,
+            ..Default::default()
+        };
+
+        let workspace = Workspace::open_with_options(&path, options.clone()).unwrap();
+        assert!(workspace.is_empty());
+
+        drop(workspace);
+        let workspace2 = Workspace::open_with_options(&path, options).unwrap();
+        assert!(workspace2.is_empty());
+    }
+
+    #[test]
+    fn test_workspace_cache_operations() {
+        let temp = TempDir::new().unwrap();
+        let workspace = Workspace::with_cache_size(temp.path(), 5).unwrap();
+
+        assert_eq!(workspace.cache_len(), 0);
+        assert_eq!(workspace.cache.utilization(), 0.0);
+
+        workspace.clear_cache().unwrap();
+        assert_eq!(workspace.cache_len(), 0);
+    }
+
+    #[test]
+    fn test_workspace_cache_stats() {
+        let backend = Arc::new(super::super::backend::MemoryBackend::new());
+        let mut workspace = Workspace::with_backend(backend).unwrap();
+
+        let meta = super::super::persistence::DocumentMeta::new("doc-1", "Test", "md");
+        let tree = crate::document::DocumentTree::new("Root", "Content");
+        let doc = PersistedDocument::new(meta, tree);
+        workspace.add(&doc).unwrap();
+
+        // First load - cache miss
+        let _ = workspace.load("doc-1").unwrap();
+        let stats = workspace.cache_stats();
+        assert_eq!(stats.misses, 1);
+
+        // Second load - cache hit
+        let _ = workspace.load("doc-1").unwrap();
+        let stats = workspace.cache_stats();
+        assert_eq!(stats.hits, 1);
     }
 }

@@ -19,12 +19,12 @@ use vectorless::retrieval::content::{
     StructureBuilder, OutputFormat, RelevanceScorer, ScoringStrategyConfig,
     ContentChunk, ScoringContext,
 };
-use vectorless::domain::NodeId;
+use vectorless::document::NodeId;
 use indextree::Arena;
 
 fn make_node_id() -> NodeId {
     let mut arena = Arena::new();
-    let node = vectorless::domain::TreeNode {
+    let node = vectorless::document::TreeNode {
         title: "Test".to_string(),
         structure: String::new(),
         content: String::new(),
@@ -135,7 +135,7 @@ fn main() {
 
     for (name, format) in formats {
         let builder = StructureBuilder::new(format);
-        let tree = vectorless::domain::DocumentTree::new("Test", "");
+        let tree = vectorless::document::DocumentTree::new("Test", "");
         let structured = builder.build(result.selected.clone(), &tree);
 
         println!("\n{} Output ({} chars, {} tokens):", name, structured.content.len(), structured.metadata.total_tokens);

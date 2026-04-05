@@ -31,7 +31,8 @@ use std::time::{Duration, Instant};
 use tracing::info;
 use uuid::Uuid;
 
-use crate::domain::{DocumentTree, Error, Result};
+use crate::{DocumentTree, Error};
+use crate::error::Result;
 use crate::retrieval::RetrieveOptions;
 use crate::storage::PersistedDocument;
 

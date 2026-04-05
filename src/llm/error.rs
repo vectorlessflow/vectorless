@@ -93,9 +93,9 @@ impl From<serde_json::Error> for LlmError {
     }
 }
 
-impl From<LlmError> for crate::domain::Error {
+impl From<LlmError> for crate::Error {
     fn from(e: LlmError) -> Self {
-        crate::domain::Error::Llm(e.to_string())
+        crate::Error::Llm(e.to_string())
     }
 }
 

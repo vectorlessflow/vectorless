@@ -8,7 +8,7 @@
 
 use tracing::info;
 
-use crate::domain::Result;
+use crate::error::Result;
 use crate::llm::LlmClient;
 
 use super::super::PipelineOptions;

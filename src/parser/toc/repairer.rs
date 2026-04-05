@@ -6,7 +6,7 @@
 use tracing::{debug, info};
 
 use crate::config::LlmConfig;
-use crate::domain::Result;
+use crate::error::Result;
 use crate::parser::pdf::PdfPage;
 
 use super::types::{TocEntry, VerificationError, VerificationReport};

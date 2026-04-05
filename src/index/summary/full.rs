@@ -3,7 +3,7 @@
 
 //! Full summary strategy - generate summaries for all nodes.
 
-use crate::domain::NodeId;
+use crate::document::NodeId;
 use crate::llm::LlmClient;
 
 use super::{SummaryGenerator, SummaryStrategyConfig};

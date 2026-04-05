@@ -159,6 +159,32 @@ dedup_threshold = 0.9
 # └── {doc_id_2}.json      # Document 2
 workspace_dir = "./workspace"
 
+# LRU cache size (number of documents to keep in memory)
+cache_size = 100
+
+# Enable atomic writes (temp file + rename)
+# This prevents data corruption on crash
+atomic_writes = true
+
+# Enable file locking for multi-process safety
+# Prevents concurrent access from multiple processes
+file_lock = true
+
+# Enable checksum verification for data integrity
+# Uses SHA-256 to verify file integrity on load
+checksum_enabled = true
+
+# Compression settings
+[storage.compression]
+# Enable compression for stored documents
+enabled = false
+
+# Compression algorithm: "gzip" or "zstd"
+algorithm = "gzip"
+
+# Compression level (1-9, higher = better compression but slower)
+level = 6
+
 [concurrency]
 # Maximum concurrent LLM API calls
 # This limits how many requests can be in-flight at the same time

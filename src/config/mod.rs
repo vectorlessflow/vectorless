@@ -87,7 +87,8 @@ pub use types::{
     // Retrieval configs
     RetrievalConfig, SearchConfig,
     // Storage and sufficiency
-    StorageConfig, CacheConfig, StrategyConfig, SufficiencyConfig,
+    StorageConfig, CompressionAlgorithm, CompressionConfig,
+    CacheConfig, StrategyConfig, SufficiencyConfig,
     // Content aggregator
     ContentAggregatorConfig,
     // Concurrency

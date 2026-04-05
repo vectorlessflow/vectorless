@@ -9,7 +9,7 @@
 
 use async_trait::async_trait;
 
-use crate::domain::DocumentTree;
+use crate::document::DocumentTree;
 
 use super::{InterventionPoint, Pilot, PilotConfig, PilotDecision, SearchState};
 
@@ -103,7 +103,7 @@ impl Pilot for NoopPilot {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::NodeId;
+    use crate::document::NodeId;
     use std::collections::HashSet;
 
     #[test]

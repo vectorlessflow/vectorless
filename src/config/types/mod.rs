@@ -23,7 +23,8 @@ pub use indexer::IndexerConfig;
 pub use llm::{LlmConfig, SummaryConfig};
 pub use retrieval::{RetrievalConfig, SearchConfig};
 pub use storage::{
-    CacheConfig, StorageConfig, StrategyConfig, SufficiencyConfig,
+    CacheConfig, CompressionAlgorithm, CompressionConfig,
+    StorageConfig, StrategyConfig, SufficiencyConfig,
 };
 
 /// Main configuration for vectorless.

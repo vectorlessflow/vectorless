@@ -12,34 +12,7 @@ use indextree::Arena;
 use serde::{Deserialize, Serialize};
 
 use super::node::{NodeId, TreeNode};
-
-/// JSON structure for exporting document tree (matches PageIndex format).
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct StructureNode {
-    /// Node title.
-    pub title: String,
-    /// Unique node identifier.
-    pub node_id: String,
-    /// Starting line number (1-based).
-    pub start_index: usize,
-    /// Ending line number (1-based).
-    pub end_index: usize,
-    /// Generated summary (optional).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub summary: Option<String>,
-    /// Child nodes.
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub nodes: Vec<StructureNode>,
-}
-
-/// Document structure for JSON export.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DocumentStructure {
-    /// Document name.
-    pub doc_name: String,
-    /// Tree structure.
-    pub structure: Vec<StructureNode>,
-}
+use super::structure::{DocumentStructure, StructureNode};
 
 /// Pre-computed index for efficient retrieval operations.
 ///

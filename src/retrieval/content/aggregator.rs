@@ -10,7 +10,8 @@ use std::collections::HashMap;
 
 use tracing::{debug, info};
 
-use crate::domain::{DocumentTree, NodeId, estimate_tokens};
+use crate::document::{DocumentTree, NodeId};
+use crate::util::estimate_tokens;
 
 use super::budget::{AllocationResult, AllocationStrategy, BudgetAllocator, SelectedContent};
 use super::builder::{ContentMetadata, StructureBuilder, StructuredContent};
@@ -350,7 +351,7 @@ mod tests {
 
     fn make_test_node_id() -> NodeId {
         let mut arena = Arena::new();
-        let node = crate::domain::TreeNode {
+        let node = crate::document::TreeNode {
             title: "Test".to_string(),
             structure: String::new(),
             content: String::new(),

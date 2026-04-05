@@ -6,7 +6,7 @@
 use async_trait::async_trait;
 
 use super::types::{RetrieveOptions, RetrieveResponse};
-use crate::domain::DocumentTree;
+use crate::document::DocumentTree;
 
 /// Result type for retriever operations.
 pub type RetrieverResult<T> = Result<T, RetrieverError>;

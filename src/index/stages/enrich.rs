@@ -7,7 +7,8 @@ use super::async_trait;
 use std::time::Instant;
 use tracing::info;
 
-use crate::domain::{DocumentTree, NodeId, Result, TocView};
+use crate::document::{DocumentTree, NodeId, TocView};
+use crate::error::Result;
 
 use super::{IndexStage, StageResult};
 use crate::index::pipeline::IndexContext;
@@ -116,7 +117,7 @@ impl IndexStage for EnrichStage {
         let tree = ctx
             .tree
             .as_mut()
-            .ok_or_else(|| crate::domain::Error::IndexBuild("Tree not built".to_string()))?;
+            .ok_or_else(|| crate::Error::IndexBuild("Tree not built".to_string()))?;
 
         // 1. Calculate page ranges
         Self::calculate_page_ranges(tree);

@@ -3,7 +3,7 @@
 
 //! Selective summary strategy - generate summaries only for qualifying nodes.
 
-use crate::domain::{DocumentTree, NodeId};
+use crate::document::{DocumentTree, NodeId};
 use crate::llm::LlmClient;
 
 use super::{SummaryGenerator, SummaryStrategyConfig};

@@ -7,7 +7,7 @@ use regex::Regex;
 use tracing::debug;
 
 use crate::config::LlmConfig;
-use crate::domain::Result;
+use crate::error::Result;
 
 use super::types::TocDetection;
 use crate::llm::LlmClient;

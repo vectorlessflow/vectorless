@@ -1,6 +1,6 @@
 [package]
 name = "vectorless"
-version = "0.1.12"
+version = "0.1.13"
 edition = "2024"
 authors = ["zTgx <beautifularea@gmail.com>"]
 description = "Hierarchical, reasoning-native document intelligence engine"
@@ -58,6 +58,16 @@ indextree = { version = "4.8.0", features = ["deser"] }
 
 # LRU cache
 lru = "0.12"
+
+# Checksum
+sha2 = "0.10"
+
+# Compression
+flate2 = "1.0"
+
+# File locking (Unix)
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
 
 # PDF processing
 pdf-extract = "0.10.0"

@@ -3,7 +3,7 @@
 
 //! PDF document types.
 
-use crate::domain::estimate_tokens;
+use crate::util::estimate_tokens;
 use serde::{Deserialize, Serialize};
 
 /// A single page from a PDF document.

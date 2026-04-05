@@ -7,7 +7,8 @@ use async_trait::async_trait;
 use pulldown_cmark::Options;
 use std::path::Path;
 
-use crate::domain::{Result, estimate_tokens};
+use crate::error::Result;
+use crate::util::estimate_tokens;
 use crate::parser::{DocumentFormat, DocumentMeta, DocumentParser, ParseResult, RawNode};
 
 use super::config::MarkdownConfig;
@@ -398,7 +399,7 @@ impl DocumentParser for MarkdownParser {
     async fn parse_file(&self, path: &Path) -> Result<ParseResult> {
         let content = tokio::fs::read_to_string(path)
             .await
-            .map_err(|e| crate::domain::Error::Parse(format!("Failed to read file: {}", e)))?;
+            .map_err(|e| crate::Error::Parse(format!("Failed to read file: {}", e)))?;
 
         let mut result = self.parse(&content).await?;
 

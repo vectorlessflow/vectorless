@@ -15,7 +15,8 @@ use super::retriever::{CostEstimate, Retriever, RetrieverError, RetrieverResult}
 use super::stages::{AnalyzeStage, JudgeStage, PlanStage, SearchStage};
 use super::strategy::LlmStrategy;
 use super::types::{RetrieveOptions, RetrieveResponse};
-use crate::domain::DocumentTree;
+use crate::document::DocumentTree;
+use crate::error::Result;
 use crate::llm::LlmClient;
 use crate::retrieval::pilot::{LlmPilot, PilotConfig};
 

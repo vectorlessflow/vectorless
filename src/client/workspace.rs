@@ -27,7 +27,8 @@ use std::sync::{Arc, RwLock};
 
 use tracing::{debug, info, warn};
 
-use crate::domain::{Error, Result};
+use crate::{Error};
+use crate::error::Result;
 use crate::storage::{DocumentMetaEntry, PersistedDocument, Workspace};
 
 use super::events::{EventEmitter, WorkspaceEvent};
@@ -353,17 +354,29 @@ pub struct WorkspaceStats {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tempfile::TempDir;
+    use crate::storage::WorkspaceOptions;
 
     #[test]
     fn test_workspace_client_creation() {
-        let workspace = Workspace::open("./test_workspace").unwrap();
+        let temp = TempDir::new().unwrap();
+        let options = WorkspaceOptions {
+            file_lock: false,
+            ..Default::default()
+        };
+        let workspace = Workspace::open_with_options(temp.path(), options).unwrap();
         let client = WorkspaceClient::new(workspace);
         assert!(client.is_empty());
     }
 
     #[test]
     fn test_workspace_stats() {
-        let workspace = Workspace::open("./test_workspace").unwrap();
+        let temp = TempDir::new().unwrap();
+        let options = WorkspaceOptions {
+            file_lock: false,
+            ..Default::default()
+        };
+        let workspace = Workspace::open_with_options(temp.path(), options).unwrap();
         let client = WorkspaceClient::new(workspace);
 
         let stats = client.stats().unwrap();

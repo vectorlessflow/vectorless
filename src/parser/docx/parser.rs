@@ -32,7 +32,8 @@ use std::path::Path;
 use async_trait::async_trait;
 use zip::ZipArchive;
 
-use crate::domain::{Error, Result};
+use crate::{Error};
+use crate::error::Result;
 use crate::parser::{DocumentFormat, DocumentMeta, DocumentParser, ParseResult, RawNode};
 
 use super::styles::StyleResolver;

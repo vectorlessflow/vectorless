@@ -14,7 +14,7 @@ use super::super::RetrievalContext;
 use super::super::types::{NavigationDecision, NavigationStep, SearchPath};
 use super::scorer::{NodeScorer, ScoringContext};
 use super::{SearchConfig, SearchResult, SearchTree};
-use crate::domain::{DocumentTree, NodeId};
+use crate::document::{DocumentTree, NodeId};
 use crate::retrieval::pilot::{Pilot, SearchState};
 
 /// Beam search - explores multiple paths simultaneously.

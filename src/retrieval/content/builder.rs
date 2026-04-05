@@ -7,7 +7,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::domain::DocumentTree;
+use crate::document::DocumentTree;
 
 use super::budget::SelectedContent;
 use super::config::OutputFormatConfig;
@@ -309,7 +309,7 @@ impl StructureBuilder {
 
         // Group by parent
         use std::collections::HashMap;
-        let mut by_parent: HashMap<Option<crate::domain::NodeId>, Vec<&SelectedContent>> =
+        let mut by_parent: HashMap<Option<crate::document::NodeId>, Vec<&SelectedContent>> =
             HashMap::new();
 
         for content in &selected {
@@ -327,7 +327,7 @@ impl StructureBuilder {
         // Build tree recursively
         fn build_node(
             content: &SelectedContent,
-            all_by_parent: &HashMap<Option<crate::domain::NodeId>, Vec<&SelectedContent>>,
+            all_by_parent: &HashMap<Option<crate::document::NodeId>, Vec<&SelectedContent>>,
         ) -> ContentTreeNode {
             let mut node = ContentTreeNode::new(content.title.clone())
                 .with_content(content.content.clone(), content.score);
@@ -413,12 +413,12 @@ fn render_tree(node: &ContentTreeNode, depth: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::NodeId;
+    use crate::document::NodeId;
     use indextree::Arena;
 
     fn make_test_node_id() -> NodeId {
         let mut arena = Arena::new();
-        let node = crate::domain::TreeNode {
+        let node = crate::document::TreeNode {
             title: "Test".to_string(),
             structure: String::new(),
             content: String::new(),
