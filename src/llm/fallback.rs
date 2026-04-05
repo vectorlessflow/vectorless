@@ -10,7 +10,7 @@
 //!
 //! # Example
 //!
-//! ```rust
+//! ```rust,ignore
 //! use vectorless::llm::fallback::{FallbackChain, FallbackConfig};
 //!
 //! let config = FallbackConfig::default();

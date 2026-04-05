@@ -33,7 +33,7 @@
 //! # Example
 //!
 //! ```rust
-//! use vectorless::metrics::{MetricsHub, MetricsConfig};
+//! use vectorless::metrics::{MetricsHub, MetricsConfig, InterventionPoint};
 //!
 //! let config = MetricsConfig::default();
 //! let hub = MetricsHub::new(config);

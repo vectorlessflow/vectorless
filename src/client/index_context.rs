@@ -153,10 +153,11 @@ impl IndexSource {
 /// use vectorless::parser::DocumentFormat;
 ///
 /// # #[tokio::main]
-/// # async fn main() -> vectorless::Result<()> {
+/// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// let engine = EngineBuilder::new()
 ///     .with_workspace("./data")
-///     .build()?;
+///     .build()
+///     .await?;
 ///
 /// // Index from file
 /// let id1 = engine.index(IndexContext::from_path("./doc.md")).await?;

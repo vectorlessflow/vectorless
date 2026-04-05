@@ -22,11 +22,12 @@
 //! use vectorless::client::{Engine, EngineBuilder, IndexContext};
 //!
 //! # #[tokio::main]
-//! # async fn main() -> vectorless::Result<()> {
+//! # async fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! // Create a client
 //! let client = EngineBuilder::new()
 //!     .with_workspace("./my_workspace")
-//!     .build()?;
+//!     .build()
+//!     .await?;
 //!
 //! // Index a document from file
 //! let doc_id = client.index(IndexContext::from_path("./document.md")).await?;
@@ -187,10 +188,11 @@ impl Engine {
     /// use vectorless::parser::DocumentFormat;
     ///
     /// # #[tokio::main]
-    /// # async fn main() -> vectorless::Result<()> {
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let engine = EngineBuilder::new()
     ///     .with_workspace("./data")
-    ///     .build()?;
+    ///     .build()
+    ///     .await?;
     ///
     /// // From file
     /// let id1 = engine.index(IndexContext::from_path("./doc.md")).await?;

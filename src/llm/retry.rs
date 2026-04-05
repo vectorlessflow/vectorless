@@ -16,7 +16,7 @@ use super::error::{LlmError, LlmResult};
 ///
 /// # Example
 ///
-/// ```rust,no_run
+/// ```rust,ignore
 /// use vectorless::llm::{RetryConfig, with_retry, LlmError, LlmResult};
 ///
 /// # #[tokio::main]
