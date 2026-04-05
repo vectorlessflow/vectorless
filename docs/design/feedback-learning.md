@@ -1,37 +1,40 @@
-# Feedback Learning 设计文档
+# Feedback Learning Design Document
 
-> Pilot 反馈学习系统 - 从用户反馈中持续改进决策
+> Pilot Feedback Learning System - Continuously improving decisions from user feedback
 
-## 概述
+## Overview
 
-Feedback Learning 是 Pilot 的学习子系统，通过收集用户对检索结果的反馈，持续优化 Pilot 的决策能力。系统会追踪不同场景下的决策准确性，并据此调整后续决策的置信度和策略。
+Feedback Learning is Pilot's learning subsystem that continuously optimizes Pilot's decision-making capabilities by collecting user feedback on retrieval results. The system tracks decision accuracy across different scenarios and adjusts confidence levels and strategies for subsequent decisions accordingly.
 
-### 设计目标
+### Design Goals
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                      设计目标                                    │
+│                      Design Goals                                │
 ├─────────────────────────────────────────────────────────────────┤
-│  1. 收集反馈 - 记录用户对检索结果的评价                            │
-│  2. 学习模式 - 识别在哪些场景下 Pilot 表现好/差                    │
-│  3. 调整决策 - 根据历史表现调整置信度和策略                         │
-│  4. 持续改进 - 随着数据积累，决策质量逐步提升                       │
+│  1. Collect Feedback - Record user ratings on retrieval results  │
+│  2. Learn Patterns - Identify scenarios where Pilot performs     │
+│                      well or poorly                              │
+│  3. Adjust Decisions - Modify confidence and strategies based    │
+│                        on historical performance                 │
+│  4. Continuous Improvement - Decision quality improves over time │
+│                             as data accumulates                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 1. 整体架构
+## 1. Overall Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                      Feedback Learning 系统架构                              │
+│                      Feedback Learning System Architecture                    │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
 │  ┌───────────────────────────────────────────────────────────────────────┐  │
-│  │                        数据流                                          │  │
+│  │                        Data Flow                                       │  │
 │  │                                                                       │  │
-│  │   检索完成                                                            │  │
+│  │   Retrieval Complete                                                  │  │
 │  │      │                                                                │  │
 │  │      ▼                                                                │  │
 │  │   ┌─────────────┐     ┌─────────────┐     ┌─────────────┐           │  │
@@ -46,7 +49,7 @@ Feedback Learning 是 Pilot 的学习子系统，通过收集用户对检索结�
 │  │                                          └─────────────┘              │  │
 │  │                                                   │                   │  │
 │  │                                                   ▼                   │  │
-│  │                                          下次检索决策                  │  │
+│  │                                          Next Retrieval Decision       │  │
 │  │                                                                       │  │
 │  └───────────────────────────────────────────────────────────────────────┘  │
 │                                                                             │
@@ -55,39 +58,39 @@ Feedback Learning 是 Pilot 的学习子系统，通过收集用户对检索结�
 
 ---
 
-## 2. 核心组件
+## 2. Core Components
 
-### 2.1 FeedbackRecord - 反馈记录
+### 2.1 FeedbackRecord - Feedback Record
 
 ```rust
-/// 反馈记录
+/// Feedback record
 pub struct FeedbackRecord {
-    /// 唯一反馈 ID
+    /// Unique feedback ID
     pub id: FeedbackId,
-    /// 关联的决策 ID
+    /// Associated decision ID
     pub decision_id: DecisionId,
-    /// 决策是否正确
+    /// Whether the decision was correct
     pub was_correct: bool,
-    /// Pilot 当时的置信度
+    /// Pilot's confidence at that time
     pub pilot_confidence: f64,
-    /// 介入点类型
+    /// Intervention point type
     pub intervention_point: InterventionPoint,
-    /// 查询哈希（用于聚合相似查询）
+    /// Query hash (for aggregating similar queries)
     pub query_hash: u64,
-    /// 路径哈希（用于聚合相似路径）
+    /// Path hash (for aggregating similar paths)
     pub path_hash: u64,
-    /// 时间戳
+    /// Timestamp
     pub timestamp_ms: u64,
-    /// 可选的用户评论
+    /// Optional user comment
     pub comment: Option<String>,
 }
 ```
 
-### 2.2 FeedbackStore - 反馈存储
+### 2.2 FeedbackStore - Feedback Storage
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                          FeedbackStore 架构                                  │
+│                          FeedbackStore Architecture                          │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
 │  ┌─────────────────────────────────────────────────────────────────────┐   │
@@ -107,50 +110,50 @@ pub struct FeedbackRecord {
 │  │                                                                     │   │
 │  └─────────────────────────────────────────────────────────────────────┘   │
 │                                                                             │
-│  统计维度:                                                                   │
+│  Statistics Dimensions:                                                     │
 │  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │  1. 按 InterventionPoint 聚合                                        │   │
-│  │     - START / FORK / BACKTRACK / EVALUATE 各自的准确率               │   │
+│  │  1. Aggregate by InterventionPoint                                   │   │
+│  │     - Accuracy for each: START / FORK / BACKTRACK / EVALUATE        │   │
 │  │                                                                     │   │
-│  │  2. 按 Query 聚合                                                   │   │
-│  │     - 相似查询的历史表现                                             │   │
+│  │  2. Aggregate by Query                                              │   │
+│  │     - Historical performance for similar queries                     │   │
 │  │                                                                     │   │
-│  │  3. 按 Path 聚合                                                    │   │
-│  │     - 相似路径的历史表现                                             │   │
+│  │  3. Aggregate by Path                                               │   │
+│  │     - Historical performance for similar paths                       │   │
 │  └─────────────────────────────────────────────────────────────────────┘   │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### 2.3 PilotLearner - 学习器
+### 2.3 PilotLearner - Learner
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                          PilotLearner 工作原理                               │
+│                          PilotLearner Workflow                               │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
-│  输入:                                                                       │
+│  Input:                                                                     │
 │  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │  - intervention_point: 当前介入点类型                                 │   │
-│  │  - query_hash: 查询的哈希值                                          │   │
-│  │  - path_hash: 路径的哈希值                                           │   │
+│  │  - intervention_point: Current intervention point type               │   │
+│  │  - query_hash: Hash value of the query                              │   │
+│  │  - path_hash: Hash value of the path                                │   │
 │  └─────────────────────────────────────────────────────────────────────┘   │
 │                                                                             │
-│  查询历史统计:                                                               │
+│  Query Historical Statistics:                                               │
 │  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │  1. 获取 intervention_point 的整体准确率                              │   │
-│  │  2. 获取 query_hash 的特定准确率（如有）                              │   │
-│  │  3. 获取 path_hash 的特定准确率（如有）                               │   │
+│  │  1. Get overall accuracy for intervention_point                      │   │
+│  │  2. Get specific accuracy for query_hash (if available)              │   │
+│  │  3. Get specific accuracy for path_hash (if available)               │   │
 │  └─────────────────────────────────────────────────────────────────────┘   │
 │                                                                             │
-│  输出 DecisionAdjustment:                                                   │
+│  Output DecisionAdjustment:                                                 │
 │  ┌─────────────────────────────────────────────────────────────────────┐   │
 │  │  pub struct DecisionAdjustment {                                    │   │
-│  │      /// 置信度调整（加到 Pilot 置信度上）                             │   │
+│  │      /// Confidence adjustment (added to Pilot confidence)           │   │
 │  │      pub confidence_delta: f64,                                     │   │
-│  │      /// 是否跳过介入（信任算法）                                     │   │
+│  │      /// Whether to skip intervention (trust algorithm)              │   │
 │  │      pub skip_intervention: bool,                                   │   │
-│  │      /// 算法权重 vs LLM 权重                                        │   │
+│  │      /// Algorithm weight vs LLM weight                             │   │
 │  │      pub algorithm_weight: f64,                                     │   │
 │  │  }                                                                  │   │
 │  └─────────────────────────────────────────────────────────────────────┘   │
@@ -160,42 +163,42 @@ pub struct FeedbackRecord {
 
 ---
 
-## 3. 学习策略
+## 3. Learning Strategies
 
-### 3.1 准确率阈值
+### 3.1 Accuracy Thresholds
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                          准确率阈值策略                                       │
+│                          Accuracy Threshold Strategy                         │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
-│  配置参数:                                                                   │
+│  Configuration Parameters:                                                  │
 │  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │  min_samples: 10              // 最小样本数才开始调整                  │   │
-│  │  high_accuracy_threshold: 0.8 // 高准确率阈值                         │   │
-│  │  low_accuracy_threshold: 0.5  // 低准确率阈值                         │   │
-│  │  max_confidence_delta: 0.2    // 最大置信度调整幅度                   │   │
+│  │  min_samples: 10              // Minimum samples before adjusting    │   │
+│  │  high_accuracy_threshold: 0.8 // High accuracy threshold             │   │
+│  │  low_accuracy_threshold: 0.5  // Low accuracy threshold              │   │
+│  │  max_confidence_delta: 0.2    // Maximum confidence adjustment       │   │
 │  └─────────────────────────────────────────────────────────────────────┘   │
 │                                                                             │
-│  决策逻辑:                                                                   │
+│  Decision Logic:                                                            │
 │  ┌─────────────────────────────────────────────────────────────────────┐   │
 │  │                                                                     │   │
 │  │  if accuracy >= high_accuracy_threshold (0.8):                      │   │
-│  │      // 高准确率：信任 LLM，提升置信度                                 │   │
+│  │      // High accuracy: trust LLM, boost confidence                  │   │
 │  │      confidence_delta = +0.2                                        │   │
-│  │      algorithm_weight = 0.3  // 更依赖 LLM                           │   │
+│  │      algorithm_weight = 0.3  // More reliance on LLM                │   │
 │  │                                                                     │   │
 │  │  elif accuracy <= low_accuracy_threshold (0.5):                     │   │
-│  │      // 低准确率：信任算法，降低置信度                                 │   │
+│  │      // Low accuracy: trust algorithm, reduce confidence            │   │
 │  │      confidence_delta = -0.2                                        │   │
-│  │      algorithm_weight = 0.7  // 更依赖算法                           │   │
+│  │      algorithm_weight = 0.7  // More reliance on algorithm          │   │
 │  │                                                                     │   │
 │  │      if accuracy < 0.3:                                             │   │
-│  │          // 非常低：跳过 LLM 调用，完全用算法                          │   │
+│  │          // Very low: skip LLM call, use algorithm only             │   │
 │  │          skip_intervention = true                                   │   │
 │  │                                                                     │   │
 │  │  else:                                                              │   │
-│  │      // 中等准确率：保持默认                                          │   │
+│  │      // Medium accuracy: keep defaults                              │   │
 │  │      confidence_delta = 0.0                                         │   │
 │  │      algorithm_weight = 0.5                                         │   │
 │  │                                                                     │   │
@@ -204,46 +207,46 @@ pub struct FeedbackRecord {
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### 3.2 多层统计融合
+### 3.2 Multi-Layer Statistics Fusion
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                        多层统计融合策略                                       │
+│                        Multi-Layer Statistics Fusion                         │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
-│  三层统计:                                                                   │
+│  Three-Layer Statistics:                                                    │
 │  ┌─────────────────────────────────────────────────────────────────────┐   │
 │  │                                                                     │   │
-│  │  Layer 1: InterventionPoint 级别（粗粒度）                           │   │
+│  │  Layer 1: InterventionPoint Level (Coarse-grained)                  │   │
 │  │  ┌─────────────────────────────────────────────────────────────┐   │   │
-│  │  │  例如: FORK 点整体准确率 = 0.75                              │   │   │
-│  │  │  影响: 基础调整                                              │   │   │
+│  │  │  Example: FORK point overall accuracy = 0.75                 │   │   │
+│  │  │  Impact: Base adjustment                                      │   │   │
 │  │  └─────────────────────────────────────────────────────────────┘   │   │
 │  │                                                                     │   │
-│  │  Layer 2: Query 级别（中粒度）                                       │   │
+│  │  Layer 2: Query Level (Medium-grained)                              │   │
 │  │  ┌─────────────────────────────────────────────────────────────┐   │   │
-│  │  │  例如: 相似查询的准确率 = 0.85                               │   │   │
-│  │  │  影响: 如果高于整体，额外 +0.05 置信度                        │   │   │
+│  │  │  Example: Similar query accuracy = 0.85                      │   │   │
+│  │  │  Impact: If higher than overall, +0.05 confidence            │   │   │
 │  │  └─────────────────────────────────────────────────────────────┘   │   │
 │  │                                                                     │   │
-│  │  Layer 3: Path 级别（细粒度）                                        │   │
+│  │  Layer 3: Path Level (Fine-grained)                                 │   │
 │  │  ┌─────────────────────────────────────────────────────────────┐   │   │
-│  │  │  例如: 相似路径的准确率 = 0.92                               │   │   │
-│  │  │  影响: 如果非常高，额外 +0.05 置信度                          │   │   │
+│  │  │  Example: Similar path accuracy = 0.92                       │   │   │
+│  │  │  Impact: If very high, +0.05 confidence                       │   │   │
 │  │  └─────────────────────────────────────────────────────────────┘   │   │
 │  │                                                                     │   │
 │  └─────────────────────────────────────────────────────────────────────┘   │
 │                                                                             │
-│  融合示例:                                                                   │
+│  Fusion Example:                                                            │
 │  ┌─────────────────────────────────────────────────────────────────────┐   │
 │  │                                                                     │   │
-│  │  场景: FORK 点，相似查询，相似路径                                    │   │
+│  │  Scenario: FORK point, similar query, similar path                  │   │
 │  │                                                                     │   │
-│  │  1. FORK 整体准确率 0.75 → confidence_delta = +0.1                  │   │
-│  │  2. 查询特定准确率 0.85 > 0.75 → confidence_delta += 0.05           │   │
-│  │  3. 路径特定准确率 0.92 > 0.9 → confidence_delta += 0.05            │   │
+│  │  1. FORK overall accuracy 0.75 → confidence_delta = +0.1            │   │
+│  │  2. Query-specific accuracy 0.85 > 0.75 → confidence_delta += 0.05  │   │
+│  │  3. Path-specific accuracy 0.92 > 0.9 → confidence_delta += 0.05    │   │
 │  │                                                                     │   │
-│  │  最终: confidence_delta = +0.2 (达到上限)                           │   │
+│  │  Final: confidence_delta = +0.2 (reached maximum)                   │   │
 │  │                                                                     │   │
 │  └─────────────────────────────────────────────────────────────────────┘   │
 │                                                                             │
@@ -252,16 +255,16 @@ pub struct FeedbackRecord {
 
 ---
 
-## 4. 与 LlmPilot 的集成
+## 4. Integration with LlmPilot
 
-### 4.1 集成点
+### 4.1 Integration Points
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                        LlmPilot 与 Learner 集成                              │
+│                        LlmPilot and Learner Integration                      │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
-│  LlmPilot 结构:                                                             │
+│  LlmPilot Structure:                                                        │
 │  ┌─────────────────────────────────────────────────────────────────────┐   │
 │  │  pub struct LlmPilot {                                              │   │
 │  │      client: LlmClient,                                             │   │
@@ -271,23 +274,23 @@ pub struct FeedbackRecord {
 │  │      context_builder: ContextBuilder,                               │   │
 │  │      prompt_builder: PromptBuilder,                                 │   │
 │  │      response_parser: ResponseParser,                               │   │
-│  │      learner: Option<Arc<PilotLearner>>,  // ← 反馈学习器            │   │
+│  │      learner: Option<Arc<PilotLearner>>,  // ← Feedback learner     │   │
 │  │  }                                                                  │   │
 │  └─────────────────────────────────────────────────────────────────────┘   │
 │                                                                             │
-│  关键方法:                                                                   │
+│  Key Methods:                                                               │
 │  ┌─────────────────────────────────────────────────────────────────────┐   │
 │  │                                                                     │   │
-│  │  // 添加学习器                                                      │   │
+│  │  // Add learner                                                     │   │
 │  │  pub fn with_learner(self, learner: Arc<PilotLearner>) -> Self     │   │
 │  │                                                                     │   │
-│  │  // 从反馈存储创建学习器                                             │   │
+│  │  // Create learner from feedback store                              │   │
 │  │  pub fn with_feedback_store(self, store: Arc<FeedbackStore>) -> Self│   │
 │  │                                                                     │   │
-│  │  // 记录反馈                                                        │   │
+│  │  // Record feedback                                                 │   │
 │  │  pub fn record_feedback(&self, record: FeedbackRecord)             │   │
 │  │                                                                     │   │
-│  │  // 获取学习器（只读）                                               │   │
+│  │  // Get learner (read-only)                                         │   │
 │  │  pub fn learner(&self) -> Option<&PilotLearner>                    │   │
 │  │                                                                     │   │
 │  └─────────────────────────────────────────────────────────────────────┘   │
@@ -295,11 +298,11 @@ pub struct FeedbackRecord {
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### 4.2 决策流程
+### 4.2 Decision Flow
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                          带学习的决策流程                                     │
+│                          Decision Flow with Learning                         │
 └─────────────────────────────────────────────────────────────────────────────┘
 
                     ┌─────────────────┐
@@ -308,7 +311,7 @@ pub struct FeedbackRecord {
                              │
                              ▼
               ┌──────────────────────────────┐
-              │  1. 构建上下文 (ContextBuilder) │
+              │  1. Build Context (Builder)   │
               │     - query_section           │
               │     - path_section            │
               │     - candidates_section      │
@@ -316,7 +319,7 @@ pub struct FeedbackRecord {
                              │
                              ▼
               ┌──────────────────────────────┐
-              │  2. 获取学习器调整             │
+              │  2. Get Learner Adjustment    │
               │     if learner.is_some() {    │
               │       query_hash = ctx.hash() │
               │       path_hash = ctx.hash()  │
@@ -331,7 +334,7 @@ pub struct FeedbackRecord {
                              │
                              ▼
               ┌──────────────────────────────┐
-              │  3. 检查是否跳过介入           │
+              │  3. Check Skip Intervention   │
               │     if adjustment.skip {      │
               │       return default_decision │
               │     }                         │
@@ -339,13 +342,13 @@ pub struct FeedbackRecord {
                              │
                              ▼
               ┌──────────────────────────────┐
-              │  4. 调用 LLM 获取决策          │
+              │  4. Call LLM for Decision     │
               │     decision = llm.complete() │
               └──────────────┬───────────────┘
                              │
                              ▼
               ┌──────────────────────────────┐
-              │  5. 应用学习器调整             │
+              │  5. Apply Learner Adjustment  │
               │     decision.confidence +=    │
               │       adjustment.confidence   │
               │       .delta                  │
@@ -353,15 +356,16 @@ pub struct FeedbackRecord {
                              │
                              ▼
                     ┌─────────────────┐
-                    │  返回调整后决策  │
+                    │  Return Adjusted │
+                    │     Decision     │
                     └─────────────────┘
 ```
 
 ---
 
-## 5. 使用示例
+## 5. Usage Examples
 
-### 5.1 基本使用
+### 5.1 Basic Usage
 
 ```rust
 use std::sync::Arc;
@@ -371,21 +375,21 @@ use vectorless::retrieval::pilot::{
 };
 use vectorless::llm::LlmClient;
 
-// 1. 创建反馈存储
+// 1. Create feedback store
 let store = Arc::new(FeedbackStore::in_memory());
 
-// 2. 创建带学习器的 Pilot
+// 2. Create Pilot with learner
 let client = LlmClient::for_model("gpt-4o-mini");
 let pilot = LlmPilot::new(client, PilotConfig::default())
     .with_feedback_store(store.clone());
 
-// 3. 执行检索（Pilot 会自动应用学习调整）
+// 3. Execute retrieval (Pilot automatically applies learning adjustments)
 let decision = pilot.decide(&state).await;
 
-// 4. 记录用户反馈
+// 4. Record user feedback
 let record = FeedbackRecord::new(
     decision_id,
-    was_correct,  // 用户评价
+    was_correct,  // User rating
     decision.confidence as f64,
     InterventionPoint::Fork,
     query_hash,
@@ -393,38 +397,38 @@ let record = FeedbackRecord::new(
 );
 pilot.record_feedback(record);
 
-// 5. 后续检索会自动利用历史反馈改进决策
+// 5. Subsequent retrievals automatically leverage historical feedback
 ```
 
-### 5.2 持久化反馈
+### 5.2 Persisting Feedback
 
 ```rust
 use vectorless::retrieval::pilot::feedback::FeedbackStoreConfig;
 
-// 创建带持久化的反馈存储
+// Create feedback store with persistence
 let config = FeedbackStoreConfig::with_persistence("./data/feedback.json");
 let store = Arc::new(FeedbackStore::new(config));
 
-// 启动时加载历史反馈
+// Load historical feedback at startup
 store.load()?;
 
-// 定期保存
+// Persist periodically
 store.persist()?;
 ```
 
-### 5.3 查看学习效果
+### 5.3 Viewing Learning Effects
 
 ```rust
-// 获取整体准确率
+// Get overall accuracy
 let accuracy = learner.overall_accuracy();
 println!("Overall accuracy: {:.2}%", accuracy * 100.0);
 
-// 获取各介入点的统计
+// Get statistics by intervention point
 let stats = store.intervention_stats();
 println!("Fork accuracy: {:.2}%", stats.fork.accuracy() * 100.0);
 println!("Start accuracy: {:.2}%", stats.start.accuracy() * 100.0);
 
-// 检查是否有足够数据
+// Check if sufficient data exists
 if learner.has_sufficient_data() {
     println!("Learner has sufficient data for adjustments");
 }
@@ -432,28 +436,28 @@ if learner.has_sufficient_data() {
 
 ---
 
-## 6. 配置选项
+## 6. Configuration Options
 
 ```rust
-/// 反馈存储配置
+/// Feedback store configuration
 pub struct FeedbackStoreConfig {
-    /// 最大记录数（内存限制）
+    /// Maximum number of records (memory limit)
     pub max_records: usize,
-    /// 是否持久化
+    /// Whether to persist
     pub persist: bool,
-    /// 持久化路径
+    /// Persistence path
     pub storage_path: Option<String>,
 }
 
-/// 学习器配置
+/// Learner configuration
 pub struct LearnerConfig {
-    /// 最小样本数（少于此数不调整）
+    /// Minimum samples (no adjustment below this)
     pub min_samples: u64,
-    /// 高准确率阈值
+    /// High accuracy threshold
     pub high_accuracy_threshold: f64,
-    /// 低准确率阈值
+    /// Low accuracy threshold
     pub low_accuracy_threshold: f64,
-    /// 最大置信度调整幅度
+    /// Maximum confidence adjustment
     pub max_confidence_delta: f64,
 }
 
@@ -471,13 +475,13 @@ impl Default for LearnerConfig {
 
 ---
 
-## 7. 实现细节
+## 7. Implementation Details
 
-### 7.1 哈希计算
+### 7.1 Hash Calculation
 
 ```rust
 impl PilotContext {
-    /// 计算查询哈希（用于聚合相似查询）
+    /// Calculate query hash (for aggregating similar queries)
     pub fn query_hash(&self) -> u64 {
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
@@ -486,7 +490,7 @@ impl PilotContext {
         hasher.finish()
     }
 
-    /// 计算路径哈希（用于聚合相似路径）
+    /// Calculate path hash (for aggregating similar paths)
     pub fn path_hash(&self) -> u64 {
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
@@ -497,11 +501,11 @@ impl PilotContext {
 }
 ```
 
-### 7.2 统计计算
+### 7.2 Statistics Calculation
 
 ```rust
 impl ContextStats {
-    /// 计算准确率
+    /// Calculate accuracy
     pub fn accuracy(&self) -> f64 {
         if self.total == 0 {
             0.0
@@ -510,12 +514,12 @@ impl ContextStats {
         }
     }
 
-    /// 记录新反馈（增量更新）
+    /// Record new feedback (incremental update)
     fn record(&mut self, was_correct: bool, confidence: f64) {
         self.total += 1;
         if was_correct {
             self.correct += 1;
-            // 增量更新平均置信度
+            // Incremental update of average confidence
             self.avg_confidence_correct = 
                 (self.avg_confidence_correct * (self.correct - 1) as f64 + confidence)
                 / self.correct as f64;
@@ -531,37 +535,39 @@ impl ContextStats {
 
 ---
 
-## 8. 未来扩展
+## 8. Future Extensions
 
-### 8.1 可能的改进方向
+### 8.1 Potential Improvements
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                          未来扩展方向                                         │
+│                          Future Extension Directions                         │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
-│  1. 语义相似度聚合                                                          │
+│  1. Semantic Similarity Aggregation                                         │
 │     ┌─────────────────────────────────────────────────────────────────┐    │
-│     │  当前: 使用精确哈希聚合                                          │    │
-│     │  未来: 使用 embedding 计算语义相似度，聚合语义相近的查询           │    │
+│     │  Current: Aggregate using exact hash                             │    │
+│     │  Future: Use embeddings to calculate semantic similarity,        │    │
+│     │          aggregate semantically similar queries                  │    │
 │     └─────────────────────────────────────────────────────────────────┘    │
 │                                                                             │
-│  2. 时间衰减                                                                │
+│  2. Time Decay                                                              │
 │     ┌─────────────────────────────────────────────────────────────────┐    │
-│     │  当前: 所有历史反馈等权重                                        │    │
-│     │  未来: 近期反馈权重更高，旧反馈逐渐衰减                           │    │
+│     │  Current: All historical feedback has equal weight               │    │
+│     │  Future: Recent feedback has higher weight, old feedback         │    │
+│     │          gradually decays                                        │    │
 │     └─────────────────────────────────────────────────────────────────┘    │
 │                                                                             │
-│  3. 在线学习                                                                │
+│  3. Online Learning                                                         │
 │     ┌─────────────────────────────────────────────────────────────────┐    │
-│     │  当前: 离线分析，在线应用                                        │    │
-│     │  未来: 实时更新模型参数                                          │    │
+│     │  Current: Offline analysis, online application                   │    │
+│     │  Future: Real-time model parameter updates                       │    │
 │     └─────────────────────────────────────────────────────────────────┘    │
 │                                                                             │
-│  4. 个性化学习                                                              │
+│  4. Personalized Learning                                                   │
 │     ┌─────────────────────────────────────────────────────────────────┐    │
-│     │  当前: 全局学习                                                  │    │
-│     │  未来: 按用户/场景分别学习                                       │    │
+│     │  Current: Global learning                                        │    │
+│     │  Future: Learn separately per user/scenario                      │    │
 │     └─────────────────────────────────────────────────────────────────┘    │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -569,13 +575,13 @@ impl ContextStats {
 
 ---
 
-## 9. 代码结构
+## 9. Code Structure
 
 ```
 src/retrieval/pilot/
-├── mod.rs              # 模块入口
-├── feedback.rs         # FeedbackStore, PilotLearner 实现
-├── llm_pilot.rs        # LlmPilot（集成 learner）
-├── builder.rs          # ContextBuilder（添加 hash 方法）
+├── mod.rs              # Module entry point
+├── feedback.rs         # FeedbackStore, PilotLearner implementation
+├── llm_pilot.rs        # LlmPilot (integrates learner)
+├── builder.rs          # ContextBuilder (adds hash methods)
 └── ...
 ```
