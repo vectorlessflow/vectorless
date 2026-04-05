@@ -6,12 +6,13 @@
 //! This module provides:
 //! - **Workspace** — A directory-based document collection manager with LRU cache
 //! - **Persistence** — Save/load document trees and metadata
+//! - **Cache** — LRU cache for loaded documents
 //!
 //! # Example
 //!
 //! ```rust,no_run
 //! use vectorless::storage::{Workspace, PersistedDocument, DocumentMeta};
-//! use vectorless::domain::DocumentTree;
+//! use vectorless::document::DocumentTree;
 //!
 //! // Create a workspace
 //! let mut workspace = Workspace::new("./my_workspace")?;
@@ -26,13 +27,14 @@
 //! let loaded = workspace.load("doc-1")?.unwrap();
 //! ```
 
+pub mod cache;
 mod persistence;
 mod workspace;
 
 // Re-export main types
+pub use cache::DocumentCache;
 pub use persistence::{
     DocumentMeta, PageContent, PersistedDocument, load_document, load_index, save_document,
     save_index,
 };
-
 pub use workspace::{DocumentMetaEntry, Workspace};

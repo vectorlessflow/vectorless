@@ -26,17 +26,15 @@
 
 use std::collections::HashMap;
 use std::fs;
-use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
 
-use lru::LruCache;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, info, warn};
 
+use super::cache::DocumentCache;
 use super::persistence::{PersistedDocument, load_document, save_document};
-use crate::{Error};
 use crate::error::Result;
+use crate::Error;
 
 const META_FILE: &str = "_meta.json";
 const DEFAULT_CACHE_SIZE: usize = 100;
@@ -64,13 +62,6 @@ pub struct DocumentMetaEntry {
     pub line_count: Option<usize>,
 }
 
-/// Inner state for Workspace (separated for interior mutability).
-#[derive(Debug)]
-struct Inner {
-    /// LRU cache for loaded full documents.
-    document_cache: LruCache<String, PersistedDocument>,
-}
-
 /// A workspace for managing indexed documents.
 ///
 /// Uses LRU cache for loaded documents to balance memory usage
@@ -85,8 +76,8 @@ pub struct Workspace {
     /// This is always loaded in memory.
     meta_index: HashMap<String, DocumentMetaEntry>,
 
-    /// Inner state with LRU cache (protected by Mutex for interior mutability).
-    inner: Mutex<Inner>,
+    /// LRU cache for loaded documents.
+    cache: DocumentCache,
 }
 
 impl Workspace {
@@ -100,15 +91,10 @@ impl Workspace {
         let root = path.into();
         fs::create_dir_all(&root).map_err(Error::Io)?;
 
-        let capacity = NonZeroUsize::new(cache_size.max(1))
-            .unwrap_or_else(|| NonZeroUsize::new(DEFAULT_CACHE_SIZE).unwrap());
-
         let mut workspace = Self {
             root,
             meta_index: HashMap::new(),
-            inner: Mutex::new(Inner {
-                document_cache: LruCache::new(capacity),
-            }),
+            cache: DocumentCache::with_capacity(cache_size),
         };
 
         workspace.load_meta_index()?;
@@ -127,15 +113,10 @@ impl Workspace {
     ) -> Result<Self> {
         let root = path.clone().into();
         if root.exists() {
-            let capacity = NonZeroUsize::new(cache_size.max(1))
-                .unwrap_or_else(|| NonZeroUsize::new(DEFAULT_CACHE_SIZE).unwrap());
-
             let mut workspace = Self {
                 root,
                 meta_index: HashMap::new(),
-                inner: Mutex::new(Inner {
-                    document_cache: LruCache::new(capacity),
-                }),
+                cache: DocumentCache::with_capacity(cache_size),
             };
             workspace.load_meta_index()?;
             Ok(workspace)
@@ -186,17 +167,15 @@ impl Workspace {
                 .source_path
                 .as_ref()
                 .map(|p| p.to_string_lossy().to_string()),
-            page_count: doc.pages.first().map(|p| p.page),
-            line_count: None, // TODO: track this
+            page_count: if doc.pages.is_empty() { None } else { Some(doc.pages.len()) },
+            line_count: doc.meta.line_count,
         };
 
         self.meta_index.insert(doc_id.clone(), meta_entry);
         self.save_meta_index()?;
 
         // Remove from cache if present (will lazy load on next access)
-        if let Ok(mut inner) = self.inner.lock() {
-            inner.document_cache.pop(&doc_id);
-        }
+        let _ = self.cache.remove(&doc_id);
 
         info!("Saved document {} to workspace", doc_id);
         Ok(())
@@ -213,20 +192,13 @@ impl Workspace {
             return Ok(None);
         }
 
-        // Check LRU cache first (with lock)
-        {
-            let mut inner = self
-                .inner
-                .lock()
-                .map_err(|_| Error::Other("Workspace lock poisoned".to_string()))?;
-
-            if let Some(cached) = inner.document_cache.get(id) {
-                debug!("Cache hit for document {}", id);
-                return Ok(Some(cached.clone()));
-            }
+        // Check LRU cache first
+        if let Some(cached) = self.cache.get(id)? {
+            debug!("Cache hit for document {}", id);
+            return Ok(Some(cached));
         }
 
-        // Load from disk (lock released during I/O)
+        // Load from disk
         let doc_path = self.document_path(id);
         if !doc_path.exists() {
             warn!("Document {} in meta index but file missing", id);
@@ -235,14 +207,8 @@ impl Workspace {
 
         let doc = load_document(&doc_path)?;
 
-        // Add to LRU cache (with lock)
-        {
-            let mut inner = self
-                .inner
-                .lock()
-                .map_err(|_| Error::Other("Workspace lock poisoned".to_string()))?;
-            inner.document_cache.put(id.to_string(), doc.clone());
-        }
+        // Add to LRU cache
+        self.cache.put(id.to_string(), doc.clone())?;
 
         debug!("Loaded document {} from disk (cached)", id);
         Ok(Some(doc))
@@ -262,9 +228,7 @@ impl Workspace {
         self.meta_index.remove(id);
 
         // Remove from cache
-        if let Ok(mut inner) = self.inner.lock() {
-            inner.document_cache.pop(id);
-        }
+        let _ = self.cache.remove(id);
 
         self.save_meta_index()?;
 
@@ -284,18 +248,19 @@ impl Workspace {
 
     /// Get the number of items currently in the LRU cache.
     pub fn cache_len(&self) -> usize {
-        self.inner
-            .lock()
-            .map(|inner| inner.document_cache.len())
-            .unwrap_or(0)
+        self.cache.len()
+    }
+
+    /// Get cache utilization (0.0 to 1.0).
+    pub fn cache_utilization(&self) -> f64 {
+        self.cache.utilization()
     }
 
     /// Clear the LRU cache (does not remove documents from workspace).
-    pub fn clear_cache(&self) {
-        if let Ok(mut inner) = self.inner.lock() {
-            inner.document_cache.clear();
-            debug!("Cleared document cache");
-        }
+    pub fn clear_cache(&self) -> Result<()> {
+        self.cache.clear()?;
+        debug!("Cleared document cache");
+        Ok(())
     }
 
     /// Get the path for a document file.
@@ -372,8 +337,8 @@ impl Workspace {
                             .source_path
                             .as_ref()
                             .map(|p| p.to_string_lossy().to_string()),
-                        page_count: doc.pages.first().map(|p| p.page),
-                        line_count: None,
+                        page_count: if doc.pages.is_empty() { None } else { Some(doc.pages.len()) },
+                        line_count: doc.meta.line_count,
                     };
                     (doc_id, meta_entry)
                 })
@@ -393,5 +358,46 @@ impl Workspace {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    #[test]
+    fn test_workspace_create() {
+        let temp = TempDir::new().unwrap();
+        let workspace = Workspace::new(temp.path()).unwrap();
+
+        assert!(workspace.is_empty());
+        assert_eq!(workspace.len(), 0);
+    }
+
+    #[test]
+    fn test_workspace_open() {
+        let temp = TempDir::new().unwrap();
+        let path = temp.path().join("workspace");
+
+        // Create new
+        let workspace = Workspace::open(&path).unwrap();
+        assert!(workspace.is_empty());
+
+        // Reopen existing
+        let workspace2 = Workspace::open(&path).unwrap();
+        assert!(workspace2.is_empty());
+    }
+
+    #[test]
+    fn test_workspace_cache_operations() {
+        let temp = TempDir::new().unwrap();
+        let workspace = Workspace::with_cache_size(temp.path(), 5).unwrap();
+
+        assert_eq!(workspace.cache_len(), 0);
+        assert_eq!(workspace.cache.utilization(), 0.0);
+
+        workspace.clear_cache().unwrap();
+        assert_eq!(workspace.cache_len(), 0);
     }
 }
