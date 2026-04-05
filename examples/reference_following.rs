@@ -27,10 +27,10 @@
 //! ```
 
 use vectorless::document::{
-    DocumentTree, NodeReference, RefType, ReferenceExtractor,
+    DocumentTree, ReferenceExtractor,
 };
 use vectorless::retrieval::{
-    expand_with_references, FollowedReference, ReferenceConfig, ReferenceFollower,
+    expand_with_references, ReferenceConfig, ReferenceFollower,
 };
 
 fn main() {
