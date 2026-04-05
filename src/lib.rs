@@ -67,16 +67,18 @@
 //!
 //! ```rust,no_run
 //! use vectorless::{EngineBuilder, Engine};
+//! use vectorless::client::IndexContext;
 //!
 //! #[tokio::main]
-//! async fn main() -> vectorless::Result<()> {
+//! async fn main() -> Result<(), Box<dyn std::error::Error>> {
 //!     // Create client
-//!     let mut client = EngineBuilder::new()
+//!     let client = EngineBuilder::new()
 //!         .with_workspace("./workspace")
-//!         .build()?;
+//!         .build()
+//!         .await?;
 //!
 //!     // Index a document
-//!     let doc_id = client.index("./document.md").await?;
+//!     let doc_id = client.index(IndexContext::from_path("./document.md")).await?;
 //!
 //!     // Query with natural language
 //!     let result = client.query(&doc_id, "What is this about?").await?;

@@ -97,7 +97,7 @@ pub trait RetrievalStage: Send + Sync {
 
     /// Whether this stage can trigger backtracking.
     ///
-    /// Stages like Judge that evaluate sufficiency may need to
+    /// Stages like Evaluate that evaluate sufficiency may need to
     /// trigger additional search iterations.
     fn can_backtrack(&self) -> bool {
         false

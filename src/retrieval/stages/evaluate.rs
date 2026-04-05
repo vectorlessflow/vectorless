@@ -1,7 +1,7 @@
 // Copyright (c) 2026 vectorless developers
 // SPDX-License-Identifier: Apache-2.0
 
-//! Judge Stage - Sufficiency checking.
+//! Evaluate Stage - Sufficiency checking.
 //!
 //! This stage evaluates whether the collected content is sufficient
 //! to answer the query, and can trigger additional search iterations.
@@ -17,7 +17,7 @@ use crate::retrieval::sufficiency::{LlmJudge, SufficiencyChecker, ThresholdCheck
 use crate::retrieval::types::{RetrievalResult, RetrieveResponse, SufficiencyLevel};
 use crate::util::estimate_tokens;
 
-/// Judge Stage - evaluates retrieval sufficiency.
+/// Evaluate Stage - evaluates retrieval sufficiency.
 ///
 /// This stage:
 /// 1. Aggregates content from candidates
@@ -32,12 +32,12 @@ use crate::util::estimate_tokens;
 /// # Example
 ///
 /// ```rust,ignore
-/// let stage = JudgeStage::new()
+/// let stage = EvaluateStage::new()
 ///     .with_llm_judge(llm_client)
 ///     .with_max_iterations(3)
 ///     .with_content_aggregator(ContentAggregatorConfig::default());
 /// ```
-pub struct JudgeStage {
+pub struct EvaluateStage {
     threshold_checker: ThresholdChecker,
     llm_judge: Option<LlmJudge>,
     max_iterations: usize,
@@ -46,14 +46,14 @@ pub struct JudgeStage {
     content_aggregator: Option<ContentAggregator>,
 }
 
-impl Default for JudgeStage {
+impl Default for EvaluateStage {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl JudgeStage {
-    /// Create a new judge stage.
+impl EvaluateStage {
+    /// Create a new evaluate stage.
     pub fn new() -> Self {
         Self {
             threshold_checker: ThresholdChecker::new(),
@@ -207,10 +207,10 @@ impl JudgeStage {
             return SufficiencyLevel::Sufficient;
         }
 
-        // Use LLM judge if available and enabled
+        // Use LLM evaluate if available and enabled
         if self.use_llm_judge {
-            if let Some(ref judge) = self.llm_judge {
-                return judge.check(&ctx.query, &ctx.accumulated_content, ctx.token_count);
+            if let Some(ref evaluate) = self.llm_judge {
+                return evaluate.check(&ctx.query, &ctx.accumulated_content, ctx.token_count);
             }
         }
 
@@ -301,9 +301,9 @@ impl JudgeStage {
 }
 
 #[async_trait]
-impl RetrievalStage for JudgeStage {
+impl RetrievalStage for EvaluateStage {
     fn name(&self) -> &'static str {
-        "judge"
+        "evaluate"
     }
 
     fn depends_on(&self) -> Vec<&'static str> {
@@ -315,7 +315,7 @@ impl RetrievalStage for JudgeStage {
     }
 
     fn failure_policy(&self) -> FailurePolicy {
-        FailurePolicy::skip() // Can skip if judge fails
+        FailurePolicy::skip() // Can skip if evaluate fails
     }
 
     fn can_backtrack(&self) -> bool {
@@ -343,7 +343,7 @@ impl RetrievalStage for JudgeStage {
         info!("Sufficiency level: {:?}", ctx.sufficiency);
 
         // Update metrics
-        ctx.metrics.judge_time_ms += start.elapsed().as_millis() as u64;
+        ctx.metrics.evaluate_time_ms += start.elapsed().as_millis() as u64;
         ctx.metrics.tokens_used = tokens;
 
         // 3. Decide next action based on sufficiency
@@ -384,7 +384,7 @@ impl RetrievalStage for JudgeStage {
             }
         };
 
-        // Update LLM call count if we used LLM judge
+        // Update LLM call count if we used LLM evaluate
         if self.use_llm_judge && self.llm_judge.is_some() {
             ctx.metrics.llm_calls += 1;
         }
@@ -398,21 +398,21 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_judge_stage_creation() {
-        let stage = JudgeStage::new();
+    fn test_evaluate_stage_creation() {
+        let stage = EvaluateStage::new();
         assert!(stage.llm_judge.is_none());
         assert!(!stage.use_llm_judge);
     }
 
     #[test]
-    fn test_judge_stage_dependencies() {
-        let stage = JudgeStage::new();
+    fn test_evaluate_stage_dependencies() {
+        let stage = EvaluateStage::new();
         assert_eq!(stage.depends_on(), vec!["search"]);
     }
 
     #[test]
-    fn test_judge_can_backtrack() {
-        let stage = JudgeStage::new();
+    fn test_evaluate_can_backtrack() {
+        let stage = EvaluateStage::new();
         assert!(stage.can_backtrack());
     }
 }

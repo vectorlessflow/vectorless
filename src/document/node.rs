@@ -10,6 +10,8 @@ use indextree::NodeId as IndexTreeNodeId;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
+use super::reference::NodeReference;
+
 /// Unique identifier for a node in the document tree.
 ///
 /// This is a newtype wrapper around indextree's NodeId to provide
@@ -96,6 +98,13 @@ pub struct TreeNode {
 
     /// Token count estimate.
     pub token_count: Option<usize>,
+
+    /// References found in this node's content.
+    ///
+    /// These are in-document references like "see Appendix G" or
+    /// "refer to Table 5.3" that can be followed during retrieval.
+    #[serde(default)]
+    pub references: Vec<NodeReference>,
 }
 
 impl Default for TreeNode {
@@ -113,6 +122,7 @@ impl Default for TreeNode {
             node_id: None,
             physical_index: None,
             token_count: None,
+            references: Vec::new(),
         }
     }
 }

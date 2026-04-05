@@ -20,7 +20,7 @@ use vectorless::document::DocumentTree;
 use vectorless::retrieval::{
     PipelineRetriever, RetrieveOptions, Retriever, StrategyPreference,
     pipeline::RetrievalOrchestrator,
-    stages::{AnalyzeStage, JudgeStage, PlanStage, SearchStage},
+    stages::{AnalyzeStage, EvaluateStage, PlanStage, SearchStage},
 };
 
 #[tokio::main]
@@ -119,7 +119,7 @@ async fn demo_orchestrator(tree: &DocumentTree) -> vectorless::Result<()> {
         .stage(AnalyzeStage::new())
         .stage(PlanStage::new())
         .stage(SearchStage::new())
-        .stage(JudgeStage::new());
+        .stage(EvaluateStage::new());
 
     println!("Orchestrator stages:");
     if let Ok(names) = orchestrator.stage_names() {

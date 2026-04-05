@@ -34,11 +34,12 @@
 //! use vectorless::client::{Engine, EngineBuilder, IndexContext};
 //!
 //! # #[tokio::main]
-//! # async fn main() -> vectorless::Result<()> {
+//! # async fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! // Create a client with default settings
 //! let client = EngineBuilder::new()
 //!     .with_workspace("./my_workspace")
-//!     .build()?;
+//!     .build()
+//!     .await?;
 //!
 //! // Index a document from file
 //! let doc_id = client.index(IndexContext::from_path("./document.md")).await?;
@@ -69,12 +70,13 @@
 //! ```rust,no_run
 //! # use vectorless::client::{Engine, EngineBuilder, IndexContext};
 //! # #[tokio::main]
-//! # async fn main() -> vectorless::Result<()> {
+//! # async fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! let client = EngineBuilder::new()
 //!     .with_workspace("./workspace")
-//!     .build()?;
+//!     .build()
+//!     .await?;
 //!
-//! let session = client.session();
+//! let session = client.session().await;
 //!
 //! // Index multiple documents
 //! let doc1 = session.index(IndexContext::from_path("./doc1.md")).await?;
@@ -91,9 +93,9 @@
 //! Monitor operation progress with events:
 //!
 //! ```rust,no_run
-//! # use vectorless::client::{Engine, EngineBuilder, EventEmitter, events::IndexEvent};
+//! # use vectorless::client::{Engine, EngineBuilder, EventEmitter, IndexEvent};
 //! # #[tokio::main]
-//! # async fn main() -> vectorless::Result<()> {
+//! # async fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! let events = EventEmitter::new()
 //!     .on_index(|e| match e {
 //!         IndexEvent::Complete { doc_id } => println!("Indexed: {}", doc_id),
@@ -102,7 +104,8 @@
 //!
 //! let client = EngineBuilder::new()
 //!     .with_events(events)
-//!     .build()?;
+//!     .build()
+//!     .await?;
 //! # Ok(())
 //! # }
 //! ```

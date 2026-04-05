@@ -67,7 +67,7 @@ pub struct ExecutionGroup {
 ///     .stage(AnalyzeStage::new())
 ///     .stage(PlanStage::new())
 ///     .stage(SearchStage::new())
-///     .stage(JudgeStage::new())
+///     .stage(EvaluateStage::new())
 ///     .with_pilot(pilot)
 ///     .with_max_backtracks(3);
 ///

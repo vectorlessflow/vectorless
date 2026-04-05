@@ -12,7 +12,7 @@ use std::sync::Arc;
 use super::content::ContentAggregatorConfig;
 use super::pipeline::RetrievalOrchestrator;
 use super::retriever::{CostEstimate, Retriever, RetrieverError, RetrieverResult};
-use super::stages::{AnalyzeStage, JudgeStage, PlanStage, SearchStage};
+use super::stages::{AnalyzeStage, EvaluateStage, PlanStage, SearchStage};
 use super::strategy::LlmStrategy;
 use super::types::{RetrieveOptions, RetrieveResponse};
 use crate::document::DocumentTree;
@@ -26,7 +26,7 @@ use crate::retrieval::pilot::{LlmPilot, PilotConfig};
 /// - Analyze stage: Query complexity and keyword extraction
 /// - Plan stage: Strategy and algorithm selection
 /// - Search stage: Tree traversal
-/// - Judge stage: Sufficiency checking
+/// - Evaluate stage: Sufficiency checking
 ///
 /// # Example
 ///
@@ -81,7 +81,7 @@ impl PipelineRetriever {
 
     /// Set content aggregator configuration.
     ///
-    /// When enabled, the Judge stage uses precision-focused content
+    /// When enabled, the Evaluate stage uses precision-focused content
     /// aggregation with relevance scoring and token budget control.
     pub fn with_content_config(mut self, config: ContentAggregatorConfig) -> Self {
         self.content_config = Some(config);
@@ -113,16 +113,16 @@ impl PipelineRetriever {
         }
         orchestrator = orchestrator.stage(search_stage);
 
-        // Add judge stage with optional content aggregator
-        let mut judge_stage = JudgeStage::new();
+        // Add evaluate stage with optional content aggregator
+        let mut evaluate_stage = EvaluateStage::new();
         if let Some(ref client) = self.llm_client {
-            judge_stage = judge_stage.with_llm_judge(client.clone());
+            evaluate_stage = evaluate_stage.with_llm_judge(client.clone());
         }
         // Configure content aggregator if provided
         if let Some(ref config) = self.content_config {
-            judge_stage = judge_stage.with_content_aggregator(config.clone());
+            evaluate_stage = evaluate_stage.with_content_aggregator(config.clone());
         }
-        orchestrator = orchestrator.stage(judge_stage);
+        orchestrator = orchestrator.stage(evaluate_stage);
 
         orchestrator
     }

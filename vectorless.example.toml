@@ -7,33 +7,46 @@
 # ============================================================================
 # LLM Configuration (Unified)
 # ============================================================================
+#
+# The LLM pool allows configuring different models for different purposes:
+# - summary: Used for generating document summaries during indexing
+# - retrieval: Used for retrieval decisions and content evaluation
+# - pilot: Used for intelligent navigation guidance
+#
+# Each client can have its own model, endpoint, and settings.
 
 [llm]
-# Default API key (can be overridden per client)
-# api_key = "sk-..."
+# Default API key (used by all clients unless overridden per-client)
+api_key = "sk-your-api-key-here"
 
-# Summary client - used for generating document summaries
-[llm.pool.summary]
+# Summary client - generates document summaries during indexing
+# Use a fast, cheap model for bulk processing
+[llm.summary]
 model = "gpt-4o-mini"
 endpoint = "https://api.openai.com/v1"
 max_tokens = 200
 temperature = 0.0
+# api_key = "sk-specific-key-for-summary"  # Optional: override default
 
-# Retrieval client - used for navigation decisions
-[llm.pool.retrieval]
+# Retrieval client - used for retrieval decisions and content evaluation
+# Can use a more capable model for better decisions
+[llm.retrieval]
 model = "gpt-4o"
 endpoint = "https://api.openai.com/v1"
 max_tokens = 100
 temperature = 0.0
+# api_key = "sk-specific-key-for-retrieval"  # Optional: override default
 
-# Pilot client - used for intelligent navigation
-[llm.pool.pilot]
+# Pilot client - used for intelligent navigation guidance
+# Use a fast model for quick navigation decisions
+[llm.pilot]
 model = "gpt-4o-mini"
 endpoint = "https://api.openai.com/v1"
 max_tokens = 300
 temperature = 0.0
+# api_key = "sk-specific-key-for-pilot"  # Optional: override default
 
-# Retry configuration
+# Retry configuration (applies to all LLM calls)
 [llm.retry]
 max_attempts = 3
 initial_delay_ms = 500
@@ -41,17 +54,18 @@ max_delay_ms = 30000
 multiplier = 2.0
 retry_on_rate_limit = true
 
-# Throttle/rate limiting configuration
+# Throttle/rate limiting configuration (applies to all LLM calls)
 [llm.throttle]
 max_concurrent_requests = 10
 requests_per_minute = 500
 enabled = true
 semaphore_enabled = true
 
-# Fallback configuration
+# Fallback configuration (applies to all LLM calls)
 [llm.fallback]
 enabled = true
 models = ["gpt-4o-mini", "glm-4-flash"]
+# Alternative endpoints for fallback
 # endpoints = [
 #     "https://api.openai.com/v1",
 #     "https://api.z.ai/api/paas/v4"
@@ -73,7 +87,7 @@ retention_days = 30
 track_tokens = true
 track_latency = true
 track_cost = true
-cost_per_1k_input_tokens = 0.00015   # gpt-4o-mini
+cost_per_1k_input_tokens = 0.00015   # gpt-4o-mini pricing
 cost_per_1k_output_tokens = 0.0006
 
 [metrics.pilot]
@@ -153,7 +167,7 @@ low_similarity_threshold = 0.3
 enabled = true
 token_budget = 4000
 min_relevance_score = 0.2
-scoring_strategy = "keyword_bm25"
+scoring_strategy = "hybrid"  # keyword | bm25 | hybrid
 output_format = "markdown"
 include_scores = false
 hierarchical_min_per_level = 0.1
@@ -169,6 +183,18 @@ enabled = true
 max_sub_queries = 3
 decomposition_model = "gpt-4o-mini"
 aggregation_strategy = "merge"  # merge | rank | synthesize
+
+# ============================================================================
+# Reference Following Configuration
+# ============================================================================
+
+[retrieval.reference]
+enabled = true
+max_depth = 3
+max_references = 10
+follow_pages = true
+follow_tables_figures = true
+min_confidence = 0.5
 
 # ============================================================================
 # Storage Configuration
@@ -195,26 +221,3 @@ subsection_threshold = 300
 max_segment_tokens = 3000
 max_summary_tokens = 200
 min_summary_tokens = 20
-
-# ============================================================================
-# Legacy Configuration (deprecated, use llm.* instead)
-# ============================================================================
-
-[summary]
-model = "gpt-4o-mini"
-endpoint = "https://api.openai.com/v1"
-max_tokens = 200
-temperature = 0.0
-
-[concurrency]
-max_concurrent_requests = 10
-requests_per_minute = 500
-enabled = true
-semaphore_enabled = true
-
-[fallback]
-enabled = true
-models = ["gpt-4o-mini", "glm-4-flash"]
-on_rate_limit = "retry_then_fallback"
-on_timeout = "retry_then_fallback"
-on_all_failed = "return_error"

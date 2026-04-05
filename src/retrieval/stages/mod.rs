@@ -8,12 +8,12 @@
 //! - [`AnalyzeStage`] - Query analysis (complexity, keywords, target sections)
 //! - [`PlanStage`] - Strategy and algorithm selection
 //! - [`SearchStage`] - Execute tree search
-//! - [`JudgeStage`] - Sufficiency checking
+//! - [`EvaluateStage`] - Sufficiency checking
 //!
 //! # Stage Flow
 //!
 //! ```text
-//! Analyze → Plan → Search → Judge
+//! Analyze → Plan → Search → Evaluate
 //!                    ↑         │
 //!                    └─────────┘ (NeedMoreData)
 //! ```
@@ -23,11 +23,11 @@
 //! Implement [`RetrievalStage`](crate::retrieval::pipeline::RetrievalStage) to create custom stages.
 
 mod analyze;
-mod judge;
+mod evaluate;
 mod plan;
 mod search;
 
 pub use analyze::AnalyzeStage;
-pub use judge::JudgeStage;
+pub use evaluate::EvaluateStage;
 pub use plan::PlanStage;
 pub use search::SearchStage;

@@ -36,6 +36,7 @@ fn make_node_id() -> NodeId {
         node_id: None,
         physical_index: None,
         token_count: None,
+        references: Vec::new(),
     };
     NodeId(arena.new_node(node))
 }

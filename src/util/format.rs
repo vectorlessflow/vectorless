@@ -8,7 +8,7 @@
 /// # Example
 ///
 /// ```
-/// use vectorless::util::format::truncate;
+/// use vectorless::util::truncate;
 ///
 /// assert_eq!(truncate("hello world", 8), "hello...");
 /// assert_eq!(truncate("hi", 10), "hi");
@@ -53,7 +53,7 @@ pub fn truncate_words(text: &str, max_len: usize) -> String {
 /// # Example
 ///
 /// ```
-/// use vectorless::util::format::format_number;
+/// use vectorless::util::format_number;
 ///
 /// assert_eq!(format_number(1000), "1,000");
 /// assert_eq!(format_number(1234567), "1,234,567");
@@ -78,7 +78,7 @@ pub fn format_number(n: usize) -> String {
 /// # Example
 ///
 /// ```
-/// use vectorless::util::format::format_bytes;
+/// use vectorless::util::format_bytes;
 ///
 /// assert_eq!(format_bytes(500), "500 B");
 /// assert_eq!(format_bytes(1024), "1.0 KB");
@@ -106,7 +106,7 @@ pub fn format_bytes(bytes: usize) -> String {
 /// # Example
 ///
 /// ```
-/// use vectorless::util::format::format_percent;
+/// use vectorless::util::format_percent;
 ///
 /// assert_eq!(format_percent(0.5), "50.0%");
 /// assert_eq!(format_percent(0.123), "12.3%");
