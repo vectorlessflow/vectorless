@@ -14,7 +14,6 @@ pub enum Error {
     // =========================================================================
     // Document & Parsing Errors
     // =========================================================================
-
     /// An error occurred while parsing a document.
     #[error("Document parsing error: {0}")]
     Parse(String),
@@ -30,7 +29,6 @@ pub enum Error {
     // =========================================================================
     // Index Errors
     // =========================================================================
-
     /// An error occurred while building the index.
     #[error("Index building error: {0}")]
     IndexBuild(String),
@@ -46,7 +44,6 @@ pub enum Error {
     // =========================================================================
     // Retrieval Errors
     // =========================================================================
-
     /// An error occurred during retrieval.
     #[error("Retrieval error: {0}")]
     Retrieval(String),
@@ -62,7 +59,6 @@ pub enum Error {
     // =========================================================================
     // LLM Errors
     // =========================================================================
-
     /// An error occurred during LLM call.
     #[error("LLM error: {0}")]
     Llm(String),
@@ -78,7 +74,6 @@ pub enum Error {
     // =========================================================================
     // Summary Errors
     // =========================================================================
-
     /// An error occurred during summarization.
     #[error("Summarization error: {0}")]
     Summarization(String),
@@ -90,7 +85,6 @@ pub enum Error {
     // =========================================================================
     // Storage Errors
     // =========================================================================
-
     /// An error occurred during I/O operations.
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
@@ -126,7 +120,6 @@ pub enum Error {
     // =========================================================================
     // Configuration Errors
     // =========================================================================
-
     /// TOML parsing error.
     #[error("TOML parsing error: {0}")]
     Toml(String),
@@ -142,7 +135,6 @@ pub enum Error {
     // =========================================================================
     // Node Errors
     // =========================================================================
-
     /// The requested node was not found.
     #[error("Node not found: {0}")]
     NodeNotFound(String),
@@ -150,7 +142,6 @@ pub enum Error {
     // =========================================================================
     // Input Validation Errors
     // =========================================================================
-
     /// Invalid input.
     #[error("Invalid input: {0}")]
     InvalidInput(String),
@@ -178,7 +169,6 @@ pub enum Error {
     // =========================================================================
     // Throttle Errors
     // =========================================================================
-
     /// Throttle error.
     #[error("Throttle error: {0}")]
     Throttle(String),
@@ -190,7 +180,6 @@ pub enum Error {
     // =========================================================================
     // Timeout Errors
     // =========================================================================
-
     /// Operation timeout.
     #[error("Operation timeout: {0}")]
     Timeout(String),
@@ -198,7 +187,6 @@ pub enum Error {
     // =========================================================================
     // Generic Errors
     // =========================================================================
-
     /// A generic error with a message.
     #[error("{0}")]
     Other(String),
@@ -229,10 +217,7 @@ impl Error {
     pub fn is_retryable(&self) -> bool {
         matches!(
             self,
-            Self::RateLimitExceeded(_)
-                | Self::SearchTimeout(_)
-                | Self::Timeout(_)
-                | Self::Llm(_)
+            Self::RateLimitExceeded(_) | Self::SearchTimeout(_) | Self::Timeout(_) | Self::Llm(_)
         )
     }
 

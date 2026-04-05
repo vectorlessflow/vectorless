@@ -65,12 +65,8 @@ mod r#trait;
 
 pub use budget::{BudgetController, BudgetUsage};
 pub use builder::{ContextBuilder, PilotContext, TokenBudget};
-pub use config::{
-    BudgetConfig, InterventionConfig, PilotConfig, PilotMode,
-};
-pub use decision::{
-    InterventionPoint, PilotDecision, RankedCandidate, SearchDirection,
-};
+pub use config::{BudgetConfig, InterventionConfig, PilotConfig, PilotMode};
+pub use decision::{InterventionPoint, PilotDecision, RankedCandidate, SearchDirection};
 pub use fallback::{FallbackAction, FallbackConfig, FallbackError, FallbackLevel, FallbackManager};
 pub use llm_pilot::LlmPilot;
 pub use metrics::{CallRecord, MetricsCollector, PilotMetrics};

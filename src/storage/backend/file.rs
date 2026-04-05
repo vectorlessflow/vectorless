@@ -10,8 +10,8 @@ use std::sync::RwLock;
 use tracing::{debug, warn};
 
 use super::StorageBackend;
-use crate::error::Result;
 use crate::Error;
+use crate::error::Result;
 
 /// File system storage backend.
 ///
@@ -68,9 +68,7 @@ impl FileBackend {
     /// Convert a key to a file path.
     fn key_to_path(&self, key: &str) -> PathBuf {
         // Sanitize key to prevent path traversal
-        let sanitized = key
-            .replace("..", "_")
-            .replace(['/', '\\', ':'], "_");
+        let sanitized = key.replace("..", "_").replace(['/', '\\', ':'], "_");
         self.root.join(format!("{}.bin", sanitized))
     }
 

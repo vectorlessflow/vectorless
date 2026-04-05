@@ -9,8 +9,8 @@
 //! - [`OptimizationConfig`] - Tree optimization settings
 //! - [`ThinningConfig`] - Node merging settings
 
-use crate::config::{ConcurrencyConfig, IndexerConfig};
 use super::summary::SummaryStrategy;
+use crate::config::{ConcurrencyConfig, IndexerConfig};
 
 /// Index mode for document processing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

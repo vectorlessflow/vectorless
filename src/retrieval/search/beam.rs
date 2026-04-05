@@ -76,7 +76,8 @@ impl BeamSearch {
         let beta = 0.6 * pilot_decision.confidence;
 
         // Build a map from node_id to pilot score
-        let mut pilot_scores: std::collections::HashMap<NodeId, f32> = std::collections::HashMap::new();
+        let mut pilot_scores: std::collections::HashMap<NodeId, f32> =
+            std::collections::HashMap::new();
         for ranked in &pilot_decision.ranked_candidates {
             pilot_scores.insert(ranked.node_id, ranked.score);
         }
@@ -100,9 +101,7 @@ impl BeamSearch {
             .collect();
 
         // Sort by merged score
-        merged.sort_by(|a, b| {
-            b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal)
-        });
+        merged.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
 
         merged
     }
@@ -137,12 +136,20 @@ impl SearchTree for BeamSearch {
         let initial_candidates = if let Some(p) = pilot {
             if p.config().guide_at_start {
                 if let Some(guidance) = p.guide_start(tree, &context.query).await {
-                    debug!("Pilot provided start guidance with confidence {}", guidance.confidence);
+                    debug!(
+                        "Pilot provided start guidance with confidence {}",
+                        guidance.confidence
+                    );
                     pilot_interventions += 1;
 
                     // Use Pilot's ranked order if available
                     if guidance.has_candidates() {
-                        self.merge_with_pilot_decision(tree, &root_children, &guidance, &context.query)
+                        self.merge_with_pilot_decision(
+                            tree,
+                            &root_children,
+                            &guidance,
+                            &context.query,
+                        )
                     } else {
                         self.score_candidates_with_query(tree, &root_children, &context.query)
                     }
@@ -203,7 +210,10 @@ impl SearchTree for BeamSearch {
 
                         // Check if Pilot wants to intervene
                         if p.should_intervene(&state) {
-                            trace!("Pilot intervening at fork with {} candidates", children.len());
+                            trace!(
+                                "Pilot intervening at fork with {} candidates",
+                                children.len()
+                            );
 
                             match p.decide(&state).await {
                                 decision => {
@@ -215,7 +225,12 @@ impl SearchTree for BeamSearch {
                                     );
 
                                     // Merge algorithm scores with Pilot decision
-                                    self.merge_with_pilot_decision(tree, &children, &decision, &context.query)
+                                    self.merge_with_pilot_decision(
+                                        tree,
+                                        &children,
+                                        &decision,
+                                        &context.query,
+                                    )
                                 }
                             }
                         } else {
@@ -276,7 +291,8 @@ impl SearchTree for BeamSearch {
         if result.paths.is_empty() && config.min_score > 0.0 {
             debug!("No results above min_score, adding best candidates as fallback");
             // Re-score initial candidates and take top-k
-            let all_candidates = self.score_candidates_with_query(tree, &tree.children(tree.root()), &context.query);
+            let all_candidates =
+                self.score_candidates_with_query(tree, &tree.children(tree.root()), &context.query);
             for (node_id, score) in all_candidates.into_iter().take(config.top_k) {
                 result.paths.push(SearchPath::from_node(node_id, score));
             }

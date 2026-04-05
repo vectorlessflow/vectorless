@@ -15,9 +15,9 @@
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
+use vectorless::Result;
 use vectorless::document::DocumentTree;
 use vectorless::storage::{DocumentMeta, PersistedDocument, StorageBackend, Workspace};
-use vectorless::Result;
 
 /// A simple in-memory backend with logging.
 ///
@@ -42,7 +42,16 @@ impl StorageBackend for LoggingMemoryBackend {
     fn get(&self, key: &str) -> Result<Option<Vec<u8>>> {
         let data = self.data.read().unwrap();
         let result = data.get(key).cloned();
-        println!("   [{}] GET '{}' -> {}", self.name, key, if result.is_some() { "found" } else { "not found" });
+        println!(
+            "   [{}] GET '{}' -> {}",
+            self.name,
+            key,
+            if result.is_some() {
+                "found"
+            } else {
+                "not found"
+            }
+        );
         Ok(result)
     }
 

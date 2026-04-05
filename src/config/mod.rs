@@ -75,27 +75,37 @@ mod validator;
 
 // Re-export main types
 pub use docs::ConfigDocs;
-pub use loader::{find_config_file, ConfigError, ConfigLoader, CONFIG_FILE_NAMES};
+pub use loader::{CONFIG_FILE_NAMES, ConfigError, ConfigLoader, find_config_file};
 pub use merge::{ConfigOverlay, Merge, MergeStrategy};
 pub use types::{
+    CacheConfig,
+    CompressionAlgorithm,
+    CompressionConfig,
+    // Concurrency
+    ConcurrencyConfig,
     // Main config
     Config,
+    // Validation
+    ConfigValidationError,
+    // Content aggregator
+    ContentAggregatorConfig,
+    // Fallback
+    FallbackBehavior,
+    FallbackConfig,
     // Indexer
     IndexerConfig,
     // LLM configs
-    LlmConfig, SummaryConfig,
+    LlmConfig,
+    OnAllFailedBehavior,
     // Retrieval configs
-    RetrievalConfig, SearchConfig,
+    RetrievalConfig,
+    SearchConfig,
+    Severity,
     // Storage and sufficiency
-    StorageConfig, CompressionAlgorithm, CompressionConfig,
-    CacheConfig, StrategyConfig, SufficiencyConfig,
-    // Content aggregator
-    ContentAggregatorConfig,
-    // Concurrency
-    ConcurrencyConfig,
-    // Fallback
-    FallbackBehavior, FallbackConfig, OnAllFailedBehavior,
-    // Validation
-    ConfigValidationError, ValidationError, Severity,
+    StorageConfig,
+    StrategyConfig,
+    SufficiencyConfig,
+    SummaryConfig,
+    ValidationError,
 };
 pub use validator::{ConfigValidator, ValidationRule};

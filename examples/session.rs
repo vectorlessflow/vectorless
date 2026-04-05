@@ -185,10 +185,7 @@ token_budget = 4000
     println!("  - Queries: {}", stats.query_count.get());
     println!("  - Cache hits: {}", stats.cache_hits.get());
     println!("  - Cache misses: {}", stats.cache_misses.get());
-    println!(
-        "  - Cache hit rate: {:.1}%",
-        stats.cache_hit_rate() * 100.0
-    );
+    println!("  - Cache hit rate: {:.1}%", stats.cache_hit_rate() * 100.0);
     if let Some(avg_time) = stats.avg_query_time() {
         println!("  - Avg query time: {:?}", avg_time);
     }

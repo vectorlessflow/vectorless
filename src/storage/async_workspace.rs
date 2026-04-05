@@ -36,8 +36,8 @@ use tracing::{debug, info, warn};
 use super::backend::{FileBackend, StorageBackend};
 use super::cache::DocumentCache;
 use super::persistence::{PersistedDocument, load_document_from_bytes, save_document_to_bytes};
-use crate::error::Result;
 use crate::Error;
+use crate::error::Result;
 
 const META_KEY: &str = "_meta";
 const DEFAULT_CACHE_SIZE: usize = 100;
@@ -121,8 +121,7 @@ pub struct AsyncWorkspace {
 
 impl std::fmt::Debug for AsyncWorkspace {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("AsyncWorkspace")
-            .finish()
+        f.debug_struct("AsyncWorkspace").finish()
     }
 }
 
@@ -158,14 +157,21 @@ impl AsyncWorkspace {
 
     /// Create a new async workspace with custom cache size.
     pub async fn with_cache_size(path: impl Into<PathBuf>, cache_size: usize) -> Result<Self> {
-        Self::with_options(path, AsyncWorkspaceOptions {
-            cache_size,
-            ..Default::default()
-        }).await
+        Self::with_options(
+            path,
+            AsyncWorkspaceOptions {
+                cache_size,
+                ..Default::default()
+            },
+        )
+        .await
     }
 
     /// Create a new async workspace with custom options.
-    pub async fn with_options(path: impl Into<PathBuf>, options: AsyncWorkspaceOptions) -> Result<Self> {
+    pub async fn with_options(
+        path: impl Into<PathBuf>,
+        options: AsyncWorkspaceOptions,
+    ) -> Result<Self> {
         let root = path.into();
         let backend = Arc::new(FileBackend::new(&root)?);
 
@@ -229,7 +235,11 @@ impl AsyncWorkspace {
                 .source_path
                 .as_ref()
                 .map(|p| p.to_string_lossy().to_string()),
-            page_count: if doc.pages.is_empty() { None } else { Some(doc.pages.len()) },
+            page_count: if doc.pages.is_empty() {
+                None
+            } else {
+                Some(doc.pages.len())
+            },
             line_count: doc.meta.line_count,
         };
 
@@ -417,10 +427,7 @@ impl AsyncWorkspace {
     /// Rebuild the meta index from existing documents.
     fn rebuild_meta_index(inner: &mut AsyncWorkspaceInner) -> Result<()> {
         let keys = inner.backend.keys()?;
-        let doc_keys: Vec<_> = keys
-            .iter()
-            .filter(|k| k.starts_with("doc:"))
-            .collect();
+        let doc_keys: Vec<_> = keys.iter().filter(|k| k.starts_with("doc:")).collect();
 
         for key in doc_keys {
             if let Some(bytes) = inner.backend.get(key)? {
@@ -436,7 +443,11 @@ impl AsyncWorkspace {
                             .source_path
                             .as_ref()
                             .map(|p| p.to_string_lossy().to_string()),
-                        page_count: if doc.pages.is_empty() { None } else { Some(doc.pages.len()) },
+                        page_count: if doc.pages.is_empty() {
+                            None
+                        } else {
+                            Some(doc.pages.len())
+                        },
                         line_count: doc.meta.line_count,
                     };
                     inner.meta_index.insert(doc_id, meta_entry);

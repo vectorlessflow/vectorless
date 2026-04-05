@@ -31,10 +31,10 @@ use std::time::{Duration, Instant};
 use tracing::info;
 use uuid::Uuid;
 
-use crate::{DocumentTree, Error};
 use crate::error::Result;
 use crate::retrieval::RetrieveOptions;
 use crate::storage::PersistedDocument;
+use crate::{DocumentTree, Error};
 
 use super::context::ClientContext;
 use super::events::EventEmitter;
@@ -189,9 +189,8 @@ impl SessionStats {
 
     /// Add query time.
     fn add_query_time(&self, duration: Duration) {
-        self.total_query_time_us.set(
-            self.total_query_time_us.get() + duration.as_micros() as u64
-        );
+        self.total_query_time_us
+            .set(self.total_query_time_us.get() + duration.as_micros() as u64);
     }
 
     /// Increment cache hits.
@@ -294,7 +293,8 @@ impl Session {
     ///
     /// Uses the cached tree if available, otherwise loads from workspace.
     pub async fn query(&self, doc_id: &str, question: &str) -> Result<QueryResult> {
-        self.query_with_options(doc_id, question, RetrieveOptions::default()).await
+        self.query_with_options(doc_id, question, RetrieveOptions::default())
+            .await
     }
 
     /// Query a document with options.
@@ -324,7 +324,8 @@ impl Session {
     ///
     /// Searches each document and merges results.
     pub async fn query_all(&self, question: &str) -> Result<Vec<QueryResult>> {
-        self.query_all_with_options(question, RetrieveOptions::default()).await
+        self.query_all_with_options(question, RetrieveOptions::default())
+            .await
     }
 
     /// Query across all documents with options.
@@ -342,7 +343,10 @@ impl Session {
         let mut results = Vec::new();
 
         for doc_id in &doc_ids {
-            match self.query_with_options(doc_id, question, options.clone()).await {
+            match self
+                .query_with_options(doc_id, question, options.clone())
+                .await
+            {
                 Ok(result) => {
                     if !result.node_ids.is_empty() {
                         results.push(result);
@@ -355,7 +359,11 @@ impl Session {
         }
 
         // Sort by score descending
-        results.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+        results.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
 
         Ok(results)
     }
@@ -366,7 +374,10 @@ impl Session {
 
     /// Get list of documents in this session.
     pub fn list_documents(&self) -> Vec<DocumentInfo> {
-        self.documents.values().map(|ctx| ctx.meta.clone()).collect()
+        self.documents
+            .values()
+            .map(|ctx| ctx.meta.clone())
+            .collect()
     }
 
     /// Get a document tree (from cache or workspace).
@@ -380,7 +391,9 @@ impl Session {
         self.stats.increment_cache_misses();
 
         // Load from workspace
-        let doc = self.workspace.load(doc_id)?
+        let doc = self
+            .workspace
+            .load(doc_id)?
             .ok_or_else(|| Error::DocumentNotFound(format!("Document not found: {}", doc_id)))?;
 
         let tree = doc.tree;

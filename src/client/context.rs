@@ -140,9 +140,7 @@ impl ClientContext {
 
     /// Check if the request has timed out.
     pub fn is_timed_out(&self) -> bool {
-        self.deadline
-            .map(|d| Instant::now() > d)
-            .unwrap_or(false)
+        self.deadline.map(|d| Instant::now() > d).unwrap_or(false)
     }
 
     /// Get remaining time until deadline.
@@ -290,8 +288,7 @@ mod tests {
 
     #[test]
     fn test_context_timeout() {
-        let ctx = ClientContext::new()
-            .with_timeout(Duration::from_millis(100));
+        let ctx = ClientContext::new().with_timeout(Duration::from_millis(100));
 
         assert!(!ctx.is_timed_out());
         assert!(ctx.remaining_time().is_some());

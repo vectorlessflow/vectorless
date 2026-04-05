@@ -7,9 +7,8 @@ use super::async_trait;
 use std::time::Instant;
 use tracing::info;
 
-
+use crate::document::NodeId;
 use crate::error::Result;
-use crate::document::{NodeId};
 use crate::index::pipeline::IndexContext;
 
 use super::{IndexStage, StageResult};

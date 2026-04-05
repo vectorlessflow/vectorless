@@ -353,8 +353,7 @@ mod tests {
 
     #[test]
     fn test_document_info() {
-        let info = DocumentInfo::new("doc-1", "Test")
-            .with_format("markdown");
+        let info = DocumentInfo::new("doc-1", "Test").with_format("markdown");
 
         assert_eq!(info.id, "doc-1");
         assert_eq!(info.format, "markdown");

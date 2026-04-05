@@ -147,12 +147,10 @@ mod tests {
 
     #[test]
     fn test_min_relevance_clamped() {
-        let config = ContentAggregatorConfig::new()
-            .with_min_relevance(1.5);
+        let config = ContentAggregatorConfig::new().with_min_relevance(1.5);
         assert_eq!(config.min_relevance_score, 1.0);
 
-        let config = ContentAggregatorConfig::new()
-            .with_min_relevance(-0.5);
+        let config = ContentAggregatorConfig::new().with_min_relevance(-0.5);
         assert_eq!(config.min_relevance_score, 0.0);
     }
 }

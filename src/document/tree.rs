@@ -119,9 +119,7 @@ impl RetrievalIndex {
             }
         }
         // Sort by start page for consistent ordering
-        result.sort_by_key(|&id| {
-            self.node_page_range.get(&id).map(|(s, _)| *s).unwrap_or(0)
-        });
+        result.sort_by_key(|&id| self.node_page_range.get(&id).map(|(s, _)| *s).unwrap_or(0));
         result
     }
 

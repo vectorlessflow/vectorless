@@ -35,8 +35,8 @@ use std::collections::HashMap;
 
 use tracing::{debug, info, warn};
 
-use crate::error::Result;
 use crate::Error;
+use crate::error::Result;
 
 /// Current data format version.
 pub const CURRENT_VERSION: u32 = 1;
@@ -133,10 +133,7 @@ impl Migrator {
     /// Register a migration.
     pub fn register(&mut self, migration: Box<dyn Migration>) {
         let key = (migration.from_version(), migration.to_version());
-        debug!(
-            "Registering migration: v{} -> v{}",
-            key.0, key.1
-        );
+        debug!("Registering migration: v{} -> v{}", key.0, key.1);
         self.migrations.insert(key, migration);
     }
 
@@ -213,11 +210,14 @@ impl Migrator {
         }
 
         // Find migration path
-        let path = self.find_migration_path(from_version, to_version)
-            .ok_or_else(|| Error::VersionMismatch(format!(
-                "No migration path from v{} to v{}",
-                from_version, to_version
-            )))?;
+        let path = self
+            .find_migration_path(from_version, to_version)
+            .ok_or_else(|| {
+                Error::VersionMismatch(format!(
+                    "No migration path from v{} to v{}",
+                    from_version, to_version
+                ))
+            })?;
 
         if path.len() < 2 {
             return Ok(data.to_vec());
@@ -233,17 +233,20 @@ impl Migrator {
 
         for next_version in path.iter().skip(1) {
             let key = (current_version, *next_version);
-            let migration = self.migrations.get(&key)
-                .ok_or_else(|| Error::VersionMismatch(format!(
+            let migration = self.migrations.get(&key).ok_or_else(|| {
+                Error::VersionMismatch(format!(
                     "Missing migration from v{} to v{}",
                     current_version, next_version
-                )))?;
+                ))
+            })?;
 
             let ctx = MigrationContext::new(current_version, *next_version);
 
             debug!(
                 "Applying migration: v{} -> v{} ({})",
-                current_version, next_version, migration.description()
+                current_version,
+                next_version,
+                migration.description()
             );
 
             current_data = migration.migrate(&current_data, &ctx)?;
@@ -316,8 +319,7 @@ mod tests {
 
     #[test]
     fn test_migration_context() {
-        let ctx = MigrationContext::new(1, 2)
-            .with_metadata("key", "value");
+        let ctx = MigrationContext::new(1, 2).with_metadata("key", "value");
 
         assert_eq!(ctx.from_version, 1);
         assert_eq!(ctx.to_version, 2);

@@ -14,13 +14,12 @@
 //! cargo run --example content_aggregation
 //! ```
 
-use vectorless::retrieval::content::{
-    ContentAggregator, ContentAggregatorConfig, BudgetAllocator, AllocationStrategy,
-    StructureBuilder, OutputFormat, RelevanceScorer, ScoringStrategyConfig,
-    ContentChunk, ScoringContext,
-};
-use vectorless::document::NodeId;
 use indextree::Arena;
+use vectorless::document::NodeId;
+use vectorless::retrieval::content::{
+    AllocationStrategy, BudgetAllocator, ContentAggregator, ContentAggregatorConfig, ContentChunk,
+    OutputFormat, RelevanceScorer, ScoringContext, ScoringStrategyConfig, StructureBuilder,
+};
 
 fn make_node_id() -> NodeId {
     let mut arena = Arena::new();
@@ -78,9 +77,12 @@ fn main() {
     println!("\nScored chunks:");
     for chunk in &chunks {
         let relevance = scorer.score_chunk(chunk, &ctx);
-        println!("  - '{}' (depth {}): score {:.3}",
-            chunk.title, chunk.depth, relevance.score);
-        println!("    Components: keyword={:.2}, bm25={:.2}, depth_penalty={:.2}, density={:.2}",
+        println!(
+            "  - '{}' (depth {}): score {:.3}",
+            chunk.title, chunk.depth, relevance.score
+        );
+        println!(
+            "    Components: keyword={:.2}, bm25={:.2}, depth_penalty={:.2}, density={:.2}",
             relevance.components.keyword_score,
             relevance.components.bm25_score,
             relevance.components.depth_penalty,
@@ -99,12 +101,14 @@ fn main() {
 
     let strategies = vec![
         ("Greedy", AllocationStrategy::Greedy),
-        ("Hierarchical (20%/level)", AllocationStrategy::Hierarchical { min_per_level: 0.2 }),
+        (
+            "Hierarchical (20%/level)",
+            AllocationStrategy::Hierarchical { min_per_level: 0.2 },
+        ),
     ];
 
     for (name, strategy) in strategies {
-        let allocator = BudgetAllocator::new(200)
-            .with_strategy(strategy);
+        let allocator = BudgetAllocator::new(200).with_strategy(strategy);
 
         let result = allocator.allocate(scored.clone(), 2);
 
@@ -114,9 +118,15 @@ fn main() {
         println!("  Avg score: {:.3}", result.stats.avg_score);
 
         for content in &result.selected {
-            let trunc = if content.is_truncated() { " [truncated]" } else { "" };
-            println!("    - '{}' ({} tokens, score {:.2}){}",
-                content.title, content.tokens, content.score, trunc);
+            let trunc = if content.is_truncated() {
+                " [truncated]"
+            } else {
+                ""
+            };
+            println!(
+                "    - '{}' ({} tokens, score {:.2}){}",
+                content.title, content.tokens, content.score, trunc
+            );
         }
     }
 
@@ -129,8 +139,7 @@ fn main() {
         ("Flat", OutputFormat::Flat),
     ];
 
-    let allocator = BudgetAllocator::new(500)
-        .with_strategy(AllocationStrategy::Greedy);
+    let allocator = BudgetAllocator::new(500).with_strategy(AllocationStrategy::Greedy);
     let result = allocator.allocate(scored.clone(), 2);
 
     for (name, format) in formats {
@@ -138,7 +147,12 @@ fn main() {
         let tree = vectorless::document::DocumentTree::new("Test", "");
         let structured = builder.build(result.selected.clone(), &tree);
 
-        println!("\n{} Output ({} chars, {} tokens):", name, structured.content.len(), structured.metadata.total_tokens);
+        println!(
+            "\n{} Output ({} chars, {} tokens):",
+            name,
+            structured.content.len(),
+            structured.metadata.total_tokens
+        );
         let preview = if structured.content.len() > 300 {
             format!("{}...", &structured.content[..300])
         } else {
@@ -153,12 +167,18 @@ fn main() {
 
     let configs = vec![
         ("Default (4000 tokens)", ContentAggregatorConfig::default()),
-        ("Conservative (1000 tokens)", ContentAggregatorConfig::new()
-            .with_token_budget(1000)
-            .with_min_relevance(0.3)),
-        ("High Precision (2000 tokens, 0.5 threshold)", ContentAggregatorConfig::new()
-            .with_token_budget(2000)
-            .with_min_relevance(0.5)),
+        (
+            "Conservative (1000 tokens)",
+            ContentAggregatorConfig::new()
+                .with_token_budget(1000)
+                .with_min_relevance(0.3),
+        ),
+        (
+            "High Precision (2000 tokens, 0.5 threshold)",
+            ContentAggregatorConfig::new()
+                .with_token_budget(2000)
+                .with_min_relevance(0.5),
+        ),
     ];
 
     for (name, config) in configs {

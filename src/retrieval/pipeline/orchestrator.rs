@@ -15,7 +15,7 @@ use std::sync::Arc;
 use std::time::Instant;
 use tracing::{debug, error, info, warn};
 
-use crate::document::{DocumentTree};
+use crate::document::DocumentTree;
 use crate::error::Result;
 use crate::retrieval::pilot::{Pilot, SearchState};
 // FailurePolicy is re-exported for stages
@@ -381,11 +381,11 @@ impl RetrievalOrchestrator {
                                     if let Some(ref pilot) = self.pilot {
                                         if pilot.config().guide_at_backtrack {
                                             // Build search state for Pilot
-                                            let visited: std::collections::HashSet<_> =
-                                                ctx.search_paths
-                                                    .iter()
-                                                    .flat_map(|p| p.nodes.iter().copied())
-                                                    .collect();
+                                            let visited: std::collections::HashSet<_> = ctx
+                                                .search_paths
+                                                .iter()
+                                                .flat_map(|p| p.nodes.iter().copied())
+                                                .collect();
                                             let candidates: Vec<_> =
                                                 ctx.candidates.iter().map(|c| c.node_id).collect();
 
@@ -460,13 +460,16 @@ impl RetrievalOrchestrator {
                                     if target_stage == "search" {
                                         if let Some(ref pilot) = self.pilot {
                                             if pilot.config().guide_at_backtrack {
-                                                let visited: std::collections::HashSet<_> =
-                                                    ctx.search_paths
-                                                        .iter()
-                                                        .flat_map(|p| p.nodes.iter().copied())
-                                                        .collect();
-                                                let candidates: Vec<_> =
-                                                    ctx.candidates.iter().map(|c| c.node_id).collect();
+                                                let visited: std::collections::HashSet<_> = ctx
+                                                    .search_paths
+                                                    .iter()
+                                                    .flat_map(|p| p.nodes.iter().copied())
+                                                    .collect();
+                                                let candidates: Vec<_> = ctx
+                                                    .candidates
+                                                    .iter()
+                                                    .map(|c| c.node_id)
+                                                    .collect();
 
                                                 let state = SearchState::new(
                                                     &ctx.tree,
@@ -476,7 +479,9 @@ impl RetrievalOrchestrator {
                                                     &visited,
                                                 );
 
-                                                if let Some(guidance) = pilot.guide_backtrack(&state).await {
+                                                if let Some(guidance) =
+                                                    pilot.guide_backtrack(&state).await
+                                                {
                                                     debug!(
                                                         "Pilot backtrack guidance for explicit backtrack: confidence={}",
                                                         guidance.confidence

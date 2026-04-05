@@ -48,9 +48,7 @@ pub use pipeline::{
 };
 
 // Re-export config types
-pub use config::{
-    IndexMode, OptimizationConfig, PipelineOptions, ThinningConfig,
-};
+pub use config::{IndexMode, OptimizationConfig, PipelineOptions, ThinningConfig};
 
 // Re-export stages
 pub use stages::IndexStage;

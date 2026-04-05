@@ -16,8 +16,8 @@
 
 use std::collections::HashSet;
 
-use crate::document::{DocumentTree, NodeId};
 use super::SearchState;
+use crate::document::{DocumentTree, NodeId};
 
 /// Token budget distribution for context building.
 #[derive(Debug, Clone)]
@@ -47,7 +47,13 @@ impl TokenBudget {
     }
 
     /// Create budget with custom distribution.
-    pub fn with_distribution(total: usize, query_pct: f32, path_pct: f32, candidates_pct: f32, siblings_pct: f32) -> Self {
+    pub fn with_distribution(
+        total: usize,
+        query_pct: f32,
+        path_pct: f32,
+        candidates_pct: f32,
+        siblings_pct: f32,
+    ) -> Self {
         let sum = query_pct + path_pct + candidates_pct + siblings_pct;
         Self {
             total,
@@ -85,10 +91,7 @@ impl PilotContext {
     pub fn to_string(&self) -> String {
         format!(
             "{}\n{}\n{}\n{}",
-            self.query_section,
-            self.path_section,
-            self.candidates_section,
-            self.toc_section
+            self.query_section, self.path_section, self.candidates_section, self.toc_section
         )
     }
 
@@ -222,7 +225,10 @@ impl ContextBuilder {
         ctx.estimated_tokens += self.estimate_tokens(&ctx.query_section);
 
         // Show failed path
-        ctx.path_section = format!("Failed path:\n{}", self.build_path_section(state.tree, failed_path));
+        ctx.path_section = format!(
+            "Failed path:\n{}",
+            self.build_path_section(state.tree, failed_path)
+        );
         ctx.estimated_tokens += self.estimate_tokens(&ctx.path_section);
 
         // Show unvisited alternatives
@@ -330,7 +336,11 @@ impl ContextBuilder {
 
         for sibling_id in siblings.iter().take(8) {
             if let Some(node) = tree.get(*sibling_id) {
-                let marker = if *sibling_id == current_id { "⭐ " } else { "" };
+                let marker = if *sibling_id == current_id {
+                    "⭐ "
+                } else {
+                    ""
+                };
                 result.push_str(&format!("  {}{}\n", marker, node.title));
             }
         }
@@ -366,7 +376,15 @@ impl ContextBuilder {
                 // Only show children for first few levels
                 if depth < max_depth {
                     for child_id in tree.children(node_id) {
-                        build_toc_recursive(tree, child_id, depth + 1, result, tokens_used, max_tokens, max_depth);
+                        build_toc_recursive(
+                            tree,
+                            child_id,
+                            depth + 1,
+                            result,
+                            tokens_used,
+                            max_tokens,
+                            max_depth,
+                        );
                     }
                 }
             }
@@ -470,7 +488,7 @@ mod tests {
     fn test_token_budget_distribution() {
         let budget = TokenBudget::new(500);
         assert_eq!(budget.query, 150); // 30%
-        assert_eq!(budget.path, 100);  // 20%
+        assert_eq!(budget.path, 100); // 20%
         assert_eq!(budget.candidates, 200); // 40%
         assert_eq!(budget.siblings, 50); // 10%
     }
@@ -496,7 +514,11 @@ mod tests {
         let builder = ContextBuilder::new(20); // Very small budget - 20 * 0.30 = 6 tokens for query = ~24 chars
         let long_query = "This is a very long query that should be truncated because it exceeds the token budget";
         let result = builder.build_query_section(long_query);
-        assert!(result.contains("..."), "Expected truncation, got: {}", result);
+        assert!(
+            result.contains("..."),
+            "Expected truncation, got: {}",
+            result
+        );
     }
 
     #[test]

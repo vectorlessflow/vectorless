@@ -170,7 +170,10 @@ impl std::fmt::Debug for FallbackManager {
         f.debug_struct("FallbackManager")
             .field("config", &self.config)
             .field("current_level", &self.current_level())
-            .field("consecutive_failures", &self.consecutive_failures.load(Ordering::Relaxed))
+            .field(
+                "consecutive_failures",
+                &self.consecutive_failures.load(Ordering::Relaxed),
+            )
             .finish()
     }
 }
@@ -393,7 +396,10 @@ mod tests {
         // Trigger failures to escalate
         for _ in 0..manager.config.failures_before_escalate {
             let action = manager.record_failure(&FallbackError::Network("test".to_string()));
-            assert!(matches!(action, FallbackAction::Retry | FallbackAction::Escalate));
+            assert!(matches!(
+                action,
+                FallbackAction::Retry | FallbackAction::Escalate
+            ));
         }
 
         assert_eq!(manager.current_level(), FallbackLevel::Retry);

@@ -46,10 +46,10 @@ use tracing::info;
 
 use crate::config::Config;
 use crate::error::Result;
-use crate::{DocumentTree, Error};
 use crate::index::PipelineExecutor;
 use crate::retrieval::{PipelineRetriever, RetrieveOptions};
 use crate::storage::Workspace;
+use crate::{DocumentTree, Error};
 
 use super::context::ClientContext;
 use super::events::EventEmitter;
@@ -124,17 +124,15 @@ impl Engine {
         let events = EventEmitter::new();
 
         // Create indexer client
-        let indexer = IndexerClient::new(executor)
-            .with_events(events.clone());
+        let indexer = IndexerClient::new(executor).with_events(events.clone());
 
         // Create retriever client
-        let retriever = RetrieverClient::new(retriever, Arc::clone(&config))
-            .with_events(events.clone());
+        let retriever =
+            RetrieverClient::new(retriever, Arc::clone(&config)).with_events(events.clone());
 
         // Create workspace client (if workspace provided)
-        let workspace_client = workspace.map(|ws| {
-            WorkspaceClient::new(ws).with_events(events.clone())
-        });
+        let workspace_client =
+            workspace.map(|ws| WorkspaceClient::new(ws).with_events(events.clone()));
 
         Ok(Self {
             config,
@@ -238,7 +236,10 @@ impl Engine {
             options.max_tokens = token_budget;
         }
 
-        let mut result = self.retriever.query_with_context(&tree, question, &options, ctx).await?;
+        let mut result = self
+            .retriever
+            .query_with_context(&tree, question, &options, ctx)
+            .await?;
         result.doc_id = doc_id.to_string();
 
         Ok(result)
@@ -291,10 +292,13 @@ impl Engine {
     /// - No workspace is configured
     /// - The document is not found
     pub fn get_structure(&self, doc_id: &str) -> Result<DocumentTree> {
-        let workspace = self.workspace.as_ref()
+        let workspace = self
+            .workspace
+            .as_ref()
             .ok_or_else(|| Error::Config("No workspace configured".to_string()))?;
 
-        let doc = workspace.load(doc_id)?
+        let doc = workspace
+            .load(doc_id)?
             .ok_or_else(|| Error::DocumentNotFound(format!("Document not found: {}", doc_id)))?;
 
         Ok(doc.tree)
@@ -309,10 +313,13 @@ impl Engine {
     /// - The document is not found
     /// - No page content is available
     pub fn get_page_content(&self, doc_id: &str, pages: &str) -> Result<String> {
-        let workspace = self.workspace.as_ref()
+        let workspace = self
+            .workspace
+            .as_ref()
             .ok_or_else(|| Error::Config("No workspace configured".to_string()))?;
 
-        let doc = workspace.load(doc_id)?
+        let doc = workspace
+            .load(doc_id)?
             .ok_or_else(|| Error::DocumentNotFound(format!("Document not found: {}", doc_id)))?;
 
         if doc.pages.is_empty() {
@@ -375,7 +382,9 @@ impl Engine {
     ///
     /// Returns an error if no workspace is configured.
     pub fn load(&self, doc_id: &str) -> Result<bool> {
-        let workspace = self.workspace.as_ref()
+        let workspace = self
+            .workspace
+            .as_ref()
             .ok_or_else(|| Error::Config("No workspace configured".to_string()))?;
 
         if !workspace.exists(doc_id)? {
@@ -392,7 +401,9 @@ impl Engine {
     ///
     /// Returns an error if no workspace is configured.
     pub fn remove(&self, doc_id: &str) -> Result<bool> {
-        let workspace = self.workspace.as_ref()
+        let workspace = self
+            .workspace
+            .as_ref()
             .ok_or_else(|| Error::Config("No workspace configured".to_string()))?;
 
         workspace.remove(doc_id)
@@ -404,7 +415,9 @@ impl Engine {
     ///
     /// Returns an error if no workspace is configured.
     pub fn exists(&self, doc_id: &str) -> Result<bool> {
-        let workspace = self.workspace.as_ref()
+        let workspace = self
+            .workspace
+            .as_ref()
             .ok_or_else(|| Error::Config("No workspace configured".to_string()))?;
 
         workspace.exists(doc_id)
@@ -416,7 +429,9 @@ impl Engine {
     ///
     /// Returns an error if no workspace is configured.
     pub fn get_metadata(&self, doc_id: &str) -> Result<Option<DocumentInfo>> {
-        let workspace = self.workspace.as_ref()
+        let workspace = self
+            .workspace
+            .as_ref()
             .ok_or_else(|| Error::Config("No workspace configured".to_string()))?;
 
         workspace.get_document_info(doc_id)
@@ -430,7 +445,9 @@ impl Engine {
     ///
     /// Returns an error if no workspace is configured.
     pub fn batch_remove(&self, doc_ids: &[&str]) -> Result<usize> {
-        let workspace = self.workspace.as_ref()
+        let workspace = self
+            .workspace
+            .as_ref()
             .ok_or_else(|| Error::Config("No workspace configured".to_string()))?;
 
         workspace.batch_remove(doc_ids)
@@ -444,7 +461,9 @@ impl Engine {
     ///
     /// Returns an error if no workspace is configured.
     pub fn clear(&self) -> Result<usize> {
-        let workspace = self.workspace.as_ref()
+        let workspace = self
+            .workspace
+            .as_ref()
             .ok_or_else(|| Error::Config("No workspace configured".to_string()))?;
 
         workspace.clear()

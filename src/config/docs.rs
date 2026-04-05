@@ -43,14 +43,34 @@ impl ConfigDocs {
         md.push_str("Controls document indexing behavior.\n\n");
         md.push_str("| Option | Type | Default | Description |\n");
         md.push_str("|--------|------|---------|-------------|\n");
-        self.add_row(&mut md, "subsection_threshold", "usize", "300",
-            "Word count threshold for splitting sections into subsections");
-        self.add_row(&mut md, "max_segment_tokens", "usize", "3000",
-            "Maximum tokens to send in a single segmentation request");
-        self.add_row(&mut md, "max_summary_tokens", "usize", "200",
-            "Maximum tokens for each summary");
-        self.add_row(&mut md, "min_summary_tokens", "usize", "20",
-            "Minimum content tokens required to generate a summary");
+        self.add_row(
+            &mut md,
+            "subsection_threshold",
+            "usize",
+            "300",
+            "Word count threshold for splitting sections into subsections",
+        );
+        self.add_row(
+            &mut md,
+            "max_segment_tokens",
+            "usize",
+            "3000",
+            "Maximum tokens to send in a single segmentation request",
+        );
+        self.add_row(
+            &mut md,
+            "max_summary_tokens",
+            "usize",
+            "200",
+            "Maximum tokens for each summary",
+        );
+        self.add_row(
+            &mut md,
+            "min_summary_tokens",
+            "usize",
+            "20",
+            "Minimum content tokens required to generate a summary",
+        );
         md.push_str("\n");
 
         // Summary section
@@ -58,11 +78,41 @@ impl ConfigDocs {
         md.push_str("LLM configuration for summary generation.\n\n");
         md.push_str("| Option | Type | Default | Description |\n");
         md.push_str("|--------|------|---------|-------------|\n");
-        self.add_row(&mut md, "model", "string", "gpt-4o-mini", "Model for summarization");
-        self.add_row(&mut md, "endpoint", "string", "https://api.openai.com/v1", "API endpoint");
-        self.add_row(&mut md, "api_key", "string?", "null", "API key (optional, can use env var)");
-        self.add_row(&mut md, "max_tokens", "usize", "200", "Maximum tokens for summary generation");
-        self.add_row(&mut md, "temperature", "f32", "0.0", "Temperature for summary generation");
+        self.add_row(
+            &mut md,
+            "model",
+            "string",
+            "gpt-4o-mini",
+            "Model for summarization",
+        );
+        self.add_row(
+            &mut md,
+            "endpoint",
+            "string",
+            "https://api.openai.com/v1",
+            "API endpoint",
+        );
+        self.add_row(
+            &mut md,
+            "api_key",
+            "string?",
+            "null",
+            "API key (optional, can use env var)",
+        );
+        self.add_row(
+            &mut md,
+            "max_tokens",
+            "usize",
+            "200",
+            "Maximum tokens for summary generation",
+        );
+        self.add_row(
+            &mut md,
+            "temperature",
+            "f32",
+            "0.0",
+            "Temperature for summary generation",
+        );
         md.push_str("\n");
 
         // Retrieval section
@@ -70,12 +120,48 @@ impl ConfigDocs {
         md.push_str("Retrieval model and behavior configuration.\n\n");
         md.push_str("| Option | Type | Default | Description |\n");
         md.push_str("|--------|------|---------|-------------|\n");
-        self.add_row(&mut md, "model", "string", "gpt-4o", "Model for retrieval navigation");
-        self.add_row(&mut md, "endpoint", "string", "https://api.openai.com/v1", "API endpoint");
-        self.add_row(&mut md, "api_key", "string?", "null", "API key (defaults to summary.api_key)");
-        self.add_row(&mut md, "top_k", "usize", "3", "Number of top results to return");
-        self.add_row(&mut md, "max_tokens", "usize", "1000", "Maximum tokens for retrieval context");
-        self.add_row(&mut md, "temperature", "f32", "0.0", "Temperature for retrieval");
+        self.add_row(
+            &mut md,
+            "model",
+            "string",
+            "gpt-4o",
+            "Model for retrieval navigation",
+        );
+        self.add_row(
+            &mut md,
+            "endpoint",
+            "string",
+            "https://api.openai.com/v1",
+            "API endpoint",
+        );
+        self.add_row(
+            &mut md,
+            "api_key",
+            "string?",
+            "null",
+            "API key (defaults to summary.api_key)",
+        );
+        self.add_row(
+            &mut md,
+            "top_k",
+            "usize",
+            "3",
+            "Number of top results to return",
+        );
+        self.add_row(
+            &mut md,
+            "max_tokens",
+            "usize",
+            "1000",
+            "Maximum tokens for retrieval context",
+        );
+        self.add_row(
+            &mut md,
+            "temperature",
+            "f32",
+            "0.0",
+            "Temperature for retrieval",
+        );
         md.push_str("\n");
 
         // Retrieval.search section
@@ -83,10 +169,34 @@ impl ConfigDocs {
         md.push_str("Search algorithm configuration.\n\n");
         md.push_str("| Option | Type | Default | Description |\n");
         md.push_str("|--------|------|---------|-------------|\n");
-        self.add_row(&mut md, "top_k", "usize", "5", "Number of top-k results to return");
-        self.add_row(&mut md, "beam_width", "usize", "3", "Beam width for multi-path search");
-        self.add_row(&mut md, "max_iterations", "usize", "10", "Maximum iterations for search algorithms");
-        self.add_row(&mut md, "min_score", "f32", "0.1", "Minimum score to include a path");
+        self.add_row(
+            &mut md,
+            "top_k",
+            "usize",
+            "5",
+            "Number of top-k results to return",
+        );
+        self.add_row(
+            &mut md,
+            "beam_width",
+            "usize",
+            "3",
+            "Beam width for multi-path search",
+        );
+        self.add_row(
+            &mut md,
+            "max_iterations",
+            "usize",
+            "10",
+            "Maximum iterations for search algorithms",
+        );
+        self.add_row(
+            &mut md,
+            "min_score",
+            "f32",
+            "0.1",
+            "Minimum score to include a path",
+        );
         md.push_str("\n");
 
         // Retrieval.sufficiency section
@@ -94,11 +204,41 @@ impl ConfigDocs {
         md.push_str("Sufficiency checker configuration.\n\n");
         md.push_str("| Option | Type | Default | Description |\n");
         md.push_str("|--------|------|---------|-------------|\n");
-        self.add_row(&mut md, "min_tokens", "usize", "500", "Minimum tokens for sufficiency");
-        self.add_row(&mut md, "target_tokens", "usize", "2000", "Target tokens for full sufficiency");
-        self.add_row(&mut md, "max_tokens", "usize", "4000", "Maximum tokens before stopping");
-        self.add_row(&mut md, "min_content_length", "usize", "200", "Minimum content length (characters)");
-        self.add_row(&mut md, "confidence_threshold", "f32", "0.7", "Confidence threshold for LLM judge");
+        self.add_row(
+            &mut md,
+            "min_tokens",
+            "usize",
+            "500",
+            "Minimum tokens for sufficiency",
+        );
+        self.add_row(
+            &mut md,
+            "target_tokens",
+            "usize",
+            "2000",
+            "Target tokens for full sufficiency",
+        );
+        self.add_row(
+            &mut md,
+            "max_tokens",
+            "usize",
+            "4000",
+            "Maximum tokens before stopping",
+        );
+        self.add_row(
+            &mut md,
+            "min_content_length",
+            "usize",
+            "200",
+            "Minimum content length (characters)",
+        );
+        self.add_row(
+            &mut md,
+            "confidence_threshold",
+            "f32",
+            "0.7",
+            "Confidence threshold for LLM judge",
+        );
         md.push_str("\n");
 
         // Retrieval.content section
@@ -106,15 +246,69 @@ impl ConfigDocs {
         md.push_str("Content aggregator configuration.\n\n");
         md.push_str("| Option | Type | Default | Description |\n");
         md.push_str("|--------|------|---------|-------------|\n");
-        self.add_row(&mut md, "enabled", "bool", "true", "Enable content aggregator");
-        self.add_row(&mut md, "token_budget", "usize", "4000", "Maximum tokens for aggregated content");
-        self.add_row(&mut md, "min_relevance_score", "f32", "0.2", "Minimum relevance score threshold (0.0-1.0)");
-        self.add_row(&mut md, "scoring_strategy", "string", "keyword_bm25", "Scoring strategy (keyword_only, keyword_bm25, hybrid)");
-        self.add_row(&mut md, "output_format", "string", "markdown", "Output format (markdown, json, tree, flat)");
-        self.add_row(&mut md, "include_scores", "bool", "false", "Include relevance scores in output");
-        self.add_row(&mut md, "hierarchical_min_per_level", "f32", "0.1", "Minimum budget allocation per depth level");
-        self.add_row(&mut md, "deduplicate", "bool", "true", "Enable content deduplication");
-        self.add_row(&mut md, "dedup_threshold", "f32", "0.9", "Similarity threshold for deduplication");
+        self.add_row(
+            &mut md,
+            "enabled",
+            "bool",
+            "true",
+            "Enable content aggregator",
+        );
+        self.add_row(
+            &mut md,
+            "token_budget",
+            "usize",
+            "4000",
+            "Maximum tokens for aggregated content",
+        );
+        self.add_row(
+            &mut md,
+            "min_relevance_score",
+            "f32",
+            "0.2",
+            "Minimum relevance score threshold (0.0-1.0)",
+        );
+        self.add_row(
+            &mut md,
+            "scoring_strategy",
+            "string",
+            "keyword_bm25",
+            "Scoring strategy (keyword_only, keyword_bm25, hybrid)",
+        );
+        self.add_row(
+            &mut md,
+            "output_format",
+            "string",
+            "markdown",
+            "Output format (markdown, json, tree, flat)",
+        );
+        self.add_row(
+            &mut md,
+            "include_scores",
+            "bool",
+            "false",
+            "Include relevance scores in output",
+        );
+        self.add_row(
+            &mut md,
+            "hierarchical_min_per_level",
+            "f32",
+            "0.1",
+            "Minimum budget allocation per depth level",
+        );
+        self.add_row(
+            &mut md,
+            "deduplicate",
+            "bool",
+            "true",
+            "Enable content deduplication",
+        );
+        self.add_row(
+            &mut md,
+            "dedup_threshold",
+            "f32",
+            "0.9",
+            "Similarity threshold for deduplication",
+        );
         md.push_str("\n");
 
         // Retrieval.strategy section
@@ -122,10 +316,34 @@ impl ConfigDocs {
         md.push_str("Strategy-specific configuration.\n\n");
         md.push_str("| Option | Type | Default | Description |\n");
         md.push_str("|--------|------|---------|-------------|\n");
-        self.add_row(&mut md, "exploration_weight", "f32", "1.414", "MCTS exploration weight (√2)");
-        self.add_row(&mut md, "similarity_threshold", "f32", "0.5", "Semantic similarity threshold");
-        self.add_row(&mut md, "high_similarity_threshold", "f32", "0.8", "High similarity for 'answer' decision");
-        self.add_row(&mut md, "low_similarity_threshold", "f32", "0.3", "Low similarity for 'explore' decision");
+        self.add_row(
+            &mut md,
+            "exploration_weight",
+            "f32",
+            "1.414",
+            "MCTS exploration weight (√2)",
+        );
+        self.add_row(
+            &mut md,
+            "similarity_threshold",
+            "f32",
+            "0.5",
+            "Semantic similarity threshold",
+        );
+        self.add_row(
+            &mut md,
+            "high_similarity_threshold",
+            "f32",
+            "0.8",
+            "High similarity for 'answer' decision",
+        );
+        self.add_row(
+            &mut md,
+            "low_similarity_threshold",
+            "f32",
+            "0.3",
+            "Low similarity for 'explore' decision",
+        );
         md.push_str("\n");
 
         // Storage section
@@ -133,7 +351,13 @@ impl ConfigDocs {
         md.push_str("Storage configuration.\n\n");
         md.push_str("| Option | Type | Default | Description |\n");
         md.push_str("|--------|------|---------|-------------|\n");
-        self.add_row(&mut md, "workspace_dir", "string", "./workspace", "Workspace directory for persisted documents");
+        self.add_row(
+            &mut md,
+            "workspace_dir",
+            "string",
+            "./workspace",
+            "Workspace directory for persisted documents",
+        );
         md.push_str("\n");
 
         // Concurrency section
@@ -141,10 +365,28 @@ impl ConfigDocs {
         md.push_str("Concurrency control configuration.\n\n");
         md.push_str("| Option | Type | Default | Description |\n");
         md.push_str("|--------|------|---------|-------------|\n");
-        self.add_row(&mut md, "max_concurrent_requests", "usize", "10", "Maximum concurrent LLM API calls");
-        self.add_row(&mut md, "requests_per_minute", "usize", "500", "Rate limit: requests per minute");
+        self.add_row(
+            &mut md,
+            "max_concurrent_requests",
+            "usize",
+            "10",
+            "Maximum concurrent LLM API calls",
+        );
+        self.add_row(
+            &mut md,
+            "requests_per_minute",
+            "usize",
+            "500",
+            "Rate limit: requests per minute",
+        );
         self.add_row(&mut md, "enabled", "bool", "true", "Enable rate limiting");
-        self.add_row(&mut md, "semaphore_enabled", "bool", "true", "Enable semaphore-based concurrency");
+        self.add_row(
+            &mut md,
+            "semaphore_enabled",
+            "bool",
+            "true",
+            "Enable semaphore-based concurrency",
+        );
         md.push_str("\n");
 
         // Fallback section
@@ -152,26 +394,68 @@ impl ConfigDocs {
         md.push_str("Fallback/error recovery configuration.\n\n");
         md.push_str("| Option | Type | Default | Description |\n");
         md.push_str("|--------|------|---------|-------------|\n");
-        self.add_row(&mut md, "enabled", "bool", "true", "Enable graceful degradation");
-        self.add_row(&mut md, "models", "[string]", "[\"gpt-4o-mini\", \"glm-4-flash\"]", "Fallback models in priority order");
-        self.add_row(&mut md, "endpoints", "[string]", "[]", "Fallback endpoints in priority order");
-        self.add_row(&mut md, "on_rate_limit", "string", "retry_then_fallback", "Behavior on rate limit (retry, fallback, retry_then_fallback, fail)");
-        self.add_row(&mut md, "on_timeout", "string", "retry_then_fallback", "Behavior on timeout");
-        self.add_row(&mut md, "on_all_failed", "string", "return_error", "Behavior when all attempts fail (return_error, return_cache)");
+        self.add_row(
+            &mut md,
+            "enabled",
+            "bool",
+            "true",
+            "Enable graceful degradation",
+        );
+        self.add_row(
+            &mut md,
+            "models",
+            "[string]",
+            "[\"gpt-4o-mini\", \"glm-4-flash\"]",
+            "Fallback models in priority order",
+        );
+        self.add_row(
+            &mut md,
+            "endpoints",
+            "[string]",
+            "[]",
+            "Fallback endpoints in priority order",
+        );
+        self.add_row(
+            &mut md,
+            "on_rate_limit",
+            "string",
+            "retry_then_fallback",
+            "Behavior on rate limit (retry, fallback, retry_then_fallback, fail)",
+        );
+        self.add_row(
+            &mut md,
+            "on_timeout",
+            "string",
+            "retry_then_fallback",
+            "Behavior on timeout",
+        );
+        self.add_row(
+            &mut md,
+            "on_all_failed",
+            "string",
+            "return_error",
+            "Behavior when all attempts fail (return_error, return_cache)",
+        );
         md.push_str("\n");
 
         md
     }
 
     fn add_row(&self, md: &mut String, name: &str, ty: &str, default: &str, desc: &str) {
-        md.push_str(&format!("| `{}` | {} | {} | {} |\n", name, ty, default, desc));
+        md.push_str(&format!(
+            "| `{}` | {} | {} | {} |\n",
+            name, ty, default, desc
+        ));
     }
 
     /// Generate an example TOML file with all options.
     pub fn to_example_toml(&self) -> String {
         toml::to_string_pretty(&self.config).unwrap_or_else(|e| {
-            format!("# Error generating TOML: {}\n\n# Using default config\n{}",
-                e, Self::fallback_toml())
+            format!(
+                "# Error generating TOML: {}\n\n# Using default config\n{}",
+                e,
+                Self::fallback_toml()
+            )
         })
     }
 
@@ -249,7 +533,8 @@ models = ["gpt-4o-mini", "glm-4-flash"]
 on_rate_limit = "retry_then_fallback"
 on_timeout = "retry_then_fallback"
 on_all_failed = "return_error"
-"#.to_string()
+"#
+        .to_string()
     }
 
     /// Generate a minimal example TOML file.
@@ -262,7 +547,8 @@ api_key = "your-api-key-here"
 
 [retrieval]
 top_k = 5
-"#.to_string()
+"#
+        .to_string()
     }
 }
 

@@ -9,15 +9,15 @@
 //! - **Checksum verification**: SHA-256 checksums for data integrity
 //! - **Version header**: Format version for future migrations
 
-use sha2::{Digest, Sha256};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::{Path, PathBuf};
 
+use crate::Error;
 use crate::document::DocumentTree;
 use crate::error::Result;
-use crate::Error;
 
 /// Current format version for persisted documents.
 const FORMAT_VERSION: u32 = 1;
@@ -209,8 +209,7 @@ pub fn save_document_with_options(
     options: &PersistenceOptions,
 ) -> Result<()> {
     // Serialize the payload first
-    let payload_bytes = serde_json::to_vec(doc)
-        .map_err(|e| Error::Serialization(e.to_string()))?;
+    let payload_bytes = serde_json::to_vec(doc).map_err(|e| Error::Serialization(e.to_string()))?;
 
     // Calculate checksum
     let checksum = calculate_checksum(&payload_bytes);
@@ -223,8 +222,8 @@ pub fn save_document_with_options(
     };
 
     // Serialize wrapper
-    let json = serde_json::to_string_pretty(&wrapper)
-        .map_err(|e| Error::Serialization(e.to_string()))?;
+    let json =
+        serde_json::to_string_pretty(&wrapper).map_err(|e| Error::Serialization(e.to_string()))?;
 
     if options.atomic_writes {
         // Atomic write: write to temp file, then rename
@@ -280,9 +279,7 @@ pub fn load_document_with_options(
     options: &PersistenceOptions,
 ) -> Result<PersistedDocument> {
     if !path.exists() {
-        return Err(Error::DocumentNotFound(
-            path.display().to_string()
-        ));
+        return Err(Error::DocumentNotFound(path.display().to_string()));
     }
 
     let file = File::open(path).map_err(Error::Io)?;
@@ -330,8 +327,8 @@ pub fn save_index_with_options(
     options: &PersistenceOptions,
 ) -> Result<()> {
     // Serialize payload
-    let payload_bytes = serde_json::to_vec(entries)
-        .map_err(|e| Error::Serialization(e.to_string()))?;
+    let payload_bytes =
+        serde_json::to_vec(entries).map_err(|e| Error::Serialization(e.to_string()))?;
 
     let checksum = calculate_checksum(&payload_bytes);
 
@@ -341,8 +338,8 @@ pub fn save_index_with_options(
         payload: entries.to_vec(),
     };
 
-    let json = serde_json::to_string_pretty(&wrapper)
-        .map_err(|e| Error::Serialization(e.to_string()))?;
+    let json =
+        serde_json::to_string_pretty(&wrapper).map_err(|e| Error::Serialization(e.to_string()))?;
 
     if options.atomic_writes {
         let temp_path = path.with_extension("tmp");
@@ -424,8 +421,7 @@ pub fn load_index_with_options(
 /// This is useful for storage backends that work with byte arrays.
 pub fn save_document_to_bytes(doc: &PersistedDocument) -> Result<Vec<u8>> {
     // Serialize the payload first
-    let payload_bytes = serde_json::to_vec(doc)
-        .map_err(|e| Error::Serialization(e.to_string()))?;
+    let payload_bytes = serde_json::to_vec(doc).map_err(|e| Error::Serialization(e.to_string()))?;
 
     // Calculate checksum
     let checksum = calculate_checksum(&payload_bytes);
@@ -438,8 +434,7 @@ pub fn save_document_to_bytes(doc: &PersistedDocument) -> Result<Vec<u8>> {
     };
 
     // Serialize wrapper
-    serde_json::to_vec(&wrapper)
-        .map_err(|e| Error::Serialization(e.to_string()))
+    serde_json::to_vec(&wrapper).map_err(|e| Error::Serialization(e.to_string()))
 }
 
 /// Deserialize a document from bytes.
@@ -486,8 +481,8 @@ pub fn load_document_from_bytes_with_options(
 
 /// Serialize an index to bytes.
 pub fn save_index_to_bytes(entries: &[DocumentMeta]) -> Result<Vec<u8>> {
-    let payload_bytes = serde_json::to_vec(entries)
-        .map_err(|e| Error::Serialization(e.to_string()))?;
+    let payload_bytes =
+        serde_json::to_vec(entries).map_err(|e| Error::Serialization(e.to_string()))?;
 
     let checksum = calculate_checksum(&payload_bytes);
 
@@ -497,8 +492,7 @@ pub fn save_index_to_bytes(entries: &[DocumentMeta]) -> Result<Vec<u8>> {
         payload: entries.to_vec(),
     };
 
-    serde_json::to_vec(&wrapper)
-        .map_err(|e| Error::Serialization(e.to_string()))
+    serde_json::to_vec(&wrapper).map_err(|e| Error::Serialization(e.to_string()))
 }
 
 /// Deserialize an index from bytes.
@@ -620,7 +614,7 @@ mod tests {
         // Change the checksum value but keep the payload intact
         let corrupted = content.replace(
             &calculate_checksum(&serde_json::to_vec(&doc).unwrap()),
-            "0000000000000000000000000000000000000000000000000000000000000000"
+            "0000000000000000000000000000000000000000000000000000000000000000",
         );
         std::fs::write(&path, corrupted).unwrap();
 

@@ -13,8 +13,8 @@ use tracing::{debug, info, warn};
 use crate::document::DocumentTree;
 use crate::llm::LlmClient;
 
-use super::builder::ContextBuilder;
 use super::budget::BudgetController;
+use super::builder::ContextBuilder;
 use super::config::PilotConfig;
 use super::decision::{InterventionPoint, PilotDecision};
 use super::parser::ResponseParser;
@@ -126,7 +126,8 @@ impl LlmPilot {
     fn scores_are_close(&self, state: &SearchState<'_>) -> bool {
         // Use the config's score_gap_threshold with the state's best_score
         // If best_score is low, consider scores as close
-        state.candidates.len() >= 2 && state.best_score < self.config.intervention.score_gap_threshold
+        state.candidates.len() >= 2
+            && state.best_score < self.config.intervention.score_gap_threshold
     }
 
     /// Determine the intervention point type.
@@ -154,7 +155,10 @@ impl LlmPilot {
 
         // Check if we can afford this call
         if !self.budget.can_afford(prompt.estimated_tokens) {
-            warn!("Budget cannot afford LLM call (estimated: {} tokens)", prompt.estimated_tokens);
+            warn!(
+                "Budget cannot afford LLM call (estimated: {} tokens)",
+                prompt.estimated_tokens
+            );
             return self.default_decision(candidates, point);
         }
 
@@ -168,7 +172,8 @@ impl LlmPilot {
             Ok(response) => {
                 // Record usage (estimate output tokens)
                 let output_tokens = self.estimate_tokens(&response);
-                self.budget.record_usage(prompt.estimated_tokens, output_tokens, 0);
+                self.budget
+                    .record_usage(prompt.estimated_tokens, output_tokens, 0);
 
                 // Parse response
                 let decision = self.response_parser.parse(&response, candidates, point);
@@ -251,7 +256,10 @@ impl Pilot for LlmPilot {
 
         // Condition 1: Fork point with enough candidates
         if state.candidates.len() > intervention.fork_threshold {
-            debug!("Intervening: fork point with {} candidates", state.candidates.len());
+            debug!(
+                "Intervening: fork point with {} candidates",
+                state.candidates.len()
+            );
             return true;
         }
 
@@ -263,7 +271,10 @@ impl Pilot for LlmPilot {
 
         // Condition 3: Low confidence (best score too low)
         if intervention.is_low_confidence(state.best_score) {
-            debug!("Intervening: low confidence (best_score={:.2})", state.best_score);
+            debug!(
+                "Intervening: low confidence (best_score={:.2})",
+                state.best_score
+            );
             return true;
         }
 
@@ -286,11 +297,7 @@ impl Pilot for LlmPilot {
         self.call_llm(point, &context, state.candidates).await
     }
 
-    async fn guide_start(
-        &self,
-        tree: &DocumentTree,
-        query: &str,
-    ) -> Option<PilotDecision> {
+    async fn guide_start(&self, tree: &DocumentTree, query: &str) -> Option<PilotDecision> {
         // Check if guide_at_start is enabled
         if !self.config.guide_at_start {
             return None;
@@ -309,7 +316,9 @@ impl Pilot for LlmPilot {
         let candidates = tree.children(tree.root());
 
         // Make LLM call
-        let decision = self.call_llm(InterventionPoint::Start, &context, &candidates).await;
+        let decision = self
+            .call_llm(InterventionPoint::Start, &context, &candidates)
+            .await;
         info!(
             "Pilot start guidance: confidence={}, candidates={}",
             decision.confidence,
@@ -319,10 +328,7 @@ impl Pilot for LlmPilot {
         Some(decision)
     }
 
-    async fn guide_backtrack(
-        &self,
-        state: &SearchState<'_>,
-    ) -> Option<PilotDecision> {
+    async fn guide_backtrack(&self, state: &SearchState<'_>) -> Option<PilotDecision> {
         // Check if guide_at_backtrack is enabled
         if !self.config.guide_at_backtrack {
             return None;
@@ -334,10 +340,15 @@ impl Pilot for LlmPilot {
         }
 
         // Build backtrack context
-        let context = self.context_builder.build_backtrack_context(state, state.path);
+        let context = self
+            .context_builder
+            .build_backtrack_context(state, state.path);
 
         // Make LLM call
-        Some(self.call_llm(InterventionPoint::Backtrack, &context, state.candidates).await)
+        Some(
+            self.call_llm(InterventionPoint::Backtrack, &context, state.candidates)
+                .await,
+        )
     }
 
     fn config(&self) -> &PilotConfig {

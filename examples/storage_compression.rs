@@ -14,8 +14,8 @@
 //! cargo run --example storage_compression
 //! ```
 
-use vectorless::storage::{GzipCodec, IdentityCodec, Codec};
 use vectorless::Result;
+use vectorless::storage::{Codec, GzipCodec, IdentityCodec};
 
 fn main() -> Result<()> {
     println!("=== Compression Example ===\n");
@@ -35,8 +35,10 @@ fn main() -> Result<()> {
     let identity_decoded = identity.decode(&identity_encoded)?;
 
     println!("   Encoded size: {} bytes", identity_encoded.len());
-    println!("   Compression ratio: {:.1}%",
-             (identity_encoded.len() as f64 / original.len() as f64) * 100.0);
+    println!(
+        "   Compression ratio: {:.1}%",
+        (identity_encoded.len() as f64 / original.len() as f64) * 100.0
+    );
     assert_eq!(original.to_vec(), identity_decoded);
     println!("   ✓ Roundtrip verified\n");
 
@@ -47,10 +49,12 @@ fn main() -> Result<()> {
         let gzip = GzipCodec::new(level);
         let compressed = gzip.encode(original)?;
 
-        println!("   Level {}: {} bytes ({:.1}% of original)",
-                 level,
-                 compressed.len(),
-                 (compressed.len() as f64 / original.len() as f64) * 100.0);
+        println!(
+            "   Level {}: {} bytes ({:.1}% of original)",
+            level,
+            compressed.len(),
+            (compressed.len() as f64 / original.len() as f64) * 100.0
+        );
     }
     println!();
 
@@ -62,8 +66,11 @@ fn main() -> Result<()> {
     let decoded = gzip.decode(&encoded)?;
 
     assert_eq!(original.to_vec(), decoded);
-    println!("   ✓ Encoded {} bytes -> {} bytes",
-             original.len(), encoded.len());
+    println!(
+        "   ✓ Encoded {} bytes -> {} bytes",
+        original.len(),
+        encoded.len()
+    );
     println!("   ✓ Decoded back to {} bytes", decoded.len());
     println!("   ✓ Data integrity verified\n");
 
@@ -80,9 +87,11 @@ fn main() -> Result<()> {
     println!("5. Summary:");
     println!("   Original:    {} bytes", original.len());
     println!("   Identity:    {} bytes (100.0%)", identity_encoded.len());
-    println!("   Gzip (lvl6): {} bytes ({:.1}%)",
-             encoded.len(),
-             (encoded.len() as f64 / original.len() as f64) * 100.0);
+    println!(
+        "   Gzip (lvl6): {} bytes ({:.1}%)",
+        encoded.len(),
+        (encoded.len() as f64 / original.len() as f64) * 100.0
+    );
     println!();
 
     println!("✓ Compression example complete!");

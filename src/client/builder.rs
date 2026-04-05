@@ -194,7 +194,9 @@ impl EngineBuilder {
 
         // LLM API key is REQUIRED for retrieval (Pilot needs it for semantic navigation)
         // Try retrieval config first, then fall back to summary config
-        let retrieval_api_key = retrieval_config.api_key.clone()
+        let retrieval_api_key = retrieval_config
+            .api_key
+            .clone()
             .or_else(|| config.summary.api_key.clone())
             .ok_or(BuildError::MissingApiKey)?;
 
@@ -207,9 +209,8 @@ impl EngineBuilder {
 
         // Configure content aggregator if enabled
         if retrieval_config.content.enabled {
-            retriever = retriever.with_content_config(
-                retrieval_config.content.to_aggregator_config()
-            );
+            retriever =
+                retriever.with_content_config(retrieval_config.content.to_aggregator_config());
         }
 
         // Build engine
@@ -236,7 +237,9 @@ pub enum BuildError {
     Workspace(String),
 
     /// Missing API key for retrieval.
-    #[error("Missing API key: LLM API key is required for retrieval. Set OPENAI_API_KEY environment variable or configure retrieval.api_key")]
+    #[error(
+        "Missing API key: LLM API key is required for retrieval. Set OPENAI_API_KEY environment variable or configure retrieval.api_key"
+    )]
     MissingApiKey,
 
     /// Other error.

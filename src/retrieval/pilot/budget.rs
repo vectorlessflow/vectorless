@@ -7,8 +7,8 @@
 //! and control costs during retrieval.
 
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::RwLock;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use super::config::BudgetConfig;
 
@@ -118,8 +118,7 @@ impl BudgetController {
         let tokens = self.total_tokens();
         let calls = self.calls_made.load(Ordering::Relaxed);
 
-        tokens < self.config.max_tokens_per_query
-            && calls < self.config.max_calls_per_query
+        tokens < self.config.max_tokens_per_query && calls < self.config.max_calls_per_query
     }
 
     /// Check if a call is allowed at a specific tree level.
@@ -151,7 +150,8 @@ impl BudgetController {
         let english_count = char_count - chinese_count;
 
         // Estimate tokens
-        let input_tokens = (chinese_count as f32 / 1.5 + english_count as f32 / 4.0).ceil() as usize;
+        let input_tokens =
+            (chinese_count as f32 / 1.5 + english_count as f32 / 4.0).ceil() as usize;
 
         // Add output reserve
         input_tokens + 100
@@ -161,8 +161,7 @@ impl BudgetController {
     pub fn can_afford(&self, estimated_cost: usize) -> bool {
         let remaining = self.remaining_tokens();
 
-        estimated_cost <= remaining
-            && estimated_cost <= self.config.max_tokens_per_call
+        estimated_cost <= remaining && estimated_cost <= self.config.max_tokens_per_call
     }
 
     /// Get remaining token budget.
@@ -188,7 +187,8 @@ impl BudgetController {
     /// * `level` - Tree level where call was made
     pub fn record_usage(&self, input_tokens: usize, output_tokens: usize, level: usize) {
         self.input_tokens.fetch_add(input_tokens, Ordering::Relaxed);
-        self.output_tokens.fetch_add(output_tokens, Ordering::Relaxed);
+        self.output_tokens
+            .fetch_add(output_tokens, Ordering::Relaxed);
         self.calls_made.fetch_add(1, Ordering::Relaxed);
 
         // Track level calls
@@ -200,8 +200,7 @@ impl BudgetController {
 
     /// Get total tokens used.
     pub fn total_tokens(&self) -> usize {
-        self.input_tokens.load(Ordering::Relaxed)
-            + self.output_tokens.load(Ordering::Relaxed)
+        self.input_tokens.load(Ordering::Relaxed) + self.output_tokens.load(Ordering::Relaxed)
     }
 
     /// Get current usage statistics.
@@ -296,13 +295,21 @@ mod tests {
         // English text - 26 chars ≈ 7 tokens + 100 output reserve = ~107
         let english = "Hello world this is a test";
         let cost = budget.estimate_cost(english);
-        assert!(cost > 100 && cost < 150, "Expected cost between 100-150, got {}", cost);
+        assert!(
+            cost > 100 && cost < 150,
+            "Expected cost between 100-150, got {}",
+            cost
+        );
 
         // Chinese text - 6 chars ≈ 4 tokens + 100 output reserve = ~104
         let chinese = "这是一个测试";
         let cost_chinese = budget.estimate_cost(chinese);
         // Both have ~100 token base from output reserve, so just check it's reasonable
-        assert!(cost_chinese > 100, "Expected Chinese cost > 100, got {}", cost_chinese);
+        assert!(
+            cost_chinese > 100,
+            "Expected Chinese cost > 100, got {}",
+            cost_chinese
+        );
     }
 
     #[test]

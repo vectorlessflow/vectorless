@@ -35,7 +35,11 @@ impl CandidateNode {
     /// Create a new candidate.
     #[must_use]
     pub fn new(node_id: NodeId, score: f32, depth: usize) -> Self {
-        Self { node_id, score, depth }
+        Self {
+            node_id,
+            score,
+            depth,
+        }
     }
 }
 
@@ -149,8 +153,7 @@ impl ContentAggregator {
         // Step 3: Allocate token budget
         let max_depth = filtered.iter().map(|r| r.chunk.depth).max().unwrap_or(0);
         let strategy = self.get_allocation_strategy();
-        let allocator = BudgetAllocator::new(self.config.token_budget)
-            .with_strategy(strategy);
+        let allocator = BudgetAllocator::new(self.config.token_budget).with_strategy(strategy);
 
         let allocation = allocator.allocate(filtered, max_depth);
 
@@ -162,10 +165,8 @@ impl ContentAggregator {
         );
 
         // Step 4: Build structured output
-        let builder = StructureBuilder::from_config(
-            self.config.output_format,
-            self.config.include_scores,
-        );
+        let builder =
+            StructureBuilder::from_config(self.config.output_format, self.config.include_scores);
 
         let structured = builder.build(allocation.selected.clone(), tree);
 

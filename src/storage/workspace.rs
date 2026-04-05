@@ -38,8 +38,8 @@ use super::backend::{FileBackend, StorageBackend};
 use super::cache::DocumentCache;
 use super::lock::FileLock;
 use super::persistence::{PersistedDocument, load_document_from_bytes, save_document_to_bytes};
-use crate::error::Result;
 use crate::Error;
+use crate::error::Result;
 
 const META_KEY: &str = "_meta";
 const LOCK_FILE: &str = ".workspace.lock";
@@ -168,10 +168,13 @@ impl Workspace {
 
     /// Create a new workspace with custom LRU cache size.
     pub fn with_cache_size(path: impl Into<PathBuf>, cache_size: usize) -> Result<Self> {
-        Self::with_options(path, WorkspaceOptions {
-            cache_size,
-            ..Default::default()
-        })
+        Self::with_options(
+            path,
+            WorkspaceOptions {
+                cache_size,
+                ..Default::default()
+            },
+        )
     }
 
     /// Create a new workspace with custom options.
@@ -210,10 +213,13 @@ impl Workspace {
         path: impl Into<PathBuf> + Clone,
         cache_size: usize,
     ) -> Result<Self> {
-        Self::open_with_options(path, WorkspaceOptions {
-            cache_size,
-            ..Default::default()
-        })
+        Self::open_with_options(
+            path,
+            WorkspaceOptions {
+                cache_size,
+                ..Default::default()
+            },
+        )
     }
 
     /// Open with custom options.
@@ -290,7 +296,11 @@ impl Workspace {
                 .source_path
                 .as_ref()
                 .map(|p| p.to_string_lossy().to_string()),
-            page_count: if doc.pages.is_empty() { None } else { Some(doc.pages.len()) },
+            page_count: if doc.pages.is_empty() {
+                None
+            } else {
+                Some(doc.pages.len())
+            },
             line_count: doc.meta.line_count,
         };
 
@@ -426,10 +436,7 @@ impl Workspace {
     /// Rebuild the meta index from existing documents.
     fn rebuild_meta_index(&mut self) -> Result<()> {
         let keys = self.backend.keys()?;
-        let doc_keys: Vec<_> = keys
-            .iter()
-            .filter(|k| k.starts_with("doc:"))
-            .collect();
+        let doc_keys: Vec<_> = keys.iter().filter(|k| k.starts_with("doc:")).collect();
 
         for key in doc_keys {
             if let Some(bytes) = self.backend.get(key)? {
@@ -445,7 +452,11 @@ impl Workspace {
                             .source_path
                             .as_ref()
                             .map(|p| p.to_string_lossy().to_string()),
-                        page_count: if doc.pages.is_empty() { None } else { Some(doc.pages.len()) },
+                        page_count: if doc.pages.is_empty() {
+                            None
+                        } else {
+                            Some(doc.pages.len())
+                        },
                         line_count: doc.meta.line_count,
                     };
                     self.meta_index.insert(doc_id, meta_entry);
@@ -455,10 +466,7 @@ impl Workspace {
 
         if !self.meta_index.is_empty() {
             self.save_meta_index()?;
-            info!(
-                "Rebuilt index from {} document(s)",
-                self.meta_index.len()
-            );
+            info!("Rebuilt index from {} document(s)", self.meta_index.len());
         }
 
         Ok(())

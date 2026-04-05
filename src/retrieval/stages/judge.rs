@@ -10,12 +10,12 @@ use async_trait::async_trait;
 // Arc is used for async sharing
 use tracing::{info, warn};
 
-use crate::util::estimate_tokens;
 use crate::llm::LlmClient;
 use crate::retrieval::content::{ContentAggregator, ContentAggregatorConfig};
 use crate::retrieval::pipeline::{FailurePolicy, PipelineContext, RetrievalStage, StageOutcome};
 use crate::retrieval::sufficiency::{LlmJudge, SufficiencyChecker, ThresholdChecker};
 use crate::retrieval::types::{RetrievalResult, RetrieveResponse, SufficiencyLevel};
+use crate::util::estimate_tokens;
 
 /// Judge Stage - evaluates retrieval sufficiency.
 ///
@@ -108,7 +108,8 @@ impl JudgeStage {
         if let Some(ref aggregator) = self.content_aggregator {
             use crate::retrieval::content::CandidateNode;
 
-            let candidates: Vec<CandidateNode> = ctx.candidates
+            let candidates: Vec<CandidateNode> = ctx
+                .candidates
                 .iter()
                 .map(|c| CandidateNode::new(c.node_id, c.score, c.depth))
                 .collect();
@@ -116,9 +117,7 @@ impl JudgeStage {
             let result = aggregator.aggregate(&candidates, &ctx.tree, &ctx.query);
             info!(
                 "ContentAggregator: {} nodes, {} tokens, avg score {:.2}",
-                result.nodes_included,
-                result.tokens_used,
-                result.avg_score
+                result.nodes_included, result.tokens_used, result.avg_score
             );
             return (result.content, result.tokens_used);
         }
@@ -167,7 +166,11 @@ impl JudgeStage {
     }
 
     /// Collect content from leaf descendants of a node (excluding the node itself).
-    fn collect_leaf_content(&self, tree: &crate::document::DocumentTree, node_id: crate::document::NodeId) -> String {
+    fn collect_leaf_content(
+        &self,
+        tree: &crate::document::DocumentTree,
+        node_id: crate::document::NodeId,
+    ) -> String {
         let mut content_parts = Vec::new();
 
         // Start with children, not the node itself

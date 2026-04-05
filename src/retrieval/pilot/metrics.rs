@@ -208,12 +208,15 @@ impl MetricsCollector {
         }
 
         // Update token counters
-        self.total_input_tokens.fetch_add(input_tokens, Ordering::Relaxed);
-        self.total_output_tokens.fetch_add(output_tokens, Ordering::Relaxed);
+        self.total_input_tokens
+            .fetch_add(input_tokens, Ordering::Relaxed);
+        self.total_output_tokens
+            .fetch_add(output_tokens, Ordering::Relaxed);
 
         // Update latency
         let latency_ms = latency.as_millis() as u64;
-        self.total_latency_ms.fetch_add(latency_ms, Ordering::Relaxed);
+        self.total_latency_ms
+            .fetch_add(latency_ms, Ordering::Relaxed);
 
         // Store latency sample
         if let Ok(mut samples) = self.latency_samples.write() {
@@ -328,7 +331,10 @@ impl MetricsCollector {
             let p99_idx = (latencies.len() as f64 * 0.99) as usize;
 
             let p50 = latencies.get(p50_idx).copied().unwrap_or(0);
-            let p99 = latencies.get(p99_idx.min(latencies.len() - 1)).copied().unwrap_or(0);
+            let p99 = latencies
+                .get(p99_idx.min(latencies.len() - 1))
+                .copied()
+                .unwrap_or(0);
 
             (p50, p99)
         } else {
@@ -445,7 +451,14 @@ mod tests {
     fn test_token_utilization() {
         let metrics = MetricsCollector::new();
 
-        metrics.record_call(InterventionPoint::Fork, 500, 200, Duration::ZERO, true, false);
+        metrics.record_call(
+            InterventionPoint::Fork,
+            500,
+            200,
+            Duration::ZERO,
+            true,
+            false,
+        );
 
         let utilization = metrics.snapshot().token_utilization(1000);
         assert!((utilization - 0.7).abs() < 0.01);
@@ -480,7 +493,14 @@ mod tests {
     fn test_reset() {
         let metrics = MetricsCollector::new();
 
-        metrics.record_call(InterventionPoint::Fork, 100, 50, Duration::from_millis(200), true, false);
+        metrics.record_call(
+            InterventionPoint::Fork,
+            100,
+            50,
+            Duration::from_millis(200),
+            true,
+            false,
+        );
         assert!(metrics.total_calls() > 0);
 
         metrics.reset();

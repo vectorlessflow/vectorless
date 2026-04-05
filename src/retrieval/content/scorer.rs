@@ -167,7 +167,10 @@ impl RelevanceScorer {
         components.keyword_score = self.compute_keyword_score(&chunk.content);
 
         // 2. BM25 score (if enabled)
-        if matches!(self.strategy, ScoringStrategyConfig::KeywordWithBM25 | ScoringStrategyConfig::Hybrid) {
+        if matches!(
+            self.strategy,
+            ScoringStrategyConfig::KeywordWithBM25 | ScoringStrategyConfig::Hybrid
+        ) {
             components.bm25_score = self.compute_bm25_score(&chunk.content, ctx);
         }
 
@@ -204,9 +207,8 @@ impl RelevanceScorer {
         }
 
         let content_lower = content.to_lowercase();
-        let content_words: std::collections::HashSet<&str> = content_lower
-            .split_whitespace()
-            .collect();
+        let content_words: std::collections::HashSet<&str> =
+            content_lower.split_whitespace().collect();
 
         let matches = self
             .query_keywords
@@ -232,10 +234,7 @@ impl RelevanceScorer {
 
         for term in &self.query_keywords {
             let term_lower = term.to_lowercase();
-            let tf = content
-                .to_lowercase()
-                .matches(&term_lower)
-                .count() as f32;
+            let tf = content.to_lowercase().matches(&term_lower).count() as f32;
 
             if tf == 0.0 {
                 continue;
@@ -268,21 +267,128 @@ impl RelevanceScorer {
 fn extract_keywords(query: &str) -> Vec<String> {
     // Common English stop words
     const STOPWORDS: &[&str] = &[
-        "a", "an", "the", "is", "are", "was", "were", "be", "been", "being",
-        "have", "has", "had", "do", "does", "did", "will", "would", "could",
-        "should", "may", "might", "must", "shall", "can", "need", "dare",
-        "ought", "used", "to", "of", "in", "for", "on", "with", "at", "by",
-        "from", "as", "into", "through", "during", "before", "after",
-        "above", "below", "between", "under", "again", "further", "then",
-        "once", "here", "there", "when", "where", "why", "how", "all",
-        "each", "few", "more", "most", "other", "some", "such", "no", "nor",
-        "not", "only", "own", "same", "so", "than", "too", "very", "just",
-        "and", "but", "if", "or", "because", "until", "while", "about",
-        "what", "which", "who", "whom", "this", "that", "these", "those",
-        "i", "me", "my", "myself", "we", "our", "ours", "ourselves", "you",
-        "your", "yours", "yourself", "yourselves", "he", "him", "his",
-        "himself", "she", "her", "hers", "herself", "it", "its", "itself",
-        "they", "them", "their", "theirs", "themselves",
+        "a",
+        "an",
+        "the",
+        "is",
+        "are",
+        "was",
+        "were",
+        "be",
+        "been",
+        "being",
+        "have",
+        "has",
+        "had",
+        "do",
+        "does",
+        "did",
+        "will",
+        "would",
+        "could",
+        "should",
+        "may",
+        "might",
+        "must",
+        "shall",
+        "can",
+        "need",
+        "dare",
+        "ought",
+        "used",
+        "to",
+        "of",
+        "in",
+        "for",
+        "on",
+        "with",
+        "at",
+        "by",
+        "from",
+        "as",
+        "into",
+        "through",
+        "during",
+        "before",
+        "after",
+        "above",
+        "below",
+        "between",
+        "under",
+        "again",
+        "further",
+        "then",
+        "once",
+        "here",
+        "there",
+        "when",
+        "where",
+        "why",
+        "how",
+        "all",
+        "each",
+        "few",
+        "more",
+        "most",
+        "other",
+        "some",
+        "such",
+        "no",
+        "nor",
+        "not",
+        "only",
+        "own",
+        "same",
+        "so",
+        "than",
+        "too",
+        "very",
+        "just",
+        "and",
+        "but",
+        "if",
+        "or",
+        "because",
+        "until",
+        "while",
+        "about",
+        "what",
+        "which",
+        "who",
+        "whom",
+        "this",
+        "that",
+        "these",
+        "those",
+        "i",
+        "me",
+        "my",
+        "myself",
+        "we",
+        "our",
+        "ours",
+        "ourselves",
+        "you",
+        "your",
+        "yours",
+        "yourself",
+        "yourselves",
+        "he",
+        "him",
+        "his",
+        "himself",
+        "she",
+        "her",
+        "hers",
+        "herself",
+        "it",
+        "its",
+        "itself",
+        "they",
+        "them",
+        "their",
+        "theirs",
+        "themselves",
     ];
 
     query
@@ -305,10 +411,9 @@ fn compute_density(content: &str) -> f32 {
 
     // Stopword ratio (lower is better)
     const STOPWORDS: &[&str] = &[
-        "a", "an", "the", "is", "are", "was", "were", "be", "been", "being",
-        "have", "has", "had", "do", "does", "did", "will", "would", "could",
-        "should", "may", "might", "must", "shall", "can", "to", "of", "in",
-        "for", "on", "with", "at", "by", "from", "and", "but", "or", "as",
+        "a", "an", "the", "is", "are", "was", "were", "be", "been", "being", "have", "has", "had",
+        "do", "does", "did", "will", "would", "could", "should", "may", "might", "must", "shall",
+        "can", "to", "of", "in", "for", "on", "with", "at", "by", "from", "and", "but", "or", "as",
     ];
 
     let stopword_count = words
@@ -321,10 +426,7 @@ fn compute_density(content: &str) -> f32 {
     // Entity-like ratio (capitalized, numbers, special terms)
     let entity_count = words
         .iter()
-        .filter(|w| {
-            w.chars()
-                .any(|c| c.is_numeric() || c.is_uppercase())
-        })
+        .filter(|w| w.chars().any(|c| c.is_numeric() || c.is_uppercase()))
         .count();
 
     let entity_ratio = entity_count as f32 / words.len() as f32;
