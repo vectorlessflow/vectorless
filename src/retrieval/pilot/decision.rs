@@ -288,10 +288,12 @@ mod tests {
         assert_eq!(candidate.score, 0.8);
         assert!(candidate.reason.is_none());
 
-        let candidate_with_reason =
-            RankedCandidate::with_reason(node_ids[0], 0.9, "test reason");
+        let candidate_with_reason = RankedCandidate::with_reason(node_ids[0], 0.9, "test reason");
         assert_eq!(candidate_with_reason.score, 0.9);
-        assert_eq!(candidate_with_reason.reason, Some("test reason".to_string()));
+        assert_eq!(
+            candidate_with_reason.reason,
+            Some("test reason".to_string())
+        );
     }
 
     #[test]
@@ -300,7 +302,10 @@ mod tests {
         assert!(matches!(deeper, SearchDirection::GoDeeper { .. }));
 
         let found = SearchDirection::found_answer(0.9);
-        assert!(matches!(found, SearchDirection::FoundAnswer { confidence: 0.9 }));
+        assert!(matches!(
+            found,
+            SearchDirection::FoundAnswer { confidence: 0.9 }
+        ));
     }
 
     #[test]

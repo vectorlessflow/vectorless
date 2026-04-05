@@ -73,7 +73,10 @@ fn main() -> vectorless::Result<()> {
     println!("   - Hits: {}", stats.hits);
     println!("   - Misses: {}", stats.misses);
     println!("   - Evictions: {}", stats.evictions);
-    println!("   - Utilization: {:.1}%", workspace.cache_utilization() * 100.0);
+    println!(
+        "   - Utilization: {:.1}%",
+        workspace.cache_utilization() * 100.0
+    );
     println!();
 
     // 7. Load again (should hit cache)

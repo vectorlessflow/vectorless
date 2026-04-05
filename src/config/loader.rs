@@ -211,7 +211,12 @@ impl ConfigLoader {
     }
 
     /// Set a configuration value by path.
-    fn set_by_path(&self, config: &mut Config, path: &[&str], value: &str) -> Result<(), ConfigError> {
+    fn set_by_path(
+        &self,
+        config: &mut Config,
+        path: &[&str],
+        value: &str,
+    ) -> Result<(), ConfigError> {
         match path {
             ["summary", "api_key"] => {
                 config.summary.api_key = Some(value.to_string());
@@ -223,9 +228,9 @@ impl ConfigLoader {
                 config.summary.endpoint = value.to_string();
             }
             ["summary", "max_tokens"] => {
-                config.summary.max_tokens = value.parse().map_err(|e| {
-                    ConfigError::Env(format!("Invalid max_tokens: {}", e))
-                })?;
+                config.summary.max_tokens = value
+                    .parse()
+                    .map_err(|e| ConfigError::Env(format!("Invalid max_tokens: {}", e)))?;
             }
             ["retrieval", "api_key"] => {
                 config.retrieval.api_key = Some(value.to_string());
@@ -237,9 +242,9 @@ impl ConfigLoader {
                 config.retrieval.endpoint = value.to_string();
             }
             ["retrieval", "top_k"] => {
-                config.retrieval.top_k = value.parse().map_err(|e| {
-                    ConfigError::Env(format!("Invalid top_k: {}", e))
-                })?;
+                config.retrieval.top_k = value
+                    .parse()
+                    .map_err(|e| ConfigError::Env(format!("Invalid top_k: {}", e)))?;
             }
             ["storage", "workspace_dir"] => {
                 config.storage.workspace_dir = PathBuf::from(value);
@@ -259,8 +264,7 @@ impl ConfigLoader {
 }
 
 /// Default configuration file names to search for.
-pub const CONFIG_FILE_NAMES: &[&str] =
-    &["vectorless.toml", "config.toml", ".vectorless.toml"];
+pub const CONFIG_FILE_NAMES: &[&str] = &["vectorless.toml", "config.toml", ".vectorless.toml"];
 
 /// Find a configuration file in current or parent directories.
 pub fn find_config_file() -> Option<PathBuf> {
@@ -317,9 +321,7 @@ mod tests {
 
     #[test]
     fn test_config_loader_not_found() {
-        let result = ConfigLoader::new()
-            .file("nonexistent_config.toml")
-            .load();
+        let result = ConfigLoader::new().file("nonexistent_config.toml").load();
 
         assert!(result.is_err());
         assert!(matches!(result.unwrap_err(), ConfigError::NotFound(_)));
@@ -327,10 +329,7 @@ mod tests {
 
     #[test]
     fn test_config_loader_with_validation() {
-        let config = ConfigLoader::new()
-            .with_validation(true)
-            .load()
-            .unwrap();
+        let config = ConfigLoader::new().with_validation(true).load().unwrap();
 
         assert_eq!(config.retrieval.model, "gpt-4o");
     }

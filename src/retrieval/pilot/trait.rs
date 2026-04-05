@@ -13,7 +13,7 @@ use std::sync::LazyLock;
 
 use crate::document::{DocumentTree, NodeId};
 
-use super::{PilotConfig, PilotDecision, InterventionPoint};
+use super::{InterventionPoint, PilotConfig, PilotDecision};
 
 /// Empty HashSet for use in SearchState::for_start
 static EMPTY_VISITED: LazyLock<HashSet<NodeId>> = LazyLock::new(HashSet::new);
@@ -168,11 +168,7 @@ pub trait Pilot: Send + Sync {
     /// the starting point and initial direction.
     ///
     /// Returns `None` if no guidance is available or needed.
-    async fn guide_start(
-        &self,
-        tree: &DocumentTree,
-        query: &str,
-    ) -> Option<PilotDecision>;
+    async fn guide_start(&self, tree: &DocumentTree, query: &str) -> Option<PilotDecision>;
 
     /// Provide guidance during backtracking.
     ///
@@ -181,10 +177,7 @@ pub trait Pilot: Send + Sync {
     /// alternative paths.
     ///
     /// Returns `None` if no guidance is available.
-    async fn guide_backtrack(
-        &self,
-        state: &SearchState<'_>,
-    ) -> Option<PilotDecision>;
+    async fn guide_backtrack(&self, state: &SearchState<'_>) -> Option<PilotDecision>;
 
     /// Get the current configuration.
     fn config(&self) -> &PilotConfig;

@@ -15,14 +15,14 @@
 //! - Utilization: Current usage as percentage of capacity
 
 use std::num::NonZeroUsize;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use lru::LruCache;
 
 use super::persistence::PersistedDocument;
-use crate::error::Result;
 use crate::Error;
+use crate::error::Result;
 
 /// Default cache size (number of documents).
 const DEFAULT_CACHE_SIZE: usize = 100;
@@ -67,9 +67,8 @@ impl DocumentCache {
     #[must_use]
     pub fn with_capacity(capacity: usize) -> Self {
         let capacity = capacity.max(1);
-        let non_zero = NonZeroUsize::new(capacity).unwrap_or_else(|| {
-            NonZeroUsize::new(DEFAULT_CACHE_SIZE).expect("default is non-zero")
-        });
+        let non_zero = NonZeroUsize::new(capacity)
+            .unwrap_or_else(|| NonZeroUsize::new(DEFAULT_CACHE_SIZE).expect("default is non-zero"));
 
         Self {
             inner: Mutex::new(LruCache::new(non_zero)),
@@ -104,9 +103,7 @@ impl DocumentCache {
 
     /// Check if a document is in the cache.
     pub fn contains(&self, id: &str) -> bool {
-        self.lock()
-            .map(|cache| cache.contains(id))
-            .unwrap_or(false)
+        self.lock().map(|cache| cache.contains(id)).unwrap_or(false)
     }
 
     /// Put a document into the cache.
@@ -158,9 +155,7 @@ impl DocumentCache {
 
     /// Get the number of entries currently in the cache.
     pub fn len(&self) -> usize {
-        self.lock()
-            .map(|cache| cache.len())
-            .unwrap_or(0)
+        self.lock().map(|cache| cache.len()).unwrap_or(0)
     }
 
     /// Check if the cache is empty.
@@ -240,9 +235,9 @@ impl DocumentCache {
 
     /// Lock the inner cache.
     fn lock(&self) -> Result<std::sync::MutexGuard<'_, LruCache<String, PersistedDocument>>> {
-        self.inner.lock().map_err(|_| {
-            Error::Cache("Cache lock poisoned".to_string())
-        })
+        self.inner
+            .lock()
+            .map_err(|_| Error::Cache("Cache lock poisoned".to_string()))
     }
 }
 
@@ -272,8 +267,8 @@ pub struct CacheStats {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::storage::{DocumentMeta, PersistedDocument};
     use crate::document::DocumentTree;
+    use crate::storage::{DocumentMeta, PersistedDocument};
 
     fn create_test_doc(id: &str) -> PersistedDocument {
         let meta = DocumentMeta::new(id, "Test Doc", "md");
@@ -316,9 +311,15 @@ mod tests {
     fn test_cache_eviction() {
         let cache = DocumentCache::with_capacity(2);
 
-        cache.put("doc1".to_string(), create_test_doc("doc1")).unwrap();
-        cache.put("doc2".to_string(), create_test_doc("doc2")).unwrap();
-        cache.put("doc3".to_string(), create_test_doc("doc3")).unwrap();
+        cache
+            .put("doc1".to_string(), create_test_doc("doc1"))
+            .unwrap();
+        cache
+            .put("doc2".to_string(), create_test_doc("doc2"))
+            .unwrap();
+        cache
+            .put("doc3".to_string(), create_test_doc("doc3"))
+            .unwrap();
 
         // doc1 should be evicted (least recently used)
         assert!(!cache.contains("doc1"));
@@ -330,7 +331,9 @@ mod tests {
     fn test_cache_remove() {
         let cache = DocumentCache::new();
 
-        cache.put("doc1".to_string(), create_test_doc("doc1")).unwrap();
+        cache
+            .put("doc1".to_string(), create_test_doc("doc1"))
+            .unwrap();
         assert!(cache.contains("doc1"));
 
         let removed = cache.remove("doc1").unwrap();
@@ -345,8 +348,12 @@ mod tests {
     fn test_cache_clear() {
         let cache = DocumentCache::new();
 
-        cache.put("doc1".to_string(), create_test_doc("doc1")).unwrap();
-        cache.put("doc2".to_string(), create_test_doc("doc2")).unwrap();
+        cache
+            .put("doc1".to_string(), create_test_doc("doc1"))
+            .unwrap();
+        cache
+            .put("doc2".to_string(), create_test_doc("doc2"))
+            .unwrap();
 
         assert_eq!(cache.len(), 2);
 
@@ -361,10 +368,14 @@ mod tests {
 
         assert_eq!(cache.utilization(), 0.0);
 
-        cache.put("doc1".to_string(), create_test_doc("doc1")).unwrap();
+        cache
+            .put("doc1".to_string(), create_test_doc("doc1"))
+            .unwrap();
         assert!((cache.utilization() - 0.1).abs() < 0.01);
 
-        cache.put("doc2".to_string(), create_test_doc("doc2")).unwrap();
+        cache
+            .put("doc2".to_string(), create_test_doc("doc2"))
+            .unwrap();
         assert!((cache.utilization() - 0.2).abs() < 0.01);
     }
 }

@@ -26,7 +26,8 @@ use crate::document::{DocumentTree, NodeId};
 use crate::error::{Error, Result};
 use crate::retrieval::content::ContentAggregatorConfig;
 use crate::retrieval::{
-    QueryComplexity, RetrieveOptions, RetrieveResponse, RetrievalResult, Retriever, SufficiencyLevel,
+    QueryComplexity, RetrievalResult, RetrieveOptions, RetrieveResponse, Retriever,
+    SufficiencyLevel,
 };
 
 use super::context::ClientContext;
@@ -129,7 +130,8 @@ impl RetrieverClient {
         question: &str,
         options: &RetrieveOptions,
     ) -> Result<QueryResult> {
-        self.query_with_context(tree, question, options, &ClientContext::new()).await
+        self.query_with_context(tree, question, options, &ClientContext::new())
+            .await
     }
 
     /// Query with request context.
@@ -167,7 +169,8 @@ impl RetrieverClient {
         }
 
         // Execute retrieval
-        let response = self.retriever
+        let response = self
+            .retriever
             .retrieve(tree, question, &options)
             .await
             .map_err(|e| Error::Retrieval(e.to_string()))?;
@@ -259,11 +262,13 @@ impl RetrieverClient {
                 let similarity = self.calculate_similarity(&target_keywords, &node_keywords);
 
                 if similarity > 0.3 {
-                    results.push(RetrievalResult::new(&node.title)
-                        .with_node_id(format!("{:?}", current_id))
-                        .with_content(node.content.clone())
-                        .with_score(similarity)
-                        .with_depth(tree.depth(current_id)));
+                    results.push(
+                        RetrievalResult::new(&node.title)
+                            .with_node_id(format!("{:?}", current_id))
+                            .with_content(node.content.clone())
+                            .with_score(similarity)
+                            .with_depth(tree.depth(current_id)),
+                    );
                 }
             }
 
@@ -271,7 +276,11 @@ impl RetrieverClient {
         }
 
         // Sort by score and take top_k
-        results.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+        results.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         results.truncate(top_k);
 
         Ok(results)
@@ -326,18 +335,22 @@ impl RetrieverClient {
             }
 
             if let Some(node) = tree.get(id) {
-                ancestors.push(RetrievalResult::new(&node.title)
-                    .with_node_id(format!("{:?}", id))
-                    .with_depth(tree.depth(id)));
+                ancestors.push(
+                    RetrievalResult::new(&node.title)
+                        .with_node_id(format!("{:?}", id))
+                        .with_depth(tree.depth(id)),
+                );
 
                 // Get siblings at this level
                 if let Some(parent_id) = tree.parent(id) {
                     for child_id in tree.children(parent_id) {
                         if child_id != id {
                             if let Some(sibling) = tree.get(child_id) {
-                                siblings.push(RetrievalResult::new(&sibling.title)
-                                    .with_node_id(format!("{:?}", child_id))
-                                    .with_depth(tree.depth(child_id)));
+                                siblings.push(
+                                    RetrievalResult::new(&sibling.title)
+                                        .with_node_id(format!("{:?}", child_id))
+                                        .with_depth(tree.depth(child_id)),
+                                );
                             }
                         }
                     }
@@ -349,14 +362,12 @@ impl RetrieverClient {
         }
 
         // Get the target node
-        let target = tree
-            .get(node_id)
-            .map(|n| {
-                RetrievalResult::new(&n.title)
-                    .with_node_id(format!("{:?}", node_id))
-                    .with_content(n.content.clone())
-                    .with_depth(tree.depth(node_id))
-            });
+        let target = tree.get(node_id).map(|n| {
+            RetrievalResult::new(&n.title)
+                .with_node_id(format!("{:?}", node_id))
+                .with_content(n.content.clone())
+                .with_depth(tree.depth(node_id))
+        });
 
         Ok(NodeContext {
             target,

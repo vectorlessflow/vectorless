@@ -15,8 +15,8 @@
 use std::fs::{File, OpenOptions};
 use std::path::Path;
 
-use crate::error::Result;
 use crate::Error;
+use crate::error::Result;
 
 /// A file lock that is automatically released when dropped.
 ///
@@ -88,7 +88,7 @@ impl FileLock {
         {
             use std::os::windows::fs::OpenOptionsExt;
             use windows_sys::Win32::Storage::FileSystem::{
-                LockFileEx, LOCKFILE_EXCLUSIVE_LOCK, LOCKFILE_FAIL_IMMEDIATELY,
+                LOCKFILE_EXCLUSIVE_LOCK, LOCKFILE_FAIL_IMMEDIATELY, LockFileEx,
             };
 
             let handle = std::os::windows::io::AsRawHandle::as_raw_handle(&file);
@@ -97,7 +97,11 @@ impl FileLock {
             let result = unsafe {
                 LockFileEx(
                     handle,
-                    if exclusive { LOCKFILE_EXCLUSIVE_LOCK } else { 0 } | LOCKFILE_FAIL_IMMEDIATELY,
+                    if exclusive {
+                        LOCKFILE_EXCLUSIVE_LOCK
+                    } else {
+                        0
+                    } | LOCKFILE_FAIL_IMMEDIATELY,
                     0,
                     0xFFFFFFFF,
                     0xFFFFFFFF,
@@ -136,11 +140,11 @@ impl FileLock {
         exclusive: bool,
     ) -> Result<Option<Self>> {
         match Self::try_lock(&path.into(), exclusive) {
-                Ok(lock) => Ok(Some(lock)),
-                Err(Error::WorkspaceLocked) => Ok(None),
-                Err(e) => Err(e),
-            }
+            Ok(lock) => Ok(Some(lock)),
+            Err(Error::WorkspaceLocked) => Ok(None),
+            Err(e) => Err(e),
         }
+    }
 
     /// Check if the lock file is locked by another process.
     ///

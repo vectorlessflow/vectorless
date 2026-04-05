@@ -14,8 +14,8 @@
 //! cargo run --example events
 //! ```
 
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use vectorless::client::{EngineBuilder, EventEmitter, IndexEvent, QueryEvent};
 
@@ -36,49 +36,55 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let events = EventEmitter::new()
         // Index events
-        .on_index(move |e| {
-            match e {
-                IndexEvent::Started { path } => {
-                    println!("  [INDEX] Started: {}", path);
-                }
-                IndexEvent::FormatDetected { format } => {
-                    println!("  [INDEX] Format: {:?}", format);
-                }
-                IndexEvent::TreeBuilt { node_count } => {
-                    println!("  [INDEX] Tree built: {} nodes", node_count);
-                }
-                IndexEvent::Complete { doc_id } => {
-                    println!("  [INDEX] Complete: {}", &doc_id[..8]);
-                    index_count_clone.fetch_add(1, Ordering::SeqCst);
-                }
-                IndexEvent::Error { message } => {
-                    println!("  [INDEX] Error: {}", message);
-                }
-                _ => {}
+        .on_index(move |e| match e {
+            IndexEvent::Started { path } => {
+                println!("  [INDEX] Started: {}", path);
             }
+            IndexEvent::FormatDetected { format } => {
+                println!("  [INDEX] Format: {:?}", format);
+            }
+            IndexEvent::TreeBuilt { node_count } => {
+                println!("  [INDEX] Tree built: {} nodes", node_count);
+            }
+            IndexEvent::Complete { doc_id } => {
+                println!("  [INDEX] Complete: {}", &doc_id[..8]);
+                index_count_clone.fetch_add(1, Ordering::SeqCst);
+            }
+            IndexEvent::Error { message } => {
+                println!("  [INDEX] Error: {}", message);
+            }
+            _ => {}
         })
         // Query events
-        .on_query(move |e| {
-            match e {
-                QueryEvent::Started { query } => {
-                    println!("  [QUERY] Started: \"{}\"", query);
-                    query_count_clone.fetch_add(1, Ordering::SeqCst);
-                }
-                QueryEvent::NodeVisited { title, score, .. } => {
-                    println!("  [QUERY] Visited: \"{}\" (score: {:.2})", title, score);
-                    nodes_visited_clone.fetch_add(1, Ordering::SeqCst);
-                }
-                QueryEvent::CandidateFound { node_id, score } => {
-                    println!("  [QUERY] Candidate: {} (score: {:.2})", &node_id[..8], score);
-                }
-                QueryEvent::Complete { total_results, confidence } => {
-                    println!("  [QUERY] Complete: {} results, confidence: {:.2}", total_results, confidence);
-                }
-                QueryEvent::Error { message } => {
-                    println!("  [QUERY] Error: {}", message);
-                }
-                _ => {}
+        .on_query(move |e| match e {
+            QueryEvent::Started { query } => {
+                println!("  [QUERY] Started: \"{}\"", query);
+                query_count_clone.fetch_add(1, Ordering::SeqCst);
             }
+            QueryEvent::NodeVisited { title, score, .. } => {
+                println!("  [QUERY] Visited: \"{}\" (score: {:.2})", title, score);
+                nodes_visited_clone.fetch_add(1, Ordering::SeqCst);
+            }
+            QueryEvent::CandidateFound { node_id, score } => {
+                println!(
+                    "  [QUERY] Candidate: {} (score: {:.2})",
+                    &node_id[..8],
+                    score
+                );
+            }
+            QueryEvent::Complete {
+                total_results,
+                confidence,
+            } => {
+                println!(
+                    "  [QUERY] Complete: {} results, confidence: {:.2}",
+                    total_results, confidence
+                );
+            }
+            QueryEvent::Error { message } => {
+                println!("  [QUERY] Error: {}", message);
+            }
+            _ => {}
         });
 
     println!("  ✓ Event handlers configured\n");
@@ -122,7 +128,9 @@ The event system uses handlers that can be attached to the engine builder.
     // 4. Query the document (events will fire)
     println!("Step 4: Querying document (watch events)...\n");
 
-    let result = engine.query(&doc_id, "What features are available?").await?;
+    let result = engine
+        .query(&doc_id, "What features are available?")
+        .await?;
     println!();
 
     // 5. Show results
@@ -137,9 +145,18 @@ The event system uses handlers that can be attached to the engine builder.
 
     // 6. Show statistics
     println!("Step 6: Event statistics:");
-    println!("  - Index events fired: {}", index_count.load(Ordering::SeqCst));
-    println!("  - Query events fired: {}", query_count.load(Ordering::SeqCst));
-    println!("  - Nodes visited: {}", nodes_visited.load(Ordering::SeqCst));
+    println!(
+        "  - Index events fired: {}",
+        index_count.load(Ordering::SeqCst)
+    );
+    println!(
+        "  - Query events fired: {}",
+        query_count.load(Ordering::SeqCst)
+    );
+    println!(
+        "  - Nodes visited: {}",
+        nodes_visited.load(Ordering::SeqCst)
+    );
     println!();
 
     // 7. Cleanup

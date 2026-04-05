@@ -57,7 +57,8 @@ impl GreedySearch {
         let beta = 0.6 * pilot_decision.confidence;
 
         // Build a map from node_id to pilot score
-        let mut pilot_scores: std::collections::HashMap<NodeId, f32> = std::collections::HashMap::new();
+        let mut pilot_scores: std::collections::HashMap<NodeId, f32> =
+            std::collections::HashMap::new();
         for ranked in &pilot_decision.ranked_candidates {
             pilot_scores.insert(ranked.node_id, ranked.score);
         }
@@ -81,9 +82,7 @@ impl GreedySearch {
             .collect();
 
         // Sort by merged score
-        merged.sort_by(|a, b| {
-            b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal)
-        });
+        merged.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
 
         merged
     }
@@ -140,7 +139,10 @@ impl SearchTree for GreedySearch {
 
                 // Check if Pilot wants to intervene
                 if p.should_intervene(&state) {
-                    trace!("Pilot intervening at greedy decision point with {} candidates", children.len());
+                    trace!(
+                        "Pilot intervening at greedy decision point with {} candidates",
+                        children.len()
+                    );
 
                     match p.decide(&state).await {
                         decision => {
@@ -152,7 +154,12 @@ impl SearchTree for GreedySearch {
                             );
 
                             // Merge algorithm scores with Pilot decision
-                            self.merge_with_pilot_decision(tree, &children, &decision, &context.query)
+                            self.merge_with_pilot_decision(
+                                tree,
+                                &children,
+                                &decision,
+                                &context.query,
+                            )
                         }
                     }
                 } else {

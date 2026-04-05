@@ -33,7 +33,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let temp_dir = tempfile::tempdir()?;
 
     let documents = vec![
-        ("intro.md", r#"# Introduction
+        (
+            "intro.md",
+            r#"# Introduction
 
 Welcome to the vectorless library. This is a document intelligence engine.
 
@@ -42,8 +44,11 @@ Welcome to the vectorless library. This is a document intelligence engine.
 - Tree-based navigation
 - Multi-format support
 - Session management
-"#),
-        ("api.md", r#"# API Reference
+"#,
+        ),
+        (
+            "api.md",
+            r#"# API Reference
 
 ## Engine
 
@@ -62,8 +67,11 @@ Multi-document operations with caching.
 
 - `index(path)`: Index into session
 - `query_all(question)`: Query across all documents
-"#),
-        ("guide.md", r#"# User Guide
+"#,
+        ),
+        (
+            "guide.md",
+            r#"# User Guide
 
 ## Getting Started
 
@@ -74,8 +82,11 @@ First, create a client with workspace configuration.
 - Use sessions for multi-document operations
 - Enable caching for better performance
 - Monitor events for debugging
-"#),
-    ("advanced.md", r#"# Advanced Topics
+"#,
+        ),
+        (
+            "advanced.md",
+            r#"# Advanced Topics
 
 ## Performance Tuning
 
@@ -89,8 +100,11 @@ Configure retrieval parameters for optimal performance.
 ## Custom Pilots
 
 Implement custom navigation logic.
-"#),
-    ("reference.md", r#"# Reference
+"#,
+        ),
+        (
+            "reference.md",
+            r#"# Reference
 
 ## Configuration
 
@@ -103,8 +117,11 @@ All configuration is done via TOML files.
 top_k = 5
 max_tokens = 4000
 ```
-"#),
-    ("examples.md", r#"# Examples
+"#,
+        ),
+        (
+            "examples.md",
+            r#"# Examples
 
 ## Basic Usage
 
@@ -117,8 +134,11 @@ Process multiple documents concurrently.
 ## Session Usage
 
 Multi-document operations with caching.
-"#),
-    ("faq.md", r#"# FAQ
+"#,
+        ),
+        (
+            "faq.md",
+            r#"# FAQ
 
 ## Common Questions
 
@@ -130,8 +150,11 @@ A: Use `engine.query(doc_id, question)` method.
 
 **Q: What formats are supported?**
 A: Markdown, PDF, DOCX, HTML.
-"#),
-    ("changelog.md", r#"# Changelog
+"#,
+        ),
+        (
+            "changelog.md",
+            r#"# Changelog
 
 ## Version 0.1.0
 
@@ -144,8 +167,11 @@ A: Markdown, PDF, DOCX, HTML.
 - Session support
 - Event system
 - Content aggregator
-"#),
-        ("contributing.md", r#"# Contributing
+"#,
+        ),
+        (
+            "contributing.md",
+            r#"# Contributing
 
 ## How to Contribute
 
@@ -160,14 +186,20 @@ We welcome contributions! Please follow these steps:
 - Run `cargo fmt`
 - Run `cargo clippy`
 - Add tests
-"#),
-        ("license.md", r#"# License
+"#,
+        ),
+        (
+            "license.md",
+            r#"# License
 
 Apache License, Version 2.0
 
 Copyright 2026 vectorless developers
-"#),
-    ("architecture.md", r#"# Architecture
+"#,
+        ),
+        (
+            "architecture.md",
+            r#"# Architecture
 
 ## Overview
 
@@ -179,8 +211,11 @@ Vectorless uses a tree-based architecture.
 - Indexer: Tree building
 - Retriever: Content search
 - Storage: Persistence
-"#),
-        ("security.md", r#"# Security
+"#,
+        ),
+        (
+            "security.md",
+            r#"# Security
 
 ## Security Considerations
 
@@ -192,8 +227,11 @@ Vectorless uses a tree-based architecture.
 
 - Use environment variables
 - Rotate keys periodically
-"#),
-    ("performance.md", r#"# Performance
+"#,
+        ),
+        (
+            "performance.md",
+            r#"# Performance
 
 ## Optimization Tips
 
@@ -204,8 +242,11 @@ Vectorless uses a tree-based architecture.
 ## Benchmarks
 
 Run `cargo bench` for performance metrics.
-"#),
-        ("testing.md", r#"# Testing
+"#,
+        ),
+        (
+            "testing.md",
+            r#"# Testing
 
 ## Running Tests
 
@@ -218,8 +259,11 @@ cargo test
 - Unit tests
 - Integration tests
 - Example tests
-"#),
-    ("deployment.md", r#"# Deployment
+"#,
+        ),
+        (
+            "deployment.md",
+            r#"# Deployment
 
 ## Production Setup
 
@@ -230,8 +274,11 @@ cargo test
 ## Configuration
 
 Use TOML configuration files.
-"#),
-        ("troubleshooting.md", r#"# Troubleshooting
+"#,
+        ),
+        (
+            "troubleshooting.md",
+            r#"# Troubleshooting
 
 ## Common Issues
 
@@ -246,8 +293,11 @@ Ensure document is indexed.
 ### Performance Issues
 
 Reduce batch size or enable caching.
-"#),
-    ("integrations.md", r#"# Integrations
+"#,
+        ),
+        (
+            "integrations.md",
+            r#"# Integrations
 
 ## LLM Providers
 
@@ -259,8 +309,11 @@ Reduce batch size or enable caching.
 
 - File system (default)
 - S3 (planned)
-"#),
-        ("migrations.md", r#"# Migrations
+"#,
+        ),
+        (
+            "migrations.md",
+            r#"# Migrations
 
 ## Version Migrations
 
@@ -268,8 +321,11 @@ Reduce batch size or enable caching.
 
 - Update configuration format
 - Re-index documents
-"#),
-    ("roadmap.md", r#"# Roadmap
+"#,
+        ),
+        (
+            "roadmap.md",
+            r#"# Roadmap
 
 ## Future Plans
 
@@ -282,8 +338,11 @@ Reduce batch size or enable caching.
 
 - Distributed indexing
 - Real-time updates
-"#),
-    ("credits.md", r#"# Credits
+"#,
+        ),
+        (
+            "credits.md",
+            r#"# Credits
 
 ## Contributors
 
@@ -292,8 +351,11 @@ Thanks to all contributors!
 ## Libraries
 
 Built with Rust and many open-source libraries.
-"#),
-    ("index.md", r#"# Index
+"#,
+        ),
+        (
+            "index.md",
+            r#"# Index
 
 ## Quick Links
 
@@ -304,8 +366,11 @@ Built with Rust and many open-source libraries.
 ## Search
 
 Use the search functionality to find specific content.
-"#),
-        ("search.md", r#"# Search
+"#,
+        ),
+        (
+            "search.md",
+            r#"# Search
 
 ## Search Functionality
 
@@ -318,8 +383,11 @@ let results = engine.query(&doc_id, "search term").await?;
 ### Advanced Search
 
 Use sessions for cross-document search.
-"#),
-        ("export.md", r#"# Export
+"#,
+        ),
+        (
+            "export.md",
+            r#"# Export
 
 ## Exporting Data
 
@@ -332,8 +400,11 @@ let json = tree.to_structure_json();
 ### Custom Formats
 
 Implement custom exporters as needed.
-"#),
-    ("import.md", r#"# Import
+"#,
+        ),
+        (
+            "import.md",
+            r#"# Import
 
 ## Importing Data
 
@@ -346,8 +417,11 @@ let doc_id = engine.index("./document.md").await?;
 ### From Memory
 
 Use the content directly with parsers.
-"#),
-        ("validation.md", r#"# Validation
+"#,
+        ),
+        (
+            "validation.md",
+            r#"# Validation
 
 ## Input Validation
 
@@ -362,8 +436,11 @@ Validated on load with helpful errors.
 ### Queries
 
 Sanitized before processing.
-"#),
-        ("formatting.md", r#"# Formatting
+"#,
+        ),
+        (
+            "formatting.md",
+            r#"# Formatting
 
 ## Content Formatting
 
@@ -378,8 +455,11 @@ Syntax highlighting support.
 ### Tables
 
 Basic table parsing.
-"#),
-        ("localization.md", r#"# Localization
+"#,
+        ),
+        (
+            "localization.md",
+            r#"# Localization
 
 ## Internationalization
 
@@ -391,8 +471,11 @@ Planned i18n support for:
 - Error messages
 - UI strings
 - Documentation
-"#),
-        ("accessibility.md", r#"# Accessibility
+"#,
+        ),
+        (
+            "accessibility.md",
+            r#"# Accessibility
 
 ## Accessibility
 
@@ -407,8 +490,11 @@ Consistent and intuitive naming.
 ### Error Messages
 
 Helpful and actionable.
-"#),
-    ("glossary.md", r#"# Glossary
+"#,
+        ),
+        (
+            "glossary.md",
+            r#"# Glossary
 
 ## Terms
 
@@ -416,16 +502,22 @@ Helpful and actionable.
 - **Session**: Multi-document context
 - **Workspace**: Document storage
 - **Retrieval**: Content search
-"#),
-        ("appendix.md", r#"# Appendix
+"#,
+        ),
+        (
+            "appendix.md",
+            r#"# Appendix
 
 ## Additional Resources
 
 - [GitHub Repository](https://github.com)
 - [Documentation Site](https://docs.vectorless.dev)
 - [Community Discord](https://discord.gg)
-"#),
-    ("summary.md", r#"# Summary
+"#,
+        ),
+        (
+            "summary.md",
+            r#"# Summary
 
 ## Overview
 
@@ -436,8 +528,11 @@ This documentation covers all aspects of vectorless.
 - Try the examples
 - Join the community
 - Contribute!
-"#),
-    ("conclusion.md", r#"# Conclusion
+"#,
+        ),
+        (
+            "conclusion.md",
+            r#"# Conclusion
 
 ## Thank You
 
@@ -446,8 +541,11 @@ Thanks for using vectorless!
 ## Feedback
 
 We'd love to hear from you. Open an issue on GitHub.
-"#),
-    ("revision.md", r#"# Revision History
+"#,
+        ),
+        (
+            "revision.md",
+            r#"# Revision History
 
 ## Document Versions
 
@@ -455,8 +553,11 @@ We'd love to hear from you. Open an issue on GitHub.
 |---------|------------|---------------------------|
 | 1.0     | 2026-01-01 | Initial version           |
 | 1.1     | 2026-02-01 | Session support           |
-"#),
-    ("feedback.md", r#"# Feedback
+"#,
+        ),
+        (
+            "feedback.md",
+            r#"# Feedback
 
 ## Providing Feedback
 
@@ -473,8 +574,11 @@ We value your input!
 - Bug reports
 - Feature requests
 - Documentation improvements
-"#),
-    ("support.md", r#"# Support
+"#,
+        ),
+        (
+            "support.md",
+            r#"# Support
 
 ## Getting Help
 
@@ -489,8 +593,11 @@ Join our Discord for discussions.
 ### Enterprise
 
 Contact us for enterprise support.
-"#),
-        ("updates.md", r#"# Updates
+"#,
+        ),
+        (
+            "updates.md",
+            r#"# Updates
 
 ## Staying Updated
 
@@ -505,8 +612,11 @@ Apply security patches promptly.
 ### Deprecations
 
 Watch for deprecation notices.
-"#),
-    ("resources.md", r#"# Resources
+"#,
+        ),
+        (
+            "resources.md",
+            r#"# Resources
 
 ## External Resources
 
@@ -521,8 +631,11 @@ Watch for deprecation notices.
 - Blog posts
 - Tutorial videos
 - Example projects
-"#),
-        ("contact.md", r#"# Contact
+"#,
+        ),
+        (
+            "contact.md",
+            r#"# Contact
 
 ## Contact Information
 
@@ -537,8 +650,11 @@ Email: security@vectorless.dev
 ### Enterprise Sales
 
 Email: enterprise@vectorless.dev
-"#),
-        ("privacy.md", r#"# Privacy Policy
+"#,
+        ),
+        (
+            "privacy.md",
+            r#"# Privacy Policy
 
 ## Data Handling
 
@@ -551,8 +667,11 @@ We don't track usage or content.
 ## API Keys
 
 Stored securely in configuration files.
-"#),
-        ("terms.md", r#"# Terms of Service
+"#,
+        ),
+        (
+            "terms.md",
+            r#"# Terms of Service
 
 ## Usage Terms
 
@@ -565,8 +684,11 @@ By using vectorless, you agree to:
 ## Changes
 
 Terms may be updated. Check for revisions.
-"#),
-    ("legal.md", r#"# Legal
+"#,
+        ),
+        (
+            "legal.md",
+            r#"# Legal
 
 ## Licensing
 
@@ -579,8 +701,11 @@ Copyright 2026 vectorless developers
 ## Trademarks
 
 Vectorless is a trademark.
-"#),
-    ("versioning.md", r#"# Versioning
+"#,
+        ),
+        (
+            "versioning.md",
+            r#"# Versioning
 
 ## Semantic Versioning
 
@@ -593,8 +718,11 @@ We follow semver:
 ## Current Version
 
 0.1.10
-"#),
-        ("compatibility.md", r#"# Compatibility
+"#,
+        ),
+        (
+            "compatibility.md",
+            r#"# Compatibility
 
 ## Supported Versions
 
@@ -610,8 +738,11 @@ We follow semver:
 ## Breaking Changes
 
 Documented in changelog.
-"#),
-        ("installation.md", r#"# Installation
+"#,
+        ),
+        (
+            "installation.md",
+            r#"# Installation
 
 ## Requirements
 
@@ -629,8 +760,11 @@ cargo install vectorless
 ```bash
 vectorless --version
 ```
-"#),
-        ("quickstart.md", r#"# Quick Start
+"#,
+        ),
+        (
+            "quickstart.md",
+            r#"# Quick Start
 
 ## 5-Minute Setup
 
@@ -644,8 +778,11 @@ let client = Engine::builder().build()?;
 let doc_id = client.index("./doc.md").await?;
 let result = client.query(&doc_id, "What is this?").await?;
 ```
-"#),
-    ("tutorial.md", r#"# Tutorial
+"#,
+        ),
+        (
+            "tutorial.md",
+            r#"# Tutorial
 
 ## Introduction
 
@@ -666,8 +803,11 @@ Ask questions about your document.
 ## Step 4: Next
 
 Explore advanced features.
-"#),
-    ("examples_overview.md", r#"# Examples Overview
+"#,
+        ),
+        (
+            "examples_overview.md",
+            r#"# Examples Overview
 
 ## Available Examples
 
@@ -683,8 +823,11 @@ Explore advanced features.
 ```bash
 cargo run --example <name>
 ```
-"#),
-    ("configuration.md", r#"# Configuration
+"#,
+        ),
+        (
+            "configuration.md",
+            r#"# Configuration
 
 ## Configuration File
 
@@ -702,8 +845,11 @@ max_tokens = 4000
 ## Environment Variables
 
 - `OPENAI_API_KEY`: LLM API key
-"#),
-        ("optimization.md", r#"# Optimization
+"#,
+        ),
+        (
+            "optimization.md",
+            r#"# Optimization
 
 ## Performance Tips
 
@@ -718,8 +864,11 @@ Documents are cached in sessions.
 ## Concurrency
 
 Use `buffer_unordered` for parallel indexing.
-"#),
-        ("errors.md", r#"# Error Handling
+"#,
+        ),
+        (
+            "errors.md",
+            r#"# Error Handling
 
 ## Error Types
 
@@ -736,8 +885,11 @@ match result {
     Err(e) => { /* other error */ },
 }
 ```
-"#),
-        ("logging.md", r#"# Logging
+"#,
+        ),
+        (
+            "logging.md",
+            r#"# Logging
 
 ## Log Levels
 
@@ -752,8 +904,11 @@ match result {
 ```bash
 RUST_LOG=debug cargo run
 ```
-"#),
-        ("metrics.md", r#"# Metrics
+"#,
+        ),
+        (
+            "metrics.md",
+            r#"# Metrics
 
 ## Available Metrics
 
@@ -767,8 +922,11 @@ RUST_LOG=debug cargo run
 let stats = session.stats();
 println!("Cache hit rate: {:.1}%", stats.cache_hit_rate() * 100.0);
 ```
-"#),
-        ("health.md", r#"# Health Checks
+"#,
+        ),
+        (
+            "health.md",
+            r#"# Health Checks
 
 ## Workspace Health
 
@@ -782,8 +940,11 @@ println!("{} documents indexed", docs.len());
 ## Session Health
 
 Monitor session statistics regularly.
-"#),
-        ("backup.md", r#"# Backup
+"#,
+        ),
+        (
+            "backup.md",
+            r#"# Backup
 
 ## Backing Up
 
@@ -800,8 +961,11 @@ Restore by copying back:
 ```bash
 cp -r ./workspace_backup ./workspace
 ```
-"#),
-        ("recovery.md", r#"# Recovery
+"#,
+        ),
+        (
+            "recovery.md",
+            r#"# Recovery
 
 ## Corrupted Documents
 
@@ -815,8 +979,11 @@ engine.index(&path).await?;
 ## Session Recovery
 
 Create a new session if issues occur.
-"#),
-        ("monitoring.md", r#"# Monitoring
+"#,
+        ),
+        (
+            "monitoring.md",
+            r#"# Monitoring
 
 ## Production Monitoring
 
@@ -832,8 +999,11 @@ let events = EventEmitter::new()
 ## Alerts
 
 Set up alerts for error rates.
-"#),
-        ("scaling.md", r#"# Scaling
+"#,
+        ),
+        (
+            "scaling.md",
+            r#"# Scaling
 
 ## Horizontal Scaling
 
@@ -848,8 +1018,11 @@ Increase resources for single instance.
 - Storage backend
 - Cache coordination
 - Rate limiting
-"#),
-        ("security_config.md", r#"# Security Configuration
+"#,
+        ),
+        (
+            "security_config.md",
+            r#"# Security Configuration
 
 ## API Keys
 
@@ -867,7 +1040,8 @@ Use HTTPS for all API calls.
 ## Access Control
 
 Implement authentication for production.
-"#),
+"#,
+        ),
     ];
 
     for (name, content) in &documents {
@@ -896,13 +1070,19 @@ Implement authentication for production.
 
     let elapsed = start.elapsed();
     println!("  ✓ Indexed {} documents in {:?}", doc_ids.len(), elapsed);
-    println!("  - Rate: {:.1} docs/sec", doc_ids.len() as f64 / elapsed.as_secs_f64());
+    println!(
+        "  - Rate: {:.1} docs/sec",
+        doc_ids.len() as f64 / elapsed.as_secs_f64()
+    );
     println!();
 
     // 4. Show session stats
     println!("Step 4: Session statistics:");
     let stats = session.stats();
-    println!("  - Documents in session: {}", session.list_documents().len());
+    println!(
+        "  - Documents in session: {}",
+        session.list_documents().len()
+    );
     println!("  - Queries: {}", stats.query_count.get());
     println!();
 
@@ -939,8 +1119,14 @@ Implement authentication for production.
 
     let elapsed = start.elapsed();
     println!("  ✓ Completed {} queries in {:?}", queries.len(), elapsed);
-    println!("  - Success rate: {:.0}%", (success_count as f64 / queries.len() as f64) * 100.0);
-    println!("  - Rate: {:.1} queries/sec", queries.len() as f64 / elapsed.as_secs_f64());
+    println!(
+        "  - Success rate: {:.0}%",
+        (success_count as f64 / queries.len() as f64) * 100.0
+    );
+    println!(
+        "  - Rate: {:.1} queries/sec",
+        queries.len() as f64 / elapsed.as_secs_f64()
+    );
     println!();
 
     // 6. Final statistics
@@ -950,10 +1136,7 @@ Implement authentication for production.
     println!("  - Total queries: {}", stats.query_count.get());
     println!("  - Cache hits: {}", stats.cache_hits.get());
     println!("  - Cache misses: {}", stats.cache_misses.get());
-    println!(
-        "  - Cache hit rate: {:.1}%",
-        stats.cache_hit_rate() * 100.0
-    );
+    println!("  - Cache hit rate: {:.1}%", stats.cache_hit_rate() * 100.0);
     if let Some(avg_time) = stats.avg_query_time() {
         println!("  - Avg query time: {:?}", avg_time);
     }

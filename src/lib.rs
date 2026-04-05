@@ -128,8 +128,8 @@ pub use error::{Error, Result};
 
 // Document types
 pub use document::{
-    DocumentStructure, DocumentTree, NodeId, StructureNode, TocConfig, TocEntry,
-    TocNode, TocView, TreeNode,
+    DocumentStructure, DocumentTree, NodeId, StructureNode, TocConfig, TocEntry, TocNode, TocView,
+    TreeNode,
 };
 
 // Utility functions
@@ -163,7 +163,9 @@ pub use retrieval::{
 };
 
 // Storage
-pub use storage::{AsyncWorkspace, DocumentMeta as StorageDocumentMeta, PersistedDocument, Workspace};
+pub use storage::{
+    AsyncWorkspace, DocumentMeta as StorageDocumentMeta, PersistedDocument, Workspace,
+};
 
 // Throttle
 pub use throttle::{ConcurrencyConfig, ConcurrencyController, RateLimiter};

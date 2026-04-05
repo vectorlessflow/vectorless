@@ -39,60 +39,68 @@ impl MemoryBackend {
 
 impl StorageBackend for MemoryBackend {
     fn get(&self, key: &str) -> Result<Option<Vec<u8>>> {
-        let data = self.data.read().map_err(|_| {
-            crate::Error::Cache("Memory backend lock poisoned".to_string())
-        })?;
+        let data = self
+            .data
+            .read()
+            .map_err(|_| crate::Error::Cache("Memory backend lock poisoned".to_string()))?;
         Ok(data.get(key).cloned())
     }
 
     fn put(&self, key: &str, value: &[u8]) -> Result<()> {
-        let mut data = self.data.write().map_err(|_| {
-            crate::Error::Cache("Memory backend lock poisoned".to_string())
-        })?;
+        let mut data = self
+            .data
+            .write()
+            .map_err(|_| crate::Error::Cache("Memory backend lock poisoned".to_string()))?;
         data.insert(key.to_string(), value.to_vec());
         Ok(())
     }
 
     fn delete(&self, key: &str) -> Result<bool> {
-        let mut data = self.data.write().map_err(|_| {
-            crate::Error::Cache("Memory backend lock poisoned".to_string())
-        })?;
+        let mut data = self
+            .data
+            .write()
+            .map_err(|_| crate::Error::Cache("Memory backend lock poisoned".to_string()))?;
         Ok(data.remove(key).is_some())
     }
 
     fn exists(&self, key: &str) -> Result<bool> {
-        let data = self.data.read().map_err(|_| {
-            crate::Error::Cache("Memory backend lock poisoned".to_string())
-        })?;
+        let data = self
+            .data
+            .read()
+            .map_err(|_| crate::Error::Cache("Memory backend lock poisoned".to_string()))?;
         Ok(data.contains_key(key))
     }
 
     fn keys(&self) -> Result<Vec<String>> {
-        let data = self.data.read().map_err(|_| {
-            crate::Error::Cache("Memory backend lock poisoned".to_string())
-        })?;
+        let data = self
+            .data
+            .read()
+            .map_err(|_| crate::Error::Cache("Memory backend lock poisoned".to_string()))?;
         Ok(data.keys().cloned().collect())
     }
 
     fn len(&self) -> Result<usize> {
-        let data = self.data.read().map_err(|_| {
-            crate::Error::Cache("Memory backend lock poisoned".to_string())
-        })?;
+        let data = self
+            .data
+            .read()
+            .map_err(|_| crate::Error::Cache("Memory backend lock poisoned".to_string()))?;
         Ok(data.len())
     }
 
     fn clear(&self) -> Result<()> {
-        let mut data = self.data.write().map_err(|_| {
-            crate::Error::Cache("Memory backend lock poisoned".to_string())
-        })?;
+        let mut data = self
+            .data
+            .write()
+            .map_err(|_| crate::Error::Cache("Memory backend lock poisoned".to_string()))?;
         data.clear();
         Ok(())
     }
 
     fn batch_put(&self, items: &[(&str, &[u8])]) -> Result<()> {
-        let mut data = self.data.write().map_err(|_| {
-            crate::Error::Cache("Memory backend lock poisoned".to_string())
-        })?;
+        let mut data = self
+            .data
+            .write()
+            .map_err(|_| crate::Error::Cache("Memory backend lock poisoned".to_string()))?;
         for (key, value) in items {
             data.insert(key.to_string(), value.to_vec());
         }

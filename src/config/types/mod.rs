@@ -6,8 +6,8 @@
 //! All configuration values are defined inline in `Default` trait implementations.
 //! Configuration is loaded from TOML files only - no environment variable magic.
 
-mod content;
 mod concurrency;
+mod content;
 mod fallback;
 mod indexer;
 mod llm;
@@ -16,15 +16,15 @@ mod storage;
 
 use serde::{Deserialize, Serialize};
 
-pub use content::ContentAggregatorConfig;
 pub use concurrency::ConcurrencyConfig;
+pub use content::ContentAggregatorConfig;
 pub use fallback::{FallbackBehavior, FallbackConfig, OnAllFailedBehavior};
 pub use indexer::IndexerConfig;
 pub use llm::{LlmConfig, SummaryConfig};
 pub use retrieval::{RetrievalConfig, SearchConfig};
 pub use storage::{
-    CacheConfig, CompressionAlgorithm, CompressionConfig,
-    StorageConfig, StrategyConfig, SufficiencyConfig,
+    CacheConfig, CompressionAlgorithm, CompressionConfig, StorageConfig, StrategyConfig,
+    SufficiencyConfig,
 };
 
 /// Main configuration for vectorless.
@@ -139,10 +139,13 @@ impl Config {
         }
 
         if self.retrieval.temperature < 0.0 || self.retrieval.temperature > 2.0 {
-            errors.push(ValidationError::warning(
-                "retrieval.temperature",
-                "Temperature outside typical range [0.0, 2.0]",
-            ).with_actual(self.retrieval.temperature.to_string()));
+            errors.push(
+                ValidationError::warning(
+                    "retrieval.temperature",
+                    "Temperature outside typical range [0.0, 2.0]",
+                )
+                .with_actual(self.retrieval.temperature.to_string()),
+            );
         }
 
         // Validate content aggregator
@@ -156,12 +159,14 @@ impl Config {
         if self.retrieval.content.min_relevance_score < 0.0
             || self.retrieval.content.min_relevance_score > 1.0
         {
-            errors.push(ValidationError::error(
-                "retrieval.content.min_relevance_score",
-                "Min relevance score must be between 0.0 and 1.0",
-            )
-            .with_expected("0.0 - 1.0")
-            .with_actual(self.retrieval.content.min_relevance_score.to_string()));
+            errors.push(
+                ValidationError::error(
+                    "retrieval.content.min_relevance_score",
+                    "Min relevance score must be between 0.0 and 1.0",
+                )
+                .with_expected("0.0 - 1.0")
+                .with_actual(self.retrieval.content.min_relevance_score.to_string()),
+            );
         }
 
         // Validate concurrency

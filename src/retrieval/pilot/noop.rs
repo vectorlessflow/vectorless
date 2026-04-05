@@ -69,19 +69,12 @@ impl Pilot for NoopPilot {
         }
     }
 
-    async fn guide_start(
-        &self,
-        _tree: &DocumentTree,
-        _query: &str,
-    ) -> Option<PilotDecision> {
+    async fn guide_start(&self, _tree: &DocumentTree, _query: &str) -> Option<PilotDecision> {
         // No guidance at start
         None
     }
 
-    async fn guide_backtrack(
-        &self,
-        _state: &SearchState<'_>,
-    ) -> Option<PilotDecision> {
+    async fn guide_backtrack(&self, _state: &SearchState<'_>) -> Option<PilotDecision> {
         // No guidance during backtrack
         None
     }

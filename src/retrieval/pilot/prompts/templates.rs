@@ -268,7 +268,8 @@ Respond in JSON format with your analysis."#.to_string()
 
 {context}
 
-Respond in JSON format with ranked candidates."#.to_string()
+Respond in JSON format with ranked candidates."#
+            .to_string()
     }
 
     pub fn system_backtrack() -> String {
@@ -292,7 +293,8 @@ Respond in JSON format with alternative branches."#.to_string()
 
 {context}
 
-Respond in JSON format with your evaluation."#.to_string()
+Respond in JSON format with your evaluation."#
+            .to_string()
     }
 }
 

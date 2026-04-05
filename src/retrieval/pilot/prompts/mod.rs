@@ -13,6 +13,4 @@ mod builder;
 mod templates;
 
 pub use builder::PromptBuilder;
-pub use templates::{
-    ForkPrompt, PromptTemplate, StartPrompt, BacktrackPrompt, EvaluatePrompt,
-};
+pub use templates::{BacktrackPrompt, EvaluatePrompt, ForkPrompt, PromptTemplate, StartPrompt};

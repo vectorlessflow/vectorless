@@ -32,7 +32,7 @@ use crate::storage::{DocumentMeta, PersistedDocument};
 
 use super::context::ClientContext;
 use super::events::{EventEmitter, IndexEvent};
-use super::types::{IndexOptions, IndexMode as ClientIndexMode, IndexedDocument};
+use super::types::{IndexMode as ClientIndexMode, IndexOptions, IndexedDocument};
 
 /// Document indexing client.
 ///
@@ -145,7 +145,8 @@ impl IndexerClient {
 
         // Detect format
         let format = self.detect_format(&path, &options)?;
-        self.events.emit_index(IndexEvent::FormatDetected { format });
+        self.events
+            .emit_index(IndexEvent::FormatDetected { format });
 
         info!("Indexing {:?} document: {}", format, path.display());
 
@@ -171,7 +172,9 @@ impl IndexerClient {
         // Create pipeline input and execute
         let input = IndexInput::file(&path);
         let result = {
-            let mut executor = self.executor.lock()
+            let mut executor = self
+                .executor
+                .lock()
                 .map_err(|_| Error::Other("Pipeline executor lock poisoned".to_string()))?;
             executor.execute(input, pipeline_options).await?
         };
@@ -281,10 +284,8 @@ impl IndexerClient {
             )
             .with_description(doc.description.clone().unwrap_or_default());
 
-        let mut persisted = PersistedDocument::new(
-            meta,
-            doc.tree.expect("IndexedDocument must have a tree"),
-        );
+        let mut persisted =
+            PersistedDocument::new(meta, doc.tree.expect("IndexedDocument must have a tree"));
 
         for page in doc.pages {
             persisted.add_page(page.page, &page.content);

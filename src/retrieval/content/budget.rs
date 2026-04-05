@@ -223,7 +223,9 @@ impl BudgetAllocator {
                 let remaining = self.total_budget - tokens_used;
                 if remaining >= 50 {
                     // Minimum useful content
-                    if let Some(truncated) = self.truncate_content(&relevance.chunk.content, remaining) {
+                    if let Some(truncated) =
+                        self.truncate_content(&relevance.chunk.content, remaining)
+                    {
                         let truncated_tokens = estimate_tokens(&truncated);
                         selected.push(SelectedContent {
                             node_id: relevance.chunk.node_id,
@@ -305,7 +307,9 @@ impl BudgetAllocator {
                 // Truncate to allocated budget
                 let remaining = self.total_budget - tokens_used;
                 if remaining >= 50 && remaining >= allocated_budget / 2 {
-                    if let Some(truncated) = self.truncate_content(&relevance.chunk.content, remaining.min(allocated_budget)) {
+                    if let Some(truncated) = self
+                        .truncate_content(&relevance.chunk.content, remaining.min(allocated_budget))
+                    {
                         let truncated_tokens = estimate_tokens(&truncated);
                         let truncated_len = truncated.len();
                         selected.push(SelectedContent {
@@ -354,10 +358,7 @@ impl BudgetAllocator {
         // Group content by depth
         let mut by_depth: HashMap<usize, Vec<ContentRelevance>> = HashMap::new();
         for c in content {
-            by_depth
-                .entry(c.chunk.depth)
-                .or_default()
-                .push(c);
+            by_depth.entry(c.chunk.depth).or_default().push(c);
         }
 
         // Sort each level by score
@@ -407,9 +408,12 @@ impl BudgetAllocator {
                         level_used += tokens;
                     } else if level_used < per_level_budget {
                         // Try truncated version
-                        let remaining = (self.total_budget - tokens_used).min(per_level_budget - level_used);
+                        let remaining =
+                            (self.total_budget - tokens_used).min(per_level_budget - level_used);
                         if remaining >= 50 {
-                            if let Some(truncated) = self.truncate_content(&relevance.chunk.content, remaining) {
+                            if let Some(truncated) =
+                                self.truncate_content(&relevance.chunk.content, remaining)
+                            {
                                 let truncated_tokens = estimate_tokens(&truncated);
                                 selected.push(SelectedContent {
                                     node_id: relevance.chunk.node_id,
@@ -562,8 +566,7 @@ mod tests {
 
     #[test]
     fn test_greedy_allocation() {
-        let allocator = BudgetAllocator::new(100)
-            .with_strategy(AllocationStrategy::Greedy);
+        let allocator = BudgetAllocator::new(100).with_strategy(AllocationStrategy::Greedy);
 
         let content = vec![
             make_relevance("High score content with enough text", 0.9, 0),
@@ -577,8 +580,7 @@ mod tests {
 
     #[test]
     fn test_min_score_filter() {
-        let allocator = BudgetAllocator::new(1000)
-            .with_min_score(0.5);
+        let allocator = BudgetAllocator::new(1000).with_min_score(0.5);
 
         let content = vec![
             make_relevance("Good content", 0.8, 0),

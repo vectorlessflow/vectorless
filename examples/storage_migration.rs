@@ -96,7 +96,10 @@ fn main() -> vectorless::Result<()> {
     // 3. Migrate from v1 to v3 (multi-step)
     println!("3. Migrating data from v1 to v3 (via v2):");
     let original_data = b"Hello, World!";
-    println!("   Original (v1): {:?}", String::from_utf8_lossy(original_data));
+    println!(
+        "   Original (v1): {:?}",
+        String::from_utf8_lossy(original_data)
+    );
 
     let migrated = migrator.migrate(original_data, 1, 3)?;
     println!("   Migrated (v3): {:?}", String::from_utf8_lossy(&migrated));

@@ -131,7 +131,7 @@ impl PilotMode {
     /// Get the fork threshold multiplier for this mode.
     pub fn fork_threshold_multiplier(&self) -> f32 {
         match self {
-            PilotMode::Aggressive => 0.5,   // Lower threshold = more interventions
+            PilotMode::Aggressive => 0.5, // Lower threshold = more interventions
             PilotMode::Balanced => 1.0,
             PilotMode::Conservative => 2.0, // Higher threshold = fewer interventions
             PilotMode::AlgorithmOnly => f32::MAX,

@@ -73,10 +73,13 @@ impl ValidationRule for RangeValidator {
         }
 
         if config.indexer.subsection_threshold > 10000 {
-            errors.push(ValidationError::warning(
-                "indexer.subsection_threshold",
-                "Subsection threshold is very high, may impact performance",
-            ).with_actual(config.indexer.subsection_threshold.to_string()));
+            errors.push(
+                ValidationError::warning(
+                    "indexer.subsection_threshold",
+                    "Subsection threshold is very high, may impact performance",
+                )
+                .with_actual(config.indexer.subsection_threshold.to_string()),
+            );
         }
 
         // Summary ranges
@@ -88,10 +91,13 @@ impl ValidationRule for RangeValidator {
         }
 
         if config.summary.temperature < 0.0 || config.summary.temperature > 2.0 {
-            errors.push(ValidationError::warning(
-                "summary.temperature",
-                "Temperature outside typical range [0.0, 2.0]",
-            ).with_actual(config.summary.temperature.to_string()));
+            errors.push(
+                ValidationError::warning(
+                    "summary.temperature",
+                    "Temperature outside typical range [0.0, 2.0]",
+                )
+                .with_actual(config.summary.temperature.to_string()),
+            );
         }
 
         // Retrieval ranges
@@ -120,12 +126,14 @@ impl ValidationRule for RangeValidator {
         if config.retrieval.content.min_relevance_score < 0.0
             || config.retrieval.content.min_relevance_score > 1.0
         {
-            errors.push(ValidationError::error(
-                "retrieval.content.min_relevance_score",
-                "Min relevance score must be between 0.0 and 1.0",
-            )
-            .with_expected("0.0 - 1.0")
-            .with_actual(config.retrieval.content.min_relevance_score.to_string()));
+            errors.push(
+                ValidationError::error(
+                    "retrieval.content.min_relevance_score",
+                    "Min relevance score must be between 0.0 and 1.0",
+                )
+                .with_expected("0.0 - 1.0")
+                .with_actual(config.retrieval.content.min_relevance_score.to_string()),
+            );
         }
 
         if config.retrieval.content.hierarchical_min_per_level < 0.0
@@ -170,61 +178,71 @@ impl ValidationRule for ConsistencyValidator {
     fn validate(&self, config: &Config, errors: &mut Vec<ValidationError>) {
         // Check if summary tokens are reasonable
         if config.summary.max_tokens > config.indexer.max_segment_tokens {
-            errors.push(ValidationError::warning(
-                "summary.max_tokens",
-                "Summary max tokens exceeds max segment tokens",
-            )
-            .with_expected(format!("<= {}", config.indexer.max_segment_tokens))
-            .with_actual(config.summary.max_tokens.to_string()));
+            errors.push(
+                ValidationError::warning(
+                    "summary.max_tokens",
+                    "Summary max tokens exceeds max segment tokens",
+                )
+                .with_expected(format!("<= {}", config.indexer.max_segment_tokens))
+                .with_actual(config.summary.max_tokens.to_string()),
+            );
         }
 
         // Check if content token budget is reasonable
         if config.retrieval.content.token_budget > 100000 {
-            errors.push(ValidationError::warning(
-                "retrieval.content.token_budget",
-                "Token budget is very high, may cause performance issues",
-            ).with_actual(config.retrieval.content.token_budget.to_string()));
+            errors.push(
+                ValidationError::warning(
+                    "retrieval.content.token_budget",
+                    "Token budget is very high, may cause performance issues",
+                )
+                .with_actual(config.retrieval.content.token_budget.to_string()),
+            );
         }
 
         // Check if sufficiency thresholds are consistent
         if config.retrieval.sufficiency.min_tokens > config.retrieval.sufficiency.target_tokens {
-            errors.push(ValidationError::error(
-                "retrieval.sufficiency.min_tokens",
-                "Min tokens cannot exceed target tokens",
-            )
-            .with_expected(format!("<= {}", config.retrieval.sufficiency.target_tokens))
-            .with_actual(config.retrieval.sufficiency.min_tokens.to_string()));
+            errors.push(
+                ValidationError::error(
+                    "retrieval.sufficiency.min_tokens",
+                    "Min tokens cannot exceed target tokens",
+                )
+                .with_expected(format!("<= {}", config.retrieval.sufficiency.target_tokens))
+                .with_actual(config.retrieval.sufficiency.min_tokens.to_string()),
+            );
         }
 
         if config.retrieval.sufficiency.target_tokens > config.retrieval.sufficiency.max_tokens {
-            errors.push(ValidationError::error(
-                "retrieval.sufficiency.target_tokens",
-                "Target tokens cannot exceed max tokens",
-            )
-            .with_expected(format!("<= {}", config.retrieval.sufficiency.max_tokens))
-            .with_actual(config.retrieval.sufficiency.target_tokens.to_string()));
+            errors.push(
+                ValidationError::error(
+                    "retrieval.sufficiency.target_tokens",
+                    "Target tokens cannot exceed max tokens",
+                )
+                .with_expected(format!("<= {}", config.retrieval.sufficiency.max_tokens))
+                .with_actual(config.retrieval.sufficiency.target_tokens.to_string()),
+            );
         }
 
         // Check scoring strategy validity
         let valid_strategies = ["keyword_only", "keyword_bm25", "hybrid"];
         if !valid_strategies.contains(&config.retrieval.content.scoring_strategy.as_str()) {
-            errors.push(ValidationError::error(
-                "retrieval.content.scoring_strategy",
-                "Invalid scoring strategy",
-            )
-            .with_expected(format!("one of: {:?}", valid_strategies))
-            .with_actual(config.retrieval.content.scoring_strategy.clone()));
+            errors.push(
+                ValidationError::error(
+                    "retrieval.content.scoring_strategy",
+                    "Invalid scoring strategy",
+                )
+                .with_expected(format!("one of: {:?}", valid_strategies))
+                .with_actual(config.retrieval.content.scoring_strategy.clone()),
+            );
         }
 
         // Check output format validity
         let valid_formats = ["markdown", "json", "tree", "flat"];
         if !valid_formats.contains(&config.retrieval.content.output_format.as_str()) {
-            errors.push(ValidationError::error(
-                "retrieval.content.output_format",
-                "Invalid output format",
-            )
-            .with_expected(format!("one of: {:?}", valid_formats))
-            .with_actual(config.retrieval.content.output_format.clone()));
+            errors.push(
+                ValidationError::error("retrieval.content.output_format", "Invalid output format")
+                    .with_expected(format!("one of: {:?}", valid_formats))
+                    .with_actual(config.retrieval.content.output_format.clone()),
+            );
         }
     }
 }
@@ -278,25 +296,36 @@ impl ValidationRule for DependencyValidator {
 
         // Check strategy configuration
         if config.retrieval.strategy.exploration_weight <= 0.0 {
-            errors.push(ValidationError::error(
-                "retrieval.strategy.exploration_weight",
-                "Exploration weight must be positive",
-            ).with_actual(config.retrieval.strategy.exploration_weight.to_string()));
+            errors.push(
+                ValidationError::error(
+                    "retrieval.strategy.exploration_weight",
+                    "Exploration weight must be positive",
+                )
+                .with_actual(config.retrieval.strategy.exploration_weight.to_string()),
+            );
         }
 
         // Check similarity thresholds are ordered correctly
         if config.retrieval.strategy.low_similarity_threshold
             >= config.retrieval.strategy.high_similarity_threshold
         {
-            errors.push(ValidationError::error(
-                "retrieval.strategy.low_similarity_threshold",
-                "Low similarity threshold must be less than high similarity threshold",
-            )
-            .with_expected(format!(
-                "< {}",
-                config.retrieval.strategy.high_similarity_threshold
-            ))
-            .with_actual(config.retrieval.strategy.low_similarity_threshold.to_string()));
+            errors.push(
+                ValidationError::error(
+                    "retrieval.strategy.low_similarity_threshold",
+                    "Low similarity threshold must be less than high similarity threshold",
+                )
+                .with_expected(format!(
+                    "< {}",
+                    config.retrieval.strategy.high_similarity_threshold
+                ))
+                .with_actual(
+                    config
+                        .retrieval
+                        .strategy
+                        .low_similarity_threshold
+                        .to_string(),
+                ),
+            );
         }
     }
 }
@@ -353,7 +382,11 @@ mod tests {
 
         // Should succeed but with warnings
         if let Err(err) = result {
-            assert!(err.errors.iter().any(|e| e.path.contains("fallback.models")));
+            assert!(
+                err.errors
+                    .iter()
+                    .any(|e| e.path.contains("fallback.models"))
+            );
         }
     }
 }

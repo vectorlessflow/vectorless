@@ -41,7 +41,9 @@ async fn main() -> vectorless::Result<()> {
     println!("2. Adding documents...");
     workspace.add(&create_doc("doc-1", "Document One")).await?;
     workspace.add(&create_doc("doc-2", "Document Two")).await?;
-    workspace.add(&create_doc("doc-3", "Document Three")).await?;
+    workspace
+        .add(&create_doc("doc-3", "Document Three"))
+        .await?;
     println!("   ✓ Added 3 documents\n");
 
     // 3. Concurrent access example
@@ -83,7 +85,10 @@ async fn main() -> vectorless::Result<()> {
     let len2 = ws2.len().await;
     let len3 = ws3.len().await;
 
-    println!("   ws1.len() = {}, ws2.len() = {}, ws3.len() = {}", len1, len2, len3);
+    println!(
+        "   ws1.len() = {}, ws2.len() = {}, ws3.len() = {}",
+        len1, len2, len3
+    );
     println!("   ✓ All clones share the same state\n");
 
     // Cleanup

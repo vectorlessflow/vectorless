@@ -27,7 +27,7 @@ use std::sync::{Arc, RwLock};
 
 use tracing::{debug, info, warn};
 
-use crate::{Error};
+use crate::Error;
 use crate::error::Result;
 use crate::storage::{DocumentMetaEntry, PersistedDocument, Workspace};
 
@@ -107,7 +107,9 @@ impl WorkspaceClient {
         let doc_id = doc.meta.id.clone();
 
         {
-            let mut ws = self.workspace.write()
+            let mut ws = self
+                .workspace
+                .write()
                 .map_err(|_| Error::Other("Workspace lock poisoned".to_string()))?;
             ws.add(doc)?;
         }
@@ -126,7 +128,9 @@ impl WorkspaceClient {
     ///
     /// Returns an error if the workspace read fails.
     pub fn load(&self, doc_id: &str) -> Result<Option<PersistedDocument>> {
-        let ws = self.workspace.read()
+        let ws = self
+            .workspace
+            .read()
             .map_err(|_| Error::Other("Workspace lock poisoned".to_string()))?;
 
         if !ws.contains(doc_id) {
@@ -157,7 +161,9 @@ impl WorkspaceClient {
     /// Returns an error if the workspace write fails.
     pub fn remove(&self, doc_id: &str) -> Result<bool> {
         let removed = {
-            let mut ws = self.workspace.write()
+            let mut ws = self
+                .workspace
+                .write()
                 .map_err(|_| Error::Other("Workspace lock poisoned".to_string()))?;
             ws.remove(doc_id)?
         };
@@ -178,7 +184,9 @@ impl WorkspaceClient {
     ///
     /// Returns an error if the workspace read fails.
     pub fn exists(&self, doc_id: &str) -> Result<bool> {
-        let ws = self.workspace.read()
+        let ws = self
+            .workspace
+            .read()
             .map_err(|_| Error::Other("Workspace lock poisoned".to_string()))?;
         Ok(ws.contains(doc_id))
     }
@@ -189,10 +197,13 @@ impl WorkspaceClient {
     ///
     /// Returns an error if the workspace read fails.
     pub fn list(&self) -> Result<Vec<DocumentInfo>> {
-        let ws = self.workspace.read()
+        let ws = self
+            .workspace
+            .read()
             .map_err(|_| Error::Other("Workspace lock poisoned".to_string()))?;
 
-        Ok(ws.list_documents()
+        Ok(ws
+            .list_documents()
             .iter()
             .filter_map(|id| ws.get_meta(id))
             .map(|meta| DocumentInfo {
@@ -212,7 +223,9 @@ impl WorkspaceClient {
     ///
     /// Returns an error if the workspace read fails.
     pub fn get_meta(&self, doc_id: &str) -> Result<Option<DocumentMetaEntry>> {
-        let ws = self.workspace.read()
+        let ws = self
+            .workspace
+            .read()
             .map_err(|_| Error::Other("Workspace lock poisoned".to_string()))?;
         Ok(ws.get_meta(doc_id).cloned())
     }
@@ -223,7 +236,9 @@ impl WorkspaceClient {
     ///
     /// Returns an error if the workspace read fails.
     pub fn get_document_info(&self, doc_id: &str) -> Result<Option<DocumentInfo>> {
-        let ws = self.workspace.read()
+        let ws = self
+            .workspace
+            .read()
             .map_err(|_| Error::Other("Workspace lock poisoned".to_string()))?;
 
         Ok(ws.get_meta(doc_id).map(|meta| DocumentInfo {
@@ -247,7 +262,9 @@ impl WorkspaceClient {
         let mut removed = 0;
 
         {
-            let mut ws = self.workspace.write()
+            let mut ws = self
+                .workspace
+                .write()
                 .map_err(|_| Error::Other("Workspace lock poisoned".to_string()))?;
 
             for doc_id in doc_ids {
@@ -278,7 +295,9 @@ impl WorkspaceClient {
         let doc_ids: Vec<String>;
 
         {
-            let ws = self.workspace.read()
+            let ws = self
+                .workspace
+                .read()
                 .map_err(|_| Error::Other("Workspace lock poisoned".to_string()))?;
             doc_ids = ws.list_documents().iter().map(|s| s.to_string()).collect();
         }
@@ -286,7 +305,9 @@ impl WorkspaceClient {
         let count = doc_ids.len();
 
         {
-            let mut ws = self.workspace.write()
+            let mut ws = self
+                .workspace
+                .write()
                 .map_err(|_| Error::Other("Workspace lock poisoned".to_string()))?;
 
             for doc_id in &doc_ids {
@@ -296,7 +317,8 @@ impl WorkspaceClient {
 
         if count > 0 {
             info!("Cleared workspace: {} documents removed", count);
-            self.events.emit_workspace(WorkspaceEvent::Cleared { count });
+            self.events
+                .emit_workspace(WorkspaceEvent::Cleared { count });
         }
 
         Ok(count)
@@ -308,7 +330,9 @@ impl WorkspaceClient {
     ///
     /// Returns an error if the workspace read fails.
     pub fn stats(&self) -> Result<WorkspaceStats> {
-        let ws = self.workspace.read()
+        let ws = self
+            .workspace
+            .read()
             .map_err(|_| Error::Other("Workspace lock poisoned".to_string()))?;
 
         Ok(WorkspaceStats {
@@ -318,9 +342,7 @@ impl WorkspaceClient {
 
     /// Get the number of documents in the workspace.
     pub fn len(&self) -> usize {
-        self.workspace.read()
-            .map(|ws| ws.len())
-            .unwrap_or(0)
+        self.workspace.read().map(|ws| ws.len()).unwrap_or(0)
     }
 
     /// Check if the workspace is empty.
@@ -354,8 +376,8 @@ pub struct WorkspaceStats {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::TempDir;
     use crate::storage::WorkspaceOptions;
+    use tempfile::TempDir;
 
     #[test]
     fn test_workspace_client_creation() {

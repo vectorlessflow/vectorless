@@ -13,8 +13,8 @@ use tracing::{info, warn};
 
 use crate::document::DocumentTree;
 // LlmClient is used via strategy
-use crate::retrieval::pilot::Pilot;
 use crate::retrieval::RetrievalContext; // Legacy context
+use crate::retrieval::pilot::Pilot;
 use crate::retrieval::pipeline::{
     CandidateNode, FailurePolicy, PipelineContext, RetrievalStage, SearchAlgorithm, StageOutcome,
 };
@@ -204,7 +204,11 @@ impl RetrievalStage for SearchStage {
             "Executing search: algorithm={:?}, beam_width={}, pilot={}",
             algorithm,
             config.beam_width,
-            if self.has_pilot() { "enabled" } else { "disabled" }
+            if self.has_pilot() {
+                "enabled"
+            } else {
+                "disabled"
+            }
         );
 
         // Increment search iteration
@@ -233,16 +237,22 @@ impl RetrievalStage for SearchStage {
         let result = match algorithm {
             SearchAlgorithm::Greedy => {
                 let search = GreedySearch::new();
-                search.search(&ctx.tree, &legacy_ctx, &search_config, pilot_ref).await
+                search
+                    .search(&ctx.tree, &legacy_ctx, &search_config, pilot_ref)
+                    .await
             }
             SearchAlgorithm::Beam => {
                 let search = BeamSearch::new();
-                search.search(&ctx.tree, &legacy_ctx, &search_config, pilot_ref).await
+                search
+                    .search(&ctx.tree, &legacy_ctx, &search_config, pilot_ref)
+                    .await
             }
             SearchAlgorithm::Mcts => {
                 // Use beam search as fallback for now
                 let search = BeamSearch::new();
-                search.search(&ctx.tree, &legacy_ctx, &search_config, pilot_ref).await
+                search
+                    .search(&ctx.tree, &legacy_ctx, &search_config, pilot_ref)
+                    .await
             }
         };
 

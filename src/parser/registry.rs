@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Arc, RwLock};
 
-use crate::{Error};
+use crate::Error;
 use crate::error::Result;
 use crate::parser::{DocumentFormat, DocumentParser, MarkdownParser, ParseResult, PdfParser};
 

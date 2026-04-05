@@ -123,8 +123,8 @@ mod workspace;
 // Main Types
 // ============================================================
 
-pub use engine::Engine;
 pub use builder::{BuildError, EngineBuilder};
+pub use engine::Engine;
 
 // ============================================================
 // Sub-Clients
@@ -132,8 +132,8 @@ pub use builder::{BuildError, EngineBuilder};
 
 pub use indexer::IndexerClient;
 pub use retriever::RetrieverClient;
-pub use workspace::WorkspaceClient;
 pub use session::Session;
+pub use workspace::WorkspaceClient;
 
 // ============================================================
 // Context and Events
@@ -141,8 +141,7 @@ pub use session::Session;
 
 pub use context::{ClientContext, FeatureFlags, RequestContextConfig};
 pub use events::{
-    EventEmitter, Event, EventHandler, AsyncEventHandler,
-    IndexEvent, QueryEvent, WorkspaceEvent,
+    AsyncEventHandler, Event, EventEmitter, EventHandler, IndexEvent, QueryEvent, WorkspaceEvent,
 };
 
 // ============================================================
@@ -150,16 +149,18 @@ pub use events::{
 // ============================================================
 
 pub use types::{
-    // Document types
-    IndexedDocument, PageContent,
-    // Index types
-    IndexMode, IndexOptions,
-    // Query types
-    QueryResult,
-    // Document info
-    DocumentInfo,
     // Error types
     ClientError,
+    // Document info
+    DocumentInfo,
+    // Index types
+    IndexMode,
+    IndexOptions,
+    // Document types
+    IndexedDocument,
+    PageContent,
+    // Query types
+    QueryResult,
 };
 
 // ============================================================
@@ -167,6 +168,6 @@ pub use types::{
 // ============================================================
 
 pub use indexer::{IndexerConfig, ValidationResult};
-pub use retriever::{RetrieverClientConfig, NodeContext};
+pub use retriever::{NodeContext, RetrieverClientConfig};
+pub use session::{EvictionPolicy, PreloadStrategy, SessionConfig, SessionStats};
 pub use workspace::{WorkspaceClientConfig, WorkspaceStats};
-pub use session::{SessionConfig, SessionStats, EvictionPolicy, PreloadStrategy};

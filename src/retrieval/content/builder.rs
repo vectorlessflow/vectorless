@@ -182,11 +182,7 @@ impl StructureBuilder {
 
     /// Build structured content from selected items.
     #[must_use]
-    pub fn build(
-        &self,
-        selected: Vec<SelectedContent>,
-        tree: &DocumentTree,
-    ) -> StructuredContent {
+    pub fn build(&self, selected: Vec<SelectedContent>, tree: &DocumentTree) -> StructuredContent {
         if selected.is_empty() {
             return StructuredContent {
                 content: String::new(),
@@ -470,9 +466,7 @@ mod tests {
     #[test]
     fn test_flat_builder() {
         let builder = StructureBuilder::new(OutputFormat::Flat);
-        let selected = vec![
-            make_selected("Section 1", "Content 1", 0.9, 0),
-        ];
+        let selected = vec![make_selected("Section 1", "Content 1", 0.9, 0)];
 
         let tree = DocumentTree::new("Test", "");
         let result = builder.build(selected, &tree);
@@ -483,12 +477,9 @@ mod tests {
 
     #[test]
     fn test_builder_with_scores() {
-        let builder = StructureBuilder::new(OutputFormat::Markdown)
-            .with_scores();
+        let builder = StructureBuilder::new(OutputFormat::Markdown).with_scores();
 
-        let selected = vec![
-            make_selected("Section 1", "Content 1", 0.95, 0),
-        ];
+        let selected = vec![make_selected("Section 1", "Content 1", 0.95, 0)];
 
         let tree = DocumentTree::new("Test", "");
         let result = builder.build(selected, &tree);
@@ -508,8 +499,8 @@ mod tests {
 
     #[test]
     fn test_content_tree_node() {
-        let mut root = ContentTreeNode::new("Root".to_string())
-            .with_content("Root content".to_string(), 0.9);
+        let mut root =
+            ContentTreeNode::new("Root".to_string()).with_content("Root content".to_string(), 0.9);
 
         let child = ContentTreeNode::new("Child".to_string())
             .with_content("Child content".to_string(), 0.8);

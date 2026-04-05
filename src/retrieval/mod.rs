@@ -107,8 +107,8 @@ pub use content::{
 };
 
 // Pilot exports
+pub use pilot::NoopPilot;
 pub use pilot::{
     BudgetConfig, InterventionConfig, InterventionPoint, Pilot, PilotConfig, PilotDecision,
     PilotMode, RankedCandidate, SearchDirection, SearchState,
 };
-pub use pilot::NoopPilot;

@@ -26,12 +26,12 @@
 use std::fmt::Debug;
 use std::io::{Read, Write};
 
+use flate2::Compression;
 use flate2::read::GzDecoder;
 use flate2::write::GzEncoder;
-use flate2::Compression;
 
-use crate::error::Result;
 use crate::Error;
+use crate::error::Result;
 
 /// Codec trait for compression/decompression.
 pub trait Codec: Debug + Send + Sync {
@@ -120,8 +120,12 @@ impl Default for GzipCodec {
 impl Codec for GzipCodec {
     fn encode(&self, data: &[u8]) -> Result<Vec<u8>> {
         let mut encoder = GzEncoder::new(Vec::new(), Compression::new(self.level));
-        encoder.write_all(data).map_err(|e| Error::Parse(format!("Gzip encode error: {}", e)))?;
-        encoder.finish().map_err(|e| Error::Parse(format!("Gzip finish error: {}", e)))
+        encoder
+            .write_all(data)
+            .map_err(|e| Error::Parse(format!("Gzip encode error: {}", e)))?;
+        encoder
+            .finish()
+            .map_err(|e| Error::Parse(format!("Gzip finish error: {}", e)))
     }
 
     fn decode(&self, data: &[u8]) -> Result<Vec<u8>> {

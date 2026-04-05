@@ -181,8 +181,8 @@ impl FallbackConfig {
         let delay_ms = if attempt == 0 {
             self.initial_retry_delay_ms
         } else {
-            let delay = self.initial_retry_delay_ms as f32
-                * self.retry_multiplier.powi(attempt as i32);
+            let delay =
+                self.initial_retry_delay_ms as f32 * self.retry_multiplier.powi(attempt as i32);
             delay.min(self.max_retry_delay_ms as f32) as u64
         };
         std::time::Duration::from_millis(delay_ms)

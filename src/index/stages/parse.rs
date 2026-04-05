@@ -34,9 +34,8 @@ impl ParseStage {
             IndexMode::Auto => match &ctx.input {
                 IndexInput::File(path) => {
                     let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
-                    DocumentFormat::from_extension(ext).ok_or_else(|| {
-                        crate::Error::Parse(format!("Unknown format: {}", ext))
-                    })
+                    DocumentFormat::from_extension(ext)
+                        .ok_or_else(|| crate::Error::Parse(format!("Unknown format: {}", ext)))
                 }
                 IndexInput::Content { format, .. } => Ok(*format),
             },

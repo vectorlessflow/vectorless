@@ -7,7 +7,7 @@
 
 use super::super::builder::PilotContext;
 use super::super::decision::InterventionPoint;
-use super::templates::{ForkPrompt, PromptTemplate, StartPrompt, BacktrackPrompt, EvaluatePrompt};
+use super::templates::{BacktrackPrompt, EvaluatePrompt, ForkPrompt, PromptTemplate, StartPrompt};
 
 /// Built prompt ready for LLM call.
 #[derive(Debug, Clone)]

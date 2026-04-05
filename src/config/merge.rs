@@ -7,9 +7,8 @@
 //! enabling layered configuration from multiple sources.
 
 use super::types::{
-    CacheConfig, Config, ConcurrencyConfig, ContentAggregatorConfig, FallbackConfig,
-    IndexerConfig, RetrievalConfig, SearchConfig, StorageConfig, StrategyConfig, SufficiencyConfig,
-    SummaryConfig,
+    CacheConfig, ConcurrencyConfig, Config, ContentAggregatorConfig, FallbackConfig, IndexerConfig,
+    RetrievalConfig, SearchConfig, StorageConfig, StrategyConfig, SufficiencyConfig, SummaryConfig,
 };
 
 /// Configuration merge strategy.
@@ -138,7 +137,8 @@ impl Merge for SufficiencyConfig {
         if strategy == MergeStrategy::Replace || self.min_content_length == 200 {
             self.min_content_length = other.min_content_length;
         }
-        if strategy == MergeStrategy::Replace || (self.confidence_threshold - 0.7).abs() < f32::EPSILON
+        if strategy == MergeStrategy::Replace
+            || (self.confidence_threshold - 0.7).abs() < f32::EPSILON
         {
             self.confidence_threshold = other.confidence_threshold;
         }
@@ -158,12 +158,11 @@ impl Merge for CacheConfig {
 
 impl Merge for StrategyConfig {
     fn merge(&mut self, other: &Self, strategy: MergeStrategy) {
-        if strategy == MergeStrategy::Replace
-            || (self.exploration_weight - 1.414).abs() < 0.001
-        {
+        if strategy == MergeStrategy::Replace || (self.exploration_weight - 1.414).abs() < 0.001 {
             self.exploration_weight = other.exploration_weight;
         }
-        if strategy == MergeStrategy::Replace || (self.similarity_threshold - 0.5).abs() < f32::EPSILON
+        if strategy == MergeStrategy::Replace
+            || (self.similarity_threshold - 0.5).abs() < f32::EPSILON
         {
             self.similarity_threshold = other.similarity_threshold;
         }
@@ -188,7 +187,8 @@ impl Merge for ContentAggregatorConfig {
         if strategy == MergeStrategy::Replace || self.token_budget == 4000 {
             self.token_budget = other.token_budget;
         }
-        if strategy == MergeStrategy::Replace || (self.min_relevance_score - 0.2).abs() < f32::EPSILON
+        if strategy == MergeStrategy::Replace
+            || (self.min_relevance_score - 0.2).abs() < f32::EPSILON
         {
             self.min_relevance_score = other.min_relevance_score;
         }

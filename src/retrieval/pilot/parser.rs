@@ -13,8 +13,8 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use tracing::warn;
 
+use super::decision::{InterventionPoint, PilotDecision, RankedCandidate, SearchDirection};
 use crate::document::NodeId;
-use super::decision::{PilotDecision, RankedCandidate, SearchDirection, InterventionPoint};
 
 /// Parsed response from LLM.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -100,8 +100,9 @@ impl ResponseParser {
             confidence_regex: Regex::new(r"(?i)confidence[:\s]+([0-9.]+)").unwrap(),
             // Match direction keywords
             direction_regex: Regex::new(
-                r"(?i)(go.?deeper|explore.?siblings|backtrack|found.?answer)"
-            ).unwrap(),
+                r"(?i)(go.?deeper|explore.?siblings|backtrack|found.?answer)",
+            )
+            .unwrap(),
         }
     }
 
@@ -170,30 +171,40 @@ impl ResponseParser {
         point: InterventionPoint,
     ) -> Option<PilotDecision> {
         // Extract confidence
-        let confidence = self.confidence_regex
+        let confidence = self
+            .confidence_regex
             .captures(response)
             .and_then(|caps| caps.get(1)?.as_str().parse::<f32>().ok())
             .unwrap_or(0.5)
             .clamp(0.0, 1.0);
 
         // Extract direction
-        let direction = self.direction_regex
+        let direction = self
+            .direction_regex
             .captures(response)
             .map(|caps| {
                 let dir = caps.get(1)?.as_str().to_lowercase();
                 match dir.as_str() {
-                    d if d.contains("deeper") => Some(SearchDirection::GoDeeper { reason: String::new() }),
-                    d if d.contains("sibling") => Some(SearchDirection::ExploreSiblings { recommended: vec![] }),
+                    d if d.contains("deeper") => Some(SearchDirection::GoDeeper {
+                        reason: String::new(),
+                    }),
+                    d if d.contains("sibling") => Some(SearchDirection::ExploreSiblings {
+                        recommended: vec![],
+                    }),
                     d if d.contains("backtrack") => Some(SearchDirection::Backtrack {
                         reason: String::new(),
                         alternative_branches: vec![],
                     }),
-                    d if d.contains("found") || d.contains("answer") => Some(SearchDirection::FoundAnswer { confidence }),
+                    d if d.contains("found") || d.contains("answer") => {
+                        Some(SearchDirection::FoundAnswer { confidence })
+                    }
                     _ => None,
                 }
             })
             .flatten()
-            .unwrap_or_else(|| SearchDirection::GoDeeper { reason: String::new() });
+            .unwrap_or_else(|| SearchDirection::GoDeeper {
+                reason: String::new(),
+            });
 
         // Try to extract candidate rankings from numbered list
         let ranked = self.extract_ranked_candidates(response, candidates);
@@ -212,16 +223,23 @@ impl ResponseParser {
     }
 
     /// Extract ranked candidates from text using patterns.
-    fn extract_ranked_candidates(&self, response: &str, candidates: &[NodeId]) -> Vec<RankedCandidate> {
+    fn extract_ranked_candidates(
+        &self,
+        response: &str,
+        candidates: &[NodeId],
+    ) -> Vec<RankedCandidate> {
         let mut ranked = Vec::new();
 
         // Pattern: "1. Candidate Name (score: 0.8)"
-        let ranking_pattern = Regex::new(r"(\d+)[.\)]\s*(?:Candidate\s*)?(\d+)[\s:]+(?:score[:\s]*)?([0-9.]+)?").unwrap();
+        let ranking_pattern =
+            Regex::new(r"(\d+)[.\)]\s*(?:Candidate\s*)?(\d+)[\s:]+(?:score[:\s]*)?([0-9.]+)?")
+                .unwrap();
 
         for caps in ranking_pattern.captures_iter(response) {
             if let Some(index_match) = caps.get(2) {
                 if let Ok(index) = index_match.as_str().parse::<usize>() {
-                    let score: f32 = caps.get(3)
+                    let score: f32 = caps
+                        .get(3)
                         .and_then(|m| m.as_str().parse().ok())
                         .unwrap_or(0.5);
 
@@ -296,11 +314,19 @@ impl ResponseParser {
                 reason: llm_response.reasoning.clone(),
             },
             DirectionResponse::ExploreSiblings => SearchDirection::ExploreSiblings {
-                recommended: ranked_candidates.iter().take(3).map(|c| c.node_id).collect(),
+                recommended: ranked_candidates
+                    .iter()
+                    .take(3)
+                    .map(|c| c.node_id)
+                    .collect(),
             },
             DirectionResponse::Backtrack => SearchDirection::Backtrack {
                 reason: llm_response.reasoning.clone(),
-                alternative_branches: ranked_candidates.iter().take(3).map(|c| c.node_id).collect(),
+                alternative_branches: ranked_candidates
+                    .iter()
+                    .take(3)
+                    .map(|c| c.node_id)
+                    .collect(),
             },
             DirectionResponse::FoundAnswer => SearchDirection::FoundAnswer {
                 confidence: llm_response.confidence,
@@ -331,7 +357,9 @@ impl ResponseParser {
 
         PilotDecision {
             ranked_candidates: ranked,
-            direction: SearchDirection::GoDeeper { reason: String::new() },
+            direction: SearchDirection::GoDeeper {
+                reason: String::new(),
+            },
             confidence: 0.0,
             reasoning: "Default decision (parsing failed)".to_string(),
             intervention_point: point,
@@ -387,7 +415,10 @@ mod tests {
         assert_eq!(decision.ranked_candidates.len(), 2);
         assert_eq!(decision.ranked_candidates[0].node_id, candidates[1]);
         assert!((decision.confidence - 0.85).abs() < 0.01);
-        assert!(matches!(decision.direction, SearchDirection::GoDeeper { .. }));
+        assert!(matches!(
+            decision.direction,
+            SearchDirection::GoDeeper { .. }
+        ));
     }
 
     #[test]
@@ -477,7 +508,10 @@ Direction: go_deeper
         ];
 
         for (dir_json, should_parse) in test_cases {
-            let response = format!(r#"{{"ranked_candidates": [], "confidence": 0.5, {}}}"#, dir_json);
+            let response = format!(
+                r#"{{"ranked_candidates": [], "confidence": 0.5, {}}}"#,
+                dir_json
+            );
             let decision = parser.parse(&response, &candidates, InterventionPoint::Fork);
             assert!(should_parse, "Direction should parse correctly");
         }
