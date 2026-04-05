@@ -28,13 +28,11 @@
 //! - Very low accuracy → Intervention skipped entirely
 
 use std::sync::Arc;
-use vectorless::document::DocumentTree;
 use vectorless::llm::LlmClient;
-use vectorless::retrieval::pilot::feedback::{
-    FeedbackRecord, FeedbackStore, FeedbackStoreConfig, LearnerConfig, PilotLearner,
-    DecisionId, SubQueryComplexity, SubQueryType,
+use vectorless::retrieval::pilot::{
+    FeedbackRecord, FeedbackStore, FeedbackStoreConfig, InterventionPoint, LearnerConfig,
+    PilotLearner, DecisionId, LlmPilot, PilotConfig,
 };
-use vectorless::retrieval::pilot::{InterventionPoint, LlmPilot, PilotConfig};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("=== Feedback Learning Example ===\n");
@@ -131,7 +129,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n=== Persistence (Optional) ===\n");
 
     let persistent_config = FeedbackStoreConfig::with_persistence("/tmp/feedback.json");
-    let persistent_store = FeedbackStore::new(persistent_config);
+    let _persistent_store = FeedbackStore::new(persistent_config);
 
     // In a real app, you would:
     // - Load existing feedback at startup: persistent_store.load()?
