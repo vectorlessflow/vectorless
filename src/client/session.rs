@@ -9,11 +9,13 @@
 //! # Example
 //!
 //! ```rust,ignore
+//! use vectorless::client::IndexContext;
+//!
 //! let session = client.session();
 //!
 //! // Index multiple documents
-//! let doc1 = session.index("./doc1.md").await?;
-//! let doc2 = session.index("./doc2.md").await?;
+//! let doc1 = session.index(IndexContext::from_path("./doc1.md")).await?;
+//! let doc2 = session.index(IndexContext::from_path("./doc2.md")).await?;
 //!
 //! // Query across all documents
 //! let results = session.query_all("What is X?").await?;
@@ -24,7 +26,6 @@
 
 use std::cell::Cell;
 use std::collections::HashMap;
-use std::path::Path;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -40,7 +41,7 @@ use super::context::ClientContext;
 use super::events::EventEmitter;
 use super::indexer::IndexerClient;
 use super::retriever::RetrieverClient;
-use super::types::{DocumentInfo, IndexOptions, QueryResult};
+use super::types::{DocumentInfo, QueryResult};
 use super::workspace::WorkspaceClient;
 
 /// Session for managing multiple documents.
@@ -260,22 +261,33 @@ impl Session {
     /// Index a document into this session.
     ///
     /// The document is indexed, saved to workspace, and cached in this session.
-    pub async fn index(&self, path: impl AsRef<Path>) -> Result<String> {
-        self.index_with_options(path, IndexOptions::default()).await
-    }
-
-    /// Index a document with options.
-    pub async fn index_with_options(
-        &self,
-        path: impl AsRef<Path>,
-        options: IndexOptions,
-    ) -> Result<String> {
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` - The index context containing source and options
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// use vectorless::client::IndexContext;
+    /// use vectorless::parser::DocumentFormat;
+    ///
+    /// // From file
+    /// let id1 = session.index(IndexContext::from_path("./doc.md")).await?;
+    ///
+    /// // From content
+    /// let html = "<html><body>Content</body></html>";
+    /// let id2 = session.index(
+    ///     IndexContext::from_content(html, DocumentFormat::Html)
+    /// ).await?;
+    /// ```
+    pub async fn index(&self, ctx: super::IndexContext) -> Result<String> {
         // Index the document
-        let doc = self.indexer.index_with_options(path, options).await?;
+        let doc = self.indexer.index(ctx).await?;
 
         // Save to workspace
         let persisted = self.indexer.to_persisted(doc);
-        self.workspace.save(&persisted)?;
+        self.workspace.save(&persisted).await?;
 
         // Cache in session
         let doc_id = persisted.meta.id.clone();
@@ -391,10 +403,10 @@ impl Session {
         self.stats.increment_cache_misses();
 
         // Load from workspace
-        let doc = self
-            .workspace
-            .load(doc_id)?
-            .ok_or_else(|| Error::DocumentNotFound(format!("Document not found: {}", doc_id)))?;
+        let doc =
+            self.workspace.load(doc_id).await?.ok_or_else(|| {
+                Error::DocumentNotFound(format!("Document not found: {}", doc_id))
+            })?;
 
         let tree = doc.tree;
 

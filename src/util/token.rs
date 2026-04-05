@@ -32,7 +32,7 @@ fn get_bpe() -> &'static CoreBPE {
 /// # Example
 ///
 /// ```
-/// use vectorless::domain::estimate_tokens;
+/// use vectorless::estimate_tokens;
 ///
 /// assert_eq!(estimate_tokens(""), 0);
 /// assert!(estimate_tokens("hello world") > 0);
@@ -54,7 +54,7 @@ pub fn estimate_tokens(text: &str) -> usize {
 /// # Example
 ///
 /// ```
-/// use vectorless::domain::estimate_tokens_fast;
+/// use vectorless::estimate_tokens_fast;
 ///
 /// assert_eq!(estimate_tokens_fast(""), 0);
 /// assert_eq!(estimate_tokens_fast("hi"), 1);  // 2 chars -> 1 token min

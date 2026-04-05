@@ -19,10 +19,20 @@ pub enum IndexInput {
     /// Index from file path.
     File(PathBuf),
 
-    /// Index from raw content.
+    /// Index from raw content string.
     Content {
         /// Content string.
         content: String,
+        /// Document name.
+        name: String,
+        /// Document format.
+        format: DocumentFormat,
+    },
+
+    /// Index from binary data.
+    Bytes {
+        /// Binary data.
+        data: Vec<u8>,
         /// Document name.
         name: String,
         /// Document format.
@@ -36,8 +46,17 @@ impl IndexInput {
         Self::File(path.into())
     }
 
-    /// Create input from content.
-    pub fn content(
+    /// Create input from content string.
+    pub fn content(content: impl Into<String>) -> Self {
+        Self::Content {
+            content: content.into(),
+            name: String::new(),
+            format: DocumentFormat::Text,
+        }
+    }
+
+    /// Create input from content with name and format.
+    pub fn content_with(
         content: impl Into<String>,
         name: impl Into<String>,
         format: DocumentFormat,
@@ -46,6 +65,52 @@ impl IndexInput {
             content: content.into(),
             name: name.into(),
             format,
+        }
+    }
+
+    /// Create input from binary data.
+    pub fn bytes(data: impl Into<Vec<u8>>) -> Self {
+        Self::Bytes {
+            data: data.into(),
+            name: String::new(),
+            format: DocumentFormat::Pdf,
+        }
+    }
+
+    /// Create input from binary data with name and format.
+    pub fn bytes_with(
+        data: impl Into<Vec<u8>>,
+        name: impl Into<String>,
+        format: DocumentFormat,
+    ) -> Self {
+        Self::Bytes {
+            data: data.into(),
+            name: name.into(),
+            format,
+        }
+    }
+
+    /// Check if this is a file input.
+    pub fn is_file(&self) -> bool {
+        matches!(self, Self::File(_))
+    }
+
+    /// Check if this is a content input.
+    pub fn is_content(&self) -> bool {
+        matches!(self, Self::Content { .. })
+    }
+
+    /// Check if this is a bytes input.
+    pub fn is_bytes(&self) -> bool {
+        matches!(self, Self::Bytes { .. })
+    }
+
+    /// Get the format if available.
+    pub fn format(&self) -> Option<DocumentFormat> {
+        match self {
+            Self::File(_) => None,
+            Self::Content { format, .. } => Some(*format),
+            Self::Bytes { format, .. } => Some(*format),
         }
     }
 }

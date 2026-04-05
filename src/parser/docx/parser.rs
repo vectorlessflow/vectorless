@@ -10,11 +10,11 @@
 //!
 //! ```rust,no_run
 //! use vectorless::parser::docx::DocxParser;
-//! use vectorless::domain::DocumentParser;
+//! use vectorless::DocumentParser;
 //! use std::path::Path;
 //!
 //! # #[tokio::main]
-//! # async fn main() -> vectorless::domain::Result<()> {
+//! # async fn main() -> vectorless::Result<()> {
 //! let parser = DocxParser::new();
 //! let result = parser.parse_file(Path::new("document.docx")).await?;
 //!

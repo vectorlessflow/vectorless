@@ -19,17 +19,24 @@
 //! # Example
 //!
 //! ```rust,no_run
-//! use vectorless::client::{Engine, EngineBuilder};
+//! use vectorless::client::{Engine, EngineBuilder, IndexContext};
 //!
 //! # #[tokio::main]
-//! # async fn main() -> vectorless::domain::Result<()> {
+//! # async fn main() -> vectorless::Result<()> {
 //! // Create a client
 //! let client = EngineBuilder::new()
 //!     .with_workspace("./my_workspace")
 //!     .build()?;
 //!
-//! // Index a document
-//! let doc_id = client.index("./document.md").await?;
+//! // Index a document from file
+//! let doc_id = client.index(IndexContext::from_path("./document.md")).await?;
+//!
+//! // Index HTML content
+//! let html = "<html><body><h1>Title</h1><p>Content</p></body></html>";
+//! let doc_id2 = client.index(
+//!     IndexContext::from_content(html, vectorless::parser::DocumentFormat::Html)
+//!         .with_name("webpage")
+//! ).await?;
 //!
 //! // Query the document
 //! let result = client.query(&doc_id, "What is this?").await?;
@@ -39,8 +46,7 @@
 //! # }
 //! ```
 
-use std::path::Path;
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::Arc;
 
 use tracing::info;
 
@@ -53,10 +59,11 @@ use crate::{DocumentTree, Error};
 
 use super::context::ClientContext;
 use super::events::EventEmitter;
+use super::index_context::IndexContext;
 use super::indexer::IndexerClient;
 use super::retriever::RetrieverClient;
 use super::session::Session;
-use super::types::{DocumentInfo, IndexOptions, QueryResult};
+use super::types::{DocumentInfo, QueryResult};
 use super::workspace::WorkspaceClient;
 
 /// The main Engine client.
@@ -99,14 +106,18 @@ impl Engine {
     /// Create a new client with default configuration.
     ///
     /// Note: Prefer using [`Engine::builder()`] for more control.
-    fn new() -> Result<Self> {
+    async fn new() -> Result<Self> {
         let config = Config::default();
+        let workspace = Workspace::new("./workspace")
+            .await
+            .map_err(|e| Error::Workspace(e.to_string()))?;
         Self::with_components(
             config,
-            None,
+            workspace,
             PipelineRetriever::new(),
             PipelineExecutor::new(),
         )
+        .await
     }
 
     // ============================================================
@@ -114,9 +125,9 @@ impl Engine {
     // ============================================================
 
     /// Create a new client with the given components.
-    pub(crate) fn with_components(
+    pub(crate) async fn with_components(
         config: Config,
-        workspace: Option<Workspace>,
+        workspace: Workspace,
         retriever: PipelineRetriever,
         executor: PipelineExecutor,
     ) -> Result<Self> {
@@ -130,15 +141,16 @@ impl Engine {
         let retriever =
             RetrieverClient::new(retriever, Arc::clone(&config)).with_events(events.clone());
 
-        // Create workspace client (if workspace provided)
-        let workspace_client =
-            workspace.map(|ws| WorkspaceClient::new(ws).with_events(events.clone()));
+        // Create workspace client
+        let workspace_client = WorkspaceClient::new(workspace)
+            .await
+            .with_events(events.clone());
 
         Ok(Self {
             config,
             indexer,
             retriever,
-            workspace: workspace_client,
+            workspace: Some(workspace_client),
             events,
         })
     }
@@ -147,36 +159,65 @@ impl Engine {
     // Document Indexing
     // ============================================================
 
-    /// Index a document from a file path.
+    /// Index a document.
     ///
-    /// Returns a unique document ID.
+    /// This is the main entry point for indexing documents. The [`IndexContext`]
+    /// parameter specifies the source (file path, content string, or bytes)
+    /// and indexing options.
+    ///
+    /// # Arguments
+    ///
+    /// * `ctx` - The index context containing source and options
+    ///
+    /// # Returns
+    ///
+    /// A unique document ID string.
     ///
     /// # Errors
     ///
     /// Returns an error if:
-    /// - The file does not exist
+    /// - The file does not exist (for path sources)
     /// - The file format is not supported
     /// - The pipeline execution fails
-    pub async fn index(&self, path: impl AsRef<Path>) -> Result<String> {
-        self.index_with_options(path, IndexOptions::default()).await
-    }
-
-    /// Index a document with custom options.
     ///
-    /// # Errors
+    /// # Example
     ///
-    /// See [`Engine::index`].
-    pub async fn index_with_options(
-        &self,
-        path: impl AsRef<Path>,
-        options: IndexOptions,
-    ) -> Result<String> {
-        let doc = self.indexer.index_with_options(path, options).await?;
+    /// ```rust,no_run
+    /// use vectorless::client::{Engine, EngineBuilder, IndexContext, IndexMode};
+    /// use vectorless::parser::DocumentFormat;
+    ///
+    /// # #[tokio::main]
+    /// # async fn main() -> vectorless::Result<()> {
+    /// let engine = EngineBuilder::new()
+    ///     .with_workspace("./data")
+    ///     .build()?;
+    ///
+    /// // From file
+    /// let id1 = engine.index(IndexContext::from_path("./doc.md")).await?;
+    ///
+    /// // From content
+    /// let html = "<html><body><h1>Title</h1></body></html>";
+    /// let id2 = engine.index(
+    ///     IndexContext::from_content(html, DocumentFormat::Html)
+    ///         .with_name("webpage")
+    /// ).await?;
+    ///
+    /// // From bytes with force mode
+    /// let pdf_bytes = std::fs::read("./doc.pdf")?;
+    /// let id3 = engine.index(
+    ///     IndexContext::from_bytes(pdf_bytes, DocumentFormat::Pdf)
+    ///         .with_mode(IndexMode::Force)
+    /// ).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn index(&self, ctx: IndexContext) -> Result<String> {
+        let doc = self.indexer.index(ctx).await?;
         let persisted = self.indexer.to_persisted(doc);
 
         // Save to workspace if configured
         if let Some(ref workspace) = self.workspace {
-            workspace.save(&persisted)?;
+            workspace.save(&persisted).await?;
         }
 
         let doc_id = persisted.meta.id.clone();
@@ -199,7 +240,7 @@ impl Engine {
     /// - The document is not found
     /// - The retrieval fails
     pub async fn query(&self, doc_id: &str, question: &str) -> Result<QueryResult> {
-        let tree = self.get_structure(doc_id)?;
+        let tree = self.get_structure(doc_id).await?;
 
         let options = RetrieveOptions::new()
             .with_top_k(self.config.retrieval.top_k)
@@ -221,7 +262,7 @@ impl Engine {
         question: &str,
         ctx: &ClientContext,
     ) -> Result<QueryResult> {
-        let tree = self.get_structure(doc_id)?;
+        let tree = self.get_structure(doc_id).await?;
 
         let mut options = RetrieveOptions::new()
             .with_top_k(self.config.retrieval.top_k)
@@ -255,13 +296,17 @@ impl Engine {
     /// - Automatic caching of document trees
     /// - Cross-document queries
     /// - Session statistics
-    pub fn session(&self) -> Session {
-        let workspace = self.workspace.clone().unwrap_or_else(|| {
-            WorkspaceClient::from_arc(
-                Arc::new(RwLock::new(Workspace::open("./temp_workspace").unwrap())),
-                self.events.clone(),
-            )
-        });
+    pub async fn session(&self) -> Session {
+        let workspace = match &self.workspace {
+            Some(ws) => ws.clone(),
+            None => {
+                // Create a temporary workspace if none configured
+                let async_ws = Workspace::new("./temp_workspace")
+                    .await
+                    .expect("Failed to create temp workspace");
+                WorkspaceClient::new(async_ws).await
+            }
+        };
 
         Session::new(
             self.indexer.clone(),
@@ -276,12 +321,17 @@ impl Engine {
     // ============================================================
 
     /// Get a list of all indexed documents.
-    #[must_use]
-    pub fn list_documents(&self) -> Vec<DocumentInfo> {
-        match &self.workspace {
-            Some(workspace) => workspace.list().unwrap_or_default(),
-            None => Vec::new(),
-        }
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the workspace operation fails.
+    pub async fn list_documents(&self) -> Result<Vec<DocumentInfo>> {
+        let workspace = self
+            .workspace
+            .as_ref()
+            .ok_or_else(|| Error::Config("No workspace configured".to_string()))?;
+
+        workspace.list().await
     }
 
     /// Get document structure (tree).
@@ -291,14 +341,15 @@ impl Engine {
     /// Returns an error if:
     /// - No workspace is configured
     /// - The document is not found
-    pub fn get_structure(&self, doc_id: &str) -> Result<DocumentTree> {
+    pub async fn get_structure(&self, doc_id: &str) -> Result<DocumentTree> {
         let workspace = self
             .workspace
             .as_ref()
             .ok_or_else(|| Error::Config("No workspace configured".to_string()))?;
 
         let doc = workspace
-            .load(doc_id)?
+            .load(doc_id)
+            .await?
             .ok_or_else(|| Error::DocumentNotFound(format!("Document not found: {}", doc_id)))?;
 
         Ok(doc.tree)
@@ -312,14 +363,15 @@ impl Engine {
     /// - No workspace is configured
     /// - The document is not found
     /// - No page content is available
-    pub fn get_page_content(&self, doc_id: &str, pages: &str) -> Result<String> {
+    pub async fn get_page_content(&self, doc_id: &str, pages: &str) -> Result<String> {
         let workspace = self
             .workspace
             .as_ref()
             .ok_or_else(|| Error::Config("No workspace configured".to_string()))?;
 
         let doc = workspace
-            .load(doc_id)?
+            .load(doc_id)
+            .await?
             .ok_or_else(|| Error::DocumentNotFound(format!("Document not found: {}", doc_id)))?;
 
         if doc.pages.is_empty() {
@@ -381,17 +433,17 @@ impl Engine {
     /// # Errors
     ///
     /// Returns an error if no workspace is configured.
-    pub fn load(&self, doc_id: &str) -> Result<bool> {
+    pub async fn load(&self, doc_id: &str) -> Result<bool> {
         let workspace = self
             .workspace
             .as_ref()
             .ok_or_else(|| Error::Config("No workspace configured".to_string()))?;
 
-        if !workspace.exists(doc_id)? {
+        if !workspace.exists(doc_id).await? {
             return Ok(false);
         }
 
-        let _ = workspace.load(doc_id)?;
+        let _ = workspace.load(doc_id).await?;
         Ok(true)
     }
 
@@ -400,13 +452,13 @@ impl Engine {
     /// # Errors
     ///
     /// Returns an error if no workspace is configured.
-    pub fn remove(&self, doc_id: &str) -> Result<bool> {
+    pub async fn remove(&self, doc_id: &str) -> Result<bool> {
         let workspace = self
             .workspace
             .as_ref()
             .ok_or_else(|| Error::Config("No workspace configured".to_string()))?;
 
-        workspace.remove(doc_id)
+        workspace.remove(doc_id).await
     }
 
     /// Check if a document exists in the workspace.
@@ -414,13 +466,13 @@ impl Engine {
     /// # Errors
     ///
     /// Returns an error if no workspace is configured.
-    pub fn exists(&self, doc_id: &str) -> Result<bool> {
+    pub async fn exists(&self, doc_id: &str) -> Result<bool> {
         let workspace = self
             .workspace
             .as_ref()
             .ok_or_else(|| Error::Config("No workspace configured".to_string()))?;
 
-        workspace.exists(doc_id)
+        workspace.exists(doc_id).await
     }
 
     /// Get metadata for a document.
@@ -428,13 +480,13 @@ impl Engine {
     /// # Errors
     ///
     /// Returns an error if no workspace is configured.
-    pub fn get_metadata(&self, doc_id: &str) -> Result<Option<DocumentInfo>> {
+    pub async fn get_metadata(&self, doc_id: &str) -> Result<Option<DocumentInfo>> {
         let workspace = self
             .workspace
             .as_ref()
             .ok_or_else(|| Error::Config("No workspace configured".to_string()))?;
 
-        workspace.get_document_info(doc_id)
+        workspace.get_document_info(doc_id).await
     }
 
     /// Remove multiple documents from the workspace.
@@ -444,13 +496,13 @@ impl Engine {
     /// # Errors
     ///
     /// Returns an error if no workspace is configured.
-    pub fn batch_remove(&self, doc_ids: &[&str]) -> Result<usize> {
+    pub async fn batch_remove(&self, doc_ids: &[&str]) -> Result<usize> {
         let workspace = self
             .workspace
             .as_ref()
             .ok_or_else(|| Error::Config("No workspace configured".to_string()))?;
 
-        workspace.batch_remove(doc_ids)
+        workspace.batch_remove(doc_ids).await
     }
 
     /// Remove all documents from the workspace.
@@ -460,25 +512,36 @@ impl Engine {
     /// # Errors
     ///
     /// Returns an error if no workspace is configured.
-    pub fn clear(&self) -> Result<usize> {
+    pub async fn clear(&self) -> Result<usize> {
         let workspace = self
             .workspace
             .as_ref()
             .ok_or_else(|| Error::Config("No workspace configured".to_string()))?;
 
-        workspace.clear()
+        workspace.clear().await
     }
 
     /// Get the number of indexed documents.
-    #[must_use]
-    pub fn len(&self) -> usize {
-        self.workspace.as_ref().map(|w| w.len()).unwrap_or(0)
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the workspace operation fails.
+    pub async fn len(&self) -> Result<usize> {
+        let workspace = self
+            .workspace
+            .as_ref()
+            .ok_or_else(|| Error::Config("No workspace configured".to_string()))?;
+
+        Ok(workspace.len().await)
     }
 
     /// Check if there are no documents.
-    #[must_use]
-    pub fn is_empty(&self) -> bool {
-        self.len() == 0
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the workspace operation fails.
+    pub async fn is_empty(&self) -> Result<bool> {
+        Ok(self.len().await? == 0)
     }
 
     // ============================================================
@@ -518,17 +581,10 @@ impl Clone for Engine {
     }
 }
 
-impl Default for Engine {
-    fn default() -> Self {
-        Self::new().expect("Failed to create default Engine client")
-    }
-}
-
 impl std::fmt::Debug for Engine {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Engine")
             .field("has_workspace", &self.workspace.is_some())
-            .field("doc_count", &self.len())
             .finish_non_exhaustive()
     }
 }

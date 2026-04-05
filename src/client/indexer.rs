@@ -9,14 +9,15 @@
 //! # Example
 //!
 //! ```rust,ignore
+//! use vectorless::client::{IndexerClient, IndexContext};
+//!
 //! let indexer = IndexerClient::new(executor);
 //!
 //! let result = indexer
-//!     .index("./document.md")
-//!     .with_summaries()
+//!     .index(IndexContext::from_path("./document.md"))
 //!     .await?;
 //!
-//! println!("Indexed: {} ({} nodes)", result.doc_id, result.node_count);
+//! println!("Indexed: {} ({} nodes)", result.id, result.tree.as_ref().map(|t| t.node_count()).unwrap_or(0));
 //! ```
 
 use std::path::{Path, PathBuf};
@@ -32,7 +33,8 @@ use crate::storage::{DocumentMeta, PersistedDocument};
 
 use super::context::ClientContext;
 use super::events::{EventEmitter, IndexEvent};
-use super::types::{IndexMode as ClientIndexMode, IndexOptions, IndexedDocument};
+use super::index_context::{IndexContext, IndexSource};
+use super::types::{IndexOptions, IndexedDocument};
 
 /// Document indexing client.
 ///
@@ -106,29 +108,46 @@ impl IndexerClient {
         }
     }
 
-    /// Index a document from a file path.
+    /// Index a document from an index context.
+    ///
+    /// This is the main entry point for indexing documents. The context
+    /// specifies the source (path, content, or bytes) and options.
     ///
     /// # Errors
     ///
     /// Returns an error if:
-    /// - The file does not exist
+    /// - The file does not exist (for path sources)
     /// - The file format is not supported
     /// - The pipeline execution fails
-    pub async fn index(&self, path: impl AsRef<Path>) -> Result<IndexedDocument> {
-        self.index_with_options(path, IndexOptions::default()).await
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// use vectorless::client::{IndexerClient, IndexContext};
+    /// use vectorless::parser::DocumentFormat;
+    ///
+    /// // From file path
+    /// let doc = indexer.index(IndexContext::from_path("./doc.md")).await?;
+    ///
+    /// // From HTML content
+    /// let html = "<html><body><h1>Title</h1></body></html>";
+    /// let doc = indexer.index(
+    ///     IndexContext::from_content(html, DocumentFormat::Html)
+    ///         .with_name("webpage")
+    /// ).await?;
+    /// ```
+    pub async fn index(&self, ctx: IndexContext) -> Result<IndexedDocument> {
+        match &ctx.source {
+            IndexSource::Path(path) => self.index_from_path(path, &ctx).await,
+            IndexSource::Content { data, format } => {
+                self.index_from_content(data, *format, &ctx).await
+            }
+            IndexSource::Bytes { data, format } => self.index_from_bytes(data, *format, &ctx).await,
+        }
     }
 
-    /// Index a document with custom options.
-    ///
-    /// # Errors
-    ///
-    /// See [`IndexerClient::index`].
-    pub async fn index_with_options(
-        &self,
-        path: impl AsRef<Path>,
-        options: IndexOptions,
-    ) -> Result<IndexedDocument> {
-        let path = path.as_ref();
+    /// Index from a file path.
+    async fn index_from_path(&self, path: &Path, ctx: &IndexContext) -> Result<IndexedDocument> {
         let path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
 
         if !path.exists() {
@@ -143,31 +162,15 @@ impl IndexerClient {
         // Generate document ID
         let doc_id = Uuid::new_v4().to_string();
 
-        // Detect format
-        let format = self.detect_format(&path, &options)?;
+        // Detect format from extension
+        let format = self.detect_format_from_path(&path)?;
         self.events
             .emit_index(IndexEvent::FormatDetected { format });
 
         info!("Indexing {:?} document: {}", format, path.display());
 
-        // Convert client options to pipeline options
-        let pipeline_options = PipelineOptions {
-            mode: match options.mode {
-                ClientIndexMode::Auto => IndexMode::Auto,
-                ClientIndexMode::Pdf => IndexMode::Pdf,
-                ClientIndexMode::Markdown => IndexMode::Markdown,
-                ClientIndexMode::Html => IndexMode::Html,
-                ClientIndexMode::Docx => IndexMode::Docx,
-            },
-            generate_ids: options.generate_ids,
-            summary_strategy: if options.generate_summaries {
-                SummaryStrategy::selective(self.config.min_summary_tokens, false)
-            } else {
-                SummaryStrategy::none()
-            },
-            generate_description: options.generate_description,
-            ..Default::default()
-        };
+        // Build pipeline options
+        let pipeline_options = self.build_pipeline_options(&ctx.options, format);
 
         // Create pipeline input and execute
         let input = IndexInput::file(&path);
@@ -179,7 +182,111 @@ impl IndexerClient {
             executor.execute(input, pipeline_options).await?
         };
 
-        // Build indexed document
+        self.build_indexed_document(doc_id, result, format, ctx.name.as_deref(), Some(&path))
+    }
+
+    /// Index from content string.
+    async fn index_from_content(
+        &self,
+        content: &str,
+        format: DocumentFormat,
+        ctx: &IndexContext,
+    ) -> Result<IndexedDocument> {
+        // Emit start event
+        self.events.emit_index(IndexEvent::Started {
+            path: ctx.name.clone().unwrap_or_else(|| "content".to_string()),
+        });
+
+        let doc_id = Uuid::new_v4().to_string();
+        self.events
+            .emit_index(IndexEvent::FormatDetected { format });
+
+        info!("Indexing {:?} document from content", format);
+
+        let pipeline_options = self.build_pipeline_options(&ctx.options, format);
+
+        let input = IndexInput::content(content);
+        let result = {
+            let mut executor = self
+                .executor
+                .lock()
+                .map_err(|_| Error::Other("Pipeline executor lock poisoned".to_string()))?;
+            executor.execute(input, pipeline_options).await?
+        };
+
+        self.build_indexed_document(doc_id, result, format, ctx.name.as_deref(), None)
+    }
+
+    /// Index from binary data.
+    async fn index_from_bytes(
+        &self,
+        bytes: &[u8],
+        format: DocumentFormat,
+        ctx: &IndexContext,
+    ) -> Result<IndexedDocument> {
+        // Emit start event
+        self.events.emit_index(IndexEvent::Started {
+            path: ctx.name.clone().unwrap_or_else(|| "bytes".to_string()),
+        });
+
+        let doc_id = Uuid::new_v4().to_string();
+        self.events
+            .emit_index(IndexEvent::FormatDetected { format });
+
+        info!(
+            "Indexing {:?} document from bytes ({} bytes)",
+            format,
+            bytes.len()
+        );
+
+        let pipeline_options = self.build_pipeline_options(&ctx.options, format);
+
+        let input = IndexInput::bytes(bytes);
+        let result = {
+            let mut executor = self
+                .executor
+                .lock()
+                .map_err(|_| Error::Other("Pipeline executor lock poisoned".to_string()))?;
+            executor.execute(input, pipeline_options).await?
+        };
+
+        self.build_indexed_document(doc_id, result, format, ctx.name.as_deref(), None)
+    }
+
+    /// Build pipeline options from client options.
+    fn build_pipeline_options(
+        &self,
+        options: &IndexOptions,
+        format: DocumentFormat,
+    ) -> PipelineOptions {
+        PipelineOptions {
+            mode: match format {
+                DocumentFormat::Markdown => IndexMode::Markdown,
+                DocumentFormat::Pdf => IndexMode::Pdf,
+                DocumentFormat::Html => IndexMode::Html,
+                DocumentFormat::Docx => IndexMode::Docx,
+                DocumentFormat::Text => IndexMode::Auto,
+            },
+            generate_ids: options.generate_ids,
+            summary_strategy: if options.generate_summaries {
+                SummaryStrategy::selective(self.config.min_summary_tokens, false)
+            } else {
+                SummaryStrategy::none()
+            },
+            generate_description: options.generate_description,
+            ..Default::default()
+        }
+    }
+
+    /// Build indexed document from pipeline result.
+    fn build_indexed_document(
+        &self,
+        doc_id: String,
+        result: crate::index::IndexResult,
+        format: DocumentFormat,
+        name: Option<&str>,
+        path: Option<&Path>,
+    ) -> Result<IndexedDocument> {
         let tree = result
             .tree
             .ok_or_else(|| Error::Parse("Document tree not generated".to_string()))?;
@@ -187,10 +294,21 @@ impl IndexerClient {
         let node_count = tree.node_count();
         self.events.emit_index(IndexEvent::TreeBuilt { node_count });
 
+        let doc_name = name
+            .map(str::to_string)
+            .or_else(|| {
+                path.and_then(|p| p.file_stem())
+                    .map(|s| s.to_string_lossy().to_string())
+            })
+            .unwrap_or_else(|| result.name.clone());
+
         let mut doc = IndexedDocument::new(&doc_id, format)
-            .with_name(&result.name)
-            .with_source_path(&path)
+            .with_name(&doc_name)
             .with_tree(tree);
+
+        if let Some(p) = path {
+            doc = doc.with_source_path(p);
+        }
 
         if let Some(desc) = &result.description {
             doc = doc.with_description(desc);
@@ -206,19 +324,11 @@ impl IndexerClient {
         Ok(doc)
     }
 
-    /// Detect document format from path and options.
-    pub fn detect_format(&self, path: &Path, options: &IndexOptions) -> Result<DocumentFormat> {
-        match options.mode {
-            ClientIndexMode::Auto => {
-                let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
-                DocumentFormat::from_extension(ext)
-                    .ok_or_else(|| Error::Parse(format!("Unknown format: {}", ext)))
-            }
-            ClientIndexMode::Pdf => Ok(DocumentFormat::Pdf),
-            ClientIndexMode::Markdown => Ok(DocumentFormat::Markdown),
-            ClientIndexMode::Html => Ok(DocumentFormat::Html),
-            ClientIndexMode::Docx => Ok(DocumentFormat::Docx),
-        }
+    /// Detect document format from file extension.
+    fn detect_format_from_path(&self, path: &Path) -> Result<DocumentFormat> {
+        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+        DocumentFormat::from_extension(ext)
+            .ok_or_else(|| Error::Parse(format!("Unsupported format: {}", ext)))
     }
 
     /// Validate a document before indexing.
@@ -257,7 +367,7 @@ impl IndexerClient {
         if format.is_none() {
             return Ok(ValidationResult {
                 valid: false,
-                errors: vec![format!("Unknown format: {}", ext)],
+                errors: vec![format!("Unsupported format: {}", ext)],
                 warnings,
                 format: None,
                 estimated_size,

@@ -34,7 +34,7 @@ struct NavigationResponse {
 /// # Example
 ///
 /// ```rust,no_run
-/// use vectorless::domain::retriever::strategy::LlmStrategy;
+/// use vectorless::retriever::strategy::LlmStrategy;
 /// use vectorless::llm::LlmClient;
 ///
 /// let client = LlmClient::with_defaults();

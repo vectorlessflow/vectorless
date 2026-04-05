@@ -69,7 +69,7 @@
 //! use vectorless::{EngineBuilder, Engine};
 //!
 //! #[tokio::main]
-//! async fn main() -> vectorless::domain::Result<()> {
+//! async fn main() -> vectorless::Result<()> {
 //!     // Create client
 //!     let mut client = EngineBuilder::new()
 //!         .with_workspace("./workspace")
@@ -121,7 +121,10 @@ pub mod util;
 // =============================================================================
 
 // Client API (most common entry point)
-pub use client::{DocumentInfo, Engine, EngineBuilder, IndexedDocument};
+pub use client::{
+    BuildError, DocumentInfo, Engine, EngineBuilder, IndexContext, IndexMode, IndexOptions,
+    IndexSource, IndexedDocument,
+};
 
 // Error types
 pub use error::{Error, Result};
@@ -149,8 +152,9 @@ pub use parser::{
 // Indexing
 pub use index::pipeline::{CustomStageBuilder, PipelineOrchestrator};
 pub use index::{
-    ChangeDetector, ChangeSet, IndexContext, IndexInput, IndexMetrics, IndexMode, IndexResult,
-    IndexStage, PartialUpdater, PipelineExecutor, PipelineOptions, SummaryStrategy,
+    ChangeDetector, ChangeSet, IndexContext as PipelineIndexContext, IndexInput, IndexMetrics,
+    IndexMode as PipelineIndexMode, IndexResult, IndexStage, PartialUpdater, PipelineExecutor,
+    PipelineOptions, SummaryStrategy,
 };
 
 // Retrieval
@@ -163,9 +167,7 @@ pub use retrieval::{
 };
 
 // Storage
-pub use storage::{
-    AsyncWorkspace, DocumentMeta as StorageDocumentMeta, PersistedDocument, Workspace,
-};
+pub use storage::{DocumentMeta as StorageDocumentMeta, PersistedDocument, Workspace};
 
 // Throttle
 pub use throttle::{ConcurrencyConfig, ConcurrencyController, RateLimiter};

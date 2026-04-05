@@ -135,7 +135,7 @@ impl PipelineExecutor {
         self
     }
 
-    /// Add persistence stage with workspace.
+    /// Add persistence stage with async workspace.
     pub fn with_persistence(mut self, workspace: crate::storage::Workspace) -> Self {
         self.orchestrator = self
             .orchestrator
