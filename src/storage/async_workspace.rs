@@ -301,7 +301,7 @@ impl AsyncWorkspace {
         }
 
         // Load from backend and cache (write lock)
-        let mut inner = self.inner.write().await;
+        let inner = self.inner.write().await;
         let key = Self::doc_key(id);
 
         match inner.backend.get(&key)? {
@@ -375,7 +375,7 @@ impl AsyncWorkspace {
 
     /// Clear the LRU cache.
     pub async fn clear_cache(&self) -> Result<()> {
-        let mut inner = self.inner.write().await;
+        let inner = self.inner.write().await;
         inner.cache.clear()?;
         debug!("Cleared async document cache");
         Ok(())

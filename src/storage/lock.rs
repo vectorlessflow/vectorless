@@ -6,6 +6,12 @@
 //! Provides cross-process file locking to prevent data corruption
 //! when multiple processes access the same workspace.
 
+// File locking inherently requires unsafe FFI calls
+#![allow(unsafe_code)]
+//!
+//! Provides cross-process file locking to prevent data corruption
+//! when multiple processes access the same workspace.
+
 use std::fs::{File, OpenOptions};
 use std::path::Path;
 
