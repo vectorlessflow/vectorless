@@ -18,7 +18,7 @@
 //!
 //! // Load from file
 //! let config = ConfigLoader::new()
-//!     .file("config.toml")
+//!     .file("vectorless.toml")
 //!     .with_validation(true)
 //!     .load()?;
 //!
@@ -37,35 +37,19 @@
 //! let config = ConfigLoader::new()
 //!     .file("default.toml")        // Base defaults
 //!     .file("production.toml")     // Production overrides
-//!     .with_env("VECTORLESS_")     // Environment overrides
 //!     .with_validation(true)
 //!     .load()?;
 //! # Ok::<(), vectorless::config::ConfigError>(())
 //! ```
 //!
-//! # Environment Variables
-//!
-//! When enabled with `with_env()`, environment variables can override config:
-//!
-//! | Variable | Config Path |
-//! |----------|-------------|
-//! | `VECTORLESS_SUMMARY__API_KEY` | `summary.api_key` |
-//! | `VECTORLESS_RETRIEVAL__TOP_K` | `retrieval.top_k` |
-//! | `VECTORLESS_STORAGE__WORKSPACE_DIR` | `storage.workspace_dir` |
-//!
 //! # Configuration Sections
 //!
+//! - `[llm]` — Unified LLM configuration (pool, retry, throttle, fallback)
+//! - `[metrics]` — Unified metrics configuration
+//! - `[pilot]` — Pilot navigation configuration
 //! - `[indexer]` — Document indexing parameters
-//! - `[summary]` — Summarization model settings
 //! - `[retrieval]` — Retrieval model settings
-//! - `[retrieval.search]` — Search algorithm configuration
-//! - `[retrieval.sufficiency]` — Sufficiency checker settings
-//! - `[retrieval.content]` — Content aggregator settings
-//! - `[retrieval.strategy]` — Strategy-specific settings
-//! - `[retrieval.cache]` — Cache configuration
 //! - `[storage]` — Storage paths
-//! - `[concurrency]` — Concurrency control
-//! - `[fallback]` — Error recovery settings
 
 mod docs;
 mod loader;

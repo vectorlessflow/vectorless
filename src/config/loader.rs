@@ -3,8 +3,8 @@
 
 //! Configuration loader.
 //!
-//! Loads configuration from TOML files with optional environment variable
-//! overrides and validation.
+//! Loads configuration from TOML files with validation.
+//! All configuration must be explicit in the config file - no environment variables.
 //!
 //! # Example
 //!
@@ -20,12 +20,6 @@
 //! let config = ConfigLoader::new()
 //!     .file("config.toml")
 //!     .with_validation(true)
-//!     .load()?;
-//!
-//! // Load with environment variable override
-//! let config = ConfigLoader::new()
-//!     .file("config.toml")
-//!     .with_env("VECTORLESS_")
 //!     .load()?;
 //!
 //! // Layered configuration
@@ -66,10 +60,6 @@ pub enum ConfigError {
     /// Configuration validation failed.
     #[error("{0}")]
     Validation(#[from] super::types::ConfigValidationError),
-
-    /// Environment variable error.
-    #[error("Environment variable error: {0}")]
-    Env(String),
 }
 
 /// Configuration loader.
@@ -77,9 +67,6 @@ pub enum ConfigError {
 pub struct ConfigLoader {
     /// Configuration file paths (loaded in order, later files override earlier).
     files: Vec<PathBuf>,
-
-    /// Environment variable prefix (optional).
-    env_prefix: Option<String>,
 
     /// Whether to validate after loading.
     validate: bool,
@@ -99,7 +86,6 @@ impl ConfigLoader {
     pub fn new() -> Self {
         Self {
             files: Vec::new(),
-            env_prefix: None,
             validate: false,
             validator: None,
         }
@@ -124,15 +110,6 @@ impl ConfigLoader {
         self
     }
 
-    /// Enable environment variable override.
-    ///
-    /// Variables like `VECTORLESS_SUMMARY__API_KEY` override config values.
-    /// Use `__` (double underscore) to separate nested keys.
-    pub fn with_env(mut self, prefix: impl Into<String>) -> Self {
-        self.env_prefix = Some(prefix.into());
-        self
-    }
-
     /// Enable or disable validation after loading.
     pub fn with_validation(mut self, validate: bool) -> Self {
         self.validate = validate;
@@ -151,8 +128,7 @@ impl ConfigLoader {
     ///
     /// 1. Start with default configuration
     /// 2. Load and merge each specified file (in order)
-    /// 3. Apply environment variable overrides (if enabled)
-    /// 4. Validate configuration (if enabled)
+    /// 3. Validate configuration (if enabled)
     ///
     /// # Errors
     ///
@@ -174,11 +150,6 @@ impl ConfigLoader {
             }
         }
 
-        // Apply environment variable overrides
-        if let Some(ref prefix) = self.env_prefix {
-            self.apply_env_overrides(&mut config, prefix)?;
-        }
-
         // Validate if requested
         if self.validate {
             let validator = self.validator.unwrap_or_default();
@@ -186,80 +157,6 @@ impl ConfigLoader {
         }
 
         Ok(config)
-    }
-
-    /// Apply environment variable overrides to the configuration.
-    fn apply_env_overrides(&self, config: &mut Config, prefix: &str) -> Result<(), ConfigError> {
-        for (key, value) in std::env::vars() {
-            if !key.starts_with(prefix) {
-                continue;
-            }
-
-            // Parse the path: VECTORLESS_SUMMARY__API_KEY -> ["summary", "api_key"]
-            let path_str = key.trim_start_matches(prefix).trim_start_matches('_');
-            let parts: Vec<&str> = path_str.split("__").collect();
-
-            if parts.is_empty() {
-                continue;
-            }
-
-            // Apply the override
-            self.set_by_path(config, &parts, &value)?;
-        }
-
-        Ok(())
-    }
-
-    /// Set a configuration value by path.
-    fn set_by_path(
-        &self,
-        config: &mut Config,
-        path: &[&str],
-        value: &str,
-    ) -> Result<(), ConfigError> {
-        match path {
-            ["summary", "api_key"] => {
-                config.summary.api_key = Some(value.to_string());
-            }
-            ["summary", "model"] => {
-                config.summary.model = value.to_string();
-            }
-            ["summary", "endpoint"] => {
-                config.summary.endpoint = value.to_string();
-            }
-            ["summary", "max_tokens"] => {
-                config.summary.max_tokens = value
-                    .parse()
-                    .map_err(|e| ConfigError::Env(format!("Invalid max_tokens: {}", e)))?;
-            }
-            ["retrieval", "api_key"] => {
-                config.retrieval.api_key = Some(value.to_string());
-            }
-            ["retrieval", "model"] => {
-                config.retrieval.model = value.to_string();
-            }
-            ["retrieval", "endpoint"] => {
-                config.retrieval.endpoint = value.to_string();
-            }
-            ["retrieval", "top_k"] => {
-                config.retrieval.top_k = value
-                    .parse()
-                    .map_err(|e| ConfigError::Env(format!("Invalid top_k: {}", e)))?;
-            }
-            ["storage", "workspace_dir"] => {
-                config.storage.workspace_dir = PathBuf::from(value);
-            }
-            ["concurrency", "max_concurrent_requests"] => {
-                config.concurrency.max_concurrent_requests = value.parse().map_err(|e| {
-                    ConfigError::Env(format!("Invalid max_concurrent_requests: {}", e))
-                })?;
-            }
-            _ => {
-                // Unknown path - could log a warning
-            }
-        }
-
-        Ok(())
     }
 }
 
@@ -307,10 +204,6 @@ mod tests {
         assert_eq!(config.indexer.subsection_threshold, 300);
         assert_eq!(config.summary.model, "gpt-4o-mini");
         assert_eq!(config.retrieval.model, "gpt-4o");
-        assert_eq!(config.concurrency.max_concurrent_requests, 10);
-        assert_eq!(config.concurrency.requests_per_minute, 500);
-        assert!(config.concurrency.enabled);
-        assert!(config.concurrency.semaphore_enabled);
     }
 
     #[test]
