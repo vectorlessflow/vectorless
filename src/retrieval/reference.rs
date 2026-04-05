@@ -31,7 +31,7 @@
 //!
 //! Reference following is triggered when:
 //! 1. Search finds content containing references
-//! 2. Judge determines current content is insufficient
+//! 2. Evaluate determines current content is insufficient
 //! 3. Pilot suggests following a specific reference
 //!
 //! # Example

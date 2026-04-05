@@ -144,8 +144,8 @@ pub struct RetrievalMetrics {
     pub plan_time_ms: u64,
     /// Time spent in search stage (ms).
     pub search_time_ms: u64,
-    /// Time spent in judge stage (ms).
-    pub judge_time_ms: u64,
+    /// Time spent in evaluate stage (ms).
+    pub evaluate_time_ms: u64,
     /// Total time (ms).
     pub total_time_ms: u64,
     /// Number of nodes visited.
@@ -175,7 +175,7 @@ impl RetrievalMetrics {
         self.analyze_time_ms += other.analyze_time_ms;
         self.plan_time_ms += other.plan_time_ms;
         self.search_time_ms += other.search_time_ms;
-        self.judge_time_ms += other.judge_time_ms;
+        self.evaluate_time_ms += other.evaluate_time_ms;
         self.nodes_visited += other.nodes_visited;
         self.llm_calls += other.llm_calls;
         self.tokens_used = other.tokens_used; // Use latest
@@ -228,7 +228,7 @@ pub struct PipelineContext {
     /// Number of search iterations performed.
     pub search_iterations: usize,
 
-    // ============ Judge Stage Output ============
+    // ============ Evaluate Stage Output ============
     /// Current sufficiency level.
     pub sufficiency: SufficiencyLevel,
     /// Accumulated content from candidates.
@@ -331,7 +331,7 @@ impl PipelineContext {
             "analyze" => self.metrics.analyze_time_ms += duration_ms,
             "plan" => self.metrics.plan_time_ms += duration_ms,
             "search" => self.metrics.search_time_ms += duration_ms,
-            "judge" => self.metrics.judge_time_ms += duration_ms,
+            "evaluate" => self.metrics.evaluate_time_ms += duration_ms,
             _ => {}
         }
 

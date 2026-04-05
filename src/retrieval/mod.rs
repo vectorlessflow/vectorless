@@ -15,7 +15,7 @@
 //! │                    RetrievalOrchestrator                         │
 //! │                                                                  │
 //! │  ┌─────────┐    ┌─────────┐    ┌─────────┐    ┌─────────┐      │
-//! │  │ Analyze │───►│  Plan   │───►│ Search  │───►│  Judge  │      │
+//! │  │ Analyze │───►│  Plan   │───►│ Search  │───►│  Evaluate  │      │
 //! │  └─────────┘    └─────────┘    └─────────┘    └─────────┘      │
 //! │                                     ▲              │             │
 //! │                                     └──────────────┘             │
@@ -30,19 +30,19 @@
 //! | [`AnalyzeStage`] | Query analysis (complexity, keywords, targets) |
 //! | [`PlanStage`] | Strategy and algorithm selection |
 //! | [`SearchStage`] | Execute tree search |
-//! | [`JudgeStage`] | Sufficiency checking |
+//! | [`EvaluateStage`] | Sufficiency checking |
 //!
 //! # Quick Start
 //!
 //! ```rust,ignore
 //! use vectorless::retrieval::pipeline::{RetrievalOrchestrator, RetrievalStage};
-//! use vectorless::retrieval::stages::{AnalyzeStage, PlanStage, SearchStage, JudgeStage};
+//! use vectorless::retrieval::stages::{AnalyzeStage, PlanStage, SearchStage, EvaluateStage};
 //!
 //! let orchestrator = RetrievalOrchestrator::new()
 //!     .stage(AnalyzeStage::new())
 //!     .stage(PlanStage::new())
 //!     .stage(SearchStage::new())
-//!     .stage(JudgeStage::new());
+//!     .stage(EvaluateStage::new());
 //!
 //! let response = orchestrator.execute(tree, query, options).await?;
 //! ```
@@ -85,7 +85,7 @@ pub use pipeline::{
 pub use pipeline::PipelineContext as StageContext;
 
 // Stage exports
-pub use stages::{AnalyzeStage, JudgeStage, PlanStage, SearchStage};
+pub use stages::{AnalyzeStage, EvaluateStage, PlanStage, SearchStage};
 
 // Strategy exports
 pub use strategy::{

@@ -17,7 +17,7 @@ pub enum StageOutcome {
 
     /// Need more data, go back to Search stage for another iteration.
     ///
-    /// This enables incremental retrieval where the Judge stage can
+    /// This enables incremental retrieval where the Evaluate stage can
     /// request additional search rounds if current results are insufficient.
     NeedMoreData {
         /// Additional beam width to add for next search iteration.

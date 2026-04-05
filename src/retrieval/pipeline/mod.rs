@@ -15,7 +15,7 @@
 //!
 //! ```text
 //! ┌─────────┐    ┌─────────┐    ┌─────────┐    ┌─────────┐
-//! │ Analyze │───►│  Plan   │───►│ Search  │───►│  Judge  │
+//! │ Analyze │───►│  Plan   │───►│ Search  │───►│  Evaluate  │
 //! │ (分析)  │    │ (规划)  │    │ (搜索)  │    │ (判断)  │
 //! └─────────┘    └─────────┘    └─────────┘    └─────────┘
 //! ```
@@ -39,7 +39,7 @@
 //!     .stage(AnalyzeStage::new())
 //!     .stage(PlanStage::new())
 //!     .stage(SearchStage::new())
-//!     .stage(JudgeStage::new());
+//!     .stage(EvaluateStage::new());
 //!
 //! let response = orchestrator.execute(tree, query, options).await?;
 //! ```
