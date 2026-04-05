@@ -101,6 +101,24 @@ impl PilotContext {
             && self.path_section.is_empty()
             && self.candidates_section.is_empty()
     }
+
+    /// Get a hash of the query for feedback learning.
+    pub fn query_hash(&self) -> u64 {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+        let mut hasher = DefaultHasher::new();
+        self.query_section.hash(&mut hasher);
+        hasher.finish()
+    }
+
+    /// Get a hash of the path for feedback learning.
+    pub fn path_hash(&self) -> u64 {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+        let mut hasher = DefaultHasher::new();
+        self.path_section.hash(&mut hasher);
+        hasher.finish()
+    }
 }
 
 /// Context builder for Pilot LLM calls.
