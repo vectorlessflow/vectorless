@@ -28,7 +28,7 @@ use std::sync::Arc;
 use tracing::{debug, info, warn};
 
 use crate::error::Result;
-use crate::storage::{AsyncWorkspace, PersistedDocument};
+use crate::storage::{Workspace, PersistedDocument};
 
 use super::events::{EventEmitter, WorkspaceEvent};
 use super::types::DocumentInfo;
@@ -45,7 +45,7 @@ use super::types::DocumentInfo;
 #[derive(Clone)]
 pub struct WorkspaceClient {
     /// Workspace storage.
-    workspace: Arc<AsyncWorkspace>,
+    workspace: Arc<Workspace>,
 
     /// Event emitter.
     events: EventEmitter,
@@ -75,7 +75,7 @@ impl Default for WorkspaceClientConfig {
 
 impl WorkspaceClient {
     /// Create a new workspace client.
-    pub async fn new(workspace: AsyncWorkspace) -> Self {
+    pub async fn new(workspace: Workspace) -> Self {
         Self {
             workspace: Arc::new(workspace),
             events: EventEmitter::new(),
@@ -96,7 +96,7 @@ impl WorkspaceClient {
     }
 
     /// Create from an existing workspace Arc.
-    pub(crate) fn from_arc(workspace: Arc<AsyncWorkspace>, events: EventEmitter) -> Self {
+    pub(crate) fn from_arc(workspace: Arc<Workspace>, events: EventEmitter) -> Self {
         Self {
             workspace,
             events,
@@ -285,7 +285,7 @@ impl WorkspaceClient {
     }
 
     /// Get the underlying workspace Arc (for advanced use).
-    pub(crate) fn inner(&self) -> Arc<AsyncWorkspace> {
+    pub(crate) fn inner(&self) -> Arc<Workspace> {
         Arc::clone(&self.workspace)
     }
 }
@@ -306,7 +306,7 @@ mod tests {
     #[tokio::test]
     async fn test_workspace_client_creation() {
         let backend = StdArc::new(MemoryBackend::new());
-        let workspace = AsyncWorkspace::with_backend(backend).await.unwrap();
+        let workspace = Workspace::with_backend(backend).await.unwrap();
         let client = WorkspaceClient::new(workspace).await;
         assert!(client.is_empty().await);
     }
@@ -314,7 +314,7 @@ mod tests {
     #[tokio::test]
     async fn test_workspace_stats() {
         let backend = StdArc::new(MemoryBackend::new());
-        let workspace = AsyncWorkspace::with_backend(backend).await.unwrap();
+        let workspace = Workspace::with_backend(backend).await.unwrap();
         let client = WorkspaceClient::new(workspace).await;
 
         let stats = client.stats().await.unwrap();

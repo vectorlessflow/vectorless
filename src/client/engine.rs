@@ -54,7 +54,7 @@ use crate::config::Config;
 use crate::error::Result;
 use crate::index::PipelineExecutor;
 use crate::retrieval::{PipelineRetriever, RetrieveOptions};
-use crate::storage::AsyncWorkspace;
+use crate::storage::Workspace;
 use crate::{DocumentTree, Error};
 
 use super::context::ClientContext;
@@ -108,7 +108,7 @@ impl Engine {
     /// Note: Prefer using [`Engine::builder()`] for more control.
     async fn new() -> Result<Self> {
         let config = Config::default();
-        let workspace = AsyncWorkspace::new("./workspace")
+        let workspace = Workspace::new("./workspace")
             .await
             .map_err(|e| Error::Workspace(e.to_string()))?;
         Self::with_components(
@@ -127,7 +127,7 @@ impl Engine {
     /// Create a new client with the given components.
     pub(crate) async fn with_components(
         config: Config,
-        workspace: AsyncWorkspace,
+        workspace: Workspace,
         retriever: PipelineRetriever,
         executor: PipelineExecutor,
     ) -> Result<Self> {
@@ -299,7 +299,7 @@ impl Engine {
             Some(ws) => ws.clone(),
             None => {
                 // Create a temporary workspace if none configured
-                let async_ws = AsyncWorkspace::new("./temp_workspace")
+                let async_ws = Workspace::new("./temp_workspace")
                     .await
                     .expect("Failed to create temp workspace");
                 WorkspaceClient::new(async_ws).await

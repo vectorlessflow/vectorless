@@ -16,7 +16,7 @@
 //! ```
 
 use vectorless::document::DocumentTree;
-use vectorless::storage::{AsyncWorkspace, DocumentMeta, PersistedDocument};
+use vectorless::storage::{Workspace, DocumentMeta, PersistedDocument};
 
 #[tokio::main]
 async fn main() -> vectorless::Result<()> {
@@ -27,7 +27,7 @@ async fn main() -> vectorless::Result<()> {
 
     // 1. Create a workspace with custom cache size
     println!("1. Creating workspace at '{}'...", workspace_path);
-    let workspace = AsyncWorkspace::with_cache_size(workspace_path, 100)
+    let workspace = Workspace::with_cache_size(workspace_path, 100)
         .await
         .map_err(|e| vectorless::Error::Workspace(e.to_string()))?;
     println!("   ✓ Workspace created\n");

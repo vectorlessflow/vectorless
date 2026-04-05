@@ -167,7 +167,7 @@ pub use retrieval::{
 };
 
 // Storage
-pub use storage::{AsyncWorkspace, DocumentMeta as StorageDocumentMeta, PersistedDocument};
+pub use storage::{Workspace, DocumentMeta as StorageDocumentMeta, PersistedDocument};
 
 // Throttle
 pub use throttle::{ConcurrencyConfig, ConcurrencyController, RateLimiter};

@@ -37,7 +37,7 @@ use std::path::PathBuf;
 
 use crate::config::{Config, ConfigLoader, RetrievalConfig};
 use crate::retrieval::PipelineRetriever;
-use crate::storage::AsyncWorkspace;
+use crate::storage::Workspace;
 
 use super::engine::Engine;
 use super::events::EventEmitter;
@@ -424,7 +424,7 @@ impl EngineBuilder {
             .as_ref()
             .unwrap_or(&config.storage.workspace_dir);
 
-        let workspace = AsyncWorkspace::new(workspace_path)
+        let workspace = Workspace::new(workspace_path)
             .await
             .map_err(|e| BuildError::Workspace(e.to_string()))?;
 

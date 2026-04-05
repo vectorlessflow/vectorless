@@ -8,7 +8,7 @@ use std::time::Instant;
 use tracing::info;
 
 use crate::error::Result;
-use crate::storage::{AsyncWorkspace, DocumentMeta as StorageMeta, PersistedDocument};
+use crate::storage::{Workspace, DocumentMeta as StorageMeta, PersistedDocument};
 
 use super::{IndexStage, StageResult};
 use crate::index::pipeline::IndexContext;
@@ -16,7 +16,7 @@ use crate::index::pipeline::IndexContext;
 /// Persist stage - saves indexed document to storage.
 pub struct PersistStage {
     /// Optional workspace for persistence.
-    workspace: Option<AsyncWorkspace>,
+    workspace: Option<Workspace>,
 }
 
 impl PersistStage {
@@ -26,7 +26,7 @@ impl PersistStage {
     }
 
     /// Create with workspace.
-    pub fn with_workspace(workspace: AsyncWorkspace) -> Self {
+    pub fn with_workspace(workspace: Workspace) -> Self {
         Self {
             workspace: Some(workspace),
         }

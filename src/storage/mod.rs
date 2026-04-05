@@ -4,7 +4,7 @@
 //! Storage module for persisting document indices.
 //!
 //! This module provides:
-//! - **AsyncWorkspace** — An async directory-based document collection manager with LRU cache
+//! - **Workspace** — An async directory-based document collection manager with LRU cache
 //! - **Persistence** — Save/load document trees and metadata with atomic writes
 //! - **Cache** — LRU cache for loaded documents
 //! - **Lock** — File locking for multi-process safety
@@ -13,13 +13,13 @@
 //! # Example
 //!
 //! ```rust,no_run
-//! use vectorless::storage::{AsyncWorkspace, PersistedDocument, DocumentMeta};
+//! use vectorless::storage::{Workspace, PersistedDocument, DocumentMeta};
 //! use vectorless::document::DocumentTree;
 //!
 //! # #[tokio::main]
 //! # async fn main() -> vectorless::error::Result<()> {
 //! // Create a workspace
-//! let workspace = AsyncWorkspace::new("./my_workspace").await?;
+//! let workspace = Workspace::new("./my_workspace").await?;
 //!
 //! // Add a document
 //! let meta = DocumentMeta::new("doc-1", "My Document", "md");
@@ -33,16 +33,16 @@
 //! # }
 //! ```
 
-pub mod async_workspace;
 pub mod backend;
 pub mod cache;
 pub mod codec;
 pub mod lock;
 pub mod migration;
 mod persistence;
+pub mod workspace;
 
 // Re-export main types
-pub use async_workspace::{AsyncDocumentMetaEntry, AsyncWorkspace, AsyncWorkspaceOptions};
+pub use workspace::{DocumentMetaEntry, Workspace, WorkspaceOptions};
 pub use backend::{FileBackend, MemoryBackend, StorageBackend};
 pub use cache::DocumentCache;
 pub use codec::{Codec, GzipCodec, IdentityCodec, codec_from_config};

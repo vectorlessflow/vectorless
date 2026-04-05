@@ -17,7 +17,7 @@ use std::sync::{Arc, RwLock};
 
 use vectorless::Result;
 use vectorless::document::DocumentTree;
-use vectorless::storage::{AsyncWorkspace, DocumentMeta, PersistedDocument, StorageBackend};
+use vectorless::storage::{Workspace, DocumentMeta, PersistedDocument, StorageBackend};
 
 /// A simple in-memory backend with logging.
 ///
@@ -107,7 +107,7 @@ async fn main() -> vectorless::Result<()> {
 
     // 2. Create workspace with custom backend
     println!("2. Creating workspace with custom backend...");
-    let workspace = AsyncWorkspace::with_backend(backend).await?;
+    let workspace = Workspace::with_backend(backend).await?;
     println!("   ✓ Workspace created\n");
 
     // 3. Add a document (watch the logging)

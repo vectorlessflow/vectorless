@@ -1,30 +1,35 @@
 // Copyright (c) 2026 vectorless developers
 // SPDX-License-Identifier: Apache-2.0
 
-//! Workspace management for document collections.
+//! Async workspace management for document collections.
 //!
-//! A workspace manages indexed documents using a storage backend abstraction.
-//! Uses lazy-loading pattern with LRU cache:
-//! - Metadata index always in memory
-//! - Full documents loaded on demand with LRU eviction
+//! This module provides the primary workspace implementation for document
+//! persistence, using async I/O for integration with runtimes like Tokio.
 //!
-//! # Backends
+//! # Features
 //!
-//! The workspace supports different storage backends:
-//! - **FileBackend**: File system storage (default)
-//! - **MemoryBackend**: In-memory storage (for testing)
+//! - **Async I/O** - All operations are async for non-blocking performance
+//! - **LRU Cache** - Automatic caching with configurable size
+//! - **Thread-Safe** - Fully thread-safe with `Arc<RwLock>`
+//! - **Pluggable Backend** - Use file storage, in-memory, or custom backends
 //!
 //! # Example
 //!
 //! ```rust,ignore
-//! use vectorless::storage::{Workspace, FileBackend};
+//! use vectorless::storage::Workspace;
 //!
-//! // Default file-based workspace
-//! let mut workspace = Workspace::new("./my_workspace")?;
+//! #[tokio::main]
+//! async fn main() -> Result<()> {
+//!     let workspace = Workspace::new("./workspace").await?;
 //!
-//! // Or with custom backend
-//! let backend = std::sync::Arc::new(FileBackend::new("./my_workspace")?);
-//! let mut workspace = Workspace::with_backend(backend)?;
+//!     // Add a document
+//!     workspace.add(&doc).await?;
+//!
+//!     // Load with caching
+//!     let loaded = workspace.load_and_cache("doc-1").await?;
+//!
+//!     Ok(())
+//! }
 //! ```
 
 use std::collections::HashMap;
@@ -32,20 +37,19 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
+use tokio::sync::RwLock;
 use tracing::{debug, info, warn};
 
 use super::backend::{FileBackend, StorageBackend};
 use super::cache::DocumentCache;
-use super::lock::FileLock;
 use super::persistence::{PersistedDocument, load_document_from_bytes, save_document_to_bytes};
 use crate::Error;
 use crate::error::Result;
 
 const META_KEY: &str = "_meta";
-const LOCK_FILE: &str = ".workspace.lock";
 const DEFAULT_CACHE_SIZE: usize = 100;
 
-/// Lightweight metadata entry for the index.
+/// Lightweight metadata entry for the async workspace index.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DocumentMetaEntry {
     /// Document ID.
@@ -68,35 +72,9 @@ pub struct DocumentMetaEntry {
     pub line_count: Option<usize>,
 }
 
-/// A workspace for managing indexed documents.
-///
-/// Uses LRU cache for loaded documents to balance memory usage
-/// and access performance.
-///
-/// # Thread Safety
-///
-/// The workspace is thread-safe when used with a thread-safe backend.
-/// Read operations only require `&self`.
-#[derive(Debug)]
-pub struct Workspace {
-    /// Storage backend.
-    backend: Arc<dyn StorageBackend>,
-    /// Root path (for file-based backends, used for locking).
-    root: Option<PathBuf>,
-    /// Document metadata index (id -> meta).
-    /// This is always loaded in memory.
-    meta_index: HashMap<String, DocumentMetaEntry>,
-    /// LRU cache for loaded documents.
-    cache: DocumentCache,
-    /// File lock for multi-process safety (file backends only).
-    _lock: Option<FileLock>,
-}
-
-/// Options for workspace creation.
+/// Options for async workspace creation.
 #[derive(Debug, Clone)]
 pub struct WorkspaceOptions {
-    /// Enable file locking (default: true, only for file backends).
-    pub file_lock: bool,
     /// LRU cache size (default: 100).
     pub cache_size: usize,
 }
@@ -104,7 +82,6 @@ pub struct WorkspaceOptions {
 impl Default for WorkspaceOptions {
     fn default() -> Self {
         Self {
-            file_lock: true,
             cache_size: DEFAULT_CACHE_SIZE,
         }
     }
@@ -121,53 +98,72 @@ impl WorkspaceOptions {
         self.cache_size = size;
         self
     }
+}
 
-    /// Enable or disable file locking.
-    pub fn with_file_lock(mut self, enabled: bool) -> Self {
-        self.file_lock = enabled;
-        self
+/// Inner state for the async workspace.
+struct WorkspaceInner {
+    /// Storage backend.
+    backend: Arc<dyn StorageBackend>,
+    /// Root path (for file-based backends).
+    root: Option<PathBuf>,
+    /// Document metadata index.
+    meta_index: HashMap<String, DocumentMetaEntry>,
+    /// LRU cache for loaded documents.
+    cache: DocumentCache,
+}
+
+/// An async workspace for managing indexed documents.
+///
+/// Uses `tokio::sync::RwLock` for async-safe concurrent access.
+/// All operations are async and can be safely called from multiple tasks.
+///
+/// # Thread Safety
+///
+/// The async workspace is fully thread-safe and can be cloned cheaply
+/// (it uses `Arc` internally).
+#[derive(Clone)]
+pub struct Workspace {
+    inner: Arc<RwLock<WorkspaceInner>>,
+}
+
+impl std::fmt::Debug for Workspace {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Workspace").finish()
     }
 }
 
 impl Workspace {
-    /// Create a new workspace with a storage backend.
-    ///
-    /// # Example
-    ///
-    /// ```rust,ignore
-    /// let backend = Arc::new(FileBackend::new("./workspace")?);
-    /// let workspace = Workspace::with_backend(backend)?;
-    /// ```
-    pub fn with_backend(backend: Arc<dyn StorageBackend>) -> Result<Self> {
-        Self::with_backend_and_options(backend, WorkspaceOptions::default())
+    /// Create a new async workspace with a storage backend.
+    pub async fn with_backend(backend: Arc<dyn StorageBackend>) -> Result<Self> {
+        Self::with_backend_and_options(backend, WorkspaceOptions::default()).await
     }
 
-    /// Create a workspace with backend and options.
-    pub fn with_backend_and_options(
+    /// Create an async workspace with backend and options.
+    pub async fn with_backend_and_options(
         backend: Arc<dyn StorageBackend>,
         options: WorkspaceOptions,
     ) -> Result<Self> {
-        let mut workspace = Self {
+        let mut inner = WorkspaceInner {
             backend,
             root: None,
             meta_index: HashMap::new(),
             cache: DocumentCache::with_capacity(options.cache_size),
-            _lock: None,
         };
 
-        workspace.load_meta_index()?;
-        Ok(workspace)
+        Self::load_meta_index(&mut inner)?;
+
+        Ok(Self {
+            inner: Arc::new(RwLock::new(inner)),
+        })
     }
 
-    /// Create a new file-based workspace at the given path.
-    ///
-    /// This is a convenience method that creates a `FileBackend` internally.
-    pub fn new(path: impl Into<PathBuf>) -> Result<Self> {
-        Self::with_options(path, WorkspaceOptions::default())
+    /// Create a new file-based async workspace at the given path.
+    pub async fn new(path: impl Into<PathBuf>) -> Result<Self> {
+        Self::with_options(path, WorkspaceOptions::default()).await
     }
 
-    /// Create a new workspace with custom LRU cache size.
-    pub fn with_cache_size(path: impl Into<PathBuf>, cache_size: usize) -> Result<Self> {
+    /// Create a new async workspace with custom cache size.
+    pub async fn with_cache_size(path: impl Into<PathBuf>, cache_size: usize) -> Result<Self> {
         Self::with_options(
             path,
             WorkspaceOptions {
@@ -175,115 +171,65 @@ impl Workspace {
                 ..Default::default()
             },
         )
+        .await
     }
 
-    /// Create a new workspace with custom options.
-    pub fn with_options(path: impl Into<PathBuf>, options: WorkspaceOptions) -> Result<Self> {
-        let root = path.into();
-
-        // Acquire file lock if enabled
-        let lock = if options.file_lock {
-            let lock_path = root.join(LOCK_FILE);
-            Some(FileLock::try_lock(&lock_path, true)?)
-        } else {
-            None
-        };
-
-        let backend = Arc::new(FileBackend::new(&root)?);
-
-        let mut workspace = Self {
-            backend,
-            root: Some(root),
-            meta_index: HashMap::new(),
-            cache: DocumentCache::with_capacity(options.cache_size),
-            _lock: lock,
-        };
-
-        workspace.load_meta_index()?;
-        Ok(workspace)
-    }
-
-    /// Open an existing workspace, or create if it doesn't exist.
-    pub fn open(path: impl Into<PathBuf> + Clone) -> Result<Self> {
-        Self::open_with_options(path, WorkspaceOptions::default())
-    }
-
-    /// Open with custom cache size.
-    pub fn open_with_cache_size(
-        path: impl Into<PathBuf> + Clone,
-        cache_size: usize,
-    ) -> Result<Self> {
-        Self::open_with_options(
-            path,
-            WorkspaceOptions {
-                cache_size,
-                ..Default::default()
-            },
-        )
-    }
-
-    /// Open with custom options.
-    pub fn open_with_options(
-        path: impl Into<PathBuf> + Clone,
+    /// Create a new async workspace with custom options.
+    pub async fn with_options(
+        path: impl Into<PathBuf>,
         options: WorkspaceOptions,
     ) -> Result<Self> {
-        let root = path.clone().into();
-
-        // Acquire file lock if enabled
-        let lock = if options.file_lock && root.exists() {
-            let lock_path = root.join(LOCK_FILE);
-            Some(FileLock::try_lock(&lock_path, true)?)
-        } else {
-            None
-        };
-
+        let root = path.into();
         let backend = Arc::new(FileBackend::new(&root)?);
 
-        let mut workspace = Self {
+        let mut inner = WorkspaceInner {
             backend,
             root: Some(root),
             meta_index: HashMap::new(),
             cache: DocumentCache::with_capacity(options.cache_size),
-            _lock: lock,
         };
 
-        workspace.load_meta_index()?;
-        Ok(workspace)
+        Self::load_meta_index(&mut inner)?;
+
+        Ok(Self {
+            inner: Arc::new(RwLock::new(inner)),
+        })
     }
 
     /// Get the workspace root path (if file-based).
-    pub fn path(&self) -> Option<&Path> {
-        self.root.as_deref()
-    }
-
-    /// Get the storage backend.
-    pub fn backend(&self) -> &dyn StorageBackend {
-        self.backend.as_ref()
+    pub async fn path(&self) -> Option<PathBuf> {
+        let inner = self.inner.read().await;
+        inner.root.clone()
     }
 
     /// List all document IDs in the workspace.
-    pub fn list_documents(&self) -> Vec<&str> {
-        self.meta_index.keys().map(|s| s.as_str()).collect()
+    pub async fn list_documents(&self) -> Vec<String> {
+        let inner = self.inner.read().await;
+        inner.meta_index.keys().cloned().collect()
     }
 
     /// Get metadata for a document.
-    pub fn get_meta(&self, id: &str) -> Option<&DocumentMetaEntry> {
-        self.meta_index.get(id)
+    pub async fn get_meta(&self, id: &str) -> Option<DocumentMetaEntry> {
+        let inner = self.inner.read().await;
+        inner.meta_index.get(id).cloned()
     }
 
     /// Check if a document exists.
-    pub fn contains(&self, id: &str) -> bool {
-        self.meta_index.contains_key(id)
+    pub async fn contains(&self, id: &str) -> bool {
+        let inner = self.inner.read().await;
+        inner.meta_index.contains_key(id)
     }
 
     /// Add a document to the workspace.
-    pub fn add(&mut self, doc: &PersistedDocument) -> Result<()> {
+    pub async fn add(&self, doc: &PersistedDocument) -> Result<()> {
+        let mut inner = self.inner.write().await;
+
         let doc_id = doc.meta.id.clone();
-        let key = self.doc_key(&doc_id);
+        let key = Self::doc_key(&doc_id);
 
         // Serialize and save via backend
         let bytes = save_document_to_bytes(doc)?;
-        self.backend.put(&key, &bytes)?;
+        inner.backend.put(&key, &bytes)?;
 
         // Update meta index
         let meta_entry = DocumentMetaEntry {
@@ -304,13 +250,13 @@ impl Workspace {
             line_count: doc.meta.line_count,
         };
 
-        self.meta_index.insert(doc_id.clone(), meta_entry);
-        self.save_meta_index()?;
+        inner.meta_index.insert(doc_id.clone(), meta_entry);
+        Self::save_meta_index(&inner)?;
 
         // Remove from cache if present
-        let _ = self.cache.remove(&doc_id);
+        let _ = inner.cache.remove(&doc_id);
 
-        info!("Saved document {} to workspace", doc_id);
+        info!("Saved document {} to async workspace", doc_id);
         Ok(())
     }
 
@@ -318,27 +264,71 @@ impl Workspace {
     ///
     /// Uses LRU cache: returns cached version if available,
     /// otherwise loads from backend and caches it.
-    pub fn load(&self, id: &str) -> Result<Option<PersistedDocument>> {
-        if !self.contains(id) {
-            return Ok(None);
+    pub async fn load(&self, id: &str) -> Result<Option<PersistedDocument>> {
+        // First check if document exists (read lock)
+        {
+            let inner = self.inner.read().await;
+            if !inner.meta_index.contains_key(id) {
+                return Ok(None);
+            }
+
+            // Check LRU cache
+            if let Some(cached) = inner.cache.get(id)? {
+                debug!("Cache hit for document {}", id);
+                return Ok(Some(cached));
+            }
         }
 
-        // Check LRU cache first
-        if let Some(cached) = self.cache.get(id)? {
-            debug!("Cache hit for document {}", id);
-            return Ok(Some(cached));
-        }
+        // Load from backend (need read lock for backend access)
+        let inner = self.inner.read().await;
+        let key = Self::doc_key(id);
 
-        // Load from backend
-        let key = self.doc_key(id);
-        match self.backend.get(&key)? {
+        match inner.backend.get(&key)? {
             Some(bytes) => {
                 let doc = load_document_from_bytes(&bytes)?;
 
-                // Add to LRU cache
-                self.cache.put(id.to_string(), doc.clone())?;
+                // Note: We can't modify the cache with only a read lock
+                // For now, we return the document without caching
+                // A more sophisticated implementation would use a separate cache structure
 
-                debug!("Loaded document {} from backend (cached)", id);
+                debug!("Loaded document {} from backend", id);
+                Ok(Some(doc))
+            }
+            None => {
+                warn!("Document {} in meta index but not in backend", id);
+                Ok(None)
+            }
+        }
+    }
+
+    /// Load a document and cache it (requires write lock for caching).
+    pub async fn load_and_cache(&self, id: &str) -> Result<Option<PersistedDocument>> {
+        // First check if document exists (read lock)
+        {
+            let inner = self.inner.read().await;
+            if !inner.meta_index.contains_key(id) {
+                return Ok(None);
+            }
+
+            // Check LRU cache
+            if let Some(cached) = inner.cache.get(id)? {
+                debug!("Cache hit for document {}", id);
+                return Ok(Some(cached));
+            }
+        }
+
+        // Load from backend and cache (write lock)
+        let inner = self.inner.write().await;
+        let key = Self::doc_key(id);
+
+        match inner.backend.get(&key)? {
+            Some(bytes) => {
+                let doc = load_document_from_bytes(&bytes)?;
+
+                // Add to cache
+                inner.cache.put(id.to_string(), doc.clone())?;
+
+                debug!("Loaded and cached document {}", id);
                 Ok(Some(doc))
             }
             None => {
@@ -349,97 +339,105 @@ impl Workspace {
     }
 
     /// Remove a document from the workspace.
-    pub fn remove(&mut self, id: &str) -> Result<bool> {
-        if !self.contains(id) {
+    pub async fn remove(&self, id: &str) -> Result<bool> {
+        let mut inner = self.inner.write().await;
+
+        if !inner.meta_index.contains_key(id) {
             return Ok(false);
         }
 
-        let key = self.doc_key(id);
-        self.backend.delete(&key)?;
+        let key = Self::doc_key(id);
+        inner.backend.delete(&key)?;
 
-        self.meta_index.remove(id);
+        inner.meta_index.remove(id);
 
         // Remove from cache
-        let _ = self.cache.remove(id);
+        let _ = inner.cache.remove(id);
 
-        self.save_meta_index()?;
+        Self::save_meta_index(&inner)?;
 
-        info!("Removed document {} from workspace", id);
+        info!("Removed document {} from async workspace", id);
         Ok(true)
     }
 
     /// Get the number of documents in the workspace.
-    pub fn len(&self) -> usize {
-        self.meta_index.len()
+    pub async fn len(&self) -> usize {
+        let inner = self.inner.read().await;
+        inner.meta_index.len()
     }
 
     /// Check if the workspace is empty.
-    pub fn is_empty(&self) -> bool {
-        self.meta_index.is_empty()
+    pub async fn is_empty(&self) -> bool {
+        let inner = self.inner.read().await;
+        inner.meta_index.is_empty()
     }
 
     /// Get the number of items currently in the LRU cache.
-    pub fn cache_len(&self) -> usize {
-        self.cache.len()
+    pub async fn cache_len(&self) -> usize {
+        let inner = self.inner.read().await;
+        inner.cache.len()
     }
 
     /// Get cache utilization (0.0 to 1.0).
-    pub fn cache_utilization(&self) -> f64 {
-        self.cache.utilization()
+    pub async fn cache_utilization(&self) -> f64 {
+        let inner = self.inner.read().await;
+        inner.cache.utilization()
     }
 
     /// Get cache statistics.
-    pub fn cache_stats(&self) -> super::cache::CacheStats {
-        self.cache.stats()
+    pub async fn cache_stats(&self) -> super::cache::CacheStats {
+        let inner = self.inner.read().await;
+        inner.cache.stats()
     }
 
-    /// Clear the LRU cache (does not remove documents from workspace).
-    pub fn clear_cache(&self) -> Result<()> {
-        self.cache.clear()?;
-        debug!("Cleared document cache");
+    /// Clear the LRU cache.
+    pub async fn clear_cache(&self) -> Result<()> {
+        let inner = self.inner.write().await;
+        inner.cache.clear()?;
+        debug!("Cleared async document cache");
         Ok(())
     }
 
     /// Get the storage key for a document.
-    fn doc_key(&self, id: &str) -> String {
+    fn doc_key(id: &str) -> String {
         format!("doc:{}", id)
     }
 
     /// Load the meta index from backend.
-    fn load_meta_index(&mut self) -> Result<()> {
-        match self.backend.get(META_KEY)? {
+    fn load_meta_index(inner: &mut WorkspaceInner) -> Result<()> {
+        match inner.backend.get(META_KEY)? {
             Some(bytes) => {
                 let meta: HashMap<String, DocumentMetaEntry> = serde_json::from_slice(&bytes)
                     .map_err(|e| Error::Parse(format!("Failed to parse meta index: {}", e)))?;
-                self.meta_index = meta;
+                inner.meta_index = meta;
                 info!(
-                    "Loaded {} document(s) from workspace index",
-                    self.meta_index.len()
+                    "Loaded {} document(s) from async workspace index",
+                    inner.meta_index.len()
                 );
             }
             None => {
                 // Try to rebuild from existing keys
-                self.rebuild_meta_index()?;
+                Self::rebuild_meta_index(inner)?;
             }
         }
         Ok(())
     }
 
     /// Save the meta index to backend.
-    fn save_meta_index(&self) -> Result<()> {
-        let bytes = serde_json::to_vec_pretty(&self.meta_index)
+    fn save_meta_index(inner: &WorkspaceInner) -> Result<()> {
+        let bytes = serde_json::to_vec_pretty(&inner.meta_index)
             .map_err(|e| Error::Parse(format!("Failed to serialize meta index: {}", e)))?;
-        self.backend.put(META_KEY, &bytes)?;
+        inner.backend.put(META_KEY, &bytes)?;
         Ok(())
     }
 
     /// Rebuild the meta index from existing documents.
-    fn rebuild_meta_index(&mut self) -> Result<()> {
-        let keys = self.backend.keys()?;
+    fn rebuild_meta_index(inner: &mut WorkspaceInner) -> Result<()> {
+        let keys = inner.backend.keys()?;
         let doc_keys: Vec<_> = keys.iter().filter(|k| k.starts_with("doc:")).collect();
 
         for key in doc_keys {
-            if let Some(bytes) = self.backend.get(key)? {
+            if let Some(bytes) = inner.backend.get(key)? {
                 if let Ok(doc) = load_document_from_bytes(&bytes) {
                     let doc_id = doc.meta.id.clone();
                     let meta_entry = DocumentMetaEntry {
@@ -459,14 +457,17 @@ impl Workspace {
                         },
                         line_count: doc.meta.line_count,
                     };
-                    self.meta_index.insert(doc_id, meta_entry);
+                    inner.meta_index.insert(doc_id, meta_entry);
                 }
             }
         }
 
-        if !self.meta_index.is_empty() {
-            self.save_meta_index()?;
-            info!("Rebuilt index from {} document(s)", self.meta_index.len());
+        if !inner.meta_index.is_empty() {
+            Self::save_meta_index(inner)?;
+            info!(
+                "Rebuilt async index from {} document(s)",
+                inner.meta_index.len()
+            );
         }
 
         Ok(())
@@ -476,86 +477,128 @@ impl Workspace {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::TempDir;
+    use crate::document::DocumentTree;
 
-    #[test]
-    fn test_workspace_create() {
-        let temp = TempDir::new().unwrap();
-        let workspace = Workspace::new(temp.path()).unwrap();
-
-        assert!(workspace.is_empty());
-        assert_eq!(workspace.len(), 0);
+    fn create_test_doc(id: &str) -> PersistedDocument {
+        let meta = super::super::persistence::DocumentMeta::new(id, "Test Doc", "md");
+        let tree = DocumentTree::new("Root", "Content");
+        PersistedDocument::new(meta, tree)
     }
 
-    #[test]
-    fn test_workspace_with_memory_backend() {
+    #[tokio::test]
+    async fn test_async_workspace_create() {
         let backend = Arc::new(super::super::backend::MemoryBackend::new());
-        let mut workspace = Workspace::with_backend(backend).unwrap();
+        let workspace = Workspace::with_backend(backend).await.unwrap();
 
-        assert!(workspace.is_empty());
+        assert!(workspace.is_empty().await);
+        assert_eq!(workspace.len().await, 0);
+    }
 
-        // Add a document
-        let meta = super::super::persistence::DocumentMeta::new("doc-1", "Test", "md");
-        let tree = crate::document::DocumentTree::new("Root", "Content");
-        let doc = PersistedDocument::new(meta, tree);
+    #[tokio::test]
+    async fn test_async_workspace_add_and_load() {
+        let backend = Arc::new(super::super::backend::MemoryBackend::new());
+        let workspace = Workspace::with_backend(backend).await.unwrap();
 
-        workspace.add(&doc).unwrap();
-        assert_eq!(workspace.len(), 1);
+        let doc = create_test_doc("doc-1");
+        workspace.add(&doc).await.unwrap();
 
-        // Load it back
-        let loaded = workspace.load("doc-1").unwrap();
+        assert_eq!(workspace.len().await, 1);
+        assert!(workspace.contains("doc-1").await);
+
+        let loaded = workspace.load("doc-1").await.unwrap();
         assert!(loaded.is_some());
         assert_eq!(loaded.unwrap().meta.id, "doc-1");
     }
 
-    #[test]
-    fn test_workspace_open() {
-        let temp = TempDir::new().unwrap();
-        let path = temp.path().join("workspace");
-
-        let options = WorkspaceOptions {
-            file_lock: false,
-            ..Default::default()
-        };
-
-        let workspace = Workspace::open_with_options(&path, options.clone()).unwrap();
-        assert!(workspace.is_empty());
-
-        drop(workspace);
-        let workspace2 = Workspace::open_with_options(&path, options).unwrap();
-        assert!(workspace2.is_empty());
-    }
-
-    #[test]
-    fn test_workspace_cache_operations() {
-        let temp = TempDir::new().unwrap();
-        let workspace = Workspace::with_cache_size(temp.path(), 5).unwrap();
-
-        assert_eq!(workspace.cache_len(), 0);
-        assert_eq!(workspace.cache.utilization(), 0.0);
-
-        workspace.clear_cache().unwrap();
-        assert_eq!(workspace.cache_len(), 0);
-    }
-
-    #[test]
-    fn test_workspace_cache_stats() {
+    #[tokio::test]
+    async fn test_async_workspace_remove() {
         let backend = Arc::new(super::super::backend::MemoryBackend::new());
-        let mut workspace = Workspace::with_backend(backend).unwrap();
+        let workspace = Workspace::with_backend(backend).await.unwrap();
 
-        let meta = super::super::persistence::DocumentMeta::new("doc-1", "Test", "md");
-        let tree = crate::document::DocumentTree::new("Root", "Content");
-        let doc = PersistedDocument::new(meta, tree);
-        workspace.add(&doc).unwrap();
+        let doc = create_test_doc("doc-1");
+        workspace.add(&doc).await.unwrap();
 
-        // First load - cache miss
-        let _ = workspace.load("doc-1").unwrap();
-        let stats = workspace.cache_stats();
+        let removed = workspace.remove("doc-1").await.unwrap();
+        assert!(removed);
+        assert!(workspace.is_empty().await);
+
+        let removed_again = workspace.remove("doc-1").await.unwrap();
+        assert!(!removed_again);
+    }
+
+    #[tokio::test]
+    async fn test_async_workspace_cache() {
+        let backend = Arc::new(super::super::backend::MemoryBackend::new());
+        let workspace = Workspace::with_backend(backend).await.unwrap();
+
+        let doc = create_test_doc("doc-1");
+        workspace.add(&doc).await.unwrap();
+
+        // First load with caching
+        let _ = workspace.load_and_cache("doc-1").await.unwrap();
+        let stats = workspace.cache_stats().await;
         assert_eq!(stats.misses, 1);
 
-        // Second load - cache hit
-        let _ = workspace.load("doc-1").unwrap();
-        let stats = workspace.cache_stats();
+        // Second load should hit cache
+        let _ = workspace.load_and_cache("doc-1").await.unwrap();
+        let stats = workspace.cache_stats().await;
         assert_eq!(stats.hits, 1);
+    }
+
+    #[tokio::test]
+    async fn test_async_workspace_list_documents() {
+        let backend = Arc::new(super::super::backend::MemoryBackend::new());
+        let workspace = Workspace::with_backend(backend).await.unwrap();
+
+        workspace.add(&create_test_doc("doc-1")).await.unwrap();
+        workspace.add(&create_test_doc("doc-2")).await.unwrap();
+        workspace.add(&create_test_doc("doc-3")).await.unwrap();
+
+        let docs = workspace.list_documents().await;
+        assert_eq!(docs.len(), 3);
+    }
+
+    #[tokio::test]
+    async fn test_async_workspace_get_meta() {
+        let backend = Arc::new(super::super::backend::MemoryBackend::new());
+        let workspace = Workspace::with_backend(backend).await.unwrap();
+
+        let doc = create_test_doc("doc-1");
+        workspace.add(&doc).await.unwrap();
+
+        let meta = workspace.get_meta("doc-1").await;
+        assert!(meta.is_some());
+        let meta = meta.unwrap();
+        assert_eq!(meta.id, "doc-1");
+        assert_eq!(meta.doc_name, "Test Doc");
+        assert_eq!(meta.doc_type, "md");
+    }
+
+    #[tokio::test]
+    async fn test_async_workspace_concurrent_access() {
+        let backend = Arc::new(super::super::backend::MemoryBackend::new());
+        let workspace = Arc::new(Workspace::with_backend(backend).await.unwrap());
+
+        // Spawn multiple concurrent tasks
+        let mut handles = vec![];
+
+        for i in 0..10 {
+            let ws = workspace.clone();
+            let handle = tokio::spawn(async move {
+                let id = format!("doc-{}", i);
+                let doc = create_test_doc(&id);
+                ws.add(&doc).await.unwrap();
+                let loaded = ws.load(&id).await.unwrap();
+                assert!(loaded.is_some());
+            });
+            handles.push(handle);
+        }
+
+        // Wait for all tasks
+        for handle in handles {
+            handle.await.unwrap();
+        }
+
+        assert_eq!(workspace.len().await, 10);
     }
 }
