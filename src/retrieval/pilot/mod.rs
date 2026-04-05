@@ -65,7 +65,7 @@ mod prompts;
 mod r#trait;
 
 pub use budget::{BudgetController, BudgetUsage};
-pub use builder::{ContextBuilder, PilotContext, TokenBudget};
+pub use builder::{ContextBuilder, ContextMode, PilotContext, TokenBudget};
 pub use config::{BudgetConfig, InterventionConfig, PilotConfig, PilotMode};
 pub use decision::{InterventionPoint, PilotDecision, RankedCandidate, SearchDirection};
 pub use fallback::{FallbackAction, FallbackConfig, FallbackError, FallbackLevel, FallbackManager};

@@ -13,11 +13,117 @@
 //! - Current path: 20%
 //! - Candidates: 40%
 //! - Sibling context: 10%
+//!
+//! # Context Modes
+//!
+//! The builder supports different verbosity levels:
+//! - [`Full`](ContextMode::Full): Complete context with all details
+//! - [`Summary`](ContextMode::Summary): Titles and summaries only (default)
+//! - [`Minimal`](ContextMode::Minimal): Minimal context for token efficiency
+//!
+//! # Example
+//!
+//! ```rust,ignore
+//! use vectorless::retrieval::pilot::builder::{ContextBuilder, ContextMode};
+//!
+//! // Summary mode (default) - token efficient
+//! let builder = ContextBuilder::new(500)
+//!     .with_mode(ContextMode::Summary);
+//!
+//! // Full mode - maximum context
+//! let builder = ContextBuilder::new(1000)
+//!     .with_mode(ContextMode::Full);
+//!
+//! // Minimal mode - ultra efficient
+//! let builder = ContextBuilder::new(200)
+//!     .with_mode(ContextMode::Minimal);
+//! ```
 
 use std::collections::HashSet;
 
 use super::SearchState;
 use crate::document::{DocumentTree, NodeId};
+
+/// Context verbosity mode for LLM calls.
+///
+/// Controls how much detail is included in the context sent to the LLM.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ContextMode {
+    /// Full context with all details.
+    ///
+    /// - Includes complete content for current node
+    /// - Full summaries for all candidates
+    /// - Complete TOC with summaries
+    ///
+    /// Use when accuracy is more important than token cost.
+    Full,
+
+    /// Summary mode with titles and summaries only (default).
+    ///
+    /// - Only titles for path
+    /// - Titles + short summaries for candidates
+    /// - TOC with titles only
+    ///
+    /// Best balance of context and token efficiency.
+    #[default]
+    Summary,
+
+    /// Minimal context for maximum token efficiency.
+    ///
+    /// - Only essential path info
+    /// - Top candidates with titles only
+    /// - Abbreviated TOC
+    ///
+    /// Use when token budget is very tight.
+    Minimal,
+}
+
+impl ContextMode {
+    /// Get the default token budget for this mode.
+    pub fn default_token_budget(&self) -> usize {
+        match self {
+            ContextMode::Full => 1000,
+            ContextMode::Summary => 500,
+            ContextMode::Minimal => 200,
+        }
+    }
+
+    /// Get the maximum depth for TOC traversal.
+    pub fn max_toc_depth(&self) -> usize {
+        match self {
+            ContextMode::Full => 5,
+            ContextMode::Summary => 3,
+            ContextMode::Minimal => 2,
+        }
+    }
+
+    /// Get the maximum number of candidates to include.
+    pub fn max_candidates(&self) -> usize {
+        match self {
+            ContextMode::Full => 15,
+            ContextMode::Summary => 10,
+            ContextMode::Minimal => 5,
+        }
+    }
+
+    /// Check if summaries should be included for candidates.
+    pub fn include_summaries(&self) -> bool {
+        match self {
+            ContextMode::Full => true,
+            ContextMode::Summary => true,
+            ContextMode::Minimal => false,
+        }
+    }
+
+    /// Get the summary truncation length (in characters).
+    pub fn summary_truncation(&self) -> usize {
+        match self {
+            ContextMode::Full => 500,
+            ContextMode::Summary => 150,
+            ContextMode::Minimal => 50,
+        }
+    }
+}
 
 /// Token budget distribution for context building.
 #[derive(Debug, Clone)]
@@ -127,24 +233,43 @@ impl PilotContext {
 /// token efficiency while providing enough information for
 /// good LLM decisions.
 ///
+/// # Context Modes
+///
+/// The builder supports different verbosity levels:
+/// - [`ContextMode::Full`]: Complete context with all details
+/// - [`ContextMode::Summary`]: Titles and summaries only (default)
+/// - [`ContextMode::Minimal`]: Minimal context for token efficiency
+///
 /// # Example
 ///
 /// ```rust,ignore
-/// use vectorless::retrieval::pilot::ContextBuilder;
+/// use vectorless::retrieval::pilot::builder::{ContextBuilder, ContextMode};
 ///
+/// // Default summary mode
 /// let builder = ContextBuilder::new(500);
-/// let context = builder.build(&state, &tree);
-/// println!("Estimated tokens: {}", context.estimated_tokens);
+/// let context = builder.build(&state);
+///
+/// // Full mode for maximum context
+/// let builder = ContextBuilder::new(1000).with_mode(ContextMode::Full);
+///
+/// // Minimal mode for tight token budgets
+/// let builder = ContextBuilder::new(200).with_mode(ContextMode::Minimal);
 /// ```
 pub struct ContextBuilder {
     /// Token budget for context.
     budget: TokenBudget,
-    /// Maximum candidates to include.
-    max_candidates: usize,
-    /// Maximum path depth to show.
-    max_path_depth: usize,
-    /// Whether to include summaries for candidates.
-    include_summaries: bool,
+    /// Context verbosity mode.
+    mode: ContextMode,
+    /// Maximum candidates to include (overrides mode default).
+    max_candidates: Option<usize>,
+    /// Maximum path depth to show (overrides mode default).
+    max_path_depth: Option<usize>,
+    /// Whether to include summaries for candidates (overrides mode default).
+    include_summaries: Option<bool>,
+    /// Maximum TOC depth (overrides mode default).
+    max_toc_depth: Option<usize>,
+    /// Summary truncation length (overrides mode default).
+    summary_truncation: Option<usize>,
 }
 
 impl Default for ContextBuilder {
@@ -155,12 +280,17 @@ impl Default for ContextBuilder {
 
 impl ContextBuilder {
     /// Create a new context builder with the given token budget.
+    ///
+    /// Uses [`ContextMode::Summary`] by default.
     pub fn new(token_budget: usize) -> Self {
         Self {
             budget: TokenBudget::new(token_budget),
-            max_candidates: 10,
-            max_path_depth: 5,
-            include_summaries: true,
+            mode: ContextMode::default(),
+            max_candidates: None,
+            max_path_depth: None,
+            include_summaries: None,
+            max_toc_depth: None,
+            summary_truncation: None,
         }
     }
 
@@ -168,28 +298,88 @@ impl ContextBuilder {
     pub fn with_budget(budget: TokenBudget) -> Self {
         Self {
             budget,
-            max_candidates: 10,
-            max_path_depth: 5,
-            include_summaries: true,
+            mode: ContextMode::default(),
+            max_candidates: None,
+            max_path_depth: None,
+            include_summaries: None,
+            max_toc_depth: None,
+            summary_truncation: None,
         }
     }
 
-    /// Set maximum candidates to include.
+    /// Set the context mode.
+    ///
+    /// This controls the verbosity of the context:
+    /// - `Full`: Complete context with all details
+    /// - `Summary`: Titles and summaries only (default)
+    /// - `Minimal`: Minimal context for token efficiency
+    pub fn with_mode(mut self, mode: ContextMode) -> Self {
+        self.mode = mode;
+        // Update budget if not explicitly set
+        if self.budget.total < mode.default_token_budget() {
+            self.budget = TokenBudget::new(mode.default_token_budget());
+        }
+        self
+    }
+
+    /// Set maximum candidates to include (overrides mode default).
     pub fn with_max_candidates(mut self, max: usize) -> Self {
-        self.max_candidates = max;
+        self.max_candidates = Some(max);
         self
     }
 
-    /// Set maximum path depth to show.
+    /// Set maximum path depth to show (overrides mode default).
     pub fn with_max_path_depth(mut self, max: usize) -> Self {
-        self.max_path_depth = max;
+        self.max_path_depth = Some(max);
         self
     }
 
-    /// Set whether to include summaries for candidates.
+    /// Set whether to include summaries for candidates (overrides mode default).
     pub fn with_summaries(mut self, include: bool) -> Self {
-        self.include_summaries = include;
+        self.include_summaries = Some(include);
         self
+    }
+
+    /// Set maximum TOC depth (overrides mode default).
+    pub fn with_max_toc_depth(mut self, depth: usize) -> Self {
+        self.max_toc_depth = Some(depth);
+        self
+    }
+
+    /// Set summary truncation length (overrides mode default).
+    pub fn with_summary_truncation(mut self, len: usize) -> Self {
+        self.summary_truncation = Some(len);
+        self
+    }
+
+    /// Get the effective max candidates (mode default or override).
+    fn effective_max_candidates(&self) -> usize {
+        self.max_candidates.unwrap_or_else(|| self.mode.max_candidates())
+    }
+
+    /// Get the effective max path depth (mode default or override).
+    fn effective_max_path_depth(&self) -> usize {
+        self.max_path_depth.unwrap_or(5)
+    }
+
+    /// Get the effective include summaries setting (mode default or override).
+    fn effective_include_summaries(&self) -> bool {
+        self.include_summaries.unwrap_or_else(|| self.mode.include_summaries())
+    }
+
+    /// Get the effective max TOC depth (mode default or override).
+    fn effective_max_toc_depth(&self) -> usize {
+        self.max_toc_depth.unwrap_or_else(|| self.mode.max_toc_depth())
+    }
+
+    /// Get the effective summary truncation length (mode default or override).
+    fn effective_summary_truncation(&self) -> usize {
+        self.summary_truncation.unwrap_or_else(|| self.mode.summary_truncation())
+    }
+
+    /// Get the current mode.
+    pub fn mode(&self) -> ContextMode {
+        self.mode
     }
 
     /// Build context from search state.
@@ -279,8 +469,9 @@ impl ContextBuilder {
         result.push_str("Root");
 
         // Limit depth shown
-        let start = if path.len() > self.max_path_depth {
-            path.len() - self.max_path_depth
+        let max_depth = self.effective_max_path_depth();
+        let start = if path.len() > max_depth {
+            path.len() - max_depth
         } else {
             0
         };
@@ -300,7 +491,7 @@ impl ContextBuilder {
         result
     }
 
-    /// Build candidates section.
+    /// Build candidates section with dynamic truncation.
     fn build_candidates_section(&self, tree: &DocumentTree, candidates: &[NodeId]) -> String {
         if candidates.is_empty() {
             return "Candidates: (none)\n".to_string();
@@ -309,16 +500,20 @@ impl ContextBuilder {
         let mut result = String::from("Candidate Nodes:\n");
         let mut tokens_used = 0;
         let max_tokens = self.budget.candidates;
+        let max_candidates = self.effective_max_candidates();
+        let include_summaries = self.effective_include_summaries();
+        let summary_trunc = self.effective_summary_truncation();
 
-        for (i, node_id) in candidates.iter().take(self.max_candidates).enumerate() {
+        for (i, node_id) in candidates.iter().take(max_candidates).enumerate() {
             if tokens_used >= max_tokens {
                 result.push_str("... (more candidates omitted)\n");
                 break;
             }
 
             if let Some(node) = tree.get(*node_id) {
-                let entry = if self.include_summaries && !node.summary.is_empty() {
-                    format!("{}. {} [{}]\n", i + 1, node.title, node.summary)
+                let entry = if include_summaries && !node.summary.is_empty() {
+                    let truncated_summary = self.truncate_text(&node.summary, summary_trunc);
+                    format!("{}. {} [{}]\n", i + 1, node.title, truncated_summary)
                 } else {
                     format!("{}. {}\n", i + 1, node.title)
                 };
@@ -371,54 +566,70 @@ impl ContextBuilder {
         let mut result = String::from("Document Structure:\n");
         let mut tokens_used = 0;
         let max_tokens = self.budget.siblings + self.budget.candidates;
+        let max_depth = self.effective_max_toc_depth();
+        let include_summaries = self.effective_include_summaries();
+        let summary_trunc = self.effective_summary_truncation();
 
-        fn build_toc_recursive(
-            tree: &DocumentTree,
-            node_id: NodeId,
-            depth: usize,
-            result: &mut String,
-            tokens_used: &mut usize,
-            max_tokens: usize,
-            max_depth: usize,
-        ) {
-            if *tokens_used >= max_tokens || depth > max_depth {
-                return;
-            }
-
-            if let Some(node) = tree.get(node_id) {
-                let indent = "  ".repeat(depth);
-                let entry = format!("{}{}\n", indent, node.title);
-                *tokens_used += entry.len() / 4; // Rough estimate
-                result.push_str(&entry);
-
-                // Only show children for first few levels
-                if depth < max_depth {
-                    for child_id in tree.children(node_id) {
-                        build_toc_recursive(
-                            tree,
-                            child_id,
-                            depth + 1,
-                            result,
-                            tokens_used,
-                            max_tokens,
-                            max_depth,
-                        );
-                    }
-                }
-            }
-        }
-
-        build_toc_recursive(
+        self.build_toc_recursive(
             tree,
             tree.root(),
             0,
             &mut result,
             &mut tokens_used,
             max_tokens,
-            3, // Max depth to show
+            max_depth,
+            include_summaries,
+            summary_trunc,
         );
 
         result
+    }
+
+    /// Recursive helper for building TOC.
+    fn build_toc_recursive(
+        &self,
+        tree: &DocumentTree,
+        node_id: NodeId,
+        depth: usize,
+        result: &mut String,
+        tokens_used: &mut usize,
+        max_tokens: usize,
+        max_depth: usize,
+        include_summaries: bool,
+        summary_trunc: usize,
+    ) {
+        if *tokens_used >= max_tokens || depth > max_depth {
+            return;
+        }
+
+        if let Some(node) = tree.get(node_id) {
+            let indent = "  ".repeat(depth);
+            let entry = if include_summaries && !node.summary.is_empty() && depth < 2 {
+                let truncated = self.truncate_text(&node.summary, summary_trunc);
+                format!("{}{} [{}]\n", indent, node.title, truncated)
+            } else {
+                format!("{}{}\n", indent, node.title)
+            };
+            *tokens_used += entry.len() / 4; // Rough estimate
+            result.push_str(&entry);
+
+            // Only show children for first few levels
+            if depth < max_depth {
+                for child_id in tree.children(node_id) {
+                    self.build_toc_recursive(
+                        tree,
+                        child_id,
+                        depth + 1,
+                        result,
+                        tokens_used,
+                        max_tokens,
+                        max_depth,
+                        include_summaries,
+                        summary_trunc,
+                    );
+                }
+            }
+        }
     }
 
     /// Build section showing unvisited nodes.
@@ -444,6 +655,27 @@ impl ContextBuilder {
         }
 
         result
+    }
+
+    /// Truncate text to a maximum character length.
+    ///
+    /// Adds "..." if truncation occurs.
+    fn truncate_text(&self, text: &str, max_chars: usize) -> String {
+        if text.chars().count() <= max_chars {
+            text.to_string()
+        } else {
+            let truncated: String = text.chars().take(max_chars).collect();
+            // Try to break at word boundary
+            if let Some(last_space) = truncated.rfind(' ') {
+                if last_space > max_chars / 2 {
+                    format!("{}...", &truncated[..last_space])
+                } else {
+                    format!("{}...", truncated)
+                }
+            } else {
+                format!("{}...", truncated)
+            }
+        }
     }
 
     /// Estimate token count for a string.
@@ -514,9 +746,9 @@ mod tests {
     #[test]
     fn test_context_builder_creation() {
         let builder = ContextBuilder::new(500);
-        assert_eq!(builder.max_candidates, 10);
-        assert_eq!(builder.max_path_depth, 5);
-        assert!(builder.include_summaries);
+        assert_eq!(builder.effective_max_candidates(), 10); // Default from Summary mode
+        assert_eq!(builder.effective_max_path_depth(), 5);
+        assert!(builder.effective_include_summaries());
     }
 
     #[test]

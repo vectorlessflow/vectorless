@@ -50,6 +50,7 @@
 mod context;
 mod decompose;
 mod pipeline_retriever;
+mod reference;
 mod retriever;
 mod types;
 
@@ -121,4 +122,10 @@ pub use pilot::{
 pub use decompose::{
     DecompositionConfig, DecompositionResult, QueryDecomposer, ResultAggregator, SubQuery,
     SubQueryComplexity, SubQueryResult, SubQueryType,
+};
+
+// Reference following exports
+pub use reference::{
+    expand_with_references, FollowedReference, ReferenceConfig, ReferenceExpansion,
+    ReferenceFollower,
 };

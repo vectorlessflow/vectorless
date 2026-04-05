@@ -212,6 +212,7 @@ impl DocumentTree {
             node_id: None,
             physical_index: None,
             token_count: None,
+            references: Vec::new(),
         };
         let root_id = arena.new_node(root_data);
 
@@ -295,6 +296,7 @@ impl DocumentTree {
             node_id: None,
             physical_index: None,
             token_count: None,
+            references: Vec::new(),
         };
         let child_id = self.arena.new_node(child_data);
         parent.0.append(child_id, &mut self.arena);
