@@ -11,7 +11,7 @@ use async_trait::async_trait;
 use std::collections::HashSet;
 use std::sync::LazyLock;
 
-use crate::domain::{DocumentTree, NodeId};
+use crate::document::{DocumentTree, NodeId};
 
 use super::{PilotConfig, PilotDecision, InterventionPoint};
 

@@ -6,7 +6,7 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use crate::domain::{DocumentTree, NodeId};
+use crate::document::{DocumentTree, NodeId};
 use crate::llm::LlmClient;
 use crate::parser::{DocumentFormat, RawNode};
 

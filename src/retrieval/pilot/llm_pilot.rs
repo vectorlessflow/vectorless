@@ -10,7 +10,7 @@ use async_trait::async_trait;
 use std::sync::Arc;
 use tracing::{debug, info, warn};
 
-use crate::domain::DocumentTree;
+use crate::document::DocumentTree;
 use crate::llm::LlmClient;
 
 use super::builder::ContextBuilder;
@@ -147,7 +147,7 @@ impl LlmPilot {
         &self,
         point: InterventionPoint,
         context: &super::builder::PilotContext,
-        candidates: &[crate::domain::NodeId],
+        candidates: &[crate::document::NodeId],
     ) -> PilotDecision {
         // Build prompt
         let prompt = self.prompt_builder.build(point, context);
@@ -192,7 +192,7 @@ impl LlmPilot {
     /// Create a default decision when LLM fails.
     fn default_decision(
         &self,
-        candidates: &[crate::domain::NodeId],
+        candidates: &[crate::document::NodeId],
         point: InterventionPoint,
     ) -> PilotDecision {
         let ranked = candidates
@@ -357,14 +357,14 @@ impl Pilot for LlmPilot {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::NodeId;
+    use crate::document::NodeId;
     use indextree::Arena;
 
     fn create_test_node_ids(count: usize) -> Vec<NodeId> {
         let mut arena = Arena::new();
         let mut ids = Vec::new();
         for i in 0..count {
-            let node = crate::domain::TreeNode {
+            let node = crate::document::TreeNode {
                 title: format!("Node {}", i),
                 structure: String::new(),
                 content: String::new(),

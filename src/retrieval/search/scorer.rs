@@ -5,7 +5,7 @@
 //!
 //! Implements the NodeScore formula: `Σ ChunkScore(n) / √(N+1)`
 
-use crate::domain::{DocumentTree, NodeId};
+use crate::document::{DocumentTree, NodeId};
 
 /// Context for scoring calculations.
 #[derive(Debug, Clone)]

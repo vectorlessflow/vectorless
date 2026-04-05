@@ -7,7 +7,7 @@ use super::async_trait;
 use std::time::Instant;
 use tracing::info;
 
-use crate::domain::Result;
+use crate::error::Result;
 use crate::storage::{DocumentMeta as StorageMeta, PersistedDocument, Workspace};
 
 use super::{IndexStage, StageResult};
@@ -37,12 +37,12 @@ impl PersistStage {
         let workspace = self
             .workspace
             .as_mut()
-            .ok_or_else(|| crate::domain::Error::Config("No workspace configured".to_string()))?;
+            .ok_or_else(|| crate::Error::Config("No workspace configured".to_string()))?;
 
         let tree = ctx
             .tree
             .as_ref()
-            .ok_or_else(|| crate::domain::Error::IndexBuild("Tree not built".to_string()))?;
+            .ok_or_else(|| crate::Error::IndexBuild("Tree not built".to_string()))?;
 
         // Create metadata
         let meta = StorageMeta::new(&ctx.doc_id, &ctx.name, ctx.format.extension())

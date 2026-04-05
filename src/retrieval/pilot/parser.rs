@@ -13,7 +13,7 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use tracing::warn;
 
-use crate::domain::NodeId;
+use crate::document::NodeId;
 use super::decision::{PilotDecision, RankedCandidate, SearchDirection, InterventionPoint};
 
 /// Parsed response from LLM.
@@ -348,7 +348,7 @@ mod tests {
         let mut arena = Arena::new();
         let mut ids = Vec::new();
         for i in 0..count {
-            let node = crate::domain::TreeNode {
+            let node = crate::document::TreeNode {
                 title: format!("Node {}", i),
                 structure: String::new(),
                 content: String::new(),

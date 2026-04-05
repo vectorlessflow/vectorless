@@ -76,8 +76,8 @@ async fn main() -> vectorless::Result<()> {
 
 /// Print tree structure up to a maximum depth.
 fn print_tree_structure(
-    tree: &vectorless::domain::DocumentTree,
-    node_id: vectorless::domain::NodeId,
+    tree: &vectorless::document::DocumentTree,
+    node_id: vectorless::document::NodeId,
     current_depth: usize,
     max_depth: usize,
 ) {

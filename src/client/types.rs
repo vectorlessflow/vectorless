@@ -8,7 +8,7 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
-use crate::domain::DocumentTree;
+use crate::document::DocumentTree;
 use crate::parser::DocumentFormat;
 
 // ============================================================

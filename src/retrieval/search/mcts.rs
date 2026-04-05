@@ -14,7 +14,7 @@ use super::super::types::{NavigationDecision, NavigationStep, SearchPath};
 use super::scorer::NodeScorer;
 use super::{SearchConfig, SearchResult, SearchTree};
 use crate::config::StrategyConfig;
-use crate::domain::{DocumentTree, NodeId};
+use crate::document::{DocumentTree, NodeId};
 use crate::retrieval::pilot::Pilot;
 
 /// Statistics for a node in MCTS.

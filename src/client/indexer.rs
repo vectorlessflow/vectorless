@@ -25,7 +25,7 @@ use std::sync::{Arc, Mutex};
 use tracing::info;
 use uuid::Uuid;
 
-use crate::domain::{Error, Result};
+use crate::error::{Error, Result};
 use crate::index::{IndexInput, IndexMode, PipelineExecutor, PipelineOptions, SummaryStrategy};
 use crate::parser::DocumentFormat;
 use crate::storage::{DocumentMeta, PersistedDocument};

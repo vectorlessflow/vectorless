@@ -16,7 +16,7 @@
 
 use std::collections::HashSet;
 
-use crate::domain::{DocumentTree, NodeId};
+use crate::document::{DocumentTree, NodeId};
 use super::SearchState;
 
 /// Token budget distribution for context building.
@@ -436,7 +436,7 @@ mod tests {
 
     fn create_test_tree() -> DocumentTree {
         let mut arena = Arena::new();
-        let root = arena.new_node(crate::domain::TreeNode {
+        let root = arena.new_node(crate::document::TreeNode {
             title: "Root".to_string(),
             content: "Root content".to_string(),
             summary: "Root summary".to_string(),
@@ -444,7 +444,7 @@ mod tests {
             ..Default::default()
         });
 
-        let child1 = arena.new_node(crate::domain::TreeNode {
+        let child1 = arena.new_node(crate::document::TreeNode {
             title: "Configuration".to_string(),
             content: "Config content".to_string(),
             summary: "Configuration options".to_string(),
@@ -452,7 +452,7 @@ mod tests {
             ..Default::default()
         });
 
-        let child2 = arena.new_node(crate::domain::TreeNode {
+        let child2 = arena.new_node(crate::document::TreeNode {
             title: "API Reference".to_string(),
             content: "API content".to_string(),
             summary: "API documentation".to_string(),
@@ -463,7 +463,7 @@ mod tests {
         root.append(child1, &mut arena);
         root.append(child2, &mut arena);
 
-        DocumentTree::from_raw(arena, crate::domain::NodeId(root))
+        DocumentTree::from_raw(arena, crate::document::NodeId(root))
     }
 
     #[test]

@@ -7,7 +7,7 @@ use async_trait::async_trait;
 
 use super::super::RetrievalContext;
 use super::super::types::{NavigationStep, SearchPath};
-use crate::domain::DocumentTree;
+use crate::document::DocumentTree;
 use crate::retrieval::pilot::Pilot;
 
 /// Result of a search operation.

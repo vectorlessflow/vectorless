@@ -8,7 +8,7 @@ use std::hash::{Hash, Hasher};
 use std::path::Path;
 use std::time::SystemTime;
 
-use crate::domain::DocumentTree;
+use crate::document::DocumentTree;
 
 /// Type of change detected.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -8,7 +8,8 @@
 
 use std::collections::HashMap;
 
-use crate::domain::{estimate_tokens, NodeId};
+use crate::document::NodeId;
+use crate::util::estimate_tokens;
 
 use super::config::ScoringStrategyConfig;
 
@@ -339,7 +340,7 @@ mod tests {
 
     fn make_test_node_id() -> NodeId {
         let mut arena = Arena::new();
-        let node = crate::domain::TreeNode {
+        let node = crate::document::TreeNode {
             title: "Test".to_string(),
             structure: String::new(),
             content: String::new(),

@@ -11,7 +11,7 @@ use serde::Deserialize;
 use super::super::RetrievalContext;
 use super::super::types::{NavigationDecision, QueryComplexity};
 use super::r#trait::{NodeEvaluation, RetrievalStrategy, StrategyCapabilities};
-use crate::domain::{DocumentTree, NodeId, TocView};
+use crate::document::{DocumentTree, NodeId, TocView};
 use crate::llm::LlmClient;
 
 /// LLM response for navigation decision.

@@ -22,7 +22,8 @@ use std::sync::Arc;
 use tracing::info;
 
 use crate::config::Config;
-use crate::domain::{DocumentTree, Error, NodeId, Result};
+use crate::document::{DocumentTree, NodeId};
+use crate::error::{Error, Result};
 use crate::retrieval::content::ContentAggregatorConfig;
 use crate::retrieval::{
     QueryComplexity, RetrieveOptions, RetrieveResponse, RetrievalResult, Retriever, SufficiencyLevel,

@@ -7,7 +7,9 @@ use super::async_trait;
 use std::time::Instant;
 use tracing::info;
 
-use crate::domain::{NodeId, Result};
+
+use crate::error::Result;
+use crate::document::{NodeId};
 use crate::index::pipeline::IndexContext;
 
 use super::{IndexStage, StageResult};
@@ -23,7 +25,7 @@ impl OptimizeStage {
 
     /// Merge adjacent small leaf nodes.
     fn merge_small_leaves(
-        tree: &mut crate::domain::DocumentTree,
+        tree: &mut crate::document::DocumentTree,
         min_tokens: usize,
         metrics: &mut crate::index::IndexMetrics,
     ) -> usize {
@@ -86,7 +88,7 @@ impl OptimizeStage {
     }
 
     /// Remove empty intermediate nodes.
-    fn remove_empty_nodes(tree: &mut crate::domain::DocumentTree) -> usize {
+    fn remove_empty_nodes(tree: &mut crate::document::DocumentTree) -> usize {
         let mut removed_count = 0;
 
         // Find nodes with no content and only one child
@@ -154,7 +156,7 @@ impl IndexStage for OptimizeStage {
         let tree = ctx
             .tree
             .as_mut()
-            .ok_or_else(|| crate::domain::Error::IndexBuild("Tree not built".to_string()))?;
+            .ok_or_else(|| crate::Error::IndexBuild("Tree not built".to_string()))?;
 
         let mut merged_count = 0;
 

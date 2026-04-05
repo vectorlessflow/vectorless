@@ -27,7 +27,7 @@ use std::collections::HashMap;
 use std::time::Instant;
 use tracing::{error, info, warn};
 
-use crate::domain::Result;
+use crate::error::Result;
 
 use super::super::PipelineOptions;
 use super::super::stages::IndexStage;
@@ -208,7 +208,7 @@ impl PipelineOrchestrator {
         for entry in &self.stages {
             for dep in &entry.depends_on {
                 if !name_to_idx.contains_key(dep.as_str()) {
-                    return Err(crate::domain::Error::Config(format!(
+                    return Err(crate::error::Error::Config(format!(
                         "Stage '{}' depends on non-existent stage '{}'",
                         entry.stage.name(),
                         dep
@@ -265,7 +265,7 @@ impl PipelineOrchestrator {
                 .filter(|&&i| !result.contains(&i))
                 .map(|&i| self.stages[i].stage.name())
                 .collect();
-            return Err(crate::domain::Error::Config(format!(
+            return Err(crate::error::Error::Config(format!(
                 "Circular dependency detected involving stages: {:?}",
                 remaining
             )));

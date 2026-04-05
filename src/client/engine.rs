@@ -45,7 +45,8 @@ use std::sync::{Arc, Mutex, RwLock};
 use tracing::info;
 
 use crate::config::Config;
-use crate::domain::{DocumentTree, Error, Result};
+use crate::error::Result;
+use crate::{DocumentTree, Error};
 use crate::index::PipelineExecutor;
 use crate::retrieval::{PipelineRetriever, RetrieveOptions};
 use crate::storage::Workspace;

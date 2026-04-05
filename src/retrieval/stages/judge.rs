@@ -10,7 +10,7 @@ use async_trait::async_trait;
 // Arc is used for async sharing
 use tracing::{info, warn};
 
-use crate::domain::estimate_tokens;
+use crate::util::estimate_tokens;
 use crate::llm::LlmClient;
 use crate::retrieval::content::{ContentAggregator, ContentAggregatorConfig};
 use crate::retrieval::pipeline::{FailurePolicy, PipelineContext, RetrievalStage, StageOutcome};
@@ -167,7 +167,7 @@ impl JudgeStage {
     }
 
     /// Collect content from leaf descendants of a node (excluding the node itself).
-    fn collect_leaf_content(&self, tree: &crate::domain::DocumentTree, node_id: crate::domain::NodeId) -> String {
+    fn collect_leaf_content(&self, tree: &crate::document::DocumentTree, node_id: crate::document::NodeId) -> String {
         let mut content_parts = Vec::new();
 
         // Start with children, not the node itself
@@ -177,7 +177,7 @@ impl JudgeStage {
             return String::new();
         }
 
-        let mut stack: Vec<crate::domain::NodeId> = children;
+        let mut stack: Vec<crate::document::NodeId> = children;
 
         while let Some(current_id) = stack.pop() {
             let current_children = tree.children(current_id);
@@ -319,7 +319,7 @@ impl RetrievalStage for JudgeStage {
         true // Can trigger backtracking to search
     }
 
-    async fn execute(&self, ctx: &mut PipelineContext) -> crate::domain::Result<StageOutcome> {
+    async fn execute(&self, ctx: &mut PipelineContext) -> crate::error::Result<StageOutcome> {
         let start = std::time::Instant::now();
 
         info!(

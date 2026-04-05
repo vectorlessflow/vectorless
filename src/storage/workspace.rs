@@ -35,7 +35,8 @@ use serde::{Deserialize, Serialize};
 use tracing::{debug, info, warn};
 
 use super::persistence::{PersistedDocument, load_document, save_document};
-use crate::domain::{Error, Result};
+use crate::{Error};
+use crate::error::Result;
 
 const META_FILE: &str = "_meta.json";
 const DEFAULT_CACHE_SIZE: usize = 100;

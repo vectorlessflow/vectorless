@@ -18,7 +18,7 @@ pub use parse::ParseStage;
 pub use persist::PersistStage;
 
 use super::pipeline::{FailurePolicy, IndexContext, StageResult};
-use crate::domain::Result;
+use crate::error::Result;
 pub use async_trait::async_trait;
 
 /// Index pipeline stage.

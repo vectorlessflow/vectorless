@@ -5,7 +5,7 @@
 
 use tracing::{debug, info, warn};
 
-use crate::domain::Result;
+use crate::error::Result;
 use crate::parser::pdf::PdfPage;
 
 use super::assigner::{PageAssigner, PageAssignerConfig};

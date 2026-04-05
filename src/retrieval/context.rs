@@ -28,7 +28,8 @@
 //! ```
 
 use super::types::RetrievalResult;
-use crate::domain::{DocumentTree, NodeId, estimate_tokens};
+use crate::document::{DocumentTree, NodeId};
+use crate::util::estimate_tokens;
 use std::collections::HashSet;
 
 /// Pruning strategy for context building.
@@ -476,7 +477,7 @@ impl ContextBuilder {
         }
     }
 
-    fn format_node_section(&self, node: &crate::domain::TreeNode, depth: usize) -> String {
+    fn format_node_section(&self, node: &crate::document::TreeNode, depth: usize) -> String {
         let mut section = String::new();
 
         if self.include_titles {

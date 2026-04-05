@@ -11,7 +11,7 @@ use async_trait::async_trait;
 use std::sync::Arc;
 use tracing::{info, warn};
 
-use crate::domain::DocumentTree;
+use crate::document::DocumentTree;
 // LlmClient is used via strategy
 use crate::retrieval::pilot::Pilot;
 use crate::retrieval::RetrievalContext; // Legacy context
@@ -187,7 +187,7 @@ impl RetrievalStage for SearchStage {
         true // Can receive backtracks from judge
     }
 
-    async fn execute(&self, ctx: &mut PipelineContext) -> crate::domain::Result<StageOutcome> {
+    async fn execute(&self, ctx: &mut PipelineContext) -> crate::error::Result<StageOutcome> {
         let start = std::time::Instant::now();
 
         // Get strategy and algorithm

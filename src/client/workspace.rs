@@ -27,7 +27,8 @@ use std::sync::{Arc, RwLock};
 
 use tracing::{debug, info, warn};
 
-use crate::domain::{Error, Result};
+use crate::{Error};
+use crate::error::Result;
 use crate::storage::{DocumentMetaEntry, PersistedDocument, Workspace};
 
 use super::events::{EventEmitter, WorkspaceEvent};

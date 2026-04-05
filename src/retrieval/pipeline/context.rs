@@ -10,7 +10,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
-use crate::domain::{DocumentTree, NodeId, RetrievalIndex};
+use crate::document::{DocumentTree, NodeId, RetrievalIndex};
 use crate::retrieval::pilot::Pilot;
 use crate::retrieval::types::{
     NavigationStep, QueryComplexity, RetrieveOptions, RetrieveResponse, SearchPath,

@@ -106,13 +106,15 @@
 
 pub mod client;
 pub mod config;
-pub mod domain;
+pub mod document;
+pub mod error;
 pub mod index;
 pub mod llm;
 pub mod parser;
 pub mod retrieval;
 pub mod storage;
 pub mod throttle;
+pub mod util;
 
 // =============================================================================
 // Re-exports (Convenience API)
@@ -121,11 +123,17 @@ pub mod throttle;
 // Client API (most common entry point)
 pub use client::{DocumentInfo, Engine, EngineBuilder, IndexedDocument};
 
-// Domain types
-pub use domain::{
-    DocumentStructure, DocumentTree, Error, NodeId, Result, StructureNode, TocConfig, TocEntry,
-    TocNode, TocView, TreeNode, estimate_tokens, estimate_tokens_fast,
+// Error types
+pub use error::{Error, Result};
+
+// Document types
+pub use document::{
+    DocumentStructure, DocumentTree, NodeId, StructureNode, TocConfig, TocEntry,
+    TocNode, TocView, TreeNode,
 };
+
+// Utility functions
+pub use util::{estimate_tokens, estimate_tokens_fast};
 
 // Configuration
 pub use config::{Config, ConfigLoader, RetrievalConfig, SummaryConfig};

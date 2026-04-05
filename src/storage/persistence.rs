@@ -7,7 +7,8 @@ use serde::{Deserialize, Serialize};
 use std::io;
 use std::path::{Path, PathBuf};
 
-use crate::domain::{DocumentTree, Error, Result};
+use crate::{DocumentTree, Error};
+use crate::error::Result;
 
 /// Metadata for a persisted document.
 #[derive(Debug, Clone, Serialize, Deserialize)]

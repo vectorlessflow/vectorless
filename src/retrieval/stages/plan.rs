@@ -155,7 +155,7 @@ impl RetrievalStage for PlanStage {
         FailurePolicy::fail() // Must succeed
     }
 
-    async fn execute(&self, ctx: &mut PipelineContext) -> crate::domain::Result<StageOutcome> {
+    async fn execute(&self, ctx: &mut PipelineContext) -> crate::error::Result<StageOutcome> {
         info!("Planning retrieval strategy");
 
         // 1. Select strategy
