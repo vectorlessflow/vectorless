@@ -13,9 +13,7 @@
 
 Ultra performant document intelligence engine for RAG, with written in **Rust**. Zero vector database, zero embedding model — just LLM-powered tree navigation. Incremental indexing and multi-format support out-of-box.
 
-⭐ **Drop a star to help us grow!**
-
-**⚠️ Early Development**: This project is in active development. The API and features are likely to evolve, and breaking changes may occur.
+**Early Development**: This project is in active development. The API and features are likely to evolve, and breaking changes may occur.
 
 
 ## Why Vectorless?
@@ -134,18 +132,11 @@ async fn main() -> vectorless::Result<()> {
 
 ## Examples
 
-See the [examples/](examples/) directory for complete working examples
-
+See the [examples/](examples/) directory for complete working examples.
 
 ## Architecture
-
-### Pilot Architecture
-
-![Pilot Architecture](docs/design/pilot-architecture.svg)
-
-### System Overview
-
 ![Architecture](docs/design/architecture.svg)
+
 
 ## Contributing
 

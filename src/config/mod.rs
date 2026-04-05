@@ -95,10 +95,20 @@ pub use types::{
     // Indexer
     IndexerConfig,
     // LLM configs
+    LlmClientConfig,
     LlmConfig,
+    LlmFallbackBehavior,
+    LlmFallbackConfig,
+    LlmMetricsConfig,
+    LlmOnAllFailedBehavior,
+    LlmPoolConfig,
+    MetricsConfig,
     OnAllFailedBehavior,
+    PilotMetricsConfig,
     // Retrieval configs
     RetrievalConfig,
+    RetrievalMetricsConfig,
+    RetryConfig,
     SearchConfig,
     Severity,
     // Storage and sufficiency
@@ -106,6 +116,7 @@ pub use types::{
     StrategyConfig,
     SufficiencyConfig,
     SummaryConfig,
+    ThrottleConfig,
     ValidationError,
 };
 pub use validator::{ConfigValidator, ValidationRule};

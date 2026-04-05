@@ -11,6 +11,8 @@ mod content;
 mod fallback;
 mod indexer;
 mod llm;
+mod llm_pool;
+mod metrics;
 mod retrieval;
 mod storage;
 
@@ -21,6 +23,14 @@ pub use content::ContentAggregatorConfig;
 pub use fallback::{FallbackBehavior, FallbackConfig, OnAllFailedBehavior};
 pub use indexer::IndexerConfig;
 pub use llm::{LlmConfig, SummaryConfig};
+pub use llm_pool::{
+    FallbackBehavior as LlmFallbackBehavior, FallbackConfig as LlmFallbackConfig,
+    LlmClientConfig, LlmPoolConfig, OnAllFailedBehavior as LlmOnAllFailedBehavior, RetryConfig,
+    ThrottleConfig,
+};
+pub use metrics::{
+    LlmMetricsConfig, MetricsConfig, PilotMetricsConfig, RetrievalMetricsConfig,
+};
 pub use retrieval::{RetrievalConfig, SearchConfig};
 pub use storage::{
     CacheConfig, CompressionAlgorithm, CompressionConfig, StorageConfig, StrategyConfig,
@@ -30,11 +40,19 @@ pub use storage::{
 /// Main configuration for vectorless.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
+    /// Unified LLM configuration (pool, retry, throttle, fallback).
+    #[serde(default)]
+    pub llm: LlmPoolConfig,
+
+    /// Unified metrics configuration.
+    #[serde(default)]
+    pub metrics: MetricsConfig,
+
     /// Indexer configuration.
     #[serde(default)]
     pub indexer: IndexerConfig,
 
-    /// Summary model configuration.
+    /// Summary model configuration (legacy, prefer llm.summary).
     #[serde(default)]
     pub summary: SummaryConfig,
 
@@ -46,11 +64,11 @@ pub struct Config {
     #[serde(default)]
     pub storage: StorageConfig,
 
-    /// Concurrency control configuration.
+    /// Concurrency control configuration (legacy, prefer llm.throttle).
     #[serde(default)]
     pub concurrency: ConcurrencyConfig,
 
-    /// Fallback/error recovery configuration.
+    /// Fallback/error recovery configuration (legacy, prefer llm.fallback).
     #[serde(default)]
     pub fallback: FallbackConfig,
 }
@@ -58,6 +76,8 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
+            llm: LlmPoolConfig::default(),
+            metrics: MetricsConfig::default(),
             indexer: IndexerConfig::default(),
             summary: SummaryConfig::default(),
             retrieval: RetrievalConfig::default(),
@@ -72,6 +92,18 @@ impl Config {
     /// Create a new configuration with defaults.
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Set the LLM pool configuration.
+    pub fn with_llm(mut self, llm: LlmPoolConfig) -> Self {
+        self.llm = llm;
+        self
+    }
+
+    /// Set the metrics configuration.
+    pub fn with_metrics(mut self, metrics: MetricsConfig) -> Self {
+        self.metrics = metrics;
+        self
     }
 
     /// Set the indexer configuration.
@@ -307,6 +339,18 @@ mod tests {
         assert_eq!(config.summary.model, "gpt-4o-mini");
         assert_eq!(config.retrieval.model, "gpt-4o");
         assert_eq!(config.concurrency.max_concurrent_requests, 10);
+        // New fields
+        assert!(config.llm.summary.model == "gpt-4o-mini");
+        assert!(config.metrics.enabled);
+    }
+
+    #[test]
+    fn test_llm_pool_config_defaults() {
+        let config = LlmPoolConfig::default();
+        assert_eq!(config.summary.model, "gpt-4o-mini");
+        assert_eq!(config.retrieval.model, "gpt-4o");
+        assert_eq!(config.retry.max_attempts, 3);
+        assert_eq!(config.throttle.max_concurrent_requests, 10);
     }
 
     #[test]

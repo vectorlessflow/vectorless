@@ -11,12 +11,14 @@ use std::sync::Arc;
 use tracing::{debug, info, warn};
 
 use crate::document::DocumentTree;
-use crate::llm::LlmClient;
+use crate::llm::{LlmClient, LlmExecutor};
+use crate::throttle::ConcurrencyController;
 
 use super::budget::BudgetController;
 use super::builder::ContextBuilder;
 use super::config::PilotConfig;
 use super::decision::{InterventionPoint, PilotDecision};
+use super::feedback::{DecisionAdjustment, FeedbackRecord, FeedbackStore, PilotLearner};
 use super::parser::ResponseParser;
 use super::prompts::PromptBuilder;
 use super::r#trait::{Pilot, SearchState};
@@ -37,10 +39,10 @@ use super::r#trait::{Pilot, SearchState};
 /// │  │ Builder     │─▶│ Builder     │─▶│ Parser      │         │
 /// │  └─────────────┘  └─────────────┘  └─────────────┘         │
 /// │                                                              │
-/// │  ┌─────────────┐  ┌─────────────┐                          │
-/// │  │ Budget      │  │ LLM         │                          │
-/// │  │ Controller  │  │ Client      │                          │
-/// │  └─────────────┘  └─────────────┘                          │
+/// │  ┌─────────────┐  ┌───────────────────────┐                │
+/// │  │ Budget      │  │ LlmExecutor           │                │
+/// │  │ Controller  │  │ (throttle+retry+fall) │                │
+/// │  └─────────────┘  └───────────────────────┘                │
 /// └─────────────────────────────────────────────────────────────┘
 /// ```
 ///
@@ -48,10 +50,14 @@ use super::r#trait::{Pilot, SearchState};
 ///
 /// ```rust,ignore
 /// use vectorless::retrieval::pilot::{LlmPilot, PilotConfig};
-/// use vectorless::llm::LlmClient;
+/// use vectorless::llm::{LlmClient, LlmExecutor};
 ///
 /// let client = LlmClient::for_model("gpt-4o-mini");
 /// let pilot = LlmPilot::new(client, PilotConfig::default());
+///
+/// // Or with executor for unified throttle/retry/fallback
+/// let executor = LlmExecutor::for_model("gpt-4o-mini");
+/// let pilot = LlmPilot::with_executor(executor, PilotConfig::default());
 ///
 /// // Use in search
 /// if pilot.should_intervene(&state) {
@@ -59,8 +65,10 @@ use super::r#trait::{Pilot, SearchState};
 /// }
 /// ```
 pub struct LlmPilot {
-    /// LLM client for making requests.
+    /// LLM client for making requests (fallback when no executor).
     client: LlmClient,
+    /// LLM executor with unified throttle/retry/fallback (optional).
+    executor: Option<Arc<LlmExecutor>>,
     /// Pilot configuration.
     config: PilotConfig,
     /// Budget controller.
@@ -71,6 +79,8 @@ pub struct LlmPilot {
     prompt_builder: PromptBuilder,
     /// Response parser.
     response_parser: ResponseParser,
+    /// Feedback learner for improving decisions (optional).
+    learner: Option<Arc<PilotLearner>>,
 }
 
 impl std::fmt::Debug for LlmPilot {
@@ -90,11 +100,50 @@ impl LlmPilot {
 
         Self {
             client,
+            executor: None,
             config,
             budget,
             context_builder: ContextBuilder::new(token_budget),
             prompt_builder: PromptBuilder::new(),
             response_parser: ResponseParser::new(),
+            learner: None,
+        }
+    }
+
+    /// Create a Pilot with LlmExecutor for unified throttle/retry/fallback.
+    pub fn with_executor(executor: LlmExecutor, config: PilotConfig) -> Self {
+        let budget = BudgetController::new(config.budget.clone());
+        let token_budget = config.budget.max_tokens_per_call;
+        // Create a fallback client for backwards compatibility
+        let client = LlmClient::for_model(&executor.config().model);
+
+        Self {
+            client,
+            executor: Some(Arc::new(executor)),
+            config,
+            budget,
+            context_builder: ContextBuilder::new(token_budget),
+            prompt_builder: PromptBuilder::new(),
+            response_parser: ResponseParser::new(),
+            learner: None,
+        }
+    }
+
+    /// Create a Pilot with shared executor (for sharing throttle/fallback across pilots).
+    pub fn with_shared_executor(executor: Arc<LlmExecutor>, config: PilotConfig) -> Self {
+        let budget = BudgetController::new(config.budget.clone());
+        let token_budget = config.budget.max_tokens_per_call;
+        let client = LlmClient::for_model(&executor.config().model);
+
+        Self {
+            client,
+            executor: Some(executor),
+            config,
+            budget,
+            context_builder: ContextBuilder::new(token_budget),
+            prompt_builder: PromptBuilder::new(),
+            response_parser: ResponseParser::new(),
+            learner: None,
         }
     }
 
@@ -109,11 +158,55 @@ impl LlmPilot {
 
         Self {
             client,
+            executor: None,
             config,
             budget,
             context_builder,
             prompt_builder,
             response_parser: ResponseParser::new(),
+            learner: None,
+        }
+    }
+
+    /// Add an executor to an existing pilot.
+    pub fn with_executor_mut(mut self, executor: LlmExecutor) -> Self {
+        self.executor = Some(Arc::new(executor));
+        self
+    }
+
+    /// Add a feedback learner to the pilot.
+    pub fn with_learner(mut self, learner: Arc<PilotLearner>) -> Self {
+        self.learner = Some(learner);
+        self
+    }
+
+    /// Add a feedback learner from a feedback store.
+    pub fn with_feedback_store(mut self, store: Arc<FeedbackStore>) -> Self {
+        self.learner = Some(Arc::new(PilotLearner::new(store)));
+        self
+    }
+
+    /// Check if using LlmExecutor (unified throttle/retry/fallback).
+    pub fn has_executor(&self) -> bool {
+        self.executor.is_some()
+    }
+
+    /// Check if using feedback learner.
+    pub fn has_learner(&self) -> bool {
+        self.learner.is_some()
+    }
+
+    /// Get the feedback learner (if any).
+    pub fn learner(&self) -> Option<&PilotLearner> {
+        self.learner.as_deref()
+    }
+
+    /// Record feedback for a decision.
+    pub fn record_feedback(&self, record: FeedbackRecord) {
+        if let Some(ref learner) = self.learner {
+            let decision_id = record.decision_id;
+            learner.store().record(record);
+            debug!("Recorded feedback for decision {:?}", decision_id);
         }
     }
 
@@ -162,13 +255,38 @@ impl LlmPilot {
             return self.default_decision(candidates, point);
         }
 
+        // Get learner adjustment if available
+        let adjustment = if let Some(ref learner) = self.learner {
+            let query_hash = context.query_hash();
+            let path_hash = context.path_hash();
+            Some(learner.get_adjustment(point, query_hash, path_hash))
+        } else {
+            None
+        };
+
+        // Check if learner suggests skipping intervention
+        if let Some(ref adj) = adjustment {
+            if adj.skip_intervention {
+                debug!("Learner suggests skipping intervention (low historical accuracy)");
+                return self.default_decision(candidates, point);
+            }
+        }
+
         debug!(
             "Calling LLM for {:?} point (estimated: {} tokens)",
             point, prompt.estimated_tokens
         );
 
-        // Make LLM call
-        match self.client.complete(&prompt.system, &prompt.user).await {
+        // Make LLM call - use executor if available, otherwise use client directly
+        let result = if let Some(ref executor) = self.executor {
+            // Use LlmExecutor for unified throttle/retry/fallback
+            executor.complete(&prompt.system, &prompt.user).await
+        } else {
+            // Fallback to direct client call
+            self.client.complete(&prompt.system, &prompt.user).await
+        };
+
+        match result {
             Ok(response) => {
                 // Record usage (estimate output tokens)
                 let output_tokens = self.estimate_tokens(&response);
@@ -176,7 +294,17 @@ impl LlmPilot {
                     .record_usage(prompt.estimated_tokens, output_tokens, 0);
 
                 // Parse response
-                let decision = self.response_parser.parse(&response, candidates, point);
+                let mut decision = self.response_parser.parse(&response, candidates, point);
+
+                // Apply learner adjustment if available
+                if let Some(ref adj) = adjustment {
+                    decision.confidence =
+                        (decision.confidence + adj.confidence_delta as f32).clamp(0.0, 1.0);
+                    debug!(
+                        "Applied learner adjustment: confidence_delta={:.2}, algorithm_weight={:.2}",
+                        adj.confidence_delta, adj.algorithm_weight
+                    );
+                }
 
                 info!(
                     "LLM decision: direction={:?}, confidence={:.2}, candidates={}",

@@ -3,14 +3,6 @@
 
 //! Unified LLM client with retry and concurrency support.
 
-use async_openai::{
-    Client,
-    config::OpenAIConfig,
-    types::chat::{
-        ChatCompletionRequestSystemMessage, ChatCompletionRequestUserMessage,
-        CreateChatCompletionRequestArgs,
-    },
-};
 use serde::de::DeserializeOwned;
 use std::borrow::Cow;
 use std::sync::Arc;
@@ -18,8 +10,8 @@ use tracing::{debug, instrument};
 
 use super::config::LlmConfig;
 use super::error::{LlmError, LlmResult};
+use super::executor::LlmExecutor;
 use super::fallback::FallbackChain;
-use super::retry::with_retry;
 use crate::throttle::ConcurrencyController;
 
 /// Unified LLM client.
@@ -60,21 +52,19 @@ use crate::throttle::ConcurrencyController;
 /// ```
 #[derive(Clone)]
 pub struct LlmClient {
-    config: LlmConfig,
-    concurrency: Option<Arc<ConcurrencyController>>,
-    fallback: Option<Arc<FallbackChain>>,
+    executor: LlmExecutor,
 }
 
 impl std::fmt::Debug for LlmClient {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("LlmClient")
-            .field("model", &self.config.model)
-            .field("endpoint", &self.config.endpoint)
+            .field("model", &self.executor.config().model)
+            .field("endpoint", &self.executor.config().endpoint)
             .field(
                 "concurrency",
-                &self.concurrency.as_ref().map(|c| format!("{:?}", c)),
+                &self.executor.throttle().map(|c| format!("{:?}", c)),
             )
-            .field("fallback_enabled", &self.fallback.is_some())
+            .field("fallback_enabled", &self.executor.fallback().is_some())
             .finish()
     }
 }
@@ -83,9 +73,7 @@ impl LlmClient {
     /// Create a new LLM client with the given configuration.
     pub fn new(config: LlmConfig) -> Self {
         Self {
-            config,
-            concurrency: None,
-            fallback: None,
+            executor: LlmExecutor::new(config),
         }
     }
 
@@ -115,13 +103,13 @@ impl LlmClient {
     ///     .with_concurrency(ConcurrencyController::new(config));
     /// ```
     pub fn with_concurrency(mut self, controller: ConcurrencyController) -> Self {
-        self.concurrency = Some(Arc::new(controller));
+        self.executor = self.executor.with_throttle(controller);
         self
     }
 
     /// Add concurrency control from an existing Arc.
     pub fn with_shared_concurrency(mut self, controller: Arc<ConcurrencyController>) -> Self {
-        self.concurrency = Some(controller);
+        self.executor = self.executor.with_shared_throttle(controller);
         self
     }
 
@@ -139,29 +127,34 @@ impl LlmClient {
     /// assert!(client.fallback().is_some());
     /// ```
     pub fn with_fallback(mut self, chain: FallbackChain) -> Self {
-        self.fallback = Some(Arc::new(chain));
+        self.executor = self.executor.with_fallback(chain);
         self
     }
 
     /// Add fallback chain from an existing Arc.
     pub fn with_shared_fallback(mut self, chain: Arc<FallbackChain>) -> Self {
-        self.fallback = Some(chain);
+        self.executor = self.executor.with_shared_fallback(chain);
         self
     }
 
     /// Get the configuration.
     pub fn config(&self) -> &LlmConfig {
-        &self.config
+        self.executor.config()
     }
 
     /// Get the concurrency controller (if any).
     pub fn concurrency(&self) -> Option<&ConcurrencyController> {
-        self.concurrency.as_deref()
+        self.executor.throttle()
     }
 
     /// Get the fallback chain (if any).
     pub fn fallback(&self) -> Option<&FallbackChain> {
-        self.fallback.as_deref()
+        self.executor.fallback()
+    }
+
+    /// Get the underlying executor (for advanced usage).
+    pub fn executor(&self) -> &LlmExecutor {
+        &self.executor
     }
 
     /// Complete a prompt with system and user messages.
@@ -169,12 +162,15 @@ impl LlmClient {
     /// This method includes:
     /// - Automatic rate limiting (if configured)
     /// - Automatic retry with exponential backoff
-    #[instrument(skip(self, system, user), fields(model = %self.config.model))]
+    /// - Automatic fallback on persistent errors (if configured)
+    #[instrument(skip(self, system, user), fields(model = %self.executor.config().model))]
     pub async fn complete(&self, system: &str, user: &str) -> LlmResult<String> {
-        with_retry(&self.config.retry, || async {
-            self.complete_once(system, user).await
-        })
-        .await
+        debug!(
+            system_len = system.len(),
+            user_len = user.len(),
+            "Starting LLM completion"
+        );
+        self.executor.complete(system, user).await
     }
 
     /// Complete a prompt with custom max tokens.
@@ -184,11 +180,15 @@ impl LlmClient {
         user: &str,
         max_tokens: u16,
     ) -> LlmResult<String> {
-        with_retry(&self.config.retry, || async {
-            self.complete_once_with_max_tokens(system, user, max_tokens)
-                .await
-        })
-        .await
+        debug!(
+            system_len = system.len(),
+            user_len = user.len(),
+            max_tokens = max_tokens,
+            "Starting LLM completion with max tokens"
+        );
+        self.executor
+            .complete_with_max_tokens(system, user, max_tokens)
+            .await
     }
 
     /// Complete a prompt and parse the response as JSON.
@@ -237,152 +237,6 @@ impl LlmClient {
             .complete_with_max_tokens(system, user, max_tokens)
             .await?;
         self.parse_json(&response)
-    }
-
-    /// Single completion attempt (no retry).
-    async fn complete_once(&self, system: &str, user: &str) -> LlmResult<String> {
-        // Acquire concurrency permit (rate limiter + semaphore)
-        let _permit = if let Some(ref cc) = self.concurrency {
-            Some(cc.acquire().await)
-        } else {
-            None
-        };
-
-        let api_key = self.config.get_api_key().ok_or_else(|| {
-            LlmError::Config(
-                "No API key found. Set OPENAI_API_KEY environment variable.".to_string(),
-            )
-        })?;
-
-        let endpoint = self.config.auto_detect_endpoint();
-        let model = self.config.auto_detect_model();
-
-        println!("Using OpenAI API endpoint: {}", endpoint);
-        println!("Using OpenAI model: {}", model);
-
-        let openai_config = OpenAIConfig::new()
-            .with_api_key(api_key)
-            .with_api_base(&endpoint);
-
-        let client = Client::with_config(openai_config);
-
-        // Truncate user prompt if too long
-        let truncated = self.truncate_prompt(user);
-
-        let request = CreateChatCompletionRequestArgs::default()
-            .model(&model)
-            .messages([
-                ChatCompletionRequestSystemMessage::from(system).into(),
-                ChatCompletionRequestUserMessage::from(truncated).into(),
-            ])
-            // .max_tokens(self.config.max_tokens as u16)
-            .temperature(self.config.temperature)
-            .build()
-            .map_err(|e| LlmError::Request(format!("Failed to build request: {}", e)))?;
-
-        debug!("Sending LLM request to {} with model {}", endpoint, model);
-
-        let response = client.chat().create(request).await.map_err(|e| {
-            let msg = e.to_string();
-            LlmError::from_api_message(&msg)
-        })?;
-
-        let content = response
-            .choices
-            .first()
-            .and_then(|choice| choice.message.content.clone())
-            .ok_or(LlmError::NoContent)?;
-
-        debug!("LLM response length: {} chars", content.len());
-
-        Ok(content)
-    }
-
-    /// Single completion with custom max tokens.
-    async fn complete_once_with_max_tokens(
-        &self,
-        system: &str,
-        user: &str,
-        max_tokens: u16,
-    ) -> LlmResult<String> {
-        // Acquire concurrency permit
-        let _permit = if let Some(ref cc) = self.concurrency {
-            Some(cc.acquire().await)
-        } else {
-            None
-        };
-
-        let api_key = self.config.get_api_key().ok_or_else(|| {
-            LlmError::Config(
-                "No API key found. Set OPENAI_API_KEY environment variable.".to_string(),
-            )
-        })?;
-
-        let endpoint = self.config.auto_detect_endpoint();
-        let model = self.config.auto_detect_model();
-
-        let openai_config = OpenAIConfig::new()
-            .with_api_key(api_key)
-            .with_api_base(&endpoint);
-
-        let client = Client::with_config(openai_config);
-
-        let truncated = self.truncate_prompt(user);
-
-        let request = CreateChatCompletionRequestArgs::default()
-            .model(&model)
-            .messages([
-                ChatCompletionRequestSystemMessage::from(system).into(),
-                ChatCompletionRequestUserMessage::from(truncated).into(),
-            ])
-            // .max_tokens(max_tokens)
-            .temperature(self.config.temperature)
-            .build()
-            .map_err(|e| LlmError::Request(format!("Failed to build request: {}", e)))?;
-
-        let response = client.chat().create(request).await.map_err(|e| {
-            let msg = e.to_string();
-            eprintln!("[LLM ERROR] API error: {}", msg);
-            LlmError::from_api_message(&msg)
-        })?;
-
-        // Debug: log response structure
-        eprintln!("[LLM DEBUG] Response: {} choices", response.choices.len());
-        if let Some(choice) = response.choices.first() {
-            eprintln!(
-                "[LLM DEBUG] First choice: finish_reason={:?}, has_content={}",
-                choice.finish_reason,
-                choice.message.content.is_some()
-            );
-        }
-
-        let content = response
-            .choices
-            .first()
-            .and_then(|choice| choice.message.content.clone())
-            .ok_or_else(|| {
-                eprintln!("[LLM ERROR] Response has no content");
-                LlmError::NoContent
-            })?;
-
-        if content.is_empty() {
-            eprintln!("[LLM WARN] Returned empty content for model: {}", model);
-        } else {
-            eprintln!("[LLM DEBUG] Content length: {} chars", content.len());
-        }
-
-        Ok(content)
-    }
-
-    /// Truncate a prompt to a reasonable length.
-    fn truncate_prompt<'a>(&self, text: &'a str) -> &'a str {
-        // Roughly 4 chars per token, limit to ~30k chars
-        const MAX_CHARS: usize = 30000;
-        if text.len() > MAX_CHARS {
-            &text[..MAX_CHARS]
-        } else {
-            text
-        }
     }
 
     /// Parse JSON from LLM response.
@@ -481,7 +335,7 @@ mod tests {
     #[test]
     fn test_client_creation() {
         let client = LlmClient::for_model("gpt-4o");
-        assert_eq!(client.config.model, "gpt-4o");
+        assert_eq!(client.config().model, "gpt-4o");
     }
 
     #[test]
@@ -491,6 +345,16 @@ mod tests {
         let controller = ConcurrencyController::new(ConcurrencyConfig::conservative());
         let client = LlmClient::for_model("gpt-4o-mini").with_concurrency(controller);
 
-        assert!(client.concurrency.is_some());
+        assert!(client.concurrency().is_some());
+    }
+
+    #[test]
+    fn test_client_with_fallback() {
+        use crate::llm::FallbackConfig;
+
+        let fallback = FallbackChain::new(FallbackConfig::default());
+        let client = LlmClient::for_model("gpt-4o").with_fallback(fallback);
+
+        assert!(client.fallback().is_some());
     }
 }

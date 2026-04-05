@@ -110,6 +110,7 @@ pub mod document;
 pub mod error;
 pub mod index;
 pub mod llm;
+pub mod metrics;
 pub mod parser;
 pub mod retrieval;
 pub mod storage;
