@@ -46,7 +46,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let client = Engine::builder()
         .with_workspace("./workspace")
         .build()
-        .map_err(|e| vectorless::Error::Config(e.to_string()))?;
+        .await
+        .map_err(|e: vectorless::BuildError| vectorless::Error::Config(e.to_string()))?;
 
     println!("  - Client created successfully");
     println!();

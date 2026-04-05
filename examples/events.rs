@@ -95,7 +95,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_workspace("./workspace_events_example")
         .with_events(events)
         .build()
-        .map_err(|e| vectorless::Error::Config(e.to_string()))?;
+        .await
+        .map_err(|e: vectorless::BuildError| vectorless::Error::Config(e.to_string()))?;
     println!("  ✓ Engine created\n");
 
     // 3. Index a document (events will fire)

@@ -17,7 +17,7 @@ use std::sync::{Arc, RwLock};
 
 use vectorless::Result;
 use vectorless::document::DocumentTree;
-use vectorless::storage::{DocumentMeta, PersistedDocument, StorageBackend, Workspace};
+use vectorless::storage::{AsyncWorkspace, DocumentMeta, PersistedDocument, StorageBackend};
 
 /// A simple in-memory backend with logging.
 ///
@@ -96,7 +96,8 @@ impl StorageBackend for LoggingMemoryBackend {
     }
 }
 
-fn main() -> vectorless::Result<()> {
+#[tokio::main]
+async fn main() -> vectorless::Result<()> {
     println!("=== Custom Storage Backend Example ===\n");
 
     // 1. Create custom backend
@@ -106,7 +107,7 @@ fn main() -> vectorless::Result<()> {
 
     // 2. Create workspace with custom backend
     println!("2. Creating workspace with custom backend...");
-    let mut workspace = Workspace::with_backend(backend)?;
+    let workspace = AsyncWorkspace::with_backend(backend).await?;
     println!("   ✓ Workspace created\n");
 
     // 3. Add a document (watch the logging)
@@ -114,18 +115,18 @@ fn main() -> vectorless::Result<()> {
     let meta = DocumentMeta::new("custom-doc", "Custom Backend Test", "md");
     let tree = DocumentTree::new("Root", "Testing custom backend!");
     let doc = PersistedDocument::new(meta, tree);
-    workspace.add(&doc)?;
+    workspace.add(&doc).await?;
     println!();
 
     // 4. Load the document
     println!("4. Loading document:");
-    let loaded = workspace.load("custom-doc")?.unwrap();
+    let loaded = workspace.load_and_cache("custom-doc").await?.unwrap();
     println!("   ✓ Loaded: {}\n", loaded.meta.name);
 
     // 5. Show workspace stats
     println!("5. Workspace stats:");
-    println!("   - Documents: {}", workspace.len());
-    println!("   - Cache size: {}", workspace.cache_len());
+    println!("   - Documents: {}", workspace.len().await);
+    println!("   - Cache size: {}", workspace.cache_len().await);
     println!();
 
     println!("✓ Custom backend example complete!");

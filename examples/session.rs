@@ -26,12 +26,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let engine = EngineBuilder::new()
         .with_workspace("./workspace_session_example")
         .build()
-        .map_err(|e| vectorless::Error::Config(e.to_string()))?;
+        .await
+        .map_err(|e: vectorless::BuildError| vectorless::Error::Config(e.to_string()))?;
     println!("  ✓ Engine created\n");
 
     // 2. Create a session for multi-document operations
     println!("Step 2: Creating session...");
-    let session = engine.session();
+    let session = engine.session().await;
     println!("  ✓ Session ID: {}\n", session.id());
 
     // 3. Index multiple documents into the session

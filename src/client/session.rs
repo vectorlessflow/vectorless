@@ -287,7 +287,7 @@ impl Session {
 
         // Save to workspace
         let persisted = self.indexer.to_persisted(doc);
-        self.workspace.save(&persisted)?;
+        self.workspace.save(&persisted).await?;
 
         // Cache in session
         let doc_id = persisted.meta.id.clone();
@@ -405,7 +405,8 @@ impl Session {
         // Load from workspace
         let doc = self
             .workspace
-            .load(doc_id)?
+            .load(doc_id)
+            .await?
             .ok_or_else(|| Error::DocumentNotFound(format!("Document not found: {}", doc_id)))?;
 
         let tree = doc.tree;

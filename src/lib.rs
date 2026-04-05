@@ -69,7 +69,7 @@
 //! use vectorless::{EngineBuilder, Engine};
 //!
 //! #[tokio::main]
-//! async fn main() -> vectorless::domain::Result<()> {
+//! async fn main() -> vectorless::Result<()> {
 //!     // Create client
 //!     let mut client = EngineBuilder::new()
 //!         .with_workspace("./workspace")
@@ -167,9 +167,7 @@ pub use retrieval::{
 };
 
 // Storage
-pub use storage::{
-    AsyncWorkspace, DocumentMeta as StorageDocumentMeta, PersistedDocument, Workspace,
-};
+pub use storage::{AsyncWorkspace, DocumentMeta as StorageDocumentMeta, PersistedDocument};
 
 // Throttle
 pub use throttle::{ConcurrencyConfig, ConcurrencyController, RateLimiter};

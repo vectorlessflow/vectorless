@@ -4,7 +4,7 @@
 //! Storage module for persisting document indices.
 //!
 //! This module provides:
-//! - **Workspace** — A directory-based document collection manager with LRU cache
+//! - **AsyncWorkspace** — An async directory-based document collection manager with LRU cache
 //! - **Persistence** — Save/load document trees and metadata with atomic writes
 //! - **Cache** — LRU cache for loaded documents
 //! - **Lock** — File locking for multi-process safety
@@ -13,20 +13,24 @@
 //! # Example
 //!
 //! ```rust,no_run
-//! use vectorless::storage::{Workspace, PersistedDocument, DocumentMeta};
+//! use vectorless::storage::{AsyncWorkspace, PersistedDocument, DocumentMeta};
 //! use vectorless::document::DocumentTree;
 //!
+//! # #[tokio::main]
+//! # async fn main() -> vectorless::error::Result<()> {
 //! // Create a workspace
-//! let mut workspace = Workspace::new("./my_workspace")?;
+//! let workspace = AsyncWorkspace::new("./my_workspace").await?;
 //!
 //! // Add a document
 //! let meta = DocumentMeta::new("doc-1", "My Document", "md");
 //! let tree = DocumentTree::new("Root", "Content");
 //! let doc = PersistedDocument::new(meta, tree);
-//! workspace.add(&doc)?;
+//! workspace.add(&doc).await?;
 //!
 //! // Load it back (uses LRU cache)
-//! let loaded = workspace.load("doc-1")?.unwrap();
+//! let loaded = workspace.load_and_cache("doc-1").await?.unwrap();
+//! # Ok(())
+//! # }
 //! ```
 
 pub mod async_workspace;
@@ -36,7 +40,6 @@ pub mod codec;
 pub mod lock;
 pub mod migration;
 mod persistence;
-mod workspace;
 
 // Re-export main types
 pub use async_workspace::{AsyncDocumentMetaEntry, AsyncWorkspace, AsyncWorkspaceOptions};
@@ -51,4 +54,3 @@ pub use persistence::{
     load_index_with_options, save_document, save_document_to_bytes, save_document_with_options,
     save_index, save_index_to_bytes, save_index_with_options,
 };
-pub use workspace::{DocumentMetaEntry, Workspace, WorkspaceOptions};

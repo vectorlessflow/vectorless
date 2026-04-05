@@ -4,7 +4,7 @@
 //! Basic workspace usage example.
 //!
 //! This example demonstrates the core storage API:
-//! - Creating a workspace
+//! - Creating an async workspace
 //! - Adding documents
 //! - Loading documents with LRU cache
 //! - Listing and removing documents
@@ -16,9 +16,10 @@
 //! ```
 
 use vectorless::document::DocumentTree;
-use vectorless::storage::{DocumentMeta, PersistedDocument, Workspace};
+use vectorless::storage::{AsyncWorkspace, DocumentMeta, PersistedDocument};
 
-fn main() -> vectorless::Result<()> {
+#[tokio::main]
+async fn main() -> vectorless::Result<()> {
     println!("=== Storage Workspace Example ===\n");
 
     // Create a temporary workspace
@@ -26,7 +27,9 @@ fn main() -> vectorless::Result<()> {
 
     // 1. Create a workspace with custom cache size
     println!("1. Creating workspace at '{}'...", workspace_path);
-    let mut workspace = Workspace::with_cache_size(workspace_path, 100)?;
+    let workspace = AsyncWorkspace::with_cache_size(workspace_path, 100)
+        .await
+        .map_err(|e| vectorless::Error::Workspace(e.to_string()))?;
     println!("   ✓ Workspace created\n");
 
     // 2. Create a document
@@ -42,13 +45,13 @@ fn main() -> vectorless::Result<()> {
 
     // 3. Add document to workspace
     println!("3. Adding document to workspace...");
-    workspace.add(&doc)?;
+    workspace.add(&doc).await.map_err(|e| vectorless::Error::Workspace(e.to_string()))?;
     println!("   ✓ Document saved\n");
 
     // 4. List all documents
     println!("4. Listing documents:");
-    for id in workspace.list_documents() {
-        if let Some(meta) = workspace.get_meta(id) {
+    for id in workspace.list_documents().await {
+        if let Some(meta) = workspace.get_meta(&id).await {
             println!("   - {} ({})", meta.doc_name, meta.id);
             if let Some(ref desc) = meta.doc_description {
                 println!("     Description: {}", desc);
@@ -59,7 +62,11 @@ fn main() -> vectorless::Result<()> {
 
     // 5. Load document (uses LRU cache)
     println!("5. Loading document...");
-    let loaded = workspace.load("doc-001")?.expect("Document should exist");
+    let loaded = workspace
+        .load_and_cache("doc-001")
+        .await
+        .map_err(|e| vectorless::Error::Workspace(e.to_string()))?
+        .expect("Document should exist");
     println!("   ✓ Loaded: {}", loaded.meta.name);
     let root = loaded.tree.root();
     if let Some(node) = loaded.tree.get(root) {
@@ -69,28 +76,34 @@ fn main() -> vectorless::Result<()> {
 
     // 6. Cache statistics
     println!("6. Cache statistics:");
-    let stats = workspace.cache_stats();
+    let stats = workspace.cache_stats().await;
     println!("   - Hits: {}", stats.hits);
     println!("   - Misses: {}", stats.misses);
     println!("   - Evictions: {}", stats.evictions);
     println!(
         "   - Utilization: {:.1}%",
-        workspace.cache_utilization() * 100.0
+        workspace.cache_utilization().await * 100.0
     );
     println!();
 
     // 7. Load again (should hit cache)
     println!("7. Loading document again (should hit cache)...");
-    let _ = workspace.load("doc-001")?;
-    let stats = workspace.cache_stats();
+    let _ = workspace
+        .load_and_cache("doc-001")
+        .await
+        .map_err(|e| vectorless::Error::Workspace(e.to_string()))?;
+    let stats = workspace.cache_stats().await;
     println!("   ✓ Cache hits: {}", stats.hits);
     println!();
 
     // 8. Remove document
     println!("8. Removing document...");
-    let removed = workspace.remove("doc-001")?;
+    let removed = workspace
+        .remove("doc-001")
+        .await
+        .map_err(|e| vectorless::Error::Workspace(e.to_string()))?;
     println!("   ✓ Removed: {}", removed);
-    println!("   Workspace is empty: {}", workspace.is_empty());
+    println!("   Workspace is empty: {}", workspace.is_empty().await);
     println!();
 
     // Cleanup

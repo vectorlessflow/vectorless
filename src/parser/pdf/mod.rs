@@ -13,7 +13,7 @@
 //! use vectorless::parser::pdf::{PdfParser, PdfPage};
 //! use std::path::Path;
 //!
-//! # fn main() -> vectorless::domain::Result<()> {
+//! # fn main() -> vectorless::Result<()> {
 //! let parser = PdfParser::new();
 //! let result = parser.parse_file(Path::new("document.pdf"))?;
 //!

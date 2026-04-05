@@ -8,7 +8,7 @@ use std::time::Instant;
 use tracing::info;
 
 use crate::error::Result;
-use crate::storage::{DocumentMeta as StorageMeta, PersistedDocument, Workspace};
+use crate::storage::{AsyncWorkspace, DocumentMeta as StorageMeta, PersistedDocument};
 
 use super::{IndexStage, StageResult};
 use crate::index::pipeline::IndexContext;
@@ -16,7 +16,7 @@ use crate::index::pipeline::IndexContext;
 /// Persist stage - saves indexed document to storage.
 pub struct PersistStage {
     /// Optional workspace for persistence.
-    workspace: Option<Workspace>,
+    workspace: Option<AsyncWorkspace>,
 }
 
 impl PersistStage {
@@ -26,17 +26,17 @@ impl PersistStage {
     }
 
     /// Create with workspace.
-    pub fn with_workspace(workspace: Workspace) -> Self {
+    pub fn with_workspace(workspace: AsyncWorkspace) -> Self {
         Self {
             workspace: Some(workspace),
         }
     }
 
     /// Save document to workspace.
-    fn save_to_workspace(&mut self, ctx: &IndexContext) -> Result<()> {
+    async fn save_to_workspace(&self, ctx: &IndexContext) -> Result<()> {
         let workspace = self
             .workspace
-            .as_mut()
+            .as_ref()
             .ok_or_else(|| crate::Error::Config("No workspace configured".to_string()))?;
 
         let tree = ctx
@@ -54,7 +54,7 @@ impl PersistStage {
         // Add pages if available (for PDFs)
         // Note: pages would need to be stored in context during parse stage
 
-        workspace.add(&doc)?;
+        workspace.add(&doc).await?;
         info!("Saved document {} to workspace", ctx.doc_id);
 
         Ok(())
@@ -82,7 +82,7 @@ impl IndexStage for PersistStage {
 
         // Only persist if workspace is configured
         if self.workspace.is_some() {
-            self.save_to_workspace(ctx)?;
+            self.save_to_workspace(ctx).await?;
         } else {
             info!("No workspace configured, skipping persistence");
         }

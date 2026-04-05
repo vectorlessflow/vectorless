@@ -23,9 +23,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let engine = EngineBuilder::new()
         .with_workspace("./workspace_batch_example")
         .build()
-        .map_err(|e| vectorless::Error::Config(e.to_string()))?;
+        .await
+        .map_err(|e: vectorless::BuildError| vectorless::Error::Config(e.to_string()))?;
 
-    let session = engine.session();
+    let session = engine.session().await;
     println!("  ✓ Session created: {}\n", session.id());
 
     // 2. Create sample documents

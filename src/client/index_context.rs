@@ -153,7 +153,7 @@ impl IndexSource {
 /// use vectorless::parser::DocumentFormat;
 ///
 /// # #[tokio::main]
-/// # async fn main() -> vectorless::domain::Result<()> {
+/// # async fn main() -> vectorless::Result<()> {
 /// let engine = EngineBuilder::new()
 ///     .with_workspace("./data")
 ///     .build()?;

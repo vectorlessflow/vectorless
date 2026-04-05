@@ -34,7 +34,7 @@
 //! use vectorless::client::{Engine, EngineBuilder, IndexContext};
 //!
 //! # #[tokio::main]
-//! # async fn main() -> vectorless::domain::Result<()> {
+//! # async fn main() -> vectorless::Result<()> {
 //! // Create a client with default settings
 //! let client = EngineBuilder::new()
 //!     .with_workspace("./my_workspace")
@@ -69,7 +69,7 @@
 //! ```rust,no_run
 //! # use vectorless::client::{Engine, EngineBuilder, IndexContext};
 //! # #[tokio::main]
-//! # async fn main() -> vectorless::domain::Result<()> {
+//! # async fn main() -> vectorless::Result<()> {
 //! let client = EngineBuilder::new()
 //!     .with_workspace("./workspace")
 //!     .build()?;
@@ -93,7 +93,7 @@
 //! ```rust,no_run
 //! # use vectorless::client::{Engine, EngineBuilder, EventEmitter, events::IndexEvent};
 //! # #[tokio::main]
-//! # async fn main() -> vectorless::domain::Result<()> {
+//! # async fn main() -> vectorless::Result<()> {
 //! let events = EventEmitter::new()
 //!     .on_index(|e| match e {
 //!         IndexEvent::Complete { doc_id } => println!("Indexed: {}", doc_id),

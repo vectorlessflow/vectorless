@@ -22,7 +22,7 @@
 //! use vectorless::client::{Engine, EngineBuilder, IndexContext};
 //!
 //! # #[tokio::main]
-//! # async fn main() -> vectorless::domain::Result<()> {
+//! # async fn main() -> vectorless::Result<()> {
 //! // Create a client
 //! let client = EngineBuilder::new()
 //!     .with_workspace("./my_workspace")
@@ -46,7 +46,7 @@
 //! # }
 //! ```
 
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 
 use tracing::info;
 
@@ -54,7 +54,7 @@ use crate::config::Config;
 use crate::error::Result;
 use crate::index::PipelineExecutor;
 use crate::retrieval::{PipelineRetriever, RetrieveOptions};
-use crate::storage::Workspace;
+use crate::storage::AsyncWorkspace;
 use crate::{DocumentTree, Error};
 
 use super::context::ClientContext;
@@ -106,14 +106,18 @@ impl Engine {
     /// Create a new client with default configuration.
     ///
     /// Note: Prefer using [`Engine::builder()`] for more control.
-    fn new() -> Result<Self> {
+    async fn new() -> Result<Self> {
         let config = Config::default();
+        let workspace = AsyncWorkspace::new("./workspace")
+            .await
+            .map_err(|e| Error::Workspace(e.to_string()))?;
         Self::with_components(
             config,
-            None,
+            workspace,
             PipelineRetriever::new(),
             PipelineExecutor::new(),
         )
+        .await
     }
 
     // ============================================================
@@ -121,9 +125,9 @@ impl Engine {
     // ============================================================
 
     /// Create a new client with the given components.
-    pub(crate) fn with_components(
+    pub(crate) async fn with_components(
         config: Config,
-        workspace: Option<Workspace>,
+        workspace: AsyncWorkspace,
         retriever: PipelineRetriever,
         executor: PipelineExecutor,
     ) -> Result<Self> {
@@ -137,15 +141,14 @@ impl Engine {
         let retriever =
             RetrieverClient::new(retriever, Arc::clone(&config)).with_events(events.clone());
 
-        // Create workspace client (if workspace provided)
-        let workspace_client =
-            workspace.map(|ws| WorkspaceClient::new(ws).with_events(events.clone()));
+        // Create workspace client
+        let workspace_client = WorkspaceClient::new(workspace).await.with_events(events.clone());
 
         Ok(Self {
             config,
             indexer,
             retriever,
-            workspace: workspace_client,
+            workspace: Some(workspace_client),
             events,
         })
     }
@@ -182,7 +185,7 @@ impl Engine {
     /// use vectorless::parser::DocumentFormat;
     ///
     /// # #[tokio::main]
-    /// # async fn main() -> vectorless::domain::Result<()> {
+    /// # async fn main() -> vectorless::Result<()> {
     /// let engine = EngineBuilder::new()
     ///     .with_workspace("./data")
     ///     .build()?;
@@ -212,7 +215,7 @@ impl Engine {
 
         // Save to workspace if configured
         if let Some(ref workspace) = self.workspace {
-            workspace.save(&persisted)?;
+            workspace.save(&persisted).await?;
         }
 
         let doc_id = persisted.meta.id.clone();
@@ -291,13 +294,17 @@ impl Engine {
     /// - Automatic caching of document trees
     /// - Cross-document queries
     /// - Session statistics
-    pub fn session(&self) -> Session {
-        let workspace = self.workspace.clone().unwrap_or_else(|| {
-            WorkspaceClient::from_arc(
-                Arc::new(RwLock::new(Workspace::open("./temp_workspace").unwrap())),
-                self.events.clone(),
-            )
-        });
+    pub async fn session(&self) -> Session {
+        let workspace = match &self.workspace {
+            Some(ws) => ws.clone(),
+            None => {
+                // Create a temporary workspace if none configured
+                let async_ws = AsyncWorkspace::new("./temp_workspace")
+                    .await
+                    .expect("Failed to create temp workspace");
+                WorkspaceClient::new(async_ws).await
+            }
+        };
 
         Session::new(
             self.indexer.clone(),
@@ -322,7 +329,7 @@ impl Engine {
             .as_ref()
             .ok_or_else(|| Error::Config("No workspace configured".to_string()))?;
 
-        workspace.list()
+        workspace.list().await
     }
 
     /// Get document structure (tree).
@@ -339,7 +346,8 @@ impl Engine {
             .ok_or_else(|| Error::Config("No workspace configured".to_string()))?;
 
         let doc = workspace
-            .load(doc_id)?
+            .load(doc_id)
+            .await?
             .ok_or_else(|| Error::DocumentNotFound(format!("Document not found: {}", doc_id)))?;
 
         Ok(doc.tree)
@@ -360,7 +368,8 @@ impl Engine {
             .ok_or_else(|| Error::Config("No workspace configured".to_string()))?;
 
         let doc = workspace
-            .load(doc_id)?
+            .load(doc_id)
+            .await?
             .ok_or_else(|| Error::DocumentNotFound(format!("Document not found: {}", doc_id)))?;
 
         if doc.pages.is_empty() {
@@ -428,11 +437,11 @@ impl Engine {
             .as_ref()
             .ok_or_else(|| Error::Config("No workspace configured".to_string()))?;
 
-        if !workspace.exists(doc_id)? {
+        if !workspace.exists(doc_id).await? {
             return Ok(false);
         }
 
-        let _ = workspace.load(doc_id)?;
+        let _ = workspace.load(doc_id).await?;
         Ok(true)
     }
 
@@ -447,7 +456,7 @@ impl Engine {
             .as_ref()
             .ok_or_else(|| Error::Config("No workspace configured".to_string()))?;
 
-        workspace.remove(doc_id)
+        workspace.remove(doc_id).await
     }
 
     /// Check if a document exists in the workspace.
@@ -461,7 +470,7 @@ impl Engine {
             .as_ref()
             .ok_or_else(|| Error::Config("No workspace configured".to_string()))?;
 
-        workspace.exists(doc_id)
+        workspace.exists(doc_id).await
     }
 
     /// Get metadata for a document.
@@ -475,7 +484,7 @@ impl Engine {
             .as_ref()
             .ok_or_else(|| Error::Config("No workspace configured".to_string()))?;
 
-        workspace.get_document_info(doc_id)
+        workspace.get_document_info(doc_id).await
     }
 
     /// Remove multiple documents from the workspace.
@@ -491,7 +500,7 @@ impl Engine {
             .as_ref()
             .ok_or_else(|| Error::Config("No workspace configured".to_string()))?;
 
-        workspace.batch_remove(doc_ids)
+        workspace.batch_remove(doc_ids).await
     }
 
     /// Remove all documents from the workspace.
@@ -507,7 +516,7 @@ impl Engine {
             .as_ref()
             .ok_or_else(|| Error::Config("No workspace configured".to_string()))?;
 
-        workspace.clear()
+        workspace.clear().await
     }
 
     /// Get the number of indexed documents.
@@ -521,7 +530,7 @@ impl Engine {
             .as_ref()
             .ok_or_else(|| Error::Config("No workspace configured".to_string()))?;
 
-        Ok(workspace.len())
+        Ok(workspace.len().await)
     }
 
     /// Check if there are no documents.
@@ -567,12 +576,6 @@ impl Clone for Engine {
             workspace: self.workspace.clone(),
             events: self.events.clone(),
         }
-    }
-}
-
-impl Default for Engine {
-    fn default() -> Self {
-        Self::new().expect("Failed to create default Engine client")
     }
 }
 

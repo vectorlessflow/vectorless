@@ -20,7 +20,7 @@
 //! use vectorless::parser::{DocumentParser, MarkdownParser, DocumentFormat};
 //!
 //! # #[tokio::main]
-//! # async fn main() -> vectorless::domain::Result<()> {
+//! # async fn main() -> vectorless::Result<()> {
 //! // Create a parser
 //! let parser = MarkdownParser::new();
 //!

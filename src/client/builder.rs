@@ -11,11 +11,14 @@
 //! ```rust,no_run
 //! use vectorless::client::EngineBuilder;
 //!
+//! # #[tokio::main]
+//! # async fn main() -> Result<(), vectorless::BuildError> {
 //! // Simple setup with workspace
 //! let engine = EngineBuilder::new()
 //!     .with_workspace("./my_workspace")
 //!     .with_openai(std::env::var("OPENAI_API_KEY").unwrap())
-//!     .build()?;
+//!     .build()
+//!     .await?;
 //!
 //! // Advanced configuration
 //! let engine = EngineBuilder::new()
@@ -24,15 +27,17 @@
 //!     .with_endpoint("https://api.openai.com/v1")
 //!     .with_top_k(10)
 //!     .precise()
-//!     .build()?;
-//! # Ok::<(), vectorless::domain::BuildError>(())
+//!     .build()
+//!     .await?;
+//! # Ok(())
+//! # }
 //! ```
 
 use std::path::PathBuf;
 
 use crate::config::{Config, ConfigLoader, RetrievalConfig};
 use crate::retrieval::PipelineRetriever;
-use crate::storage::Workspace;
+use crate::storage::AsyncWorkspace;
 
 use super::engine::Engine;
 use super::events::EventEmitter;
@@ -59,11 +64,15 @@ const CONFIG_FILE_NAMES: &[&str] = &["vectorless.toml", "config.toml", ".vectorl
 /// ```rust,no_run
 /// use vectorless::client::EngineBuilder;
 ///
+/// # #[tokio::main]
+/// # async fn main() -> Result<(), vectorless::BuildError> {
 /// let client = EngineBuilder::new()
 ///     .with_workspace("./my_workspace")
 ///     .with_openai(std::env::var("OPENAI_API_KEY").unwrap())
-///     .build()?;
-/// # Ok::<(), vectorless::domain::BuildError>(())
+///     .build()
+///     .await?;
+/// # Ok(())
+/// # }
 /// ```
 #[derive(Debug)]
 pub struct EngineBuilder {
@@ -134,10 +143,14 @@ impl EngineBuilder {
     /// ```rust,no_run
     /// use vectorless::client::EngineBuilder;
     ///
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), vectorless::BuildError> {
     /// let engine = EngineBuilder::new()
     ///     .with_workspace("./data")
-    ///     .build()?;
-    /// # Ok::<(), vectorless::domain::BuildError>(())
+    ///     .build()
+    ///     .await?;
+    /// # Ok(())
+    /// # }
     /// ```
     #[must_use]
     pub fn with_workspace(mut self, path: impl Into<PathBuf>) -> Self {
@@ -193,11 +206,15 @@ impl EngineBuilder {
     /// ```rust,no_run
     /// use vectorless::client::EngineBuilder;
     ///
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), vectorless::BuildError> {
     /// let engine = EngineBuilder::new()
     ///     .with_workspace("./data")
     ///     .with_openai(std::env::var("OPENAI_API_KEY").unwrap())
-    ///     .build()?;
-    /// # Ok::<(), vectorless::domain::BuildError>(())
+    ///     .build()
+    ///     .await?;
+    /// # Ok(())
+    /// # }
     /// ```
     #[must_use]
     pub fn with_openai(self, api_key: impl Into<String>) -> Self {
@@ -216,11 +233,15 @@ impl EngineBuilder {
     /// ```rust,no_run
     /// use vectorless::client::EngineBuilder;
     ///
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), vectorless::BuildError> {
     /// let engine = EngineBuilder::new()
     ///     .with_workspace("./data")
     ///     .with_model("gpt-4o-mini", Some("sk-...".to_string()))
-    ///     .build()?;
-    /// # Ok::<(), vectorless::domain::BuildError>(())
+    ///     .build()
+    ///     .await?;
+    /// # Ok(())
+    /// # }
     /// ```
     #[must_use]
     pub fn with_model(mut self, model: impl Into<String>, api_key: Option<String>) -> Self {
@@ -238,12 +259,16 @@ impl EngineBuilder {
     /// ```rust,no_run
     /// use vectorless::client::EngineBuilder;
     ///
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), vectorless::BuildError> {
     /// let engine = EngineBuilder::new()
     ///     .with_workspace("./data")
     ///     .with_model("deepseek-chat", Some("sk-...".to_string()))
     ///     .with_endpoint("https://api.deepseek.com/v1")
-    ///     .build()?;
-    /// # Ok::<(), vectorless::domain::BuildError>(())
+    ///     .build()
+    ///     .await?;
+    /// # Ok(())
+    /// # }
     /// ```
     #[must_use]
     pub fn with_endpoint(mut self, url: impl Into<String>) -> Self {
@@ -339,13 +364,17 @@ impl EngineBuilder {
     /// ```rust,no_run
     /// use vectorless::client::EngineBuilder;
     ///
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), vectorless::BuildError> {
     /// let engine = EngineBuilder::new()
     ///     .with_workspace("./data")
     ///     .with_openai(std::env::var("OPENAI_API_KEY").unwrap())
-    ///     .build()?;
-    /// # Ok::<(), vectorless::domain::BuildError>(())
+    ///     .build()
+    ///     .await?;
+    /// # Ok(())
+    /// # }
     /// ```
-    pub fn build(self) -> Result<Engine, BuildError> {
+    pub async fn build(self) -> Result<Engine, BuildError> {
         // Load or create configuration
         let mut config = if let Some(config) = self.config {
             config
@@ -390,14 +419,14 @@ impl EngineBuilder {
         }
 
         // Open workspace: prefer explicit path, fallback to config
-        let workspace = if let Some(path) = &self.workspace {
-            Some(Workspace::open(path).map_err(|e| BuildError::Workspace(e.to_string()))?)
-        } else {
-            Some(
-                Workspace::open(&config.storage.workspace_dir)
-                    .map_err(|e| BuildError::Workspace(e.to_string()))?,
-            )
-        };
+        let workspace_path = self
+            .workspace
+            .as_ref()
+            .unwrap_or(&config.storage.workspace_dir);
+
+        let workspace = AsyncWorkspace::new(workspace_path)
+            .await
+            .map_err(|e| BuildError::Workspace(e.to_string()))?;
 
         // Create pipeline executor with LLM client if API key is available
         let executor = if let Some(api_key) = config.summary.api_key.clone() {
@@ -442,6 +471,7 @@ impl EngineBuilder {
 
         // Build engine
         Engine::with_components(config, workspace, retriever, executor)
+            .await
             .map_err(|e| BuildError::Other(e.to_string()))
     }
 }

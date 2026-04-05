@@ -21,7 +21,8 @@ async fn main() -> vectorless::Result<()> {
     let client = Engine::builder()
         .with_workspace("./workspace")
         .build()
-        .map_err(|e| vectorless::Error::Config(e.to_string()))?;
+        .await
+        .map_err(|e: vectorless::BuildError| vectorless::Error::Config(e.to_string()))?;
 
     println!("✓ Client created\n");
 

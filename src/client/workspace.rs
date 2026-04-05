@@ -3,43 +3,49 @@
 
 //! Workspace management client.
 //!
-//! This module provides CRUD operations for document persistence
+//! This module provides async CRUD operations for document persistence
 //! through the workspace abstraction.
 //!
 //! # Example
 //!
 //! ```rust,ignore
-//! let workspace = WorkspaceClient::new(workspace_storage);
+//! let workspace = WorkspaceClient::new(workspace_storage).await;
 //!
 //! // Save a document
-//! workspace.save(&doc)?;
+//! workspace.save(&doc).await?;
 //!
 //! // Load a document
-//! let doc = workspace.load("doc-id")?;
+//! let doc = workspace.load("doc-id").await?;
 //!
 //! // List all documents
-//! for doc in workspace.list()? {
+//! for doc in workspace.list().await? {
 //!     println!("{}: {}", doc.id, doc.name);
 //! }
 //! ```
 
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 
 use tracing::{debug, info, warn};
 
-use crate::Error;
 use crate::error::Result;
-use crate::storage::{DocumentMetaEntry, PersistedDocument, Workspace};
+use crate::storage::{AsyncWorkspace, PersistedDocument};
 
 use super::events::{EventEmitter, WorkspaceEvent};
 use super::types::DocumentInfo;
 
 /// Workspace management client.
 ///
-/// Provides thread-safe CRUD operations for document persistence.
+/// Provides async thread-safe CRUD operations for document persistence.
+/// All operations are async and can be safely called from multiple tasks.
+///
+/// # Thread Safety
+///
+/// The client is fully thread-safe and can be cloned cheaply
+/// (it uses `Arc` internally).
+#[derive(Clone)]
 pub struct WorkspaceClient {
     /// Workspace storage.
-    workspace: Arc<RwLock<Workspace>>,
+    workspace: Arc<AsyncWorkspace>,
 
     /// Event emitter.
     events: EventEmitter,
@@ -69,9 +75,9 @@ impl Default for WorkspaceClientConfig {
 
 impl WorkspaceClient {
     /// Create a new workspace client.
-    pub fn new(workspace: Workspace) -> Self {
+    pub async fn new(workspace: AsyncWorkspace) -> Self {
         Self {
-            workspace: Arc::new(RwLock::new(workspace)),
+            workspace: Arc::new(workspace),
             events: EventEmitter::new(),
             config: WorkspaceClientConfig::default(),
         }
@@ -90,7 +96,7 @@ impl WorkspaceClient {
     }
 
     /// Create from an existing workspace Arc.
-    pub(crate) fn from_arc(workspace: Arc<RwLock<Workspace>>, events: EventEmitter) -> Self {
+    pub(crate) fn from_arc(workspace: Arc<AsyncWorkspace>, events: EventEmitter) -> Self {
         Self {
             workspace,
             events,
@@ -103,16 +109,10 @@ impl WorkspaceClient {
     /// # Errors
     ///
     /// Returns an error if the workspace write fails.
-    pub fn save(&self, doc: &PersistedDocument) -> Result<()> {
+    pub async fn save(&self, doc: &PersistedDocument) -> Result<()> {
         let doc_id = doc.meta.id.clone();
 
-        {
-            let mut ws = self
-                .workspace
-                .write()
-                .map_err(|_| Error::Other("Workspace lock poisoned".to_string()))?;
-            ws.add(doc)?;
-        }
+        self.workspace.add(doc).await?;
 
         info!("Saved document: {}", doc_id);
         self.events.emit_workspace(WorkspaceEvent::Saved { doc_id });
@@ -127,17 +127,12 @@ impl WorkspaceClient {
     /// # Errors
     ///
     /// Returns an error if the workspace read fails.
-    pub fn load(&self, doc_id: &str) -> Result<Option<PersistedDocument>> {
-        let ws = self
-            .workspace
-            .read()
-            .map_err(|_| Error::Other("Workspace lock poisoned".to_string()))?;
-
-        if !ws.contains(doc_id) {
+    pub async fn load(&self, doc_id: &str) -> Result<Option<PersistedDocument>> {
+        if !self.workspace.contains(doc_id).await {
             return Ok(None);
         }
 
-        let doc = ws.load(doc_id)?;
+        let doc = self.workspace.load_and_cache(doc_id).await?;
         let cache_hit = doc.is_some();
 
         if let Some(ref doc) = doc {
@@ -159,14 +154,8 @@ impl WorkspaceClient {
     /// # Errors
     ///
     /// Returns an error if the workspace write fails.
-    pub fn remove(&self, doc_id: &str) -> Result<bool> {
-        let removed = {
-            let mut ws = self
-                .workspace
-                .write()
-                .map_err(|_| Error::Other("Workspace lock poisoned".to_string()))?;
-            ws.remove(doc_id)?
-        };
+    pub async fn remove(&self, doc_id: &str) -> Result<bool> {
+        let removed = self.workspace.remove(doc_id).await?;
 
         if removed {
             info!("Removed document: {}", doc_id);
@@ -183,12 +172,8 @@ impl WorkspaceClient {
     /// # Errors
     ///
     /// Returns an error if the workspace read fails.
-    pub fn exists(&self, doc_id: &str) -> Result<bool> {
-        let ws = self
-            .workspace
-            .read()
-            .map_err(|_| Error::Other("Workspace lock poisoned".to_string()))?;
-        Ok(ws.contains(doc_id))
+    pub async fn exists(&self, doc_id: &str) -> Result<bool> {
+        Ok(self.workspace.contains(doc_id).await)
     }
 
     /// List all documents in the workspace.
@@ -196,38 +181,24 @@ impl WorkspaceClient {
     /// # Errors
     ///
     /// Returns an error if the workspace read fails.
-    pub fn list(&self) -> Result<Vec<DocumentInfo>> {
-        let ws = self
-            .workspace
-            .read()
-            .map_err(|_| Error::Other("Workspace lock poisoned".to_string()))?;
+    pub async fn list(&self) -> Result<Vec<DocumentInfo>> {
+        let doc_ids = self.workspace.list_documents().await;
+        let mut result = Vec::with_capacity(doc_ids.len());
 
-        Ok(ws
-            .list_documents()
-            .iter()
-            .filter_map(|id| ws.get_meta(id))
-            .map(|meta| DocumentInfo {
-                id: meta.id.clone(),
-                name: meta.doc_name.clone(),
-                format: meta.doc_type.clone(),
-                description: meta.doc_description.clone(),
-                page_count: meta.page_count,
-                line_count: meta.line_count,
-            })
-            .collect())
-    }
+        for id in &doc_ids {
+            if let Some(meta) = self.workspace.get_meta(id).await {
+                result.push(DocumentInfo {
+                    id: meta.id,
+                    name: meta.doc_name,
+                    format: meta.doc_type,
+                    description: meta.doc_description,
+                    page_count: meta.page_count,
+                    line_count: meta.line_count,
+                });
+            }
+        }
 
-    /// Get document metadata without loading the full document.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the workspace read fails.
-    pub fn get_meta(&self, doc_id: &str) -> Result<Option<DocumentMetaEntry>> {
-        let ws = self
-            .workspace
-            .read()
-            .map_err(|_| Error::Other("Workspace lock poisoned".to_string()))?;
-        Ok(ws.get_meta(doc_id).cloned())
+        Ok(result)
     }
 
     /// Get document info by ID.
@@ -235,17 +206,12 @@ impl WorkspaceClient {
     /// # Errors
     ///
     /// Returns an error if the workspace read fails.
-    pub fn get_document_info(&self, doc_id: &str) -> Result<Option<DocumentInfo>> {
-        let ws = self
-            .workspace
-            .read()
-            .map_err(|_| Error::Other("Workspace lock poisoned".to_string()))?;
-
-        Ok(ws.get_meta(doc_id).map(|meta| DocumentInfo {
-            id: meta.id.clone(),
-            name: meta.doc_name.clone(),
-            format: meta.doc_type.clone(),
-            description: meta.doc_description.clone(),
+    pub async fn get_document_info(&self, doc_id: &str) -> Result<Option<DocumentInfo>> {
+        Ok(self.workspace.get_meta(doc_id).await.map(|meta| DocumentInfo {
+            id: meta.id,
+            name: meta.doc_name,
+            format: meta.doc_type,
+            description: meta.doc_description,
             page_count: meta.page_count,
             line_count: meta.line_count,
         }))
@@ -258,22 +224,15 @@ impl WorkspaceClient {
     /// # Errors
     ///
     /// Returns an error if the workspace write fails.
-    pub fn batch_remove(&self, doc_ids: &[&str]) -> Result<usize> {
+    pub async fn batch_remove(&self, doc_ids: &[&str]) -> Result<usize> {
         let mut removed = 0;
 
-        {
-            let mut ws = self
-                .workspace
-                .write()
-                .map_err(|_| Error::Other("Workspace lock poisoned".to_string()))?;
-
-            for doc_id in doc_ids {
-                if ws.remove(doc_id)? {
-                    removed += 1;
-                    self.events.emit_workspace(WorkspaceEvent::Removed {
-                        doc_id: doc_id.to_string(),
-                    });
-                }
+        for doc_id in doc_ids {
+            if self.workspace.remove(doc_id).await? {
+                removed += 1;
+                self.events.emit_workspace(WorkspaceEvent::Removed {
+                    doc_id: doc_id.to_string(),
+                });
             }
         }
 
@@ -291,28 +250,12 @@ impl WorkspaceClient {
     /// # Errors
     ///
     /// Returns an error if the workspace write fails.
-    pub fn clear(&self) -> Result<usize> {
-        let doc_ids: Vec<String>;
-
-        {
-            let ws = self
-                .workspace
-                .read()
-                .map_err(|_| Error::Other("Workspace lock poisoned".to_string()))?;
-            doc_ids = ws.list_documents().iter().map(|s| s.to_string()).collect();
-        }
-
+    pub async fn clear(&self) -> Result<usize> {
+        let doc_ids = self.workspace.list_documents().await;
         let count = doc_ids.len();
 
-        {
-            let mut ws = self
-                .workspace
-                .write()
-                .map_err(|_| Error::Other("Workspace lock poisoned".to_string()))?;
-
-            for doc_id in &doc_ids {
-                let _ = ws.remove(doc_id);
-            }
+        for doc_id in &doc_ids {
+            let _ = self.workspace.remove(doc_id).await;
         }
 
         if count > 0 {
@@ -325,44 +268,25 @@ impl WorkspaceClient {
     }
 
     /// Get workspace statistics.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the workspace read fails.
-    pub fn stats(&self) -> Result<WorkspaceStats> {
-        let ws = self
-            .workspace
-            .read()
-            .map_err(|_| Error::Other("Workspace lock poisoned".to_string()))?;
-
+    pub async fn stats(&self) -> Result<WorkspaceStats> {
         Ok(WorkspaceStats {
-            document_count: ws.len(),
+            document_count: self.workspace.len().await,
         })
     }
 
     /// Get the number of documents in the workspace.
-    pub fn len(&self) -> usize {
-        self.workspace.read().map(|ws| ws.len()).unwrap_or(0)
+    pub async fn len(&self) -> usize {
+        self.workspace.len().await
     }
 
     /// Check if the workspace is empty.
-    pub fn is_empty(&self) -> bool {
-        self.len() == 0
+    pub async fn is_empty(&self) -> bool {
+        self.workspace.is_empty().await
     }
 
     /// Get the underlying workspace Arc (for advanced use).
-    pub(crate) fn inner(&self) -> Arc<RwLock<Workspace>> {
+    pub(crate) fn inner(&self) -> Arc<AsyncWorkspace> {
         Arc::clone(&self.workspace)
-    }
-}
-
-impl Clone for WorkspaceClient {
-    fn clone(&self) -> Self {
-        Self {
-            workspace: Arc::clone(&self.workspace),
-            events: self.events.clone(),
-            config: self.config.clone(),
-        }
     }
 }
 
@@ -376,32 +300,24 @@ pub struct WorkspaceStats {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::storage::WorkspaceOptions;
-    use tempfile::TempDir;
+    use crate::storage::backend::MemoryBackend;
+    use std::sync::Arc as StdArc;
 
-    #[test]
-    fn test_workspace_client_creation() {
-        let temp = TempDir::new().unwrap();
-        let options = WorkspaceOptions {
-            file_lock: false,
-            ..Default::default()
-        };
-        let workspace = Workspace::open_with_options(temp.path(), options).unwrap();
-        let client = WorkspaceClient::new(workspace);
-        assert!(client.is_empty());
+    #[tokio::test]
+    async fn test_workspace_client_creation() {
+        let backend = StdArc::new(MemoryBackend::new());
+        let workspace = AsyncWorkspace::with_backend(backend).await.unwrap();
+        let client = WorkspaceClient::new(workspace).await;
+        assert!(client.is_empty().await);
     }
 
-    #[test]
-    fn test_workspace_stats() {
-        let temp = TempDir::new().unwrap();
-        let options = WorkspaceOptions {
-            file_lock: false,
-            ..Default::default()
-        };
-        let workspace = Workspace::open_with_options(temp.path(), options).unwrap();
-        let client = WorkspaceClient::new(workspace);
+    #[tokio::test]
+    async fn test_workspace_stats() {
+        let backend = StdArc::new(MemoryBackend::new());
+        let workspace = AsyncWorkspace::with_backend(backend).await.unwrap();
+        let client = WorkspaceClient::new(workspace).await;
 
-        let stats = client.stats().unwrap();
+        let stats = client.stats().await.unwrap();
         assert_eq!(stats.document_count, 0);
     }
 }

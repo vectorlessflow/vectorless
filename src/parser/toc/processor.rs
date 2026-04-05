@@ -72,7 +72,7 @@ impl Default for TocProcessorConfig {
 /// use vectorless::parser::pdf::PdfParser;
 ///
 /// # #[tokio::main]
-/// # async fn main() -> vectorless::domain::Result<()> {
+/// # async fn main() -> vectorless::Result<()> {
 /// // Parse PDF
 /// let pdf_parser = PdfParser::new();
 /// let result = pdf_parser.parse_file("document.pdf".as_ref())?;
