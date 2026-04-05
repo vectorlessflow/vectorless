@@ -5,8 +5,17 @@
 //!
 //! This module provides a thread-safe LRU cache for loaded documents,
 //! allowing efficient reuse of loaded document data while limiting memory usage.
+//!
+//! # Metrics
+//!
+//! The cache tracks:
+//! - Hits: Number of successful cache lookups
+//! - Misses: Number of failed cache lookups
+//! - Evictions: Number of entries evicted due to capacity
+//! - Utilization: Current usage as percentage of capacity
 
 use std::num::NonZeroUsize;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 
 use lru::LruCache;
@@ -22,12 +31,25 @@ const DEFAULT_CACHE_SIZE: usize = 100;
 ///
 /// Uses interior mutability via `Mutex` for safe concurrent access.
 /// The cache automatically evicts least-recently-used entries when full.
+///
+/// # Metrics
+///
+/// The cache maintains atomic counters for:
+/// - **hits**: Successful cache lookups
+/// - **misses**: Failed cache lookups (document not in cache)
+/// - **evictions**: Entries removed due to capacity limits
 #[derive(Debug)]
 pub struct DocumentCache {
     /// Inner cache protected by Mutex.
     inner: Mutex<LruCache<String, PersistedDocument>>,
     /// Maximum capacity.
     capacity: usize,
+    /// Number of cache hits.
+    hits: AtomicU64,
+    /// Number of cache misses.
+    misses: AtomicU64,
+    /// Number of cache evictions.
+    evictions: AtomicU64,
 }
 
 impl DocumentCache {
@@ -52,6 +74,9 @@ impl DocumentCache {
         Self {
             inner: Mutex::new(LruCache::new(non_zero)),
             capacity,
+            hits: AtomicU64::new(0),
+            misses: AtomicU64::new(0),
+            evictions: AtomicU64::new(0),
         }
     }
 
@@ -65,7 +90,16 @@ impl DocumentCache {
     /// Returns an error if the cache lock is poisoned.
     pub fn get(&self, id: &str) -> Result<Option<PersistedDocument>> {
         let mut cache = self.lock()?;
-        Ok(cache.get(id).cloned())
+        let result = cache.get(id).cloned();
+
+        // Update metrics
+        if result.is_some() {
+            self.hits.fetch_add(1, Ordering::Relaxed);
+        } else {
+            self.misses.fetch_add(1, Ordering::Relaxed);
+        }
+
+        Ok(result)
     }
 
     /// Check if a document is in the cache.
@@ -85,7 +119,18 @@ impl DocumentCache {
     /// Returns an error if the cache lock is poisoned.
     pub fn put(&self, id: String, doc: PersistedDocument) -> Result<Option<PersistedDocument>> {
         let mut cache = self.lock()?;
-        Ok(cache.put(id, doc))
+
+        // Track capacity before put to detect eviction
+        let was_full = cache.len() >= self.capacity;
+
+        let evicted = cache.put(id, doc);
+
+        // Track evictions
+        if evicted.is_some() || was_full {
+            self.evictions.fetch_add(1, Ordering::Relaxed);
+        }
+
+        Ok(evicted)
     }
 
     /// Remove a document from the cache.
@@ -147,13 +192,50 @@ impl DocumentCache {
         Ok(cache.iter().map(|(k, _)| k.clone()).collect())
     }
 
-    /// Get cache statistics.
+    /// Get cache statistics including metrics.
     pub fn stats(&self) -> CacheStats {
         CacheStats {
             len: self.len(),
             capacity: self.capacity,
             utilization: self.utilization(),
+            hits: self.hits.load(Ordering::Relaxed),
+            misses: self.misses.load(Ordering::Relaxed),
+            evictions: self.evictions.load(Ordering::Relaxed),
         }
+    }
+
+    /// Get the number of cache hits.
+    pub fn hits(&self) -> u64 {
+        self.hits.load(Ordering::Relaxed)
+    }
+
+    /// Get the number of cache misses.
+    pub fn misses(&self) -> u64 {
+        self.misses.load(Ordering::Relaxed)
+    }
+
+    /// Get the number of cache evictions.
+    pub fn evictions(&self) -> u64 {
+        self.evictions.load(Ordering::Relaxed)
+    }
+
+    /// Get the cache hit rate (0.0 to 1.0).
+    pub fn hit_rate(&self) -> f64 {
+        let hits = self.hits.load(Ordering::Relaxed);
+        let misses = self.misses.load(Ordering::Relaxed);
+        let total = hits + misses;
+        if total == 0 {
+            0.0
+        } else {
+            hits as f64 / total as f64
+        }
+    }
+
+    /// Reset all metrics counters to zero.
+    pub fn reset_metrics(&self) {
+        self.hits.store(0, Ordering::Relaxed);
+        self.misses.store(0, Ordering::Relaxed);
+        self.evictions.store(0, Ordering::Relaxed);
     }
 
     /// Lock the inner cache.
@@ -170,7 +252,7 @@ impl Default for DocumentCache {
     }
 }
 
-/// Cache statistics.
+/// Cache statistics including metrics.
 #[derive(Debug, Clone, Copy)]
 pub struct CacheStats {
     /// Number of entries in cache.
@@ -179,6 +261,12 @@ pub struct CacheStats {
     pub capacity: usize,
     /// Utilization (0.0 to 1.0).
     pub utilization: f64,
+    /// Number of cache hits.
+    pub hits: u64,
+    /// Number of cache misses.
+    pub misses: u64,
+    /// Number of cache evictions.
+    pub evictions: u64,
 }
 
 #[cfg(test)]

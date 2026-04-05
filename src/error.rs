@@ -103,33 +103,33 @@ pub enum Error {
     #[error("Cache error: {0}")]
     Cache(String),
 
-    // =========================================================================
-    // Serialization Errors
-    // =========================================================================
-
-    /// An error occurred during serialization/deserialization.
+    /// Serialization error.
     #[error("Serialization error: {0}")]
-    Serialization(#[from] serde_json::Error),
+    Serialization(String),
 
-    /// TOML parsing error.
-    #[error("TOML parsing error: {0}")]
-    Toml(String),
-
-    // =========================================================================
-    // Node & Document Errors
-    // =========================================================================
-
-    /// The requested node was not found.
-    #[error("Node not found: {0}")]
-    NodeNotFound(String),
-
-    /// The requested document was not found.
+    /// Document not found.
     #[error("Document not found: {0}")]
     DocumentNotFound(String),
+
+    /// Checksum mismatch.
+    #[error("Checksum mismatch: {0}")]
+    ChecksumMismatch(String),
+
+    /// Workspace locked by another process.
+    #[error("Workspace locked by another process")]
+    WorkspaceLocked,
+
+    /// Format version mismatch.
+    #[error("Format version mismatch: {0}")]
+    VersionMismatch(String),
 
     // =========================================================================
     // Configuration Errors
     // =========================================================================
+
+    /// TOML parsing error.
+    #[error("TOML parsing error: {0}")]
+    Toml(String),
 
     /// Invalid configuration.
     #[error("Invalid configuration: {0}")]
@@ -138,6 +138,14 @@ pub enum Error {
     /// Missing required configuration.
     #[error("Missing required configuration: {0}")]
     MissingConfig(String),
+
+    // =========================================================================
+    // Node Errors
+    // =========================================================================
+
+    /// The requested node was not found.
+    #[error("Node not found: {0}")]
+    NodeNotFound(String),
 
     // =========================================================================
     // Input Validation Errors

@@ -23,6 +23,11 @@
 //! The workspace uses interior mutability for the LRU cache:
 //! - Read operations (`get_meta`, `contains`, `list_documents`) only need `&self`
 //! - Cache updates happen internally via `Mutex`
+//!
+//! # File Locking
+//!
+//! When enabled (default), the workspace uses an exclusive file lock
+//! to prevent concurrent access from multiple processes.
 
 use std::collections::HashMap;
 use std::fs;
@@ -32,11 +37,13 @@ use serde::{Deserialize, Serialize};
 use tracing::{debug, info, warn};
 
 use super::cache::DocumentCache;
+use super::lock::FileLock;
 use super::persistence::{PersistedDocument, load_document, save_document};
 use crate::error::Result;
 use crate::Error;
 
 const META_FILE: &str = "_meta.json";
+const LOCK_FILE: &str = ".workspace.lock";
 const DEFAULT_CACHE_SIZE: usize = 100;
 
 /// Lightweight metadata entry for the index.
@@ -78,23 +85,61 @@ pub struct Workspace {
 
     /// LRU cache for loaded documents.
     cache: DocumentCache,
+
+    /// File lock for multi-process safety.
+    _lock: Option<FileLock>,
+}
+
+/// Options for workspace creation.
+#[derive(Debug, Clone)]
+pub struct WorkspaceOptions {
+    /// Enable file locking (default: true).
+    pub file_lock: bool,
+    /// LRU cache size (default: 100).
+    pub cache_size: usize,
+}
+
+impl Default for WorkspaceOptions {
+    fn default() -> Self {
+        Self {
+            file_lock: true,
+            cache_size: DEFAULT_CACHE_SIZE,
+        }
+    }
 }
 
 impl Workspace {
     /// Create a new workspace at the given path with default cache size.
     pub fn new(path: impl Into<PathBuf>) -> Result<Self> {
-        Self::with_cache_size(path, DEFAULT_CACHE_SIZE)
+        Self::with_options(path, WorkspaceOptions::default())
     }
 
     /// Create a new workspace with custom LRU cache size.
     pub fn with_cache_size(path: impl Into<PathBuf>, cache_size: usize) -> Result<Self> {
+        Self::with_options(path, WorkspaceOptions {
+            cache_size,
+            ..Default::default()
+        })
+    }
+
+    /// Create a new workspace with custom options.
+    pub fn with_options(path: impl Into<PathBuf>, options: WorkspaceOptions) -> Result<Self> {
         let root = path.into();
         fs::create_dir_all(&root).map_err(Error::Io)?;
+
+        // Acquire file lock if enabled
+        let lock = if options.file_lock {
+            let lock_path = root.join(LOCK_FILE);
+            Some(FileLock::try_lock(&lock_path, true)?)
+        } else {
+            None
+        };
 
         let mut workspace = Self {
             root,
             meta_index: HashMap::new(),
-            cache: DocumentCache::with_capacity(cache_size),
+            cache: DocumentCache::with_capacity(options.cache_size),
+            _lock: lock,
         };
 
         workspace.load_meta_index()?;
@@ -103,7 +148,7 @@ impl Workspace {
 
     /// Open an existing workspace, or create if it doesn't exist.
     pub fn open(path: impl Into<PathBuf> + Clone) -> Result<Self> {
-        Self::open_with_cache_size(path, DEFAULT_CACHE_SIZE)
+        Self::open_with_options(path, WorkspaceOptions::default())
     }
 
     /// Open with custom cache size.
@@ -111,17 +156,37 @@ impl Workspace {
         path: impl Into<PathBuf> + Clone,
         cache_size: usize,
     ) -> Result<Self> {
+        Self::open_with_options(path, WorkspaceOptions {
+            cache_size,
+            ..Default::default()
+        })
+    }
+
+    /// Open with custom options.
+    pub fn open_with_options(
+        path: impl Into<PathBuf> + Clone,
+        options: WorkspaceOptions,
+    ) -> Result<Self> {
         let root = path.clone().into();
         if root.exists() {
+            // Acquire file lock if enabled
+            let lock = if options.file_lock {
+                let lock_path = root.join(LOCK_FILE);
+                Some(FileLock::try_lock(&lock_path, true)?)
+            } else {
+                None
+            };
+
             let mut workspace = Self {
                 root,
                 meta_index: HashMap::new(),
-                cache: DocumentCache::with_capacity(cache_size),
+                cache: DocumentCache::with_capacity(options.cache_size),
+                _lock: lock,
             };
             workspace.load_meta_index()?;
             Ok(workspace)
         } else {
-            Self::with_cache_size(path, cache_size)
+            Self::with_options(path, options)
         }
     }
 
@@ -380,12 +445,19 @@ mod tests {
         let temp = TempDir::new().unwrap();
         let path = temp.path().join("workspace");
 
+        // Use options without file lock to allow reopening
+        let options = WorkspaceOptions {
+            file_lock: false,
+            ..Default::default()
+        };
+
         // Create new
-        let workspace = Workspace::open(&path).unwrap();
+        let workspace = Workspace::open_with_options(&path, options.clone()).unwrap();
         assert!(workspace.is_empty());
 
-        // Reopen existing
-        let workspace2 = Workspace::open(&path).unwrap();
+        // Reopen existing (need to drop first workspace to release lock)
+        drop(workspace);
+        let workspace2 = Workspace::open_with_options(&path, options).unwrap();
         assert!(workspace2.is_empty());
     }
 
