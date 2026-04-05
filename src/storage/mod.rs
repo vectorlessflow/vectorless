@@ -8,6 +8,7 @@
 //! - **Persistence** — Save/load document trees and metadata with atomic writes
 //! - **Cache** — LRU cache for loaded documents
 //! - **Lock** — File locking for multi-process safety
+//! - **Backend** — Storage backend abstraction (file, memory, etc.)
 //!
 //! # Example
 //!
@@ -28,18 +29,28 @@
 //! let loaded = workspace.load("doc-1")?.unwrap();
 //! ```
 
+pub mod async_workspace;
+pub mod backend;
 pub mod cache;
+pub mod codec;
 pub mod lock;
+pub mod migration;
 mod persistence;
 mod workspace;
 
 // Re-export main types
+pub use backend::{FileBackend, MemoryBackend, StorageBackend};
 pub use cache::DocumentCache;
+pub use codec::{Codec, GzipCodec, IdentityCodec, codec_from_config};
+pub use migration::{Migration, MigrationContext, Migrator, CURRENT_VERSION};
 pub use lock::{FileLock, ScopedLock};
 pub use persistence::{
     DocumentMeta, PageContent, PersistedDocument,
-    load_document, load_document_with_options, load_index, load_index_with_options,
-    save_document, save_document_with_options, save_index, save_index_with_options,
+    load_document, load_document_from_bytes, load_document_with_options,
+    load_index, load_index_from_bytes, load_index_with_options,
+    save_document, save_document_to_bytes, save_document_with_options,
+    save_index, save_index_to_bytes, save_index_with_options,
     PersistenceOptions,
 };
+pub use async_workspace::{AsyncDocumentMetaEntry, AsyncWorkspace, AsyncWorkspaceOptions};
 pub use workspace::{DocumentMetaEntry, Workspace, WorkspaceOptions};

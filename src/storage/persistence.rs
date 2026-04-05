@@ -415,6 +415,131 @@ pub fn load_index_with_options(
     Ok(wrapper.payload)
 }
 
+// ============================================================================
+// Bytes-based serialization (for StorageBackend integration)
+// ============================================================================
+
+/// Serialize a document to bytes (JSON with checksum wrapper).
+///
+/// This is useful for storage backends that work with byte arrays.
+pub fn save_document_to_bytes(doc: &PersistedDocument) -> Result<Vec<u8>> {
+    // Serialize the payload first
+    let payload_bytes = serde_json::to_vec(doc)
+        .map_err(|e| Error::Serialization(e.to_string()))?;
+
+    // Calculate checksum
+    let checksum = calculate_checksum(&payload_bytes);
+
+    // Create wrapper
+    let wrapper = PersistedWrapper {
+        version: FORMAT_VERSION,
+        checksum,
+        payload: doc.clone(),
+    };
+
+    // Serialize wrapper
+    serde_json::to_vec(&wrapper)
+        .map_err(|e| Error::Serialization(e.to_string()))
+}
+
+/// Deserialize a document from bytes.
+///
+/// Verifies checksum by default.
+pub fn load_document_from_bytes(data: &[u8]) -> Result<PersistedDocument> {
+    load_document_from_bytes_with_options(data, true)
+}
+
+/// Deserialize a document from bytes with optional checksum verification.
+pub fn load_document_from_bytes_with_options(
+    data: &[u8],
+    verify_checksum: bool,
+) -> Result<PersistedDocument> {
+    // Parse wrapper
+    let wrapper: PersistedWrapper<PersistedDocument> = serde_json::from_slice(data)
+        .map_err(|e| Error::Parse(format!("Failed to parse document: {}", e)))?;
+
+    // Check version
+    if wrapper.version != FORMAT_VERSION {
+        return Err(Error::VersionMismatch(format!(
+            "Expected version {}, got {}",
+            FORMAT_VERSION, wrapper.version
+        )));
+    }
+
+    // Verify checksum if enabled
+    if verify_checksum {
+        let payload_bytes = serde_json::to_vec(&wrapper.payload)
+            .map_err(|e| Error::Serialization(e.to_string()))?;
+
+        let expected_checksum = calculate_checksum(&payload_bytes);
+
+        if wrapper.checksum != expected_checksum {
+            return Err(Error::ChecksumMismatch(format!(
+                "Expected {}, got {}",
+                expected_checksum, wrapper.checksum
+            )));
+        }
+    }
+
+    Ok(wrapper.payload)
+}
+
+/// Serialize an index to bytes.
+pub fn save_index_to_bytes(entries: &[DocumentMeta]) -> Result<Vec<u8>> {
+    let payload_bytes = serde_json::to_vec(entries)
+        .map_err(|e| Error::Serialization(e.to_string()))?;
+
+    let checksum = calculate_checksum(&payload_bytes);
+
+    let wrapper = PersistedWrapper {
+        version: FORMAT_VERSION,
+        checksum,
+        payload: entries.to_vec(),
+    };
+
+    serde_json::to_vec(&wrapper)
+        .map_err(|e| Error::Serialization(e.to_string()))
+}
+
+/// Deserialize an index from bytes.
+pub fn load_index_from_bytes(data: &[u8]) -> Result<Vec<DocumentMeta>> {
+    load_index_from_bytes_with_options(data, true)
+}
+
+/// Deserialize an index from bytes with optional checksum verification.
+pub fn load_index_from_bytes_with_options(
+    data: &[u8],
+    verify_checksum: bool,
+) -> Result<Vec<DocumentMeta>> {
+    let wrapper: PersistedWrapper<Vec<DocumentMeta>> = serde_json::from_slice(data)
+        .map_err(|e| Error::Parse(format!("Failed to parse index: {}", e)))?;
+
+    // Check version
+    if wrapper.version != FORMAT_VERSION {
+        return Err(Error::VersionMismatch(format!(
+            "Expected version {}, got {}",
+            FORMAT_VERSION, wrapper.version
+        )));
+    }
+
+    // Verify checksum if enabled
+    if verify_checksum {
+        let payload_bytes = serde_json::to_vec(&wrapper.payload)
+            .map_err(|e| Error::Serialization(e.to_string()))?;
+
+        let expected_checksum = calculate_checksum(&payload_bytes);
+
+        if wrapper.checksum != expected_checksum {
+            return Err(Error::ChecksumMismatch(format!(
+                "Expected {}, got {}",
+                expected_checksum, wrapper.checksum
+            )));
+        }
+    }
+
+    Ok(wrapper.payload)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
