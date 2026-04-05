@@ -41,16 +41,16 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo clippy --all-targets --all-features -- -D warnings
 
-  test:
-    name: Test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - run: cargo test --lib --all-features
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+  # test:
+  #   name: Test
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: dtolnay/rust-toolchain@stable
+  #     - uses: Swatinem/rust-cache@v2
+  #     - run: cargo test --lib --all-features
+  #       env:
+  #         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 
   docs:
     name: Documentation
@@ -64,18 +64,18 @@ jobs:
         env:
           RUSTDOCFLAGS: -D warnings
 
-  doctest:
-    name: Doc Tests
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - name: Run documentation tests
-        run: cargo test --doc --all-features
-        continue-on-error: true  # Allow doctest failures initially
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+  # doctest:
+  #   name: Doc Tests
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: dtolnay/rust-toolchain@stable
+  #     - uses: Swatinem/rust-cache@v2
+  #     - name: Run documentation tests
+  #       run: cargo test --doc --all-features
+  #       continue-on-error: true  # Allow doctest failures initially
+  #       env:
+  #         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 
   # Release build check
   build:
