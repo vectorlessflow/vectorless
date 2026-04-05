@@ -11,7 +11,8 @@ use std::sync::Arc;
 use tracing::{debug, info, warn};
 
 use crate::document::DocumentTree;
-use crate::llm::LlmClient;
+use crate::llm::{LlmClient, LlmExecutor};
+use crate::throttle::ConcurrencyController;
 
 use super::budget::BudgetController;
 use super::builder::ContextBuilder;
@@ -37,10 +38,10 @@ use super::r#trait::{Pilot, SearchState};
 /// │  │ Builder     │─▶│ Builder     │─▶│ Parser      │         │
 /// │  └─────────────┘  └─────────────┘  └─────────────┘         │
 /// │                                                              │
-/// │  ┌─────────────┐  ┌─────────────┐                          │
-/// │  │ Budget      │  │ LLM         │                          │
-/// │  │ Controller  │  │ Client      │                          │
-/// │  └─────────────┘  └─────────────┘                          │
+/// │  ┌─────────────┐  ┌───────────────────────┐                │
+/// │  │ Budget      │  │ LlmExecutor           │                │
+/// │  │ Controller  │  │ (throttle+retry+fall) │                │
+/// │  └─────────────┘  └───────────────────────┘                │
 /// └─────────────────────────────────────────────────────────────┘
 /// ```
 ///
@@ -48,10 +49,14 @@ use super::r#trait::{Pilot, SearchState};
 ///
 /// ```rust,ignore
 /// use vectorless::retrieval::pilot::{LlmPilot, PilotConfig};
-/// use vectorless::llm::LlmClient;
+/// use vectorless::llm::{LlmClient, LlmExecutor};
 ///
 /// let client = LlmClient::for_model("gpt-4o-mini");
 /// let pilot = LlmPilot::new(client, PilotConfig::default());
+///
+/// // Or with executor for unified throttle/retry/fallback
+/// let executor = LlmExecutor::for_model("gpt-4o-mini");
+/// let pilot = LlmPilot::with_executor(executor, PilotConfig::default());
 ///
 /// // Use in search
 /// if pilot.should_intervene(&state) {
@@ -59,8 +64,10 @@ use super::r#trait::{Pilot, SearchState};
 /// }
 /// ```
 pub struct LlmPilot {
-    /// LLM client for making requests.
+    /// LLM client for making requests (fallback when no executor).
     client: LlmClient,
+    /// LLM executor with unified throttle/retry/fallback (optional).
+    executor: Option<Arc<LlmExecutor>>,
     /// Pilot configuration.
     config: PilotConfig,
     /// Budget controller.
@@ -90,6 +97,42 @@ impl LlmPilot {
 
         Self {
             client,
+            executor: None,
+            config,
+            budget,
+            context_builder: ContextBuilder::new(token_budget),
+            prompt_builder: PromptBuilder::new(),
+            response_parser: ResponseParser::new(),
+        }
+    }
+
+    /// Create a Pilot with LlmExecutor for unified throttle/retry/fallback.
+    pub fn with_executor(executor: LlmExecutor, config: PilotConfig) -> Self {
+        let budget = BudgetController::new(config.budget.clone());
+        let token_budget = config.budget.max_tokens_per_call;
+        // Create a fallback client for backwards compatibility
+        let client = LlmClient::for_model(&executor.config().model);
+
+        Self {
+            client,
+            executor: Some(Arc::new(executor)),
+            config,
+            budget,
+            context_builder: ContextBuilder::new(token_budget),
+            prompt_builder: PromptBuilder::new(),
+            response_parser: ResponseParser::new(),
+        }
+    }
+
+    /// Create a Pilot with shared executor (for sharing throttle/fallback across pilots).
+    pub fn with_shared_executor(executor: Arc<LlmExecutor>, config: PilotConfig) -> Self {
+        let budget = BudgetController::new(config.budget.clone());
+        let token_budget = config.budget.max_tokens_per_call;
+        let client = LlmClient::for_model(&executor.config().model);
+
+        Self {
+            client,
+            executor: Some(executor),
             config,
             budget,
             context_builder: ContextBuilder::new(token_budget),
@@ -109,12 +152,24 @@ impl LlmPilot {
 
         Self {
             client,
+            executor: None,
             config,
             budget,
             context_builder,
             prompt_builder,
             response_parser: ResponseParser::new(),
         }
+    }
+
+    /// Add an executor to an existing pilot.
+    pub fn with_executor_mut(mut self, executor: LlmExecutor) -> Self {
+        self.executor = Some(Arc::new(executor));
+        self
+    }
+
+    /// Check if using LlmExecutor (unified throttle/retry/fallback).
+    pub fn has_executor(&self) -> bool {
+        self.executor.is_some()
     }
 
     /// Check if budget allows LLM calls.
@@ -167,8 +222,16 @@ impl LlmPilot {
             point, prompt.estimated_tokens
         );
 
-        // Make LLM call
-        match self.client.complete(&prompt.system, &prompt.user).await {
+        // Make LLM call - use executor if available, otherwise use client directly
+        let result = if let Some(ref executor) = self.executor {
+            // Use LlmExecutor for unified throttle/retry/fallback
+            executor.complete(&prompt.system, &prompt.user).await
+        } else {
+            // Fallback to direct client call
+            self.client.complete(&prompt.system, &prompt.user).await
+        };
+
+        match result {
             Ok(response) => {
                 // Record usage (estimate output tokens)
                 let output_tokens = self.estimate_tokens(&response);

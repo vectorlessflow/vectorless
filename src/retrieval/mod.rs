@@ -48,6 +48,7 @@
 //! ```
 
 mod context;
+mod decompose;
 mod pipeline_retriever;
 mod retriever;
 mod types;
@@ -114,4 +115,10 @@ pub use pilot::NoopPilot;
 pub use pilot::{
     BudgetConfig, InterventionConfig, InterventionPoint, Pilot, PilotConfig, PilotDecision,
     PilotMode, RankedCandidate, SearchDirection, SearchState,
+};
+
+// Decompose exports (multi-turn retrieval)
+pub use decompose::{
+    DecompositionConfig, DecompositionResult, QueryDecomposer, ResultAggregator, SubQuery,
+    SubQueryComplexity, SubQueryResult, SubQueryType,
 };

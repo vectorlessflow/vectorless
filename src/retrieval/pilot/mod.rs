@@ -56,6 +56,7 @@ mod builder;
 mod config;
 mod decision;
 mod fallback;
+mod feedback;
 mod llm_pilot;
 mod metrics;
 mod noop;
@@ -68,6 +69,10 @@ pub use builder::{ContextBuilder, PilotContext, TokenBudget};
 pub use config::{BudgetConfig, InterventionConfig, PilotConfig, PilotMode};
 pub use decision::{InterventionPoint, PilotDecision, RankedCandidate, SearchDirection};
 pub use fallback::{FallbackAction, FallbackConfig, FallbackError, FallbackLevel, FallbackManager};
+pub use feedback::{
+    ContextStats, DecisionAdjustment, DecisionId, FeedbackId, FeedbackRecord, FeedbackStore,
+    FeedbackStoreConfig, InterventionStats, LearnerConfig, PilotLearner,
+};
 pub use llm_pilot::LlmPilot;
 pub use metrics::{CallRecord, MetricsCollector, PilotMetrics};
 pub use noop::NoopPilot;
