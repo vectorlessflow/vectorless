@@ -18,10 +18,9 @@
 
 Instead of chunking documents into vectors, Vectorless preserves the document's tree structure and uses a **hybrid algorithm + LLM approach** to navigate it — like how a human reads a table of contents:
 
-- **Algorithm** handles "how to walk" — BM25 scoring, tree traversal (fast, deterministic)
-- **Pilot (LLM)** handles "where to go" — semantic understanding, ambiguity resolution
+- **Pilot (LLM)** handles "where to go"
+- **Algorithm** handles "how to walk"
 
-**Analogy:** Traditional RAG is like searching every word in a book. Vectorless is like reading the table of contents, then going to the right chapter.
 
 ## How It Works
 
