@@ -21,7 +21,9 @@ use crate::retrieval::pipeline::{
 use crate::retrieval::search::{
     BeamSearch, GreedySearch, SearchConfig as SearchAlgConfig, SearchTree,
 };
-use crate::retrieval::strategy::{KeywordStrategy, LlmStrategy, RetrievalStrategy};
+use crate::retrieval::strategy::{
+    HybridConfig, HybridStrategy, KeywordStrategy, LlmStrategy, RetrievalStrategy,
+};
 use crate::retrieval::types::StrategyPreference;
 
 /// Search Stage - executes tree search with optional Pilot guidance.
@@ -52,6 +54,7 @@ pub struct SearchStage {
     keyword_strategy: KeywordStrategy,
     llm_strategy: Option<Arc<LlmStrategy>>,
     semantic_strategy: Option<Arc<dyn RetrievalStrategy>>,
+    hybrid_strategy: Option<Arc<dyn RetrievalStrategy>>,
     /// Pilot for navigation guidance (optional).
     pilot: Option<Arc<dyn Pilot>>,
 }
@@ -69,6 +72,7 @@ impl SearchStage {
             keyword_strategy: KeywordStrategy::new(),
             llm_strategy: None,
             semantic_strategy: None,
+            hybrid_strategy: None,
             pilot: None,
         }
     }
@@ -92,6 +96,26 @@ impl SearchStage {
     /// Add semantic strategy for embedding-based search.
     pub fn with_semantic_strategy(mut self, strategy: Arc<dyn RetrievalStrategy>) -> Self {
         self.semantic_strategy = Some(strategy);
+        self
+    }
+
+    /// Add hybrid strategy (BM25 + LLM refinement).
+    ///
+    /// If no LLM strategy is set, creates one from the provided LLM strategy.
+    pub fn with_hybrid_strategy(mut self, strategy: Arc<dyn RetrievalStrategy>) -> Self {
+        self.hybrid_strategy = Some(strategy);
+        self
+    }
+
+    /// Configure hybrid strategy with custom config using the LLM strategy.
+    pub fn with_hybrid_config(mut self, config: HybridConfig) -> Self {
+        if let Some(ref llm) = self.llm_strategy {
+            // Clone the LlmStrategy and box it
+            let llm_boxed: Box<dyn RetrievalStrategy> = Box::new((**llm).clone());
+            self.hybrid_strategy = Some(Arc::new(
+                HybridStrategy::new(llm_boxed).with_config(config)
+            ));
+        }
         self
     }
 
@@ -124,6 +148,29 @@ impl SearchStage {
                     strategy.clone()
                 } else {
                     warn!("LLM strategy requested but not available, falling back to Keyword");
+                    Arc::new(self.keyword_strategy.clone())
+                }
+            }
+            StrategyPreference::ForceHybrid => {
+                if let Some(ref strategy) = self.hybrid_strategy {
+                    info!("Using Hybrid strategy");
+                    strategy.clone()
+                } else if let Some(ref llm) = self.llm_strategy {
+                    info!("Using Hybrid strategy (auto-created from LLM)");
+                    let llm_boxed: Box<dyn RetrievalStrategy> = Box::new((**llm).clone());
+                    Arc::new(HybridStrategy::new(llm_boxed))
+                } else {
+                    warn!("Hybrid strategy requested but no LLM available, falling back to Keyword");
+                    Arc::new(self.keyword_strategy.clone())
+                }
+            }
+            StrategyPreference::ForceCrossDocument | StrategyPreference::ForcePageRange => {
+                // These require special setup, fall back to hybrid or keyword
+                if let Some(ref strategy) = self.hybrid_strategy {
+                    info!("Using Hybrid strategy as fallback for {:?})", preference);
+                    strategy.clone()
+                } else {
+                    warn!("{:?} requires special configuration, falling back to Keyword", preference);
                     Arc::new(self.keyword_strategy.clone())
                 }
             }

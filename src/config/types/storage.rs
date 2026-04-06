@@ -337,6 +337,163 @@ pub struct StrategyConfig {
     /// Low similarity threshold for "explore" decision.
     #[serde(default = "default_low_similarity_threshold")]
     pub low_similarity_threshold: f32,
+
+    /// Hybrid strategy configuration (BM25 + LLM refinement).
+    #[serde(default)]
+    pub hybrid: HybridStrategyConfig,
+
+    /// Cross-document strategy configuration.
+    #[serde(default)]
+    pub cross_document: CrossDocumentStrategyConfig,
+
+    /// Page-range strategy configuration.
+    #[serde(default)]
+    pub page_range: PageRangeStrategyConfig,
+}
+
+/// Hybrid strategy configuration (BM25 pre-filter + LLM refinement).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HybridStrategyConfig {
+    /// Enable hybrid strategy.
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+
+    /// BM25 pre-filter: keep top N% of candidates.
+    #[serde(default = "default_pre_filter_ratio")]
+    pub pre_filter_ratio: f32,
+
+    /// Minimum candidates to pass to LLM.
+    #[serde(default = "default_min_candidates")]
+    pub min_candidates: usize,
+
+    /// Maximum candidates for LLM refinement.
+    #[serde(default = "default_max_candidates")]
+    pub max_candidates: usize,
+
+    /// BM25 score for auto-accept (skip LLM).
+    #[serde(default = "default_auto_accept_threshold")]
+    pub auto_accept_threshold: f32,
+
+    /// BM25 score for auto-reject (skip LLM).
+    #[serde(default = "default_auto_reject_threshold")]
+    pub auto_reject_threshold: f32,
+
+    /// Weight for BM25 score in final scoring.
+    #[serde(default = "default_bm25_weight")]
+    pub bm25_weight: f32,
+
+    /// Weight for LLM score in final scoring.
+    #[serde(default = "default_llm_weight")]
+    pub llm_weight: f32,
+}
+
+fn default_true() -> bool { true }
+fn default_pre_filter_ratio() -> f32 { 0.3 }
+fn default_min_candidates() -> usize { 2 }
+fn default_max_candidates() -> usize { 5 }
+fn default_auto_accept_threshold() -> f32 { 0.85 }
+fn default_auto_reject_threshold() -> f32 { 0.15 }
+fn default_bm25_weight() -> f32 { 0.4 }
+fn default_llm_weight() -> f32 { 0.6 }
+
+impl Default for HybridStrategyConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            pre_filter_ratio: default_pre_filter_ratio(),
+            min_candidates: default_min_candidates(),
+            max_candidates: default_max_candidates(),
+            auto_accept_threshold: default_auto_accept_threshold(),
+            auto_reject_threshold: default_auto_reject_threshold(),
+            bm25_weight: default_bm25_weight(),
+            llm_weight: default_llm_weight(),
+        }
+    }
+}
+
+/// Cross-document strategy configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CrossDocumentStrategyConfig {
+    /// Enable cross-document strategy.
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+
+    /// Maximum documents to search.
+    #[serde(default = "default_max_documents")]
+    pub max_documents: usize,
+
+    /// Maximum results per document.
+    #[serde(default = "default_max_results_per_doc")]
+    pub max_results_per_doc: usize,
+
+    /// Maximum total results.
+    #[serde(default = "default_max_total_results")]
+    pub max_total_results: usize,
+
+    /// Minimum score threshold.
+    #[serde(default = "default_min_score")]
+    pub min_score: f32,
+
+    /// Merge strategy: TopK, BestPerDocument, WeightedByRelevance.
+    #[serde(default = "default_merge_strategy")]
+    pub merge_strategy: String,
+
+    /// Search documents in parallel.
+    #[serde(default = "default_true")]
+    pub parallel_search: bool,
+}
+
+fn default_max_documents() -> usize { 10 }
+fn default_max_results_per_doc() -> usize { 3 }
+fn default_max_total_results() -> usize { 10 }
+fn default_min_score() -> f32 { 0.3 }
+fn default_merge_strategy() -> String { "TopK".to_string() }
+
+impl Default for CrossDocumentStrategyConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            max_documents: default_max_documents(),
+            max_results_per_doc: default_max_results_per_doc(),
+            max_total_results: default_max_total_results(),
+            min_score: default_min_score(),
+            merge_strategy: default_merge_strategy(),
+            parallel_search: true,
+        }
+    }
+}
+
+/// Page-range strategy configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PageRangeStrategyConfig {
+    /// Enable page-range strategy.
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+
+    /// Include nodes that span across the boundary.
+    #[serde(default = "default_true")]
+    pub include_boundary_nodes: bool,
+
+    /// Expand range by N pages for context.
+    #[serde(default)]
+    pub expand_context_pages: usize,
+
+    /// Minimum overlap ratio for node inclusion.
+    #[serde(default = "default_min_overlap_ratio")]
+    pub min_overlap_ratio: f32,
+}
+
+fn default_min_overlap_ratio() -> f32 { 0.1 }
+
+impl Default for PageRangeStrategyConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            include_boundary_nodes: true,
+            expand_context_pages: 0,
+            min_overlap_ratio: default_min_overlap_ratio(),
+        }
+    }
 }
 
 fn default_exploration_weight() -> f32 {
@@ -362,6 +519,9 @@ impl Default for StrategyConfig {
             similarity_threshold: default_similarity_threshold(),
             high_similarity_threshold: default_high_similarity_threshold(),
             low_similarity_threshold: default_low_similarity_threshold(),
+            hybrid: HybridStrategyConfig::default(),
+            cross_document: CrossDocumentStrategyConfig::default(),
+            page_range: PageRangeStrategyConfig::default(),
         }
     }
 }
@@ -453,5 +613,37 @@ mod tests {
         let config = StrategyConfig::default();
         assert!((config.exploration_weight - 1.414).abs() < 0.001);
         assert_eq!(config.similarity_threshold, 0.5);
+        assert!(config.hybrid.enabled);
+        assert!(config.cross_document.enabled);
+        assert!(config.page_range.enabled);
+    }
+
+    #[test]
+    fn test_hybrid_strategy_config_defaults() {
+        let config = HybridStrategyConfig::default();
+        assert!(config.enabled);
+        assert!((config.pre_filter_ratio - 0.3).abs() < f32::EPSILON);
+        assert_eq!(config.min_candidates, 2);
+        assert_eq!(config.max_candidates, 5);
+        assert!((config.auto_accept_threshold - 0.85).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn test_cross_document_strategy_config_defaults() {
+        let config = CrossDocumentStrategyConfig::default();
+        assert!(config.enabled);
+        assert_eq!(config.max_documents, 10);
+        assert_eq!(config.max_results_per_doc, 3);
+        assert_eq!(config.merge_strategy, "TopK");
+        assert!(config.parallel_search);
+    }
+
+    #[test]
+    fn test_page_range_strategy_config_defaults() {
+        let config = PageRangeStrategyConfig::default();
+        assert!(config.enabled);
+        assert!(config.include_boundary_nodes);
+        assert_eq!(config.expand_context_pages, 0);
+        assert!((config.min_overlap_ratio - 0.1).abs() < f32::EPSILON);
     }
 }

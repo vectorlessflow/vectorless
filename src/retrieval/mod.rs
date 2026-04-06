@@ -89,7 +89,10 @@ pub use stages::{AnalyzeStage, EvaluateStage, PlanStage, SearchStage};
 
 // Strategy exports
 pub use strategy::{
-    KeywordStrategy, LlmStrategy, RetrievalStrategy, SemanticStrategy, StrategyCapabilities,
+    CrossDocumentConfig, CrossDocumentStrategy, DocumentEntry, DocumentId, DocumentResult,
+    HybridConfig, HybridStrategy, KeywordStrategy, LlmStrategy, MergeStrategy,
+    PageRange, PageRangeConfig, PageRangeStrategy, RetrievalStrategy, SemanticStrategy,
+    StrategyCapabilities, StrategyCost,
 };
 
 // Search exports

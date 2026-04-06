@@ -163,6 +163,37 @@ similarity_threshold = 0.5
 high_similarity_threshold = 0.8
 low_similarity_threshold = 0.3
 
+# Hybrid Strategy Configuration (BM25 + LLM refinement)
+# Recommended for most use cases - reduces LLM calls while maintaining accuracy
+[retrieval.strategy.hybrid]
+enabled = true
+pre_filter_ratio = 0.3        # Keep top 30% of BM25 candidates
+min_candidates = 2            # Minimum candidates to pass to LLM
+max_candidates = 5            # Maximum candidates for LLM refinement
+auto_accept_threshold = 0.85  # BM25 score for auto-accept (skip LLM)
+auto_reject_threshold = 0.15  # BM25 score for auto-reject (skip LLM)
+bm25_weight = 0.4             # Weight for BM25 score in final scoring
+llm_weight = 0.6              # Weight for LLM score in final scoring
+
+# Cross-Document Retrieval Configuration
+# For searching across multiple documents simultaneously
+[retrieval.strategy.cross_document]
+enabled = true
+max_documents = 10            # Maximum documents to search
+max_results_per_doc = 3       # Maximum results per document
+max_total_results = 10        # Maximum total results
+min_score = 0.3               # Minimum score threshold
+merge_strategy = "TopK"       # TopK | BestPerDocument | WeightedByRelevance
+parallel_search = true        # Search documents in parallel
+
+# Page-Range Strategy Configuration
+# For filtering by page range before retrieval
+[retrieval.strategy.page_range]
+enabled = true
+include_boundary_nodes = true # Include nodes spanning across boundary
+expand_context_pages = 0      # Expand range by N pages for context
+min_overlap_ratio = 0.1       # Minimum overlap ratio for node inclusion
+
 [retrieval.content]
 enabled = true
 token_budget = 4000
