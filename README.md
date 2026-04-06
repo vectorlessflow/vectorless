@@ -10,13 +10,16 @@
 
 </div>
 
-> ⚠️ **Early Development** — API may change. Not recommended for production yet.
+> ⚠️ **Early Development** — API may change. 
 
 ## What is Vectorless?
 
-**Vectorless** is a Rust library for querying structured documents using natural language — without vector databases or embedding models. 
+**Vectorless** is a Rust library for querying structured documents using natural language — without vector databases or embedding models.
 
-Instead of chunking documents into vectors, Vectorless preserves the document's tree structure and uses an LLM to navigate it — like how a human reads a table of contents.
+Instead of chunking documents into vectors, Vectorless preserves the document's tree structure and uses a **hybrid algorithm + LLM approach** to navigate it — like how a human reads a table of contents:
+
+- **Algorithm** handles "how to walk" — BM25 scoring, tree traversal (fast, deterministic)
+- **Pilot (LLM)** handles "where to go" — semantic understanding, ambiguity resolution
 
 **Analogy:** Traditional RAG is like searching every word in a book. Vectorless is like reading the table of contents, then going to the right chapter.
 
@@ -139,7 +142,6 @@ async fn main() -> vectorless::Result<()> {
 | **Feedback Learning** | Improves from user feedback over time |
 | **Multi-turn Queries** | Handles complex questions with decomposition |
 
----
 
 ## Architecture
 
