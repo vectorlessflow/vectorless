@@ -41,6 +41,15 @@ pub enum StrategyPreference {
 
     /// Force LLM strategy (deep reasoning).
     ForceLlm,
+
+    /// Force hybrid strategy (BM25 + LLM refinement).
+    ForceHybrid,
+
+    /// Force cross-document strategy (multi-document retrieval).
+    ForceCrossDocument,
+
+    /// Force page-range strategy (filter by page range).
+    ForcePageRange,
 }
 
 impl Default for StrategyPreference {
