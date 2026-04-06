@@ -1,70 +1,98 @@
-<svg viewBox="0 0 800 400" xmlns="http://www.w3.org/2000/svg" font-family="system-ui, -apple-system, sans-serif">
-  <!-- Document Tree -->
-  <rect x="20" y="20" width="280" height="360" rx="8" fill="#f8fafc" stroke="#e2e8f0" stroke-width="2"/>
-  <text x="30" y="50" font-size="14" font-weight="600" fill="#1e293b">Document Tree</text>
+<svg viewBox="0 0 800 280" xmlns="http://www.w3.org/2000/svg" font-family="system-ui, -apple-system, sans-serif">
+  <!-- Background -->
+  <rect width="800" height="280" fill="#fafafa"/>
 
-  <!-- Root -->
-  <rect x="40" y="70" width="240" height="32" rx="4" fill="#3b82f6"/>
-  <text x="50" y="91" font-size="12" fill="white">Root: Technical Manual</text>
+  <!-- Step 1: Document -->
+  <rect x="20" y="40" width="150" height="180" rx="10" fill="#f8fafc" stroke="#e2e8f0" stroke-width="2"/>
+  <text x="95" y="65" font-size="12" font-weight="600" fill="#1e293b" text-anchor="middle">1. Your Document</text>
 
-  <!-- Level 1 nodes -->
-  <rect x="60" y="115" width="200" height="28" rx="4" fill="#60a5fa"/>
-  <text x="70" y="134" font-size="11" fill="white">Chapter 1: Introduction</text>
+  <!-- Document icon -->
+  <rect x="45" y="85" width="100" height="80" rx="4" fill="white" stroke="#cbd5e1" stroke-width="1"/>
+  <text x="95" y="105" font-size="9" font-weight="500" fill="#475569" text-anchor="middle">manual.pdf</text>
+  <rect x="55" y="115" width="80" height="6" rx="2" fill="#e2e8f0"/>
+  <rect x="55" y="125" width="80" height="6" rx="2" fill="#e2e8f0"/>
+  <rect x="55" y="135" width="80" height="6" rx="2" fill="#e2e8f0"/>
+  <rect x="55" y="145" width="60" height="6" rx="2" fill="#e2e8f0"/>
 
-  <rect x="60" y="150" width="200" height="28" rx="4" fill="#60a5fa"/>
-  <text x="70" y="169" font-size="11" fill="white">Chapter 2: Architecture</text>
+  <text x="95" y="185" font-size="9" fill="#64748b" text-anchor="middle">PDF, MD, DOCX</text>
+  <text x="95" y="200" font-size="9" fill="#64748b" text-anchor="middle">HTML, Text</text>
 
-  <!-- Level 2 nodes -->
-  <rect x="80" y="190" width="160" height="24" rx="4" fill="#93c5fd"/>
-  <text x="90" y="207" font-size="10" fill="#1e40af">2.1 System Design</text>
+  <!-- Arrow 1 -->
+  <path d="M 175 130 L 205 130" stroke="#3b82f6" stroke-width="2" marker-end="url(#arrow-blue)"/>
 
-  <rect x="80" y="220" width="160" height="24" rx="4" fill="#93c5fd"/>
-  <text x="90" y="237" font-size="10" fill="#1e40af">2.2 Implementation</text>
+  <!-- Step 2: Tree -->
+  <rect x="210" y="40" width="180" height="180" rx="10" fill="#f0fdf4" stroke="#86efac" stroke-width="2"/>
+  <text x="300" y="65" font-size="12" font-weight="600" fill="#166534" text-anchor="middle">2. Build Tree</text>
 
-  <rect x="60" y="255" width="200" height="28" rx="4" fill="#60a5fa"/>
-  <text x="70" y="274" font-size="11" fill="white">Chapter 3: API Reference</text>
+  <!-- Tree structure -->
+  <rect x="235" y="80" width="130" height="22" rx="4" fill="#22c55e"/>
+  <text x="300" y="95" font-size="9" fill="white" text-anchor="middle">📖 Technical Manual</text>
 
-  <!-- Token counts -->
-  <text x="240" y="207" font-size="9" fill="#64748b">300 tok</text>
-  <text x="240" y="237" font-size="9" fill="#64748b">450 tok</text>
+  <rect x="250" y="110" width="100" height="18" rx="3" fill="#4ade80"/>
+  <text x="300" y="123" font-size="8" fill="white" text-anchor="middle">Ch.1 Introduction</text>
 
-  <!-- Arrow -->
-  <path d="M 320 200 L 380 200" stroke="#3b82f6" stroke-width="2" marker-end="url(#arrow)"/>
-  <text x="335" y="190" font-size="10" fill="#64748b">Query</text>
+  <rect x="250" y="133" width="100" height="18" rx="3" fill="#4ade80"/>
+  <text x="300" y="146" font-size="8" fill="white" text-anchor="middle">Ch.2 Architecture</text>
 
-  <!-- LLM Navigator -->
-  <rect x="400" y="80" width="180" height="240" rx="8" fill="#1e293b"/>
-  <text x="420" y="110" font-size="14" font-weight="600" fill="white">LLM Navigator</text>
+  <rect x="265" y="156" width="70" height="15" rx="2" fill="#86efac"/>
+  <text x="300" y="167" font-size="7" fill="#166534" text-anchor="middle">2.1 System</text>
 
-  <rect x="420" y="130" width="140" height="40" rx="4" fill="#374151"/>
-  <text x="430" y="148" font-size="10" fill="#9ca3af">Step 1:</text>
-  <text x="430" y="162" font-size="10" fill="white">"Which chapter?"</text>
+  <rect x="265" y="175" width="70" height="15" rx="2" fill="#86efac"/>
+  <text x="300" y="186" font-size="7" fill="#166534" text-anchor="middle">2.2 Implementation</text>
 
-  <rect x="420" y="180" width="140" height="40" rx="4" fill="#374151"/>
-  <text x="430" y="198" font-size="10" fill="#9ca3af">Step 2:</text>
-  <text x="430" y="212" font-size="10" fill="white">"Which section?"</text>
+  <!-- Arrow 2 -->
+  <path d="M 395 130 L 425 130" stroke="#22c55e" stroke-width="2" marker-end="url(#arrow-green)"/>
 
-  <rect x="420" y="230" width="140" height="40" rx="4" fill="#059669"/>
-  <text x="430" y="248" font-size="10" fill="#a7f3d0">Step 3:</text>
-  <text x="430" y="262" font-size="10" fill="white">Return content</text>
+  <!-- Step 3: Query -->
+  <rect x="430" y="40" width="160" height="180" rx="10" fill="#eff6ff" stroke="#93c5fd" stroke-width="2"/>
+  <text x="510" y="65" font-size="12" font-weight="600" fill="#1e40af" text-anchor="middle">3. Query</text>
 
-  <!-- Arrow to result -->
-  <path d="M 580 200 L 620 200" stroke="#059669" stroke-width="2" marker-end="url(#arrow-green)"/>
+  <!-- Query box -->
+  <rect x="450" y="85" width="120" height="40" rx="6" fill="#dbeafe" stroke="#60a5fa" stroke-width="1"/>
+  <text x="510" y="100" font-size="9" fill="#1e40af" text-anchor="middle">"How do I</text>
+  <text x="510" y="115" font-size="9" fill="#1e40af" text-anchor="middle">reset?"</text>
 
-  <!-- Result -->
-  <rect x="640" y="140" width="140" height="120" rx="8" fill="#f0fdf4" stroke="#86efac" stroke-width="2"/>
-  <text x="660" y="170" font-size="12" font-weight="600" fill="#166534">Result</text>
-  <text x="660" y="195" font-size="10" fill="#15803d">Section 2.1</text>
-  <text x="660" y="210" font-size="10" fill="#15803d">System Design</text>
-  <text x="660" y="235" font-size="9" fill="#64748b">+ context</text>
+  <!-- LLM brain -->
+  <rect x="450" y="135" width="120" height="60" rx="6" fill="#1e293b"/>
+  <text x="510" y="155" font-size="9" fill="white" text-anchor="middle">🧠 LLM Navigator</text>
+  <text x="460" y="175" font-size="7" fill="#9ca3af">"Check Chapter 4"</text>
+  <text x="460" y="187" font-size="7" fill="#9ca3af">"Try section 4.2"</text>
+
+  <!-- Arrow 3 -->
+  <path d="M 595 130 L 625 130" stroke="#3b82f6" stroke-width="2" marker-end="url(#arrow-blue)"/>
+
+  <!-- Step 4: Result -->
+  <rect x="630" y="40" width="150" height="180" rx="10" fill="#fef3c7" stroke="#fcd34d" stroke-width="2"/>
+  <text x="705" y="65" font-size="12" font-weight="600" fill="#92400e" text-anchor="middle">4. Result</text>
+
+  <!-- Result box -->
+  <rect x="650" y="80" width="110" height="90" rx="6" fill="white" stroke="#fbbf24" stroke-width="1"/>
+  <text x="705" y="100" font-size="9" font-weight="500" fill="#92400e" text-anchor="middle">Section 4.2</text>
+  <text x="660" y="120" font-size="8" fill="#64748b">## Reset Procedure</text>
+  <text x="660" y="135" font-size="7" fill="#9ca3af">To reset, hold the</text>
+  <text x="660" y="148" font-size="7" fill="#9ca3af">power button for...</text>
+  <text x="660" y="163" font-size="7" fill="#9ca3af">...</text>
+
+  <!-- Path -->
+  <text x="705" y="190" font-size="8" fill="#92400e" text-anchor="middle">Path: Ch.4 → 4.2</text>
+  <text x="705" y="205" font-size="8" fill="#78350f" text-anchor="middle">+ surrounding context</text>
+
+  <!-- Bottom explanation -->
+  <rect x="20" y="235" width="760" height="35" rx="6" fill="#f1f5f9"/>
+  <text x="400" y="252" font-size="10" fill="#475569" text-anchor="middle">
+    💡 Like reading a table of contents, then going to the right chapter — instead of searching every word in the book.
+  </text>
+  <text x="400" y="265" font-size="9" fill="#94a3b8" text-anchor="middle">
+    The LLM navigates the tree structure, just like a human would.
+  </text>
 
   <!-- Arrow markers -->
   <defs>
-    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
-      <path d="M0,0 L0,6 L9,3 z" fill="#3b82f6"/>
+    <marker id="arrow-blue" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L7,3 z" fill="#3b82f6"/>
     </marker>
-    <marker id="arrow-green" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
-      <path d="M0,0 L0,6 L9,3 z" fill="#059669"/>
+    <marker id="arrow-green" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L7,3 z" fill="#22c55e"/>
     </marker>
   </defs>
 </svg>

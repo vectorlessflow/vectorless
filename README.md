@@ -8,105 +8,102 @@
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-1.85%2B-orange.svg)](https://www.rust-lang.org/)
 
-
 </div>
 
-Ultra performant document intelligence engine for RAG, with written in **Rust**. Zero vector database, zero embedding model — just LLM-powered tree navigation. Incremental indexing and multi-format support out-of-box.
+> ⚠️ **Early Development** — API may change. Not recommended for production yet.
 
-**Early Development**: This project is in active development. The API and features are likely to evolve, and breaking changes may occur.
+## What is Vectorless?
 
+**Vectorless** is a Rust library for querying structured documents using natural language — without vector databases or embedding models. 
 
-## Why Vectorless?
+Instead of chunking documents into vectors, Vectorless preserves the document's tree structure and uses an LLM to navigate it — like how a human reads a table of contents.
 
-Traditional RAG systems have a fundamental problem: **they lose document structure.**
-
-When you chunk a document into vectors, you lose:
-- The hierarchical relationship between sections
-- The context of where information lives
-- The ability to navigate based on reasoning
-
-**Vectorless takes a different approach:**
-
-It preserves your document's tree structure and uses an LLM to navigate it — just like a human would skim a table of contents, then drill into relevant sections.
-
-**Result:** More accurate retrieval with zero infrastructure complexity.
+**Analogy:** Traditional RAG is like searching every word in a book. Vectorless is like reading the table of contents, then going to the right chapter.
 
 ## How It Works
 
-![Architecture](docs/design/how-it-works.svg)
+![How it works](docs/design/how-it-works.svg)
 
-**Vectorless** preserves your document's hierarchical structure and uses a multi-stage pipeline for intelligent retrieval:
+### 1. Index: Build a Navigable Tree
 
-### Index Pipeline
+```
+Technical Manual (root)
+├── Chapter 1: Introduction
+├── Chapter 2: Architecture
+│   ├── 2.1 System Design
+│   └── 2.2 Implementation
+└── Chapter 3: API Reference
+```
 
-Transforms documents into a navigable tree structure:
+Each node gets an AI-generated summary, enabling fast navigation.
 
-1. **Parse** — Parse documents (Markdown, PDF, DOCX, HTML) into structured content
-2. **Build** — Construct document tree with metadata
-3. **Enhance** — Add table of contents and section detection
-4. **Enrich** — Generate AI summaries for tree nodes
-5. **Optimize** — Optimize tree structure for efficient retrieval
+### 2. Query: Navigate with LLM
 
-### Retrieval Pipeline
+When you ask "How do I reset the device?":
 
-Uses adaptive, multi-stage retrieval with backtracking:
+1. **Analyze** — Understand query intent and complexity
+2. **Navigate** — LLM guides tree traversal (like reading a TOC)
+3. **Retrieve** — Return the exact section with context
+4. **Verify** — Check if more information is needed (backtracking)
 
-1. **Analyze** — Detect query complexity, extract keywords
-2. **Plan** — Select optimal strategy (keyword/semantic/LLM) and algorithm
-3. **Search** — Execute tree traversal (greedy/beam/MCTS)
-4. **Judge** — Evaluate sufficiency, trigger backtracking if needed
+## Traditional RAG vs Vectorless
 
-This mimics how humans navigate documentation: skim the TOC, drill into relevant sections, and backtrack when needed.
+![Traditional RAG vs Vectorless](docs/design/comparison.svg)
 
-### Pilot: The Brain
+| Aspect | Traditional RAG | Vectorless |
+|--------|----------------|------------|
+| **Infrastructure** | Vector DB + Embedding Model | Just LLM API |
+| **Document Structure** | Lost in chunking | Preserved |
+| **Context** | Fragment only | Section + surrounding context |
+| **Setup Time** | Hours to Days | Minutes |
+| **Best For** | Unstructured text | Structured documents |
 
-**Pilot** is the intelligence layer that guides retrieval:
+## Example
 
-- **Intervention Points** — Pilot acts at key decision moments:
-  - **START** — Analyze query intent, set initial direction
-  - **FORK** — Rank candidates at branch points
-  - **BACKTRACK** — Suggest alternatives when search fails
-  - **EVALUATE** — Assess content sufficiency
+**Input:**
+```
+Document: 100-page technical manual (PDF)
+Query: "How do I reset the device?"
+```
 
-- **Score Merging** — Combines algorithm scores with LLM reasoning:
-  ```
-  final_score = α × algorithm_score + β × llm_score
-  ```
+**Output:**
+```
+Answer: "To reset the device, hold the power button for 10 seconds 
+until the LED flashes blue, then release..."
 
-- **Fallback Strategy** — 4-level degradation (Normal → Retry → Simplified → Algorithm-only)
+Source: Chapter 4 > Section 4.2 > Reset Procedure
+```
 
-- **Budget Control** — Token and call limits with intelligent allocation
+## When to Use
 
-## Comparison
+✅ **Good fit:**
+- Technical documentation
+- Manuals and guides
+- Structured reports
+- Policy documents
+- Any document with clear hierarchy
 
-| Aspect | Vectorless | Traditional RAG |
-|--------|-----------|-----------------|
-| **Infrastructure** | Zero | Vector DB + Embedding Model |
-| **Setup Time** | Minutes | Hours to Days |
-| **Reasoning** | Native navigation | Similarity search only |
-| **Document Structure** | Preserved | Lost in chunking |
-| **Incremental Updates** | Supported | Full re-index required |
-| **Debugging** | Traceable navigation path | Black box similarity scores |
-| **Best For** | Structured documents | Unstructured text |
+❌ **Not ideal:**
+- Unstructured text (tweets, chat logs)
+- Very short documents (< 1 page)
+- Pure Q&A datasets without structure
 
-## Installation
+## Quick Start
 
-Add to your `Cargo.toml`:
+### Installation
 
 ```toml
 [dependencies]
 vectorless = "0.1"
 ```
 
-## Quick Start
-
-Create a configuration file `vectorless.toml` in your project root:
+### Configuration
 
 ```bash
 cp vectorless.example.toml ./vectorless.toml
 ```
 
-Basic usage:
+### Usage
 
 ```rust
 use vectorless::Engine;
@@ -116,33 +113,52 @@ async fn main() -> vectorless::Result<()> {
     // Create client
     let client = Engine::builder()
         .with_workspace("./workspace")
-        .build()
-        .map_err(|e| vectorless::Error::Config(e.to_string()))?;
+        .build()?;
 
-    // Index a document
-    let doc_id = client.index("./document.md").await?;
+    // Index a document (PDF, Markdown, DOCX, HTML)
+    let doc_id = client.index("./document.pdf").await?;
 
-    // Query
-    let result = client.query(&doc_id, "What is this about?").await?;
-    println!("{}", result.content);
+    // Query with natural language
+    let result = client.query(&doc_id, "What are the system requirements?").await?;
+
+    println!("Answer: {}", result.content);
+    println!("Source: {}", result.path); // e.g., "Chapter 2 > Section 2.1"
 
     Ok(())
 }
 ```
 
-## Examples
+## Features
 
-See the [examples/](examples/) directory for complete working examples.
+| Feature | Description |
+|---------|-------------|
+| **Zero Infrastructure** | No vector DB, no embedding model — just an LLM API |
+| **Multi-format Support** | PDF, Markdown, DOCX, HTML out of the box |
+| **Incremental Updates** | Add/remove documents without full re-index |
+| **Traceable Results** | See the exact navigation path taken |
+| **Feedback Learning** | Improves from user feedback over time |
+| **Multi-turn Queries** | Handles complex questions with decomposition |
+
+---
 
 ## Architecture
+
 ![Architecture](docs/design/architecture.svg)
 
+### Core Components
+
+- **Index Pipeline** — Parses documents, builds tree, generates summaries
+- **Retrieval Pipeline** — Analyzes query, navigates tree, returns results
+- **Pilot** — LLM-powered navigator that guides retrieval decisions
+- **Metrics Hub** — Unified observability for LLM calls, retrieval, and feedback
+
+## Examples
+
+See the [examples/](examples/) directory.
 
 ## Contributing
 
-Contributions are welcome!
-
-If you find this project useful, please consider giving it a star on [GitHub](https://github.com/vectorlessflow/vectorless) — it helps others discover it and supports ongoing development.
+Contributions welcome! If you find this useful, please ⭐ the repo — it helps others discover it.
 
 ## Star History
 
@@ -156,4 +172,4 @@ If you find this project useful, please consider giving it a star on [GitHub](ht
 
 ## License
 
-Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) for details.
+Apache License 2.0
