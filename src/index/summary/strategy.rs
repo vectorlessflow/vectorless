@@ -6,7 +6,7 @@
 use async_trait::async_trait;
 
 use crate::document::{DocumentTree, NodeId};
-use crate::fingerprint::Fingerprint;
+use crate::utils::fingerprint::Fingerprint;
 use crate::llm::{LlmClient, LlmResult};
 use crate::memo::{MemoKey, MemoStore, MemoValue};
 

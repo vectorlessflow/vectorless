@@ -14,7 +14,7 @@ use std::time::SystemTime;
 use serde::{Deserialize, Serialize};
 
 use crate::document::{DocumentTree, NodeId};
-use crate::fingerprint::{Fingerprint, Fingerprinter, NodeFingerprint};
+use crate::utils::fingerprint::{Fingerprint, Fingerprinter, NodeFingerprint};
 
 /// Type of change detected.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

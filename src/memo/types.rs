@@ -6,7 +6,7 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-use crate::fingerprint::Fingerprint;
+use crate::utils::fingerprint::Fingerprint;
 
 /// Types of operations that can be memoized.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -141,7 +141,7 @@ impl MemoKey {
 
     /// Compute a fingerprint of this key for storage.
     pub fn fingerprint(&self) -> Fingerprint {
-        use crate::fingerprint::Fingerprinter;
+        use crate::utils::fingerprint::Fingerprinter;
 
         let mut fp = Fingerprinter::new();
         fp.write_u64(self.op_type.as_byte() as u64);

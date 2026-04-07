@@ -10,7 +10,7 @@ use tracing::info;
 use crate::document::{DocumentTree, NodeId};
 use crate::error::Result;
 use crate::parser::RawNode;
-use crate::util::estimate_tokens;
+use crate::utils::estimate_tokens;
 
 use super::{IndexStage, StageResult};
 use crate::index::ThinningConfig;

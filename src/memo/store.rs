@@ -19,7 +19,7 @@ use tracing::{debug, info, warn};
 
 use super::types::{MemoEntry, MemoKey, MemoStats, MemoValue};
 use crate::error::Result;
-use crate::fingerprint::Fingerprint;
+use crate::utils::fingerprint::Fingerprint;
 
 /// Default TTL for cache entries (7 days).
 const DEFAULT_TTL: Duration = Duration::days(7);

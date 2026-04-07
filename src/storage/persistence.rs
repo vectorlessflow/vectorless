@@ -55,8 +55,8 @@ pub struct DocumentMeta {
     // === Processing State (for incremental updates) ===
 
     /// Content fingerprint for change detection.
-    #[serde(default, skip_serializing_if = "crate::fingerprint::Fingerprint::is_zero")]
-    pub content_fingerprint: crate::fingerprint::Fingerprint,
+    #[serde(default, skip_serializing_if = "crate::utils::fingerprint::Fingerprint::is_zero")]
+    pub content_fingerprint: crate::utils::fingerprint::Fingerprint,
 
     /// Processing version (incremented when algorithm changes).
     #[serde(default)]
@@ -93,7 +93,7 @@ impl DocumentMeta {
             line_count: None,
             created_at: now,
             modified_at: now,
-            content_fingerprint: crate::fingerprint::Fingerprint::zero(),
+            content_fingerprint: crate::utils::fingerprint::Fingerprint::zero(),
             processing_version: 0,
             node_count: 0,
             total_summary_tokens: 0,
@@ -115,7 +115,7 @@ impl DocumentMeta {
     }
 
     /// Set the content fingerprint.
-    pub fn with_fingerprint(mut self, fp: crate::fingerprint::Fingerprint) -> Self {
+    pub fn with_fingerprint(mut self, fp: crate::utils::fingerprint::Fingerprint) -> Self {
         self.content_fingerprint = fp;
         self
     }
@@ -148,7 +148,7 @@ impl DocumentMeta {
     /// Mark as processed with given fingerprint and version.
     pub fn mark_processed(
         &mut self,
-        fp: crate::fingerprint::Fingerprint,
+        fp: crate::utils::fingerprint::Fingerprint,
         version: u32,
         model: Option<&str>,
     ) {
@@ -159,7 +159,7 @@ impl DocumentMeta {
     }
 
     /// Check if the document needs reprocessing.
-    pub fn needs_reprocessing(&self, current_fp: &crate::fingerprint::Fingerprint, current_version: u32) -> bool {
+    pub fn needs_reprocessing(&self, current_fp: &crate::utils::fingerprint::Fingerprint, current_version: u32) -> bool {
         // Never processed
         if self.processing_version == 0 {
             return true;

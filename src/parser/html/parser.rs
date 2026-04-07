@@ -9,7 +9,7 @@ use std::path::Path;
 
 use crate::error::Result;
 use crate::parser::{DocumentFormat, DocumentMeta, DocumentParser, ParseResult, RawNode};
-use crate::util::estimate_tokens;
+use crate::utils::estimate_tokens;
 
 use super::config::HtmlConfig;
 

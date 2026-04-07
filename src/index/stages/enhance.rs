@@ -10,7 +10,7 @@ use tracing::{debug, info, warn};
 
 use crate::document::{DocumentTree, NodeId, TreeNode};
 use crate::error::Result;
-use crate::fingerprint::Fingerprint;
+use crate::utils::fingerprint::Fingerprint;
 use crate::llm::LlmClient;
 use crate::memo::{MemoKey, MemoStore, MemoValue};
 
