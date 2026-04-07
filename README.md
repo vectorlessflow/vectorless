@@ -1,11 +1,11 @@
 <div align="center">
 
-![Vectorless](docs/design/logo-horizontal.svg)
+<img src="https://raw.githubusercontent.com/vectorlessflow/vectorless/main/docs/design/logo-horizontal.svg" alt="Vectorless" width="400">
 
-[![Crates.io](https://img.shields.io/crates/v/vectorless.svg)](https://crates.io/crates/vectorless)
 [![PyPI](https://img.shields.io/pypi/v/vectorless.svg)](https://pypi.org/project/vectorless/)
-[![Downloads](https://img.shields.io/crates/d/vectorless.svg)](https://crates.io/crates/vectorless)
-[![Documentation](https://docs.rs/vectorless/badge.svg)](https://docs.rs/vectorless)
+[![Python](https://img.shields.io/pypi/pyversions/vectorless.svg)](https://pypi.org/project/vectorless/)
+[![Crates.io](https://img.shields.io/crates/v/vectorless.svg)](https://crates.io/crates/vectorless)
+[![Docs](https://docs.rs/vectorless/badge.svg)](https://docs.rs/vectorless)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-1.85%2B-orange.svg)](https://www.rust-lang.org/)
 
@@ -23,7 +23,7 @@ Instead of chunking documents into vectors, Vectorless preserves the document's 
 
 ## How It Works
 
-![How it works](docs/design/how-it-works.svg)
+<img src="https://raw.githubusercontent.com/vectorlessflow/vectorless/main/docs/design/how-it-works.svg" alt="How it works" width="600">
 
 ### 1. Index: Build a Navigable Tree
 
@@ -49,7 +49,7 @@ When you ask "How do I reset the device?":
 
 ## Traditional RAG vs Vectorless
 
-![Traditional RAG vs Vectorless](docs/design/comparison.svg)
+<img src="https://raw.githubusercontent.com/vectorlessflow/vectorless/main/docs/design/comparison.svg" alt="Traditional RAG vs Vectorless" width="600">
 
 | Aspect | Traditional RAG | Vectorless |
 |--------|----------------|------------|
@@ -164,7 +164,7 @@ async fn main() -> vectorless::Result<()> {
 
 ## Architecture
 
-![Architecture](docs/design/architecture.svg)
+<img src="https://raw.githubusercontent.com/vectorlessflow/vectorless/main/docs/design/architecture.svg" alt="Architecture" width="600">
 
 ### Core Components
 

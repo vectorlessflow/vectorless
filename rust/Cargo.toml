@@ -1,12 +1,12 @@
 [package]
 name = "vectorless"
-version = "0.1.19"
-edition = "2024"
-authors = ["zTgx <beautifularea@gmail.com>"]
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
 description = "Hierarchical, reasoning-native document intelligence engine"
-license = "Apache-2.0"
-repository = "https://github.com/vectorlessflow/vectorless"
-homepage = "https://vectorless.dev"
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
 documentation = "https://docs.rs/vectorless"
 keywords = ["rag", "document", "retrieval", "indexing", "llm"]
 categories = ["text-processing", "data-structures", "algorithms"]
@@ -15,111 +15,88 @@ exclude = ["samples/", "docs/", ".*"]
 
 [dependencies]
 # Async runtime
-tokio = { version = "1", features = ["full"] }
-async-trait = "0.1"
-futures = "0.3"
+tokio = { workspace = true }
+async-trait = { workspace = true }
+futures = { workspace = true }
 
 # Serialization
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-toml = "0.8"
+serde = { workspace = true }
+serde_json = { workspace = true }
+toml = { workspace = true }
 
 # Error handling
-thiserror = "2"
-anyhow = { version = "1", optional = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true, optional = true }
 
 # OpenAI-compatible API client
-async-openai = { version = "0.34", features = ["chat-completion"] }
+async-openai = { workspace = true }
 
 # UUID
-uuid = { version = "1.10", features = ["v4", "serde"] }
+uuid = { workspace = true }
 
 # Time
-chrono = { version = "0.4", default-features = false, features = ["serde", "clock"] }
+chrono = { workspace = true }
 
 # Logging
-tracing = "0.1"
+tracing = { workspace = true }
 
 # Rate limiting
-governor = "0.6"
-nonzero_ext = "0.3"
+governor = { workspace = true }
+nonzero_ext = { workspace = true }
 
 # Token counting
-tiktoken-rs = "0.9"
+tiktoken-rs = { workspace = true }
 
 # Text processing
-regex = "1.10"
+regex = { workspace = true }
 
 # Markdown parsing
-pulldown-cmark = { version = "0.12", default-features = false, features = ["simd"] }
+pulldown-cmark = { workspace = true }
 
 # Tree data structure
-indextree = { version = "4.8.0", features = ["deser"] }
+indextree = { workspace = true }
 
 # LRU cache
-lru = "0.12"
+lru = { workspace = true }
 
 # Checksum
-sha2 = "0.10"
+sha2 = { workspace = true }
 
-# BLAKE2b hashing for fingerprints
-blake2 = "0.10"
-base64 = "0.22"
+# BLAKE2b hashing
+blake2 = { workspace = true }
+base64 = { workspace = true }
 
-# Synchronization primitives (for memo store)
-parking_lot = "0.12"
+# Synchronization primitives
+parking_lot = { workspace = true }
 
 # Compression
-flate2 = "1.0"
+flate2 = { workspace = true }
 
 # File locking (Unix)
 [target.'cfg(unix)'.dependencies]
-libc = "0.2"
+libc = { workspace = true }
 
 # PDF processing
-pdf-extract = "0.10.0"
-lopdf = "0.34"
+pdf-extract = { workspace = true }
+lopdf = { workspace = true }
 
 # DOCX processing
-zip = "2.2"
-roxmltree = "0.20"
+zip = { workspace = true }
+roxmltree = { workspace = true }
 
-# Random number generation (for sampling)
-rand = "0.8"
+# Random number generation
+rand = { workspace = true }
 
 # BM25 scoring
-bm25 = { version = "2.3.2", features = ["parallelism"] }
+bm25 = { workspace = true }
 
 # HTML parsing
-scraper = "0.22"
+scraper = { workspace = true }
 
 [dev-dependencies]
-tempfile = "3.10"
-tokio-test = "0.4"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tempfile = { workspace = true }
+tokio-test = { workspace = true }
+tracing-subscriber = { workspace = true }
 
-[profile.release]
-opt-level = 3
-lto = "thin"
-codegen-units = 1
-strip = true
-panic = "abort"
-
-[profile.dev]
-opt-level = 0
-debug = true
-
-[profile.bench]
-inherits = "release"
-debug = true
-
-[profile.release.package."*"]
-opt-level = 3
-
-[lints.rust]
-missing_docs = "warn"
-unsafe_code = "warn"
-
-[lints.clippy]
-all = "warn"
-pedantic = "warn"
+[lints]
+workspace = true
