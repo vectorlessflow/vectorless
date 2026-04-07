@@ -28,30 +28,114 @@
 //! ## Architecture
 //!
 //! ```text
-//! ┌─────────────────────────────────────────────────────────────────┐
-//! │                          client                                  │
-//! │                     (Engine, EngineBuilder)                      │
-//! └────────────────────────────┬────────────────────────────────────┘
-//!                              │
-//!           ┌──────────────────┼──────────────────┐
-//!           ▼                  ▼                  ▼
-//!     ┌──────────┐       ┌───────────┐      ┌──────────┐
-//!     │  index   │       │ retrieval │      │ storage  │
-//!     │ (write)  │       │  (read)   │      │ (persist)│
-//!     └────┬─────┘       └─────┬─────┘      └────┬─────┘
-//!          │                   │                 │
-//!          └───────────┬───────┘                 │
-//!                      ▼                         │
-//!                ┌───────────┐                   │
-//!                │  domain   │                   │
-//!                │(Tree/Node)│                   │
-//!                └─────┬─────┘                   │
-//!                      │                         │
-//!       ┌──────────────┼──────────────┐          │
-//!       ▼              ▼              ▼          │
-//!  ┌────────┐    ┌──────────┐   ┌────────┐      │
-//!  │ parser │    │   llm    │   │ config │◄─────┘
-//!  └────────┘    └──────────┘   └────────┘
+//!                              ┌─────────────────────────────────────────────────┐
+//!                              │                    USER                          │
+//!                              │              (Query / Index)                     │
+//!                              └────────────────────────┬────────────────────────┘
+//!                                                       │
+//!                                                       ▼
+//! ┌─────────────────────────────────────────────────────────────────────────────────┐
+//! │                              CLIENT LAYER                                        │
+//! │  ┌───────────────────────────────────────────────────────────────────────────┐  │
+//! │  │                           Engine / EngineBuilder                            │  │
+//! │  │                    (Unified API for Index + Query)                          │  │
+//! │  └───────────────────────────────────────────────────────────────────────────┘  │
+//! └─────────────────────────────────────────────────────────────────────────────────┘
+//!                                                       │
+//!                              ┌────────────────────────┴────────────────────────┐
+//!                              │                                                 │
+//!                              ▼                                                 ▼
+//! ┌──────────────────────────────────────────────┐   ┌──────────────────────────────────────────────┐
+//! │              INDEX PIPELINE                   │   │              RETRIEVAL ENGINE                │
+//! │  ┌─────────┐  ┌─────────┐  ┌─────────────┐   │   │  ┌─────────────────────────────────────┐    │
+//! │  │  Parse  │─▶│  Build  │─▶│   Enhance   │   │   │  │           Pilot (LLM)               │    │
+//! │  │ (Doc)   │  │ (Tree)  │  │ (Summaries) │   │   │  │     ┌───────────────────────┐       │    │
+//! │  └─────────┘  └────┬────┘  └──────┬──────┘   │   │  │     │   Navigation Agent    │       │    │
+//! │       │            │              │          │   │  │     │  ┌─────┐ ┌─────────┐  │       │    │
+//! │       ▼            ▼              ▼          │   │  │     │  │Decide│▶│Traverse │  │       │    │
+//! │  ┌─────────┐  ┌─────────┐  ┌─────────────┐   │   │  │     │  │Path │ │  Tree   │  │       │    │
+//! │  │ Enrich  │─▶│ Optimize│─▶│   Persist   │   │   │  │     │  └─────┘ └─────────┘  │       │    │
+//! │  │(Meta)   │  │ (Tree)  │  │  (Storage)  │   │   │  │     └───────────────────────┘       │    │
+//! │  └─────────┘  └─────────┘  └─────────────┘   │   │  └─────────────────────────────────────┘    │
+//! │       │                                        │   │                    │                        │
+//! │       │         ┌──────────────────────┐      │   │                    ▼                        │
+//! │       └────────▶│   Change Detector    │◀─────┼───┤  ┌─────────────────────────────────────┐    │
+//! │                  │  (Fingerprint-based) │      │   │  │         Context Assembler           │    │
+//! │                  └──────────────────────┘      │   │  │   ┌─────────┐ ┌─────────────────┐  │    │
+//! │                                                │   │  │   │ Pruning │ │  Token Budget   │  │    │
+//! └──────────────────────────────────────────────┘   │  │   │Strategy │ │    Management   │  │    │
+//!                              │                     │  │   └─────────┘ └─────────────────┘  │    │
+//!                              │                     │  └─────────────────────────────────────┘    │
+//!                              │                     │                    │                        │
+//!                              ▼                     │                    ▼                        │
+//! ┌──────────────────────────────────────────────────────────────────────────────────────────────┐
+//! │                                  DOMAIN LAYER (Core)                                          │
+//! │                                                                                               │
+//! │   ┌───────────────────┐     ┌───────────────────┐     ┌───────────────────┐                   │
+//! │   │   DocumentTree    │     │    TreeNode       │     │    NodeId         │                   │
+//! │   │   (Arena-based)   │────▶│  - title          │     │   (indextree)     │                   │
+//! │   │                   │     │  - content        │     │                   │                   │
+//! │   └───────────────────┘     │  - summary        │     └───────────────────┘                   │
+//! │            │                │  - depth          │              │                              │
+//! │            ▼                │  - token_count    │              │                              │
+//! │   ┌───────────────────┐     └───────────────────┘              │                              │
+//! │   │     TocView       │              │                         │                              │
+//! │   │  (Table of        │              │                         │                              │
+//! │   │   Contents)       │              │                         │                              │
+//! │   └───────────────────┘              │                         │                              │
+//! └──────────────────────────────────────────────────────────────────────────────────────────────┘
+//!                                        │                         │
+//!                      ┌─────────────────┴─────────────────────────┴─────────────────┐
+//!                      │                                                               │
+//!                      ▼                                                               ▼
+//! ┌─────────────────────────────────────────┐   ┌─────────────────────────────────────────────────┐
+//! │            SUPPORT LAYER                 │   │                 STORAGE LAYER                   │
+//! │                                          │   │                                                  │
+//! │  ┌─────────────┐  ┌──────────────────┐   │   │  ┌────────────────┐  ┌─────────────────────┐    │
+//! │  │    LLM      │  │     Parser       │   │   │  │   Workspace    │  │    MemoStore        │    │
+//! │  │  (OpenAI)   │  │ - Markdown       │   │   │  │  (Persistence) │  │  (LLM Cache)        │    │
+//! │  │             │  │ - PDF            │   │   │  │                │  │  - LRU Eviction     │    │
+//! │  │ ┌─────────┐ │  │ - DOCX           │   │   │  │ ┌────────────┐ │  │  - TTL Expiration   │    │
+//! │  │ │  Pool   │ │  │                  │   │   │  │ │   LRU     │ │  │  - Disk Persist     │    │
+//! │  │ │ Retry   │ │  └──────────────────┘   │   │  │ │   Cache   │ │  │                      │    │
+//! │  │ │ Fallback│ │                          │   │  │ └────────────┘ │  └─────────────────────┘    │
+//! │  │ └─────────┘ │  ┌──────────────────┐   │   │  │                │                               │
+//! │  └─────────────┘  │   Fingerprint    │   │   │  │ ┌────────────┐ │  ┌─────────────────────┐    │
+//! │                    │   (BLAKE2b)      │   │   │  │ │  Atomic    │ │  │   ChangeDetector    │    │
+//! │  ┌─────────────┐  │                  │   │   │  │ │  Writes    │ │  │   (Incremental)     │    │
+//! │  │   Config    │  │ ┌──────────────┐ │   │   │  │ └────────────┘ │  │                     │    │
+//! │  │   Loader    │  │ │ Content FP   │ │   │   │  │                │  │ ┌─────────────────┐ │    │
+//! │  │             │  │ │ Subtree FP   │ │   │   │  └────────────────┘  │ │ Processing Ver  │ │    │
+//! │  └─────────────┘  │ │ Node FP      │ │   │   │                      │ └─────────────────┘ │    │
+//! │                    │ └──────────────┘ │   │   │                      └─────────────────────┘    │
+//! │  ┌─────────────┐  └──────────────────┘   │   │                                                  │
+//! │  │  Throttle   │                          │   │  ┌────────────────────────────────────────────┐ │
+//! │  │ (Rate Limit)│  ┌──────────────────┐   │   │  │              DocumentMeta                  │ │
+//! │  └─────────────┘  │   Throttle       │   │   │  │  - content_fingerprint                     │ │
+//! │                    │   (Concurrency)  │   │   │  │  - processing_version                      │ │
+//! │                    └──────────────────┘   │   │  │  - node_count, total_summary_tokens        │ │
+//! │                                          │   │  └────────────────────────────────────────────┘ │
+//! └─────────────────────────────────────────┘   └─────────────────────────────────────────────────┘
+//! ```
+//!
+//! ## Data Flow
+//!
+//! ### Indexing Flow
+//! ```text
+//! Document ──▶ Parse ──▶ Build Tree ──▶ Generate Summaries ──▶ Detect Changes ──▶ Persist
+//!                            │                │                      │
+//!                            │                └──▶ MemoStore ◀───────┘
+//!                            │                      (Cache)
+//!                            └──▶ Fingerprint ──▶ ChangeDetector
+//! ```
+//!
+//! ### Query Flow
+//! ```text
+//! Query ──▶ Pilot Agent ──▶ Navigate Tree ──▶ Assemble Context ──▶ Return Result
+//!               │                 │                   │
+//!               └──▶ LLM ◀────────┘                   │
+//!                    (Decide)                         │
+//!                                                     └──▶ MemoStore (Cached Summaries)
 //! ```
 //!
 //! ## Features
@@ -62,6 +146,8 @@
 //! - 📄 **Multi-Format** — Markdown, PDF, DOCX support
 //! - 💾 **Persistent Workspace** — LRU-cached storage with lazy loading
 //! - 🔄 **Retry & Fallback** — Resilient LLM calls with automatic recovery
+//! - 🔍 **Incremental Updates** — Fingerprint-based change detection
+//! - ⚡ **LLM Memoization** — Cache summaries and decisions to reduce costs
 //!
 //! ## Quick Start
 //!
@@ -93,14 +179,16 @@
 //! | Module | Description |
 //! |--------|-------------|
 //! | [`client`] | High-level API (`Engine`, `EngineBuilder`) |
-//! | [`domain`] | Core domain types (`DocumentTree`, `TreeNode`, `NodeId`) |
-//! | [`index`] | Document indexing pipeline |
-//! | [`retrieval`] | Retrieval strategies and search algorithms |
+//! | [`document`] | Core domain types (`DocumentTree`, `TreeNode`, `NodeId`) |
+//! | [`index`] | Document indexing pipeline with incremental updates |
+//! | [`retrieval`] | Retrieval strategies and LLM-based navigation |
 //! | [`config`] | Configuration management |
 //! | [`llm`] | LLM client with retry & fallback |
 //! | [`parser`] | Document parsers (Markdown, PDF, DOCX) |
-//! | [`storage`] | Workspace persistence |
-//! | [`throttle`] | Rate limiting |
+//! | [`storage`] | Workspace persistence with LRU caching |
+//! | [`throttle`] | Rate limiting and concurrency control |
+//! | [`fingerprint`] | Content and subtree fingerprinting |
+//! | [`memo`] | LLM result memoization and caching |
 
 // =============================================================================
 // Modules
@@ -112,12 +200,13 @@ pub mod document;
 pub mod error;
 pub mod index;
 pub mod llm;
+pub mod memo;
 pub mod metrics;
 pub mod parser;
 pub mod retrieval;
 pub mod storage;
 pub mod throttle;
-pub mod util;
+pub mod utils;
 
 // =============================================================================
 // Re-exports (Convenience API)
@@ -139,7 +228,7 @@ pub use document::{
 };
 
 // Utility functions
-pub use util::{estimate_tokens, estimate_tokens_fast};
+pub use utils::{estimate_tokens, estimate_tokens_fast};
 
 // Configuration
 pub use config::{Config, ConfigLoader, RetrievalConfig, SummaryConfig};
@@ -174,3 +263,6 @@ pub use storage::{DocumentMeta as StorageDocumentMeta, PersistedDocument, Worksp
 
 // Throttle
 pub use throttle::{ConcurrencyConfig, ConcurrencyController, RateLimiter};
+
+// Memo
+pub use memo::{MemoEntry, MemoKey, MemoOpType, MemoStats, MemoStore, MemoValue};

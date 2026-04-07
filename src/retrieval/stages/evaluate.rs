@@ -15,7 +15,7 @@ use crate::retrieval::content::{ContentAggregator, ContentAggregatorConfig};
 use crate::retrieval::pipeline::{FailurePolicy, PipelineContext, RetrievalStage, StageOutcome};
 use crate::retrieval::sufficiency::{LlmJudge, SufficiencyChecker, ThresholdChecker};
 use crate::retrieval::types::{RetrievalResult, RetrieveResponse, SufficiencyLevel};
-use crate::util::estimate_tokens;
+use crate::utils::estimate_tokens;
 
 /// Evaluate Stage - evaluates retrieval sufficiency.
 ///

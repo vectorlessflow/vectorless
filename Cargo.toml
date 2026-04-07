@@ -1,6 +1,6 @@
 [package]
 name = "vectorless"
-version = "0.1.18"
+version = "0.1.19"
 edition = "2024"
 authors = ["zTgx <beautifularea@gmail.com>"]
 description = "Hierarchical, reasoning-native document intelligence engine"
@@ -61,6 +61,13 @@ lru = "0.12"
 
 # Checksum
 sha2 = "0.10"
+
+# BLAKE2b hashing for fingerprints
+blake2 = "0.10"
+base64 = "0.22"
+
+# Synchronization primitives (for memo store)
+parking_lot = "0.12"
 
 # Compression
 flate2 = "1.0"

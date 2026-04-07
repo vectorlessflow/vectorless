@@ -6,7 +6,9 @@
 use async_trait::async_trait;
 
 use crate::document::{DocumentTree, NodeId};
+use crate::utils::fingerprint::Fingerprint;
 use crate::llm::{LlmClient, LlmResult};
+use crate::memo::{MemoKey, MemoStore, MemoValue};
 
 /// Configuration for summary strategies.
 #[derive(Debug, Clone)]
@@ -160,6 +162,8 @@ pub trait SummaryGenerator: Send + Sync {
 pub struct LlmSummaryGenerator {
     client: LlmClient,
     max_tokens: usize,
+    /// Optional memo store for caching results.
+    memo_store: Option<MemoStore>,
 }
 
 impl LlmSummaryGenerator {
@@ -168,6 +172,7 @@ impl LlmSummaryGenerator {
         Self {
             client,
             max_tokens: 200,
+            memo_store: None,
         }
     }
 
@@ -176,11 +181,32 @@ impl LlmSummaryGenerator {
         self.max_tokens = max_tokens;
         self
     }
+
+    /// Set memo store for caching.
+    pub fn with_memo_store(mut self, store: MemoStore) -> Self {
+        self.memo_store = Some(store);
+        self
+    }
 }
 
 #[async_trait]
 impl SummaryGenerator for LlmSummaryGenerator {
     async fn generate(&self, title: &str, content: &str) -> LlmResult<String> {
+        // Compute content fingerprint for cache key
+        let content_fp = Fingerprint::from_str(&format!("{}|{}", title, content));
+        let memo_key = MemoKey::summary(&content_fp);
+
+        // Check memo store first
+        if let Some(ref store) = self.memo_store {
+            if let Some(cached) = store.get(&memo_key) {
+                if let Some(summary) = cached.as_summary() {
+                    tracing::debug!("Memo cache hit for summary: {}", title);
+                    return Ok(summary.to_string());
+                }
+            }
+        }
+
+        // Generate with LLM
         let system_prompt = "You are a document summarization assistant. \
             Generate a concise summary (2-3 sentences) of the given section. \
             Focus on the main topics and key information. \
@@ -188,8 +214,22 @@ impl SummaryGenerator for LlmSummaryGenerator {
 
         let user_prompt = format!("Title: {}\n\nContent:\n{}", title, content);
 
-        self.client
+        let summary = self.client
             .complete_with_max_tokens(&system_prompt, &user_prompt, self.max_tokens as u16)
-            .await
+            .await?;
+
+        // Cache the result
+        if let Some(ref store) = self.memo_store {
+            // Estimate tokens saved (roughly: input + output tokens)
+            let tokens_saved = (title.len() + content.len() + summary.len()) / 4;
+            store.put_with_tokens(
+                memo_key,
+                MemoValue::Summary(summary.clone()),
+                tokens_saved as u64,
+            );
+            tracing::debug!("Memo cache stored for summary: {}", title);
+        }
+
+        Ok(summary)
     }
 }

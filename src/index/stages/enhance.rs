@@ -5,12 +5,14 @@
 
 use super::async_trait;
 use std::sync::Arc;
-use std::time::Instant;
-use tracing::{info, warn};
+use std::time::{Duration, Instant};
+use tracing::{debug, info, warn};
 
-use crate::document::{DocumentTree, NodeId};
+use crate::document::{DocumentTree, NodeId, TreeNode};
 use crate::error::Result;
+use crate::utils::fingerprint::Fingerprint;
 use crate::llm::LlmClient;
+use crate::memo::{MemoKey, MemoStore, MemoValue};
 
 use super::{IndexStage, StageResult};
 use crate::index::pipeline::{FailurePolicy, IndexContext, StageRetryConfig};
@@ -20,78 +22,48 @@ use crate::index::summary::{LlmSummaryGenerator, SummaryGenerator, SummaryStrate
 pub struct EnhanceStage {
     /// LLM client for summary generation.
     llm_client: Option<Arc<LlmClient>>,
+    /// Memo store for caching LLM results.
+    memo_store: Option<Arc<MemoStore>>,
 }
 
 impl EnhanceStage {
     /// Create a new enhance stage.
     pub fn new() -> Self {
-        Self { llm_client: None }
+        Self {
+            llm_client: None,
+            memo_store: None,
+        }
     }
 
     /// Create with LLM client.
     pub fn with_llm_client(client: LlmClient) -> Self {
         Self {
             llm_client: Some(Arc::new(client)),
+            memo_store: None,
         }
     }
 
-    /// Check if summary generation is needed.
+    /// Create with LLM client and memo store.
+    pub fn with_llm_and_memo(client: LlmClient, memo_store: MemoStore) -> Self {
+        Self {
+            llm_client: Some(Arc::new(client)),
+            memo_store: Some(Arc::new(memo_store)),
+        }
+    }
+
+    /// Set memo store for caching.
+    pub fn with_memo_store(mut self, store: MemoStore) -> Self {
+        self.memo_store = Some(Arc::new(store));
+        self
+    }
+
+    /// Check if summary generation is needed based on strategy.
     fn needs_summaries(&self, ctx: &IndexContext) -> bool {
         match &ctx.options.summary_strategy {
             SummaryStrategy::None => false,
-            SummaryStrategy::Lazy { .. } => false,
-            _ => true,
+            SummaryStrategy::Lazy { .. } => false, // Generated on-demand at query time
+            SummaryStrategy::Full { .. } | SummaryStrategy::Selective { .. } => true,
         }
-    }
-
-    /// Generate summary for a single node.
-    async fn generate_node_summary(
-        tree: &mut DocumentTree,
-        node_id: NodeId,
-        generator: &LlmSummaryGenerator,
-        strategy: &SummaryStrategy,
-        metrics: &mut crate::index::IndexMetrics,
-    ) -> Result<()> {
-        let node = match tree.get(node_id) {
-            Some(n) => n.clone(),
-            None => return Ok(()),
-        };
-
-        // Skip if no content
-        if node.content.is_empty() {
-            return Ok(());
-        }
-
-        // Get token count
-        let token_count = node.token_count.unwrap_or(0);
-        let should_gen = strategy.should_generate(tree, node_id, token_count);
-
-        // Check if we should generate
-        if !should_gen {
-            return Ok(());
-        }
-
-        // Generate summary
-        match generator.generate(&node.title, &node.content).await {
-            Ok(summary) => {
-                if summary.is_empty() {
-                    warn!("Empty summary returned for node '{}'", node.title);
-                } else {
-                    tree.set_summary(node_id, &summary);
-                    info!(
-                        "Generated summary for node: {} ({} chars)",
-                        node.title,
-                        summary.len()
-                    );
-                    metrics.increment_summaries();
-                }
-            }
-            Err(e) => {
-                warn!("Failed to generate summary for {}: {}", node.title, e);
-            }
-        }
-
-        Ok(())
     }
 }
 
@@ -120,7 +92,7 @@ impl IndexStage for EnhanceStage {
         FailurePolicy::retry_with(
             StageRetryConfig::new()
                 .with_max_attempts(2)
-                .with_initial_delay(std::time::Duration::from_millis(500)),
+                .with_initial_delay(Duration::from_millis(500)),
         )
     }
 
@@ -156,9 +128,14 @@ impl IndexStage for EnhanceStage {
 
         info!("Using summary strategy: {:?}", ctx.options.summary_strategy);
 
-        // Create summary generator
-        let generator = LlmSummaryGenerator::new((*llm_client).as_ref().clone())
+        // Create summary generator with optional memo store
+        let mut generator = LlmSummaryGenerator::new((*llm_client).as_ref().clone())
             .with_max_tokens(ctx.options.indexer.max_summary_tokens);
+
+        // Attach memo store to generator if available
+        if let Some(store) = &self.memo_store {
+            generator = generator.with_memo_store((**store).clone());
+        }
 
         // Get all nodes to process
         let node_ids: Vec<NodeId> = tree.traverse();
@@ -166,27 +143,76 @@ impl IndexStage for EnhanceStage {
 
         info!("Processing {} nodes for summary generation", total_nodes);
 
-        // Process nodes (with concurrency control)
+        // Process nodes
         let mut generated = 0;
         let mut failed = 0;
         let strategy = ctx.options.summary_strategy.clone();
 
         for node_id in node_ids {
-            match Self::generate_node_summary(
-                tree,
-                node_id,
-                &generator,
-                &strategy,
-                &mut ctx.metrics,
-            )
-            .await
-            {
-                Ok(()) => {
+            // Get node data (need to clone to avoid borrow issues)
+            let node = match tree.get(node_id) {
+                Some(n) => n.clone(),
+                None => continue,
+            };
+
+            // Skip if no content
+            if node.content.is_empty() {
+                continue;
+            }
+
+            // Get token count and check if we should generate
+            let token_count = node.token_count.unwrap_or(0);
+            if !strategy.should_generate(tree, node_id, token_count) {
+                continue;
+            }
+
+            // Check memo store first (additional check beyond generator)
+            let cached_summary = if let Some(store) = self.memo_store.as_deref() {
+                let content_fp =
+                    Fingerprint::from_str(&format!("{}|{}", node.title, node.content));
+                let memo_key = MemoKey::summary(&content_fp);
+
+                store
+                    .get(&memo_key)
+                    .and_then(|cached| cached.as_summary().map(|s| s.to_string()))
+            } else {
+                None
+            };
+
+            if let Some(summary) = cached_summary {
+                if !summary.is_empty() {
+                    tree.set_summary(node_id, &summary);
+                    debug!(
+                        "Using cached summary for node: {} ({} chars)",
+                        node.title,
+                        summary.len()
+                    );
+                    ctx.metrics.increment_summaries();
                     generated += 1;
+                    continue;
+                }
+            }
+
+            // Generate summary (generator also has memoization built-in)
+            match generator.generate(&node.title, &node.content).await {
+                Ok(summary) => {
+                    if summary.is_empty() {
+                        warn!("Empty summary returned for node '{}'", node.title);
+                        failed += 1;
+                    } else {
+                        tree.set_summary(node_id, &summary);
+                        debug!(
+                            "Generated summary for node: {} ({} chars)",
+                            node.title,
+                            summary.len()
+                        );
+                        ctx.metrics.increment_summaries();
+                        generated += 1;
+                    }
                 }
                 Err(e) => {
+                    warn!("Failed to generate summary for {}: {}", node.title, e);
                     failed += 1;
-                    warn!("Failed to generate summary: {}", e);
                 }
             }
 

@@ -10,7 +10,7 @@ use std::time::{Duration, Instant};
 /// # Example
 ///
 /// ```rust
-/// use vectorless::util::Timer;
+/// use vectorless::utils::Timer;
 ///
 /// let timer = Timer::start("indexing");
 /// // ... do work ...

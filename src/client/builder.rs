@@ -36,6 +36,7 @@
 use std::path::PathBuf;
 
 use crate::config::{Config, ConfigLoader, RetrievalConfig};
+use crate::memo::MemoStore;
 use crate::retrieval::PipelineRetriever;
 use crate::storage::Workspace;
 
@@ -108,6 +109,9 @@ pub struct EngineBuilder {
 
     /// Precise mode flag.
     precise_mode: bool,
+
+    /// Memo store for caching LLM decisions.
+    memo_store: Option<MemoStore>,
 }
 
 impl EngineBuilder {
@@ -126,6 +130,7 @@ impl EngineBuilder {
             top_k: None,
             fast_mode: false,
             precise_mode: false,
+            memo_store: None,
         }
     }
 
@@ -189,6 +194,39 @@ impl EngineBuilder {
     #[must_use]
     pub fn with_events(mut self, events: EventEmitter) -> Self {
         self.events = Some(events);
+        self
+    }
+
+    /// Set a memo store for caching LLM decisions.
+    ///
+    /// When enabled, the pilot will cache navigation decisions based on
+    /// context fingerprints, avoiding redundant API calls for similar
+    /// navigation scenarios.
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// use vectorless::client::EngineBuilder;
+    /// use vectorless::memo::MemoStore;
+    /// use chrono::Duration;
+    ///
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), vectorless::BuildError> {
+    /// let memo_store = MemoStore::new()
+    ///     .with_ttl(Duration::days(7))
+    ///     .with_model("gpt-4o");
+    ///
+    /// let engine = EngineBuilder::new()
+    ///     .with_workspace("./data")
+    ///     .with_memo_store(memo_store)
+    ///     .build()
+    ///     .await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[must_use]
+    pub fn with_memo_store(mut self, store: MemoStore) -> Self {
+        self.memo_store = Some(store);
         self
     }
 
@@ -467,6 +505,17 @@ impl EngineBuilder {
         if retrieval_config.content.enabled {
             retriever =
                 retriever.with_content_config(retrieval_config.content.to_aggregator_config());
+        }
+
+        // Add memo store if provided or create default
+        if let Some(memo_store) = self.memo_store {
+            retriever = retriever.with_memo_store(memo_store);
+        } else {
+            // Create default memo store with model from config
+            let memo_store = MemoStore::new()
+                .with_model(&retrieval_config.model)
+                .with_version(1);
+            retriever = retriever.with_memo_store(memo_store);
         }
 
         // Build engine
