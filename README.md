@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="https://raw.githubusercontent.com/vectorlessflow/vectorless/main/docs/design/logo-horizontal.svg" alt="Vectorless" width="400">
+<img src="https://raw.githubusercontent.com/vectorlessflow/vectorless/main/docs/design/logo-horizontal.svg" alt="Vectorless">
 
 [![PyPI](https://img.shields.io/pypi/v/vectorless.svg)](https://pypi.org/project/vectorless/)
 [![Python](https://img.shields.io/pypi/pyversions/vectorless.svg)](https://pypi.org/project/vectorless/)
@@ -25,7 +25,7 @@ Instead of chunking documents into vectors, Vectorless preserves the document's 
 
 ## How It Works
 
-<img src="https://raw.githubusercontent.com/vectorlessflow/vectorless/main/docs/design/how-it-works.svg" alt="How it works" width="600">
+<img src="https://raw.githubusercontent.com/vectorlessflow/vectorless/main/docs/design/how-it-works.svg" alt="How it works">
 
 ### 1. Index: Build a Navigable Tree
 
@@ -51,7 +51,7 @@ When you ask "How do I reset the device?":
 
 ## Traditional RAG vs Vectorless
 
-<img src="https://raw.githubusercontent.com/vectorlessflow/vectorless/main/docs/design/comparison.svg" alt="Traditional RAG vs Vectorless" width="600">
+<img src="https://raw.githubusercontent.com/vectorlessflow/vectorless/main/docs/design/comparison.svg" alt="Traditional RAG vs Vectorless">
 
 | Aspect | Traditional RAG | Vectorless |
 |--------|----------------|------------|
@@ -166,7 +166,7 @@ async fn main() -> vectorless::Result<()> {
 
 ## Architecture
 
-<img src="https://raw.githubusercontent.com/vectorlessflow/vectorless/main/docs/design/architecture.svg" alt="Architecture" width="600">
+<img src="https://raw.githubusercontent.com/vectorlessflow/vectorless/main/docs/design/architecture.svg" alt="Architecture">
 
 ### Core Components
 
