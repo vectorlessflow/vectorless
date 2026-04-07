@@ -13,7 +13,7 @@
 
 ## What is Vectorless?
 
-**Vectorless** is a Rust library for querying structured documents using natural language — without vector databases or embedding models.
+**Vectorless** is a library for querying structured documents using natural language — without vector databases or embedding models. Core engine written in Rust, with Python bindings.
 
 Instead of chunking documents into vectors, Vectorless preserves the document's tree structure and uses a **hybrid algorithm + LLM approach** to navigate it — like how a human reads a table of contents:
 
@@ -91,7 +91,8 @@ Source: Chapter 4 > Section 4.2 > Reset Procedure
 
 ## Quick Start
 
-### Python
+<details open>
+<summary><b>Python</b></summary>
 
 ```bash
 pip install vectorless
@@ -112,45 +113,42 @@ result = engine.query(doc_id, "What is the total revenue?")
 print(f"Answer: {result.content}")
 ```
 
-See [python/README.md](python/README.md) for full Python documentation.
+</details>
 
-### Rust
+<details>
+<summary><b>Rust</b></summary>
 
 ```toml
 [dependencies]
 vectorless = "0.1"
 ```
 
-### Configuration
-
 ```bash
 cp vectorless.example.toml ./vectorless.toml
 ```
-
-### Usage
 
 ```rust
 use vectorless::Engine;
 
 #[tokio::main]
 async fn main() -> vectorless::Result<()> {
-    // Create client
     let client = Engine::builder()
         .with_workspace("./workspace")
         .build()?;
 
-    // Index a document (PDF, Markdown, DOCX, HTML)
     let doc_id = client.index("./document.pdf").await?;
 
-    // Query with natural language
-    let result = client.query(&doc_id, "What are the system requirements?").await?;
+    let result = client.query(&doc_id,
+        "What are the system requirements?").await?;
 
     println!("Answer: {}", result.content);
-    println!("Source: {}", result.path); // e.g., "Chapter 2 > Section 2.1"
+    println!("Source: {}", result.path);
 
     Ok(())
 }
 ```
+
+</details>
 
 ## Features
 
