@@ -51,6 +51,32 @@ pub struct DocumentMeta {
 
     /// Last modified timestamp.
     pub modified_at: chrono::DateTime<chrono::Utc>,
+
+    // === Processing State (for incremental updates) ===
+
+    /// Content fingerprint for change detection.
+    #[serde(default, skip_serializing_if = "crate::fingerprint::Fingerprint::is_zero")]
+    pub content_fingerprint: crate::fingerprint::Fingerprint,
+
+    /// Processing version (incremented when algorithm changes).
+    #[serde(default)]
+    pub processing_version: u32,
+
+    /// Node count in the tree.
+    #[serde(default)]
+    pub node_count: usize,
+
+    /// Total tokens in summaries.
+    #[serde(default)]
+    pub total_summary_tokens: usize,
+
+    /// LLM model used for processing.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub processing_model: Option<String>,
+
+    /// Last processing duration in milliseconds.
+    #[serde(default)]
+    pub processing_duration_ms: u64,
 }
 
 impl DocumentMeta {
@@ -67,6 +93,12 @@ impl DocumentMeta {
             line_count: None,
             created_at: now,
             modified_at: now,
+            content_fingerprint: crate::fingerprint::Fingerprint::zero(),
+            processing_version: 0,
+            node_count: 0,
+            total_summary_tokens: 0,
+            processing_model: None,
+            processing_duration_ms: 0,
         }
     }
 
@@ -80,6 +112,70 @@ impl DocumentMeta {
     pub fn with_description(mut self, desc: impl Into<String>) -> Self {
         self.description = Some(desc.into());
         self
+    }
+
+    /// Set the content fingerprint.
+    pub fn with_fingerprint(mut self, fp: crate::fingerprint::Fingerprint) -> Self {
+        self.content_fingerprint = fp;
+        self
+    }
+
+    /// Set the processing version.
+    pub fn with_processing_version(mut self, version: u32) -> Self {
+        self.processing_version = version;
+        self
+    }
+
+    /// Set the processing model.
+    pub fn with_processing_model(mut self, model: impl Into<String>) -> Self {
+        self.processing_model = Some(model.into());
+        self
+    }
+
+    /// Update processing statistics.
+    pub fn update_processing_stats(
+        &mut self,
+        node_count: usize,
+        summary_tokens: usize,
+        duration_ms: u64,
+    ) {
+        self.node_count = node_count;
+        self.total_summary_tokens = summary_tokens;
+        self.processing_duration_ms = duration_ms;
+        self.modified_at = chrono::Utc::now();
+    }
+
+    /// Mark as processed with given fingerprint and version.
+    pub fn mark_processed(
+        &mut self,
+        fp: crate::fingerprint::Fingerprint,
+        version: u32,
+        model: Option<&str>,
+    ) {
+        self.content_fingerprint = fp;
+        self.processing_version = version;
+        self.processing_model = model.map(|s| s.to_string());
+        self.modified_at = chrono::Utc::now();
+    }
+
+    /// Check if the document needs reprocessing.
+    pub fn needs_reprocessing(&self, current_fp: &crate::fingerprint::Fingerprint, current_version: u32) -> bool {
+        // Never processed
+        if self.processing_version == 0 {
+            return true;
+        }
+
+        // Algorithm version changed
+        if self.processing_version < current_version {
+            return true;
+        }
+
+        // Content changed
+        if &self.content_fingerprint != current_fp {
+            return true;
+        }
+
+        false
     }
 }
 

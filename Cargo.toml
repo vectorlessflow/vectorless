@@ -62,6 +62,13 @@ lru = "0.12"
 # Checksum
 sha2 = "0.10"
 
+# BLAKE2b hashing for fingerprints
+blake2 = "0.10"
+base64 = "0.22"
+
+# Synchronization primitives (for memo store)
+parking_lot = "0.12"
+
 # Compression
 flate2 = "1.0"
 

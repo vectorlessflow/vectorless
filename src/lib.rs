@@ -110,8 +110,10 @@ pub mod client;
 pub mod config;
 pub mod document;
 pub mod error;
+pub mod fingerprint;
 pub mod index;
 pub mod llm;
+pub mod memo;
 pub mod metrics;
 pub mod parser;
 pub mod retrieval;
@@ -174,3 +176,9 @@ pub use storage::{DocumentMeta as StorageDocumentMeta, PersistedDocument, Worksp
 
 // Throttle
 pub use throttle::{ConcurrencyConfig, ConcurrencyController, RateLimiter};
+
+// Fingerprint
+pub use fingerprint::{Fingerprint, Fingerprinter, NodeFingerprint};
+
+// Memo
+pub use memo::{MemoEntry, MemoKey, MemoOpType, MemoStats, MemoStore, MemoValue};
