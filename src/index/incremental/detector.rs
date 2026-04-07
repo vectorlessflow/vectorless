@@ -232,18 +232,12 @@ impl ChangeDetector {
         current_mtime > *recorded_mtime
     }
 
-    /// Check if content needs reindexing based on simple hash.
+    /// Check if content needs reindexing based on fingerprint.
     pub fn needs_reindex_by_hash(&self, doc_id: &str, content: &str) -> bool {
-        let current_hash = Self::hash_content(content);
+        let current_fp = Fingerprint::from_str(content);
 
         match self.content_fps.get(doc_id) {
-            Some(recorded_fp) => {
-                // Compare first 8 bytes of fingerprint to hash
-                let recorded_hash = u64::from_le_bytes(
-                    recorded_fp.as_bytes()[..8].try_into().unwrap_or([0u8; 8]),
-                );
-                recorded_hash != current_hash
-            }
+            Some(recorded_fp) => recorded_fp != &current_fp,
             None => true,
         }
     }
