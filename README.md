@@ -10,8 +10,6 @@
 
 </div>
 
-> ⚠️ **Early Development** — API may change. 
-
 ## What is Vectorless?
 
 **Vectorless** is a Rust library for querying structured documents using natural language — without vector databases or embedding models.
