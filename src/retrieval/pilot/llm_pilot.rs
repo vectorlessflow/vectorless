@@ -12,7 +12,9 @@ use tracing::{debug, info, warn};
 
 use crate::document::DocumentTree;
 use crate::llm::{LlmClient, LlmExecutor};
+use crate::memo::{MemoKey, MemoOpType, MemoStore, MemoValue};
 use crate::throttle::ConcurrencyController;
+use crate::utils::fingerprint::Fingerprint;
 
 use super::budget::BudgetController;
 use super::builder::ContextBuilder;
@@ -42,6 +44,11 @@ use super::r#trait::{Pilot, SearchState};
 /// │  ┌─────────────┐  ┌───────────────────────┐                │
 /// │  │ Budget      │  │ LlmExecutor           │                │
 /// │  │ Controller  │  │ (throttle+retry+fall) │                │
+/// │  └─────────────┘  └───────────────────────┘                │
+/// │                                                              │
+/// │  ┌─────────────┐  ┌───────────────────────┐                │
+/// │  │ Memo        │  │ (cache LLM decisions) │                │
+/// │  │ Store       │  │                       │                │
 /// │  └─────────────┘  └───────────────────────┘                │
 /// └─────────────────────────────────────────────────────────────┘
 /// ```
@@ -81,6 +88,8 @@ pub struct LlmPilot {
     response_parser: ResponseParser,
     /// Feedback learner for improving decisions (optional).
     learner: Option<Arc<PilotLearner>>,
+    /// Memo store for caching decisions (optional).
+    memo_store: Option<MemoStore>,
 }
 
 impl std::fmt::Debug for LlmPilot {
@@ -107,6 +116,7 @@ impl LlmPilot {
             prompt_builder: PromptBuilder::new(),
             response_parser: ResponseParser::new(),
             learner: None,
+            memo_store: None,
         }
     }
 
@@ -126,6 +136,7 @@ impl LlmPilot {
             prompt_builder: PromptBuilder::new(),
             response_parser: ResponseParser::new(),
             learner: None,
+            memo_store: None,
         }
     }
 
@@ -144,6 +155,7 @@ impl LlmPilot {
             prompt_builder: PromptBuilder::new(),
             response_parser: ResponseParser::new(),
             learner: None,
+            memo_store: None,
         }
     }
 
@@ -165,6 +177,7 @@ impl LlmPilot {
             prompt_builder,
             response_parser: ResponseParser::new(),
             learner: None,
+            memo_store: None,
         }
     }
 
@@ -186,6 +199,16 @@ impl LlmPilot {
         self
     }
 
+    /// Add a memo store for caching decisions.
+    ///
+    /// When enabled, the pilot will cache LLM decisions based on
+    /// context fingerprints, avoiding redundant API calls for
+    /// similar navigation scenarios.
+    pub fn with_memo_store(mut self, store: MemoStore) -> Self {
+        self.memo_store = Some(store);
+        self
+    }
+
     /// Check if using LlmExecutor (unified throttle/retry/fallback).
     pub fn has_executor(&self) -> bool {
         self.executor.is_some()
@@ -196,9 +219,19 @@ impl LlmPilot {
         self.learner.is_some()
     }
 
+    /// Check if using memo store.
+    pub fn has_memo_store(&self) -> bool {
+        self.memo_store.is_some()
+    }
+
     /// Get the feedback learner (if any).
     pub fn learner(&self) -> Option<&PilotLearner> {
         self.learner.as_deref()
+    }
+
+    /// Get the memo store (if any).
+    pub fn memo_store(&self) -> Option<&MemoStore> {
+        self.memo_store.as_ref()
     }
 
     /// Record feedback for a decision.
@@ -208,6 +241,18 @@ impl LlmPilot {
             learner.store().record(record);
             debug!("Recorded feedback for decision {:?}", decision_id);
         }
+    }
+
+    /// Compute a cache key for a pilot decision.
+    fn compute_cache_key(&self, context: &super::builder::PilotContext, point: InterventionPoint) -> Option<MemoKey> {
+        let store = self.memo_store.as_ref()?;
+
+        // Build a fingerprint from the context using available methods
+        let context_str = context.to_string();
+        let context_fp = Fingerprint::from_str(&context_str);
+        let query_fp = Fingerprint::from_str(&context.query_section);
+
+        Some(MemoKey::pilot_decision(&context_fp, &query_fp))
     }
 
     /// Check if budget allows LLM calls.
@@ -243,6 +288,20 @@ impl LlmPilot {
         context: &super::builder::PilotContext,
         candidates: &[crate::document::NodeId],
     ) -> PilotDecision {
+        // Check memo cache first
+        if let Some(ref store) = self.memo_store {
+            if let Some(cache_key) = self.compute_cache_key(context, point) {
+                if let Some(cached) = store.get(&cache_key) {
+                    if let MemoValue::PilotDecision(decision_value) = cached {
+                        debug!("Memo cache hit for pilot decision at {:?}", point);
+                        // Convert cached value back to PilotDecision
+                        let decision = self.cached_value_to_decision(decision_value, candidates, point);
+                        return decision;
+                    }
+                }
+            }
+        }
+
         // Build prompt
         let prompt = self.prompt_builder.build(point, context);
 
@@ -313,12 +372,61 @@ impl LlmPilot {
                     decision.ranked_candidates.len()
                 );
 
+                // Cache the decision
+                if let Some(ref store) = self.memo_store {
+                    if let Some(cache_key) = self.compute_cache_key(context, point) {
+                        let decision_value = self.decision_to_cached_value(&decision);
+                        let tokens_saved = prompt.estimated_tokens as u64 + output_tokens as u64;
+                        store.put_with_tokens(cache_key, MemoValue::PilotDecision(decision_value), tokens_saved);
+                        debug!("Memo cache stored for pilot decision at {:?}", point);
+                    }
+                }
+
                 decision
             }
             Err(e) => {
                 warn!("LLM call failed: {}", e);
                 self.default_decision(candidates, point)
             }
+        }
+    }
+
+    /// Convert a PilotDecision to a cacheable value.
+    fn decision_to_cached_value(&self, decision: &PilotDecision) -> crate::memo::PilotDecisionValue {
+        crate::memo::PilotDecisionValue {
+            selected_idx: decision.ranked_candidates.first()
+                .map(|c| c.node_id.0.into())
+                .unwrap_or(0),
+            confidence: decision.confidence,
+            reasoning: decision.reasoning.clone(),
+        }
+    }
+
+    /// Convert a cached value back to a PilotDecision.
+    fn cached_value_to_decision(
+        &self,
+        value: crate::memo::PilotDecisionValue,
+        candidates: &[crate::document::NodeId],
+        point: InterventionPoint,
+    ) -> PilotDecision {
+        let ranked = candidates
+            .iter()
+            .enumerate()
+            .map(|(i, &node_id)| super::decision::RankedCandidate {
+                node_id,
+                score: if i == value.selected_idx { 1.0 } else { 0.5 / (i + 1) as f32 },
+                reason: None,
+            })
+            .collect();
+
+        PilotDecision {
+            ranked_candidates: ranked,
+            direction: super::decision::SearchDirection::GoDeeper {
+                reason: "Cached decision".to_string(),
+            },
+            confidence: value.confidence,
+            reasoning: value.reasoning,
+            intervention_point: point,
         }
     }
 

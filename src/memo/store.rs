@@ -7,7 +7,9 @@
 
 use std::collections::HashMap;
 use std::future::Future;
+use std::num::NonZeroUsize;
 use std::path::Path;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
 use chrono::{Duration, Utc};
@@ -17,7 +19,7 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock as AsyncRwLock;
 use tracing::{debug, info, warn};
 
-use super::types::{MemoEntry, MemoKey, MemoStats, MemoValue};
+use super::types::{MemoEntry, MemoKey, MemoOpType, MemoStats, MemoValue};
 use crate::error::Result;
 use crate::utils::fingerprint::Fingerprint;
 
@@ -244,6 +246,99 @@ impl MemoStore {
         let mut result = stats.clone();
         result.entries = self.len();
         result
+    }
+
+    /// Get cache statistics synchronously.
+    ///
+    /// This acquires a read lock on the stats, which is generally fast.
+    /// Use this when you need stats without async context.
+    pub fn stats_snapshot(&self) -> MemoStats {
+        // Use try_read to avoid blocking; fall back to defaults if locked
+        match self.stats.try_read() {
+            Ok(stats) => {
+                let mut result = stats.clone();
+                result.entries = self.len();
+                result
+            }
+            Err(_) => MemoStats {
+                entries: self.len(),
+                ..Default::default()
+            },
+        }
+    }
+
+    /// Invalidate all entries of a specific operation type.
+    ///
+    /// This is useful for batch invalidation when the algorithm for
+    /// a specific operation type changes.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// // Invalidate all pilot decision caches
+    /// let removed = store.invalidate_by_op_type(MemoOpType::PilotDecision);
+    /// println!("Removed {} cached pilot decisions", removed);
+    /// ```
+    pub fn invalidate_by_op_type(&self, op_type: MemoOpType) -> usize {
+        let mut cache = self.cache.write();
+        let before = cache.len();
+
+        // Collect keys to remove based on entry value type
+        let keys_to_remove: Vec<String> = cache
+            .iter()
+            .filter_map(|(key, entry)| {
+                let matches = match (&entry.value, op_type) {
+                    (MemoValue::Summary(_), MemoOpType::Summary) => true,
+                    (MemoValue::PilotDecision(_), MemoOpType::PilotDecision) => true,
+                    (MemoValue::QueryAnalysis(_), MemoOpType::QueryAnalysis) => true,
+                    (MemoValue::Extraction(_), MemoOpType::Extraction) => true,
+                    _ => false,
+                };
+                if matches { Some(key.clone()) } else { None }
+            })
+            .collect();
+
+        // Remove entries
+        for key in keys_to_remove {
+            cache.pop(&key);
+        }
+
+        let removed = before - cache.len();
+        if removed > 0 {
+            debug!("Invalidated {} entries for op_type {:?}", removed, op_type);
+        }
+        removed
+    }
+
+    /// Invalidate all entries matching a model ID prefix.
+    ///
+    /// This is useful when switching models or when a model's behavior changes.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// // Invalidate all GPT-4 caches
+    /// let removed = store.invalidate_by_model_prefix("gpt-4");
+    /// ```
+    pub fn invalidate_by_model_prefix(&self, prefix: &str) -> usize {
+        let mut cache = self.cache.write();
+        let before = cache.len();
+
+        // Since the key is a fingerprint, we need to check model_id from entries
+        // For now, we'll clear all entries if prefix matches our model_id
+        // A better approach would be to store model_id in entry metadata
+        let should_clear = self.model_id.as_ref()
+            .map(|m| m.starts_with(prefix))
+            .unwrap_or(false);
+
+        if should_clear {
+            cache.clear();
+            let removed = before;
+            debug!("Invalidated all {} entries (model prefix '{}')", removed, prefix);
+            return removed;
+        }
+
+        0
     }
 
     /// Remove expired entries.

@@ -18,6 +18,7 @@ use super::types::{RetrieveOptions, RetrieveResponse};
 use crate::document::DocumentTree;
 use crate::error::Result;
 use crate::llm::LlmClient;
+use crate::memo::MemoStore;
 use crate::retrieval::pilot::{LlmPilot, PilotConfig};
 
 /// Pipeline-based retriever using the stage architecture.
@@ -42,6 +43,8 @@ pub struct PipelineRetriever {
     max_iterations: usize,
     /// Content aggregator configuration.
     content_config: Option<ContentAggregatorConfig>,
+    /// Memo store for caching LLM decisions.
+    memo_store: Option<MemoStore>,
 }
 
 impl Default for PipelineRetriever {
@@ -58,6 +61,7 @@ impl PipelineRetriever {
             max_backtracks: 5,
             max_iterations: 10,
             content_config: None,
+            memo_store: None,
         }
     }
 
@@ -88,6 +92,16 @@ impl PipelineRetriever {
         self
     }
 
+    /// Add a memo store for caching LLM decisions.
+    ///
+    /// When enabled, the pilot will cache navigation decisions based on
+    /// context fingerprints, avoiding redundant API calls for similar
+    /// navigation scenarios.
+    pub fn with_memo_store(mut self, store: MemoStore) -> Self {
+        self.memo_store = Some(store);
+        self
+    }
+
     /// Build the orchestrator with all stages.
     fn build_orchestrator(&self) -> RetrievalOrchestrator {
         let mut orchestrator = RetrievalOrchestrator::new()
@@ -108,7 +122,13 @@ impl PipelineRetriever {
         let mut search_stage = SearchStage::new();
         if let Some(ref client) = self.llm_client {
             // Create LLM-based Pilot for semantic navigation guidance
-            let pilot = LlmPilot::new(client.clone(), PilotConfig::default());
+            let mut pilot = LlmPilot::new(client.clone(), PilotConfig::default());
+
+            // Add memo store if available
+            if let Some(ref store) = self.memo_store {
+                pilot = pilot.with_memo_store(store.clone());
+            }
+
             search_stage = search_stage.with_pilot(Arc::new(pilot));
         }
         orchestrator = orchestrator.stage(search_stage);
