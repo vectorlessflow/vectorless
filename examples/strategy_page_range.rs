@@ -66,31 +66,31 @@ fn demo_page_range_options() {
     println!("PageRange creation methods:\n");
 
     // Specific range
-    let range1 = PageRange::new(10, 20);
+    let _range1 = PageRange::new(10, 20);
     println!("  PageRange::new(10, 20)");
     println!("    → Range: pages 10-20 (inclusive)");
     println!("    → Use case: Search a specific chapter\n");
 
     // Single page
-    let range2 = PageRange::single(15);
+    let _range2 = PageRange::single(15);
     println!("  PageRange::single(15)");
     println!("    → Range: page 15 only");
     println!("    → Use case: Search a specific page\n");
 
     // From page to end
-    let range3 = PageRange::from(30);
+    let _range3 = PageRange::from(30);
     println!("  PageRange::from(30)");
     println!("    → Range: page 30 to end of document");
     println!("    → Use case: Search appendix or references\n");
 
     // From beginning to page
-    let range4 = PageRange::until(10);
+    let _range4 = PageRange::until(10);
     println!("  PageRange::until(10)");
     println!("    → Range: beginning to page 10");
     println!("    → Use case: Search introduction or preface\n");
 
     // Default (all pages)
-    let range5 = PageRange::default();
+    let _range5 = PageRange::default();
     println!("  PageRange::default()");
     println!("    → Range: all pages");
     println!("    → Use case: No page restriction\n");
