@@ -1,10 +1,13 @@
 <div align="center">
 
-![Vectorless](docs/design/logo-horizontal.svg)
+<img src="https://raw.githubusercontent.com/vectorlessflow/vectorless/main/docs/design/logo-horizontal.svg" alt="Vectorless">
 
+[![PyPI](https://img.shields.io/pypi/v/vectorless.svg)](https://pypi.org/project/vectorless/)
+[![Python](https://img.shields.io/pypi/pyversions/vectorless.svg)](https://pypi.org/project/vectorless/)
+[![PyPI Downloads](https://static.pepy.tech/badge/vectorless/month)](https://pepy.tech/projects/vectorless)
 [![Crates.io](https://img.shields.io/crates/v/vectorless.svg)](https://crates.io/crates/vectorless)
-[![Downloads](https://img.shields.io/crates/d/vectorless.svg)](https://crates.io/crates/vectorless)
-[![Documentation](https://docs.rs/vectorless/badge.svg)](https://docs.rs/vectorless)
+[![Crates.io Downloads](https://img.shields.io/crates/d/vectorless.svg)](https://crates.io/crates/vectorless)
+[![Docs](https://docs.rs/vectorless/badge.svg)](https://docs.rs/vectorless)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-1.85%2B-orange.svg)](https://www.rust-lang.org/)
 
@@ -12,7 +15,7 @@
 
 ## What is Vectorless?
 
-**Vectorless** is a Rust library for querying structured documents using natural language — without vector databases or embedding models.
+**Vectorless** is a library for querying structured documents using natural language — without vector databases or embedding models. Core engine written in Rust, with Python bindings.
 
 Instead of chunking documents into vectors, Vectorless preserves the document's tree structure and uses a **hybrid algorithm + LLM approach** to navigate it — like how a human reads a table of contents:
 
@@ -22,7 +25,7 @@ Instead of chunking documents into vectors, Vectorless preserves the document's 
 
 ## How It Works
 
-![How it works](docs/design/how-it-works.svg)
+<img src="https://raw.githubusercontent.com/vectorlessflow/vectorless/main/docs/design/how-it-works.svg" alt="How it works">
 
 ### 1. Index: Build a Navigable Tree
 
@@ -48,7 +51,7 @@ When you ask "How do I reset the device?":
 
 ## Traditional RAG vs Vectorless
 
-![Traditional RAG vs Vectorless](docs/design/comparison.svg)
+<img src="https://raw.githubusercontent.com/vectorlessflow/vectorless/main/docs/design/comparison.svg" alt="Traditional RAG vs Vectorless">
 
 | Aspect | Traditional RAG | Vectorless |
 |--------|----------------|------------|
@@ -90,43 +93,64 @@ Source: Chapter 4 > Section 4.2 > Reset Procedure
 
 ## Quick Start
 
-### Installation
+<details open>
+<summary><b>Python</b></summary>
+
+```bash
+pip install vectorless
+```
+
+```python
+from vectorless import Engine, IndexContext
+
+# Create engine (uses OPENAI_API_KEY env var)
+engine = Engine(workspace="./data")
+
+# Index a document
+ctx = IndexContext.from_file("./report.pdf")
+doc_id = engine.index(ctx)
+
+# Query
+result = engine.query(doc_id, "What is the total revenue?")
+print(f"Answer: {result.content}")
+```
+
+</details>
+
+<details>
+<summary><b>Rust</b></summary>
 
 ```toml
 [dependencies]
 vectorless = "0.1"
 ```
 
-### Configuration
-
 ```bash
 cp vectorless.example.toml ./vectorless.toml
 ```
-
-### Usage
 
 ```rust
 use vectorless::Engine;
 
 #[tokio::main]
 async fn main() -> vectorless::Result<()> {
-    // Create client
     let client = Engine::builder()
         .with_workspace("./workspace")
         .build()?;
 
-    // Index a document (PDF, Markdown, DOCX, HTML)
     let doc_id = client.index("./document.pdf").await?;
 
-    // Query with natural language
-    let result = client.query(&doc_id, "What are the system requirements?").await?;
+    let result = client.query(&doc_id,
+        "What are the system requirements?").await?;
 
     println!("Answer: {}", result.content);
-    println!("Source: {}", result.path); // e.g., "Chapter 2 > Section 2.1"
+    println!("Source: {}", result.path);
 
     Ok(())
 }
 ```
+
+</details>
 
 ## Features
 
@@ -142,7 +166,7 @@ async fn main() -> vectorless::Result<()> {
 
 ## Architecture
 
-![Architecture](docs/design/architecture.svg)
+<img src="https://raw.githubusercontent.com/vectorlessflow/vectorless/main/docs/design/architecture.svg" alt="Architecture">
 
 ### Core Components
 

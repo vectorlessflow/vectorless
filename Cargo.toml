@@ -1,19 +1,17 @@
-[package]
-name = "vectorless"
+[workspace]
+members = ["rust", "python"]
+resolver = "2"
+
+[workspace.package]
 version = "0.1.19"
 edition = "2024"
 authors = ["zTgx <beautifularea@gmail.com>"]
-description = "Hierarchical, reasoning-native document intelligence engine"
 license = "Apache-2.0"
 repository = "https://github.com/vectorlessflow/vectorless"
 homepage = "https://vectorless.dev"
 documentation = "https://docs.rs/vectorless"
-keywords = ["rag", "document", "retrieval", "indexing", "llm"]
-categories = ["text-processing", "data-structures", "algorithms"]
-readme = "README.md"
-exclude = ["samples/", "docs/", ".*"]
 
-[dependencies]
+[workspace.dependencies]
 # Async runtime
 tokio = { version = "1", features = ["full"] }
 async-trait = "0.1"
@@ -26,7 +24,7 @@ toml = "0.8"
 
 # Error handling
 thiserror = "2"
-anyhow = { version = "1", optional = true }
+anyhow = "1"
 
 # OpenAI-compatible API client
 async-openai = { version = "0.34", features = ["chat-completion"] }
@@ -62,18 +60,17 @@ lru = "0.12"
 # Checksum
 sha2 = "0.10"
 
-# BLAKE2b hashing for fingerprints
+# BLAKE2b hashing
 blake2 = "0.10"
 base64 = "0.22"
 
-# Synchronization primitives (for memo store)
+# Synchronization primitives
 parking_lot = "0.12"
 
 # Compression
 flate2 = "1.0"
 
 # File locking (Unix)
-[target.'cfg(unix)'.dependencies]
 libc = "0.2"
 
 # PDF processing
@@ -84,7 +81,7 @@ lopdf = "0.34"
 zip = "2.2"
 roxmltree = "0.20"
 
-# Random number generation (for sampling)
+# Random number generation
 rand = "0.8"
 
 # BM25 scoring
@@ -93,11 +90,23 @@ bm25 = { version = "2.3.2", features = ["parallelism"] }
 # HTML parsing
 scraper = "0.22"
 
-[dev-dependencies]
+# Python bindings
+pyo3 = { version = "0.22", features = ["extension-module"] }
+
+# Dev dependencies
 tempfile = "3.10"
 tokio-test = "0.4"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
+[workspace.lints.rust]
+missing_docs = "warn"
+unsafe_code = "warn"
+
+[workspace.lints.clippy]
+all = "warn"
+pedantic = "warn"
+
+# Profile settings (must be at root level, not under workspace)
 [profile.release]
 opt-level = 3
 lto = "thin"
@@ -115,11 +124,3 @@ debug = true
 
 [profile.release.package."*"]
 opt-level = 3
-
-[lints.rust]
-missing_docs = "warn"
-unsafe_code = "warn"
-
-[lints.clippy]
-all = "warn"
-pedantic = "warn"
