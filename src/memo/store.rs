@@ -42,6 +42,44 @@ struct MemoStoreData {
     stats: MemoStats,
 }
 
+/// Atomic statistics for lock-free access.
+#[derive(Debug, Default)]
+struct AtomicStats {
+    hits: AtomicU64,
+    misses: AtomicU64,
+    tokens_saved: AtomicU64,
+}
+
+impl AtomicStats {
+    fn new() -> Self {
+        Self {
+            hits: AtomicU64::new(0),
+            misses: AtomicU64::new(0),
+            tokens_saved: AtomicU64::new(0),
+        }
+    }
+
+    fn record_hit(&self) {
+        self.hits.fetch_add(1, Ordering::Relaxed);
+    }
+
+    fn record_miss(&self) {
+        self.misses.fetch_add(1, Ordering::Relaxed);
+    }
+
+    fn add_tokens_saved(&self, tokens: u64) {
+        self.tokens_saved.fetch_add(tokens, Ordering::Relaxed);
+    }
+
+    fn snapshot(&self) -> (u64, u64, u64) {
+        (
+            self.hits.load(Ordering::Relaxed),
+            self.misses.load(Ordering::Relaxed),
+            self.tokens_saved.load(Ordering::Relaxed),
+        )
+    }
+}
+
 /// LLM Memoization store.
 ///
 /// Provides caching for expensive LLM operations with:
@@ -77,6 +115,17 @@ pub struct MemoStore {
 
     /// Version for cache invalidation.
     version: u32,
+}
+
+impl std::fmt::Debug for MemoStore {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("MemoStore")
+            .field("ttl", &self.ttl)
+            .field("model_id", &self.model_id)
+            .field("version", &self.version)
+            .field("cache_len", &self.cache.read().len())
+            .finish()
+    }
 }
 
 impl Clone for MemoStore {
@@ -639,8 +688,13 @@ mod tests {
             .await
             .unwrap();
 
-        // Hit
-        store.get(&key);
+        // Hit via get_or_compute (this updates global stats)
+        store
+            .get_or_compute(key.clone(), || async {
+                Ok((MemoValue::Summary("Should not be called".to_string()), 0))
+            })
+            .await
+            .unwrap();
 
         let stats = store.stats().await;
         assert_eq!(stats.misses, 1);

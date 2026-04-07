@@ -200,6 +200,7 @@ impl Clone for PipelineRetriever {
             max_backtracks: self.max_backtracks,
             max_iterations: self.max_iterations,
             content_config: self.content_config.clone(),
+            memo_store: self.memo_store.clone(),
         }
     }
 }

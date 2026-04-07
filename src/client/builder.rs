@@ -507,6 +507,17 @@ impl EngineBuilder {
                 retriever.with_content_config(retrieval_config.content.to_aggregator_config());
         }
 
+        // Add memo store if provided or create default
+        if let Some(memo_store) = self.memo_store {
+            retriever = retriever.with_memo_store(memo_store);
+        } else {
+            // Create default memo store with model from config
+            let memo_store = MemoStore::new()
+                .with_model(&retrieval_config.model)
+                .with_version(1);
+            retriever = retriever.with_memo_store(memo_store);
+        }
+
         // Build engine
         Engine::with_components(config, workspace, retriever, executor)
             .await
