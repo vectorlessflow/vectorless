@@ -83,6 +83,9 @@ rand = "0.8"
 # BM25 scoring
 bm25 = { version = "2.3.2", features = ["parallelism"] }
 
+# HTML parsing
+scraper = "0.22"
+
 [dev-dependencies]
 tempfile = "3.10"
 tokio-test = "0.4"
