@@ -12,7 +12,7 @@
 //! - **Markdown** - Full support via [`MarkdownParser`]
 //! - **PDF** - Full support via [`PdfParser`] with TOC extraction
 //! - **DOCX** - Full support via [`DocxParser`] with heading detection
-//! - **HTML** - Planned (placeholder)
+//! - **HTML** - Full support via [`HtmlParser`] with heading hierarchy
 //!
 //! # Example
 //!
@@ -46,6 +46,9 @@ pub mod markdown;
 // PDF parsing module
 pub mod pdf;
 
+// HTML parsing module
+pub mod html;
+
 // TOC processing module
 pub mod toc;
 
@@ -63,5 +66,6 @@ pub use registry::{ParserRegistry, get_parser, get_parser_for_file, parse_conten
 
 // Re-export concrete parsers
 pub use docx::DocxParser;
+pub use html::{HtmlConfig, HtmlParser};
 pub use markdown::{MarkdownConfig, MarkdownParser};
 pub use pdf::PdfParser;

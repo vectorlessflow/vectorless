@@ -13,7 +13,9 @@ use std::sync::{Arc, RwLock};
 
 use crate::Error;
 use crate::error::Result;
-use crate::parser::{DocumentFormat, DocumentParser, MarkdownParser, ParseResult, PdfParser};
+use crate::parser::{
+    DocumentFormat, DocumentParser, HtmlParser, MarkdownParser, ParseResult, PdfParser,
+};
 
 /// Type alias for parser factory functions.
 type ParserFactory = Box<dyn Fn() -> Box<dyn DocumentParser> + Send + Sync>;
@@ -63,10 +65,12 @@ impl ParserRegistry {
         registry
     }
 
-    /// Register default parsers (Markdown, PDF).
+    /// Register default parsers (Markdown, PDF, HTML, DOCX).
     pub fn register_defaults(&self) {
         self.register("markdown", || Box::new(MarkdownParser::new()));
         self.register("pdf", || Box::new(PdfParser::new()));
+        self.register("html", || Box::new(HtmlParser::new()));
+        self.register("docx", || Box::new(super::docx::DocxParser::new()));
     }
 
     /// Register a parser factory by name.
@@ -182,7 +186,7 @@ pub fn get_parser(format: DocumentFormat) -> Option<Box<dyn DocumentParser>> {
     match format {
         DocumentFormat::Markdown => Some(Box::new(MarkdownParser::new())),
         DocumentFormat::Pdf => Some(Box::new(PdfParser::new())),
-        DocumentFormat::Html => None, // TODO: Implement HTML parser
+        DocumentFormat::Html => Some(Box::new(HtmlParser::new())),
         DocumentFormat::Docx => Some(Box::new(super::docx::DocxParser::new())),
         DocumentFormat::Text => None, // TODO: Implement plain text parser
     }
@@ -243,6 +247,7 @@ mod tests {
         let registry = ParserRegistry::with_defaults();
         let formats = registry.supported_formats();
         assert!(formats.contains(&DocumentFormat::Markdown));
+        assert!(formats.contains(&DocumentFormat::Html));
     }
 
     #[test]
@@ -268,6 +273,14 @@ mod tests {
     }
 
     #[test]
+    fn test_html_parser_registered() {
+        let registry = ParserRegistry::with_defaults();
+        assert!(registry.supports(DocumentFormat::Html));
+        let parser = registry.get(DocumentFormat::Html);
+        assert!(parser.is_some());
+    }
+
+    #[test]
     fn test_get_parser_function() {
         let parser = get_parser(DocumentFormat::Markdown);
         assert!(parser.is_some());
@@ -276,6 +289,12 @@ mod tests {
     #[test]
     fn test_get_parser_for_file() {
         let parser = get_parser_for_file(Path::new("test.md"));
+        assert!(parser.is_some());
+    }
+
+    #[test]
+    fn test_get_html_parser_for_file() {
+        let parser = get_parser_for_file(Path::new("test.html"));
         assert!(parser.is_some());
     }
 }
