@@ -3,6 +3,7 @@
 ![Vectorless](docs/design/logo-horizontal.svg)
 
 [![Crates.io](https://img.shields.io/crates/v/vectorless.svg)](https://crates.io/crates/vectorless)
+[![PyPI](https://img.shields.io/pypi/v/vectorless.svg)](https://pypi.org/project/vectorless/)
 [![Downloads](https://img.shields.io/crates/d/vectorless.svg)](https://crates.io/crates/vectorless)
 [![Documentation](https://docs.rs/vectorless/badge.svg)](https://docs.rs/vectorless)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
@@ -90,7 +91,30 @@ Source: Chapter 4 > Section 4.2 > Reset Procedure
 
 ## Quick Start
 
-### Installation
+### Python
+
+```bash
+pip install vectorless
+```
+
+```python
+from vectorless import Engine, IndexContext
+
+# Create engine (uses OPENAI_API_KEY env var)
+engine = Engine(workspace="./data")
+
+# Index a document
+ctx = IndexContext.from_file("./report.pdf")
+doc_id = engine.index(ctx)
+
+# Query
+result = engine.query(doc_id, "What is the total revenue?")
+print(f"Answer: {result.content}")
+```
+
+See [python/README.md](python/README.md) for full Python documentation.
+
+### Rust
 
 ```toml
 [dependencies]

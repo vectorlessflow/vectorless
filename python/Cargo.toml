@@ -1,0 +1,16 @@
+[package]
+name = "vectorless-py"
+version = "0.1.0"
+edition = "2024"
+authors = ["zTgx <beautifularea@gmail.com>"]
+description = "Python bindings for vectorless"
+license = "Apache-2.0"
+
+[lib]
+name = "vectorless"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.22", features = ["extension-module"] }
+tokio = { version = "1", features = ["rt-multi-thread"] }
+vectorless = { path = "../rust" }

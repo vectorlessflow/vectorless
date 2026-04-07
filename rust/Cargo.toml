@@ -1,0 +1,125 @@
+[package]
+name = "vectorless"
+version = "0.1.19"
+edition = "2024"
+authors = ["zTgx <beautifularea@gmail.com>"]
+description = "Hierarchical, reasoning-native document intelligence engine"
+license = "Apache-2.0"
+repository = "https://github.com/vectorlessflow/vectorless"
+homepage = "https://vectorless.dev"
+documentation = "https://docs.rs/vectorless"
+keywords = ["rag", "document", "retrieval", "indexing", "llm"]
+categories = ["text-processing", "data-structures", "algorithms"]
+readme = "../README.md"
+exclude = ["samples/", "docs/", ".*"]
+
+[dependencies]
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+async-trait = "0.1"
+futures = "0.3"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+toml = "0.8"
+
+# Error handling
+thiserror = "2"
+anyhow = { version = "1", optional = true }
+
+# OpenAI-compatible API client
+async-openai = { version = "0.34", features = ["chat-completion"] }
+
+# UUID
+uuid = { version = "1.10", features = ["v4", "serde"] }
+
+# Time
+chrono = { version = "0.4", default-features = false, features = ["serde", "clock"] }
+
+# Logging
+tracing = "0.1"
+
+# Rate limiting
+governor = "0.6"
+nonzero_ext = "0.3"
+
+# Token counting
+tiktoken-rs = "0.9"
+
+# Text processing
+regex = "1.10"
+
+# Markdown parsing
+pulldown-cmark = { version = "0.12", default-features = false, features = ["simd"] }
+
+# Tree data structure
+indextree = { version = "4.8.0", features = ["deser"] }
+
+# LRU cache
+lru = "0.12"
+
+# Checksum
+sha2 = "0.10"
+
+# BLAKE2b hashing for fingerprints
+blake2 = "0.10"
+base64 = "0.22"
+
+# Synchronization primitives (for memo store)
+parking_lot = "0.12"
+
+# Compression
+flate2 = "1.0"
+
+# File locking (Unix)
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+# PDF processing
+pdf-extract = "0.10.0"
+lopdf = "0.34"
+
+# DOCX processing
+zip = "2.2"
+roxmltree = "0.20"
+
+# Random number generation (for sampling)
+rand = "0.8"
+
+# BM25 scoring
+bm25 = { version = "2.3.2", features = ["parallelism"] }
+
+# HTML parsing
+scraper = "0.22"
+
+[dev-dependencies]
+tempfile = "3.10"
+tokio-test = "0.4"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = true
+panic = "abort"
+
+[profile.dev]
+opt-level = 0
+debug = true
+
+[profile.bench]
+inherits = "release"
+debug = true
+
+[profile.release.package."*"]
+opt-level = 3
+
+[lints.rust]
+missing_docs = "warn"
+unsafe_code = "warn"
+
+[lints.clippy]
+all = "warn"
+pedantic = "warn"
