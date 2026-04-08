@@ -11,7 +11,7 @@ documentation = "https://docs.rs/vectorless"
 keywords = ["rag", "document", "retrieval", "indexing", "llm"]
 categories = ["text-processing", "data-structures", "algorithms"]
 readme = "../README.md"
-exclude = ["samples/", "docs/", ".*"]
+exclude = ["docs/", ".*"]
 
 # Example directory configuration
 [[example]]

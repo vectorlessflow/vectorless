@@ -28,6 +28,11 @@ pub struct VectorlessError {
 
 #[pymethods]
 impl VectorlessError {
+    #[new]
+    fn new_py(message: String, kind: String) -> Self {
+        Self { message, kind }
+    }
+
     #[getter]
     fn message(&self) -> &str {
         &self.message
@@ -96,7 +101,7 @@ fn to_py_err(e: RustError) -> PyErr {
 /// # From bytes
 /// ctx = IndexContext.from_bytes(data, name="doc", format="pdf")
 /// ```
-#[pyclass]
+#[pyclass(name = "IndexContext")]
 pub struct PyIndexContext {
     inner: IndexContext,
 }
@@ -134,7 +139,7 @@ impl PyIndexContext {
     ///     IndexContext for the content.
     #[staticmethod]
     #[pyo3(signature = (content, name=None, format="markdown"))]
-    fn from_text(content: String, name: Option<String>, format: &str) -> PyResult<Self> {
+    fn from_content(content: String, name: Option<String>, format: &str) -> PyResult<Self> {
         let doc_format = parse_format(format)?;
         let mut ctx = IndexContext::from_content(&content, doc_format);
         if let Some(n) = name {
@@ -168,9 +173,8 @@ fn parse_format(format: &str) -> PyResult<DocumentFormat> {
         "pdf" => Ok(DocumentFormat::Pdf),
         "docx" | "doc" => Ok(DocumentFormat::Docx),
         "html" | "htm" => Ok(DocumentFormat::Html),
-        "text" | "txt" => Ok(DocumentFormat::Text),
         _ => Err(PyErr::from(VectorlessError::new(
-            format!("Unknown format: {}", format),
+            format!("Unknown format: {}. Supported: markdown, pdf, docx, html", format),
             "config",
         ))),
     }
@@ -181,7 +185,7 @@ fn parse_format(format: &str) -> PyResult<DocumentFormat> {
 // ============================================================
 
 /// Result of a document query.
-#[pyclass]
+#[pyclass(name = "QueryResult")]
 pub struct PyQueryResult {
     inner: QueryResult,
 }
@@ -227,7 +231,7 @@ impl PyQueryResult {
 // ============================================================
 
 /// Information about an indexed document.
-#[pyclass]
+#[pyclass(name = "DocumentInfo")]
 pub struct PyDocumentInfo {
     inner: DocumentInfo,
 }
@@ -312,7 +316,7 @@ impl PyDocumentInfo {
 /// ```python
 /// engine = Engine(config_path="./vectorless.toml")
 /// ```
-#[pyclass]
+#[pyclass(name = "Engine")]
 pub struct PyEngine {
     inner: Arc<Engine>,
     rt: Runtime,
@@ -370,12 +374,7 @@ impl PyEngine {
                 builder = builder.with_workspace(ws);
             }
 
-            // Set API key
-            if let Some(key) = resolved_api_key {
-                builder = builder.with_openai(key);
-            }
-
-            // Set model
+            // Set model first (without overriding api_key)
             if let Some(m) = &model {
                 builder = builder.with_model(m, None);
             }
@@ -383,6 +382,11 @@ impl PyEngine {
             // Set endpoint
             if let Some(e) = &endpoint {
                 builder = builder.with_endpoint(e);
+            }
+
+            // Set API key last (this ensures it's not overwritten)
+            if let Some(key) = resolved_api_key {
+                builder = builder.with_openai(key);
             }
 
             builder.build().await
@@ -543,7 +547,7 @@ impl PyEngine {
 /// print(result.content)
 /// ```
 #[pymodule]
-fn _vectorless(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
+fn vectorless(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<VectorlessError>()?;
     m.add_class::<PyIndexContext>()?;
     m.add_class::<PyQueryResult>()?;

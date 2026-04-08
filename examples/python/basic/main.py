@@ -1,16 +1,13 @@
 #!/usr/bin/env python3
-# Copyright (c) 2026 vectorless developers
-# SPDX-License-Identifier: Apache-2.0
-
 """
-Basic usage example - Zero Configuration.
+Basic example - Zero Configuration.
 
 This example demonstrates the simplest way to use Vectorless.
 Just set OPENAI_API_KEY environment variable and you're ready to go.
 
 Usage:
     export OPENAI_API_KEY="sk-..."
-    python basic.py
+    python main.py
 """
 
 import os
@@ -22,7 +19,6 @@ def main():
     print("=== Vectorless Basic Example (Zero Configuration) ===\n")
 
     # Zero configuration: Just set OPENAI_API_KEY environment variable
-    # The engine will automatically use it.
     with tempfile.TemporaryDirectory() as workspace:
         engine = Engine(workspace=workspace)
 
@@ -56,7 +52,7 @@ result = engine.query(doc_id, "What is the total revenue?")
 print(result.content)
 ```
 """
-        ctx = IndexContext.from_text(content, name="manual", format="markdown")
+        ctx = IndexContext.from_content(content, name="manual", format="markdown")
         doc_id = engine.index(ctx)
         print(f"✓ Indexed: {doc_id}\n")
 

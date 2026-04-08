@@ -265,7 +265,6 @@ impl IndexerClient {
                 DocumentFormat::Pdf => IndexMode::Pdf,
                 DocumentFormat::Html => IndexMode::Html,
                 DocumentFormat::Docx => IndexMode::Docx,
-                DocumentFormat::Text => IndexMode::Auto,
             },
             generate_ids: options.generate_ids,
             summary_strategy: if options.generate_summaries {

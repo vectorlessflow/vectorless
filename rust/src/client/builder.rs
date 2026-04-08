@@ -285,8 +285,8 @@ impl EngineBuilder {
 
     /// Configure for OpenAI API.
     ///
-    /// Uses `gpt-4o` model by default. Use [`with_model`](EngineBuilder::with_model)
-    /// to specify a different model.
+    /// Sets the API key and optionally the model to "gpt-4o" if not already set.
+    /// Use [`with_model`](EngineBuilder::with_model) before this to specify a different model.
     ///
     /// # Example
     ///
@@ -305,7 +305,13 @@ impl EngineBuilder {
     /// ```
     #[must_use]
     pub fn with_openai(self, api_key: impl Into<String>) -> Self {
-        self.with_model("gpt-4o", Some(api_key.into()))
+        let mut builder = self;
+        builder.api_key = Some(api_key.into());
+        // Only set default model if not already set
+        if builder.model.is_none() {
+            builder.model = Some("gpt-4o".to_string());
+        }
+        builder
     }
 
     /// Set the LLM model and optional API key.
@@ -333,7 +339,9 @@ impl EngineBuilder {
     #[must_use]
     pub fn with_model(mut self, model: impl Into<String>, api_key: Option<String>) -> Self {
         self.model = Some(model.into());
-        self.api_key = api_key;
+        if api_key.is_some() {
+            self.api_key = api_key;
+        }
         self
     }
 

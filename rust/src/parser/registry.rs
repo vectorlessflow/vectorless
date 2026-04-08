@@ -141,7 +141,7 @@ impl ParserRegistry {
     /// For binary formats (PDF, DOCX), the parser handles the bytes directly.
     pub async fn parse_bytes(&self, bytes: &[u8], format: DocumentFormat) -> Result<ParseResult> {
         match format {
-            DocumentFormat::Markdown | DocumentFormat::Html | DocumentFormat::Text => {
+            DocumentFormat::Markdown | DocumentFormat::Html => {
                 // Text formats - convert to string first
                 let content = std::str::from_utf8(bytes)
                     .map_err(|e| Error::Parse(format!("Invalid UTF-8 content: {}", e)))?;
@@ -188,7 +188,6 @@ pub fn get_parser(format: DocumentFormat) -> Option<Box<dyn DocumentParser>> {
         DocumentFormat::Pdf => Some(Box::new(PdfParser::new())),
         DocumentFormat::Html => Some(Box::new(HtmlParser::new())),
         DocumentFormat::Docx => Some(Box::new(super::docx::DocxParser::new())),
-        DocumentFormat::Text => None, // TODO: Implement plain text parser
     }
 }
 

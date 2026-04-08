@@ -21,8 +21,6 @@ pub enum DocumentFormat {
     Html,
     /// Word documents (.docx)
     Docx,
-    /// Plain text files (.txt)
-    Text,
 }
 
 impl DocumentFormat {
@@ -33,7 +31,6 @@ impl DocumentFormat {
             "pdf" => Some(Self::Pdf),
             "html" | "htm" => Some(Self::Html),
             "docx" => Some(Self::Docx),
-            "txt" => Some(Self::Text),
             _ => None,
         }
     }
@@ -45,7 +42,6 @@ impl DocumentFormat {
             Self::Pdf => "pdf",
             Self::Html => "html",
             Self::Docx => "docx",
-            Self::Text => "txt",
         }
     }
 }
@@ -173,7 +169,7 @@ impl Default for DocumentMeta {
     fn default() -> Self {
         Self {
             name: String::new(),
-            format: DocumentFormat::Text,
+            format: DocumentFormat::Markdown,
             page_count: None,
             line_count: 0,
             source_path: None,

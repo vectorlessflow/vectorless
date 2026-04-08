@@ -51,7 +51,7 @@ impl IndexInput {
         Self::Content {
             content: content.into(),
             name: String::new(),
-            format: DocumentFormat::Text,
+            format: DocumentFormat::Markdown,
         }
     }
 
