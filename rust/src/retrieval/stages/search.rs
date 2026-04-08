@@ -4,30 +4,24 @@
 //! Search Stage - Execute tree search with Pilot integration.
 //!
 //! This stage executes the selected search algorithm using
-//! the selected retrieval strategy. When a Pilot is provided,
-//! it can provide semantic guidance at key decision points.
-//!
-//! # LLM-First Search
-//!
-//! When an LLM client is provided, the stage will first attempt to
-//! directly locate the top-3 most relevant nodes using the TOC,
-//! falling back to tree traversal algorithms (Beam/Greedy) only if
-//! LLM fails or returns insufficient results.
+//! hierarchical ToC-based location followed by tree traversal.
+//! When a Pilot is provided, it can provide semantic guidance
+//! at key decision points.
 
 use async_trait::async_trait;
-use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
-use crate::document::{DocumentTree, TocView};
+use crate::document::DocumentTree;
 use crate::llm::LlmClient;
-use crate::retrieval::RetrievalContext; // Legacy context
+use crate::retrieval::RetrievalContext;
 use crate::retrieval::pilot::Pilot;
 use crate::retrieval::pipeline::{
     CandidateNode, FailurePolicy, PipelineContext, RetrievalStage, SearchAlgorithm, StageOutcome,
 };
 use crate::retrieval::search::{
-    BeamSearch, GreedySearch, SearchConfig as SearchAlgConfig, SearchTree,
+    BeamSearch, GreedySearch, SearchConfig as SearchAlgConfig, SearchCue, SearchTree,
+    ToCNavigator,
 };
 use crate::retrieval::strategy::{
     HybridConfig, HybridStrategy, KeywordStrategy, LlmStrategy, RetrievalStrategy,
@@ -37,27 +31,16 @@ use crate::retrieval::types::StrategyPreference;
 /// Search Stage - executes tree search with optional Pilot guidance.
 ///
 /// This stage:
-/// 1. Instantiates the selected search algorithm
-/// 2. Creates the appropriate strategy
-/// 3. Executes search with optional Pilot intervention
-/// 4. Collects candidates
+/// 1. Uses ToCNavigator to locate relevant subtrees (Phase Locate)
+/// 2. Resolves queries (original or decomposed sub-queries)
+/// 3. Runs search algorithms from located subtrees (Phase Traverse)
+/// 4. Collects and deduplicates candidates (Phase Collect)
 ///
 /// # Pilot Integration
 ///
 /// When a Pilot is provided via [`with_pilot`], the search algorithm
 /// can consult it at key decision points for semantic guidance.
 /// Without a Pilot, the search uses pure algorithm scoring.
-///
-/// # Example
-///
-/// ```rust,ignore
-/// use vectorless::retrieval::pilot::{LlmPilot, PilotConfig};
-///
-/// let pilot = LlmPilot::new(llm_client, PilotConfig::default());
-/// let stage = SearchStage::new()
-///     .with_pilot(Arc::new(pilot))
-///     .with_llm_strategy(llm_strategy);
-/// ```
 pub struct SearchStage {
     keyword_strategy: KeywordStrategy,
     llm_strategy: Option<Arc<LlmStrategy>>,
@@ -65,8 +48,10 @@ pub struct SearchStage {
     hybrid_strategy: Option<Arc<dyn RetrievalStrategy>>,
     /// Pilot for navigation guidance (optional).
     pilot: Option<Arc<dyn Pilot>>,
-    /// LLM client for direct TOC-based search (optional).
+    /// LLM client for ToC-based location (optional).
     llm_client: Option<LlmClient>,
+    /// ToC navigator for hierarchical subtree location.
+    toc_navigator: ToCNavigator,
 }
 
 impl Default for SearchStage {
@@ -85,24 +70,20 @@ impl SearchStage {
             hybrid_strategy: None,
             pilot: None,
             llm_client: None,
+            toc_navigator: ToCNavigator::new(),
         }
     }
 
-    /// Add LLM client for direct TOC-based search.
-    ///
-    /// When provided, the stage will first attempt to locate relevant
-    /// nodes directly using the TOC, falling back to tree traversal
-    /// algorithms only if LLM fails or returns insufficient results.
+    /// Add LLM client for ToC-based search.
     pub fn with_llm_client(mut self, client: Option<LlmClient>) -> Self {
+        if let Some(ref client) = client {
+            self.toc_navigator = ToCNavigator::new().with_llm_client(client.clone());
+        }
         self.llm_client = client;
         self
     }
 
     /// Add Pilot for semantic navigation guidance.
-    ///
-    /// When provided, the search algorithm will consult the Pilot
-    /// at key decision points to get semantic guidance on which
-    /// branches are most relevant to the query.
     pub fn with_pilot(mut self, pilot: Arc<dyn Pilot>) -> Self {
         self.pilot = Some(pilot);
         self
@@ -121,8 +102,6 @@ impl SearchStage {
     }
 
     /// Add hybrid strategy (BM25 + LLM refinement).
-    ///
-    /// If no LLM strategy is set, creates one from the provided LLM strategy.
     pub fn with_hybrid_strategy(mut self, strategy: Arc<dyn RetrievalStrategy>) -> Self {
         self.hybrid_strategy = Some(strategy);
         self
@@ -131,7 +110,6 @@ impl SearchStage {
     /// Configure hybrid strategy with custom config using the LLM strategy.
     pub fn with_hybrid_config(mut self, config: HybridConfig) -> Self {
         if let Some(ref llm) = self.llm_strategy {
-            // Clone the LlmStrategy and box it
             let llm_boxed: Box<dyn RetrievalStrategy> = Box::new((**llm).clone());
             self.hybrid_strategy = Some(Arc::new(
                 HybridStrategy::new(llm_boxed).with_config(config)
@@ -186,7 +164,6 @@ impl SearchStage {
                 }
             }
             StrategyPreference::ForceCrossDocument | StrategyPreference::ForcePageRange => {
-                // These require special setup, fall back to hybrid or keyword
                 if let Some(ref strategy) = self.hybrid_strategy {
                     info!("Using Hybrid strategy as fallback for {:?})", preference);
                     strategy.clone()
@@ -196,7 +173,6 @@ impl SearchStage {
                 }
             }
             StrategyPreference::Auto => {
-                // Default to keyword, let plan stage decide
                 Arc::new(self.keyword_strategy.clone())
             }
         }
@@ -212,17 +188,14 @@ impl SearchStage {
 
         for path in paths {
             if let Some(leaf_id) = path.leaf {
-                // Get node info
                 if let Some(node) = tree.get(leaf_id) {
                     let depth = node.depth;
                     let is_leaf = tree.is_leaf(leaf_id);
-
                     candidates.push(CandidateNode::new(leaf_id, path.score, depth, is_leaf));
                 }
             }
         }
 
-        // Sort by score descending
         candidates.sort_by(|a, b| {
             b.score
                 .partial_cmp(&a.score)
@@ -232,171 +205,102 @@ impl SearchStage {
         candidates
     }
 
-    /// Build a flat TOC list for LLM consumption.
+    /// Resolve the list of queries to search for.
     ///
-    /// Returns a formatted string with numbered entries:
-    /// ```
-    /// [1] Title: "Overview"
-    ///     Summary: "This section covers..."
-    /// [2] Title: "Architecture"
-    ///     Summary: "The system architecture..."
-    /// ```
-    fn build_toc_for_llm(&self, tree: &DocumentTree) -> (String, Vec<crate::document::NodeId>) {
-        let toc_view = TocView::new();
-        let mut entries = Vec::new();
-        let mut node_ids = Vec::new();
+    /// If decomposition produced multi-turn sub-queries, returns them in
+    /// execution order. Otherwise returns the original query.
+    fn resolve_queries(ctx: &PipelineContext) -> Vec<String> {
+        if let Some(ref decomp) = ctx.decomposition {
+            if decomp.was_decomposed && decomp.is_multi_turn() {
+                return decomp
+                    .execution_order()
+                    .iter()
+                    .map(|&i| decomp.sub_queries[i].text.clone())
+                    .collect();
+            }
+        }
+        vec![ctx.query.clone()]
+    }
 
-        fn collect_entries(
-            tree: &DocumentTree,
-            node_id: crate::document::NodeId,
-            entries: &mut Vec<(usize, String, String)>,
-            node_ids: &mut Vec<crate::document::NodeId>,
-            index: &mut usize,
-        ) {
-            if let Some(node) = tree.get(node_id) {
-                let title = node.title.clone();
-                let summary = if node.summary.is_empty() {
-                    "(no summary)".to_string()
-                } else {
-                    node.summary.clone()
+    /// Run search across all queries and cues, collecting and deduplicating results.
+    async fn run_search(
+        &self,
+        ctx: &mut PipelineContext,
+        queries: &[String],
+        cues: &[SearchCue],
+    ) -> (Vec<crate::retrieval::types::SearchPath>, Vec<CandidateNode>) {
+        let algorithm = ctx.selected_algorithm.unwrap_or(SearchAlgorithm::Beam);
+        let config = ctx.search_config.clone().unwrap_or_default();
+
+        let search_config = SearchAlgConfig {
+            top_k: config.beam_width * 2,
+            beam_width: config.beam_width,
+            max_iterations: config.max_iterations,
+            min_score: config.min_score,
+            leaf_only: false,
+        };
+
+        let pilot_ref: Option<&dyn Pilot> = self.pilot.as_deref();
+
+        let mut all_paths = Vec::new();
+        let mut total_pilot_interventions = 0u64;
+
+        for query in queries {
+            let legacy_ctx = RetrievalContext::new(
+                query,
+                ctx.options.max_tokens,
+                ctx.options.sufficiency_check,
+            );
+
+            for cue in cues {
+                debug!(
+                    "Searching: algorithm={:?}, query='{}', cue.root={:?}, cue.confidence={:.3}",
+                    algorithm, query, cue.root, cue.confidence
+                );
+
+                let result = match algorithm {
+                    SearchAlgorithm::Greedy => {
+                        GreedySearch::new()
+                            .search_from(&ctx.tree, &legacy_ctx, &search_config, pilot_ref, cue.root)
+                            .await
+                    }
+                    SearchAlgorithm::Beam => {
+                        BeamSearch::new()
+                            .search_from(&ctx.tree, &legacy_ctx, &search_config, pilot_ref, cue.root)
+                            .await
+                    }
+                    // MCTS is not truly implemented — falls back to Beam behavior.
+                    SearchAlgorithm::Mcts => {
+                        BeamSearch::new()
+                            .search_from(&ctx.tree, &legacy_ctx, &search_config, pilot_ref, cue.root)
+                            .await
+                    }
                 };
-                entries.push((*index, title, summary));
-                node_ids.push(node_id);
-                *index += 1;
 
-                for child_id in tree.children(node_id) {
-                    collect_entries(tree, child_id, entries, node_ids, index);
-                }
+                all_paths.extend(result.paths);
+                total_pilot_interventions += result.pilot_interventions as u64;
             }
         }
 
-        collect_entries(tree, tree.root(), &mut entries, &mut node_ids, &mut 0);
+        let mut all_candidates = self.extract_candidates(&all_paths, &ctx.tree);
 
-        let toc_str = entries
-            .iter()
-            .map(|(idx, title, summary)| {
-                format!("[{}] Title: \"{}\"\n    Summary: \"{}\"", idx + 1, title, summary)
-            })
-            .collect::<Vec<_>>()
-            .join("\n\n");
+        // Deduplicate by node_id, keeping the highest-scored entry
+        all_candidates.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        all_candidates.dedup_by(|a, b| a.node_id == b.node_id);
 
-        (toc_str, node_ids)
-    }
-
-    /// Locate top candidates directly via LLM using TOC.
-    ///
-    /// This method bypasses tree traversal by asking the LLM to
-    /// directly identify the most relevant nodes from the TOC.
-    async fn locate_via_llm(
-        &self,
-        query: &str,
-        tree: &DocumentTree,
-    ) -> Option<Vec<CandidateNode>> {
-        let llm_client = self.llm_client.as_ref()?;
-        let (toc_str, node_ids) = self.build_toc_for_llm(tree);
-
-        if node_ids.is_empty() {
-            warn!("No nodes in tree for LLM search");
-            return None;
-        }
-
-        let system_prompt = r#"You are a document navigation assistant. Your task is to locate the most relevant sections in a document hierarchy for a user's query.
-
-CRITICAL INSTRUCTIONS:
-1. Analyze the user query carefully to understand the intent
-2. Examine the provided Table of Contents (TOC) with numbered entries
-3. Select the TOP 3 most relevant entries that would contain the answer
-4. You MUST respond with ONLY valid JSON. No markdown code blocks. No explanations outside JSON.
-
-Your response must have this EXACT structure:
-{
-  "reasoning": "Brief analysis of the query and why you selected these entries",
-  "candidates": [
-    {"node_id": 1, "relevance_score": 0.95, "reason": "Why this entry matches the query"},
-    {"node_id": 2, "relevance_score": 0.80, "reason": "Why this entry is also relevant"},
-    {"node_id": 3, "relevance_score": 0.65, "reason": "Why this entry might be relevant"}
-  ]
-}
-
-Rules:
-- node_id: MUST be a number from the provided TOC (the number in [N] brackets)
-- relevance_score: Number between 0.0 and 1.0 (higher = more relevant)
-- reason: Brief explanation for each selection
-- candidates: Must have exactly 3 items, ordered by relevance (highest first)"#;
-
-        let user_prompt = format!(
-            "USER QUERY: {}\n\nDOCUMENT TOC ({} entries):\n{}\n\nBased on the query and TOC above, select the TOP 3 most relevant entries.\n\nRespond with ONLY the JSON object:",
-            query,
-            node_ids.len(),
-            toc_str
+        info!(
+            "Search complete: {} paths, {} candidates (pilot interventions: {})",
+            all_paths.len(),
+            all_candidates.len(),
+            total_pilot_interventions
         );
 
-        info!("Attempting LLM-based search for query: '{}'", query);
-
-        match llm_client.complete(system_prompt, &user_prompt).await {
-            Ok(response) => {
-                // Parse JSON response
-                match serde_json::from_str::<LlmLocateResponse>(&response) {
-                    Ok(llm_response) => {
-                        let mut candidates = Vec::new();
-
-                        for candidate in llm_response.candidates {
-                            // node_id is 1-indexed from LLM, convert to 0-indexed
-                            let idx = candidate.node_id.saturating_sub(1);
-                            if idx < node_ids.len() {
-                                let node_id = node_ids[idx];
-                                if let Some(node) = tree.get(node_id) {
-                                    candidates.push(CandidateNode::new(
-                                        node_id,
-                                        candidate.relevance_score,
-                                        node.depth,
-                                        tree.is_leaf(node_id),
-                                    ));
-                                    info!(
-                                        "LLM selected: [{}] '{}' (score: {:.2})",
-                                        candidate.node_id, node.title, candidate.relevance_score
-                                    );
-                                }
-                            }
-                        }
-
-                        if candidates.is_empty() {
-                            warn!("LLM returned no valid candidates");
-                            return None;
-                        }
-
-                        println!("LLM search found {} candidates", candidates.len());
-                        println!("LLM candidates content: {:?}", candidates);
-                        Some(candidates)
-                    }
-                    Err(e) => {
-                        warn!("Failed to parse LLM response as JSON: {}", e);
-                        warn!("Raw response: {}", response);
-                        None
-                    }
-                }
-            }
-            Err(e) => {
-                warn!("LLM call failed: {}", e);
-                None
-            }
-        }
+        (all_paths, all_candidates)
     }
-}
-
-/// LLM response for locate query.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct LlmLocateResponse {
-    reasoning: String,
-    candidates: Vec<LlmLocateCandidate>,
-}
-
-/// A candidate from LLM locate response.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct LlmLocateCandidate {
-    node_id: usize,
-    relevance_score: f32,
-    reason: String,
 }
 
 #[async_trait]
@@ -410,229 +314,70 @@ impl RetrievalStage for SearchStage {
     }
 
     fn priority(&self) -> i32 {
-        30 // Third stage
+        30
     }
 
     fn failure_policy(&self) -> FailurePolicy {
-        FailurePolicy::retry() // Retry on transient failures
+        FailurePolicy::retry()
     }
 
     fn can_backtrack(&self) -> bool {
-        true // Can receive backtracks from judge
+        true
     }
 
     async fn execute(&self, ctx: &mut PipelineContext) -> crate::error::Result<StageOutcome> {
         let start = std::time::Instant::now();
 
-        // Get strategy and algorithm
-        let _strategy = self.get_strategy(ctx);
         let algorithm = ctx.selected_algorithm.unwrap_or(SearchAlgorithm::Beam);
         let config = ctx.search_config.clone().unwrap_or_default();
 
         // Reset Pilot state for new query
         if let Some(ref pilot) = self.pilot {
             pilot.reset();
-            println!("[DEBUG] SearchStage: Pilot is available, is_active={}", pilot.is_active());
-        } else {
-            println!("[DEBUG] SearchStage: No Pilot available");
+            debug!("SearchStage: Pilot is available, is_active={}", pilot.is_active());
         }
 
         info!(
             "Executing search: algorithm={:?}, beam_width={}, pilot={}",
             algorithm,
             config.beam_width,
-            if self.has_pilot() {
-                "enabled"
-            } else {
-                "disabled"
-            }
+            if self.has_pilot() { "enabled" } else { "disabled" }
         );
 
-        // Increment search iteration
         ctx.increment_search_iteration();
 
-        // === Try LLM-first search (direct TOC-based location) ===
-        if self.llm_client.is_some() {
-            info!("Attempting LLM-first search for query: '{}'", ctx.query);
+        // === Phase Locate: find relevant subtrees via ToC ===
+        let level_0_nodes: Vec<_> = ctx
+            .retrieval_index
+            .as_ref()
+            .and_then(|idx| idx.level(0))
+            .map(|nodes| nodes.to_vec())
+            .unwrap_or_else(|| ctx.tree.children(ctx.tree.root()));
 
-            if let Some(candidates) = self.locate_via_llm(&ctx.query, &ctx.tree).await {
-                if !candidates.is_empty() {
-                    ctx.candidates = candidates;
-                    ctx.metrics.search_time_ms += start.elapsed().as_millis() as u64;
-                    ctx.metrics.nodes_visited += ctx.candidates.len();
-                    ctx.metrics.llm_calls += 1;
+        let cues = self
+            .toc_navigator
+            .locate(&ctx.query, &ctx.tree, &level_0_nodes)
+            .await;
 
-                    info!(
-                        "LLM-first search found {} candidates (skipped tree traversal)",
-                        ctx.candidates.len()
-                    );
+        debug!("ToCNavigator returned {} cues", cues.len());
 
-                    return Ok(StageOutcome::cont());
-                }
-            }
+        // === Resolve queries (decomposed or original) ===
+        let queries = Self::resolve_queries(ctx);
 
-            info!("LLM-first search returned no results, falling back to tree traversal");
-        }
+        // === Phase Traverse + Collect ===
+        let (paths, candidates) = self.run_search(ctx, &queries, &cues).await;
 
-        // Build search config for search algorithms
-        let search_config = SearchAlgConfig {
-            top_k: config.beam_width * 2,
-            beam_width: config.beam_width,
-            max_iterations: config.max_iterations,
-            min_score: config.min_score,
-            leaf_only: false,
-        };
+        ctx.search_paths = paths;
+        ctx.candidates = candidates;
 
-        // Get Pilot reference (or None if not available)
-        let pilot_ref: Option<&dyn Pilot> = self.pilot.as_deref();
-        println!("[DEBUG] SearchStage: pilot_ref is {}", if pilot_ref.is_some() { "Some" } else { "None" });
-
-        // === Check for decomposition ===
-        if let Some(ref decomposition) = ctx.decomposition {
-            if decomposition.was_decomposed && decomposition.is_multi_turn() {
-                info!("Processing {} decomposed sub-queries", decomposition.sub_queries.len());
-
-                let mut all_paths = Vec::new();
-                let mut all_candidates = Vec::new();
-                let mut total_pilot_interventions = 0u64;
-
-                // Process each sub-query in execution order
-                let order = decomposition.execution_order();
-                for sub_idx in order {
-                    let sub_query = &decomposition.sub_queries[sub_idx];
-                    info!("Processing sub-query : {}", sub_query.text);
-
-                    // Create legacy context for this sub-query
-                    let legacy_ctx = RetrievalContext::new(
-                        &sub_query.text,
-                        ctx.options.max_tokens,
-                        ctx.options.sufficiency_check,
-                    );
-
-                    println!("[DEBUG] SearchStage: Starting search for sub-query: algorithm={:?}, top_k={}, beam_width={}",
-                        algorithm, search_config.top_k, search_config.beam_width);
-
-                    // Execute search for this sub-query
-                    let result = match algorithm {
-                        SearchAlgorithm::Greedy => {
-                            let search = GreedySearch::new();
-                            search.search(&ctx.tree, &legacy_ctx, &search_config, pilot_ref).await
-                        }
-                        SearchAlgorithm::Beam => {
-                            let search = BeamSearch::new();
-                            search.search(&ctx.tree, &legacy_ctx, &search_config, pilot_ref).await
-                        }
-                        SearchAlgorithm::Mcts => {
-                            let search = BeamSearch::new();
-                            search.search(&ctx.tree, &legacy_ctx, &search_config, pilot_ref).await
-                        }
-                    };
-
-                    all_candidates.extend(self.extract_candidates(&result.paths, &ctx.tree));
-                    all_paths.extend(result.paths);
-                    total_pilot_interventions += result.pilot_interventions as u64;
-
-                    info!("Sub-query '{}' found {} paths", sub_query.text, all_paths.len());
-                }
-
-                // Merge results
-                ctx.search_paths = all_paths;
-                ctx.candidates = all_candidates;
-
-                info!(
-                    "Search complete: {} total candidates from {} sub-queries (pilot interventions: {})",
-                    ctx.candidates.len(),
-                    decomposition.sub_queries.len(),
-                    total_pilot_interventions
-                );
-            } else {
-                // Single query (not decomposed or single sub-query) - process as normal
-                let legacy_ctx = RetrievalContext::new(
-                    &ctx.query,
-                    ctx.options.max_tokens,
-                    ctx.options.sufficiency_check,
-                );
-
-                println!("[DEBUG] SearchStage: Starting search with algorithm={:?}, top_k={}, beam_width={}, max_iterations={}, min_score={:.2}",
-                    algorithm, search_config.top_k, search_config.beam_width, search_config.max_iterations, search_config.min_score);
-
-                let result = match algorithm {
-                    SearchAlgorithm::Greedy => {
-                        let search = GreedySearch::new();
-                        search.search(&ctx.tree, &legacy_ctx, &search_config, pilot_ref).await
-                    }
-                    SearchAlgorithm::Beam => {
-                        let search = BeamSearch::new();
-                        search.search(&ctx.tree, &legacy_ctx, &search_config, pilot_ref).await
-                    }
-                    SearchAlgorithm::Mcts => {
-                        let search = BeamSearch::new();
-                        search.search(&ctx.tree, &legacy_ctx, &search_config, pilot_ref).await
-                    }
-                };
-
-                ctx.search_paths = result.paths;
-                ctx.candidates = self.extract_candidates(&ctx.search_paths, &ctx.tree);
-
-                info!(
-                    "Search found {} paths (pilot interventions: {})",
-                    ctx.search_paths.len(),
-                    result.pilot_interventions
-                );
-            }
-        } else {
-            // No decomposition available, process original query
-            let legacy_ctx = RetrievalContext::new(
-                &ctx.query,
-                ctx.options.max_tokens,
-                ctx.options.sufficiency_check,
-            );
-
-            println!("[DEBUG] SearchStage: Starting search with algorithm={:?}, top_k={}, beam_width={}, max_iterations={}, min_score={:.2}",
-                algorithm, search_config.top_k, search_config.beam_width, search_config.max_iterations, search_config.min_score);
-
-            let result = match algorithm {
-                SearchAlgorithm::Greedy => {
-                    let search = GreedySearch::new();
-                    search.search(&ctx.tree, &legacy_ctx, &search_config, pilot_ref).await
-                }
-                SearchAlgorithm::Beam => {
-                    let search = BeamSearch::new();
-                    search.search(&ctx.tree, &legacy_ctx, &search_config, pilot_ref).await
-                }
-                SearchAlgorithm::Mcts => {
-                    let search = BeamSearch::new();
-                    search.search(&ctx.tree, &legacy_ctx, &search_config, pilot_ref).await
-                }
-            };
-
-            ctx.search_paths = result.paths;
-            ctx.candidates = self.extract_candidates(&ctx.search_paths, &ctx.tree);
-
-            info!(
-                "Search found {} paths (pilot interventions: {})",
-                ctx.search_paths.len(),
-                result.pilot_interventions
-            );
-        }
-
-        // Debug output
-        println!("[DEBUG] Search found {} total paths, {} candidates", ctx.search_paths.len(), ctx.candidates.len());
-        for (i, path) in ctx.search_paths.iter().enumerate().take(5) {
-            if let Some(leaf_id) = path.leaf {
-                if let Some(node) = ctx.tree.get(leaf_id) {
-                    println!("[DEBUG] Path {}: score={:.3}, title='{}', content_len={}",
-                        i, path.score, node.title, node.content.len());
-                }
-            }
-        }
-
-        // Debug output
-        println!("[DEBUG] Extracted {} candidates", ctx.candidates.len());
+        debug!(
+            "Search found {} total paths, {} candidates",
+            ctx.search_paths.len(),
+            ctx.candidates.len()
+        );
         for (i, c) in ctx.candidates.iter().enumerate().take(5) {
             if let Some(node) = ctx.tree.get(c.node_id) {
-                println!("[DEBUG] Candidate {}: score={:.3}, title='{}'",
-                    i, c.score, node.title);
+                debug!("Candidate {}: score={:.3}, title='{}'", i, c.score, node.title);
             }
         }
 
