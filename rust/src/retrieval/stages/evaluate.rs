@@ -331,6 +331,7 @@ impl RetrievalStage for EvaluateStage {
 
         println!("[DEBUG] EvaluateStage: {} candidates, iteration {}",
             ctx.candidates.len(), ctx.search_iterations);
+        
         info!(
             "Judging sufficiency: {} candidates, iteration {}",
             ctx.candidates.len(),

@@ -214,6 +214,9 @@ impl Engine {
     /// # }
     /// ```
     pub async fn index(&self, ctx: IndexContext) -> Result<String> {
+        println!("Indexing...");
+        println!("ctx: {:?}", ctx);
+        
         let doc = self.indexer.index(ctx).await?;
         let persisted = self.indexer.to_persisted(doc);
 

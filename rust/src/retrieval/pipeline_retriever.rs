@@ -119,7 +119,7 @@ impl PipelineRetriever {
         orchestrator = orchestrator.stage(plan_stage);
 
         // Add search stage with Pilot for semantic navigation
-        let mut search_stage = SearchStage::new();
+        let mut search_stage = SearchStage::new().with_llm_client(self.llm_client.clone());
         if let Some(ref client) = self.llm_client {
             // Create LLM-based Pilot for semantic navigation guidance
             let mut pilot = LlmPilot::new(client.clone(), PilotConfig::default());

@@ -236,6 +236,7 @@ impl SearchTree for BeamSearch {
                                 children.len()
                             );
 
+                            println!("[DEBUG] BEAM SEARCH: Pilot intervening at decision point");
                             match p.decide(&state).await {
                                 decision => {
                                     pilot_interventions += 1;

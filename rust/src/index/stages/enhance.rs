@@ -161,6 +161,7 @@ impl IndexStage for EnhanceStage {
                 Some(n) => n.clone(),
                 None => continue,
             };
+            println!("[DEBUG] Evaluating node for summary: {} {}", node.title, node.content);
 
             // Skip if no content
             if node.content.is_empty() {
@@ -204,6 +205,8 @@ impl IndexStage for EnhanceStage {
 
             // Generate summary (generator also has memoization built-in)
             println!("[DEBUG] Calling LLM to generate summary for node: {} ({} tokens)", node.title, token_count);
+            println!("[DEBUG] Node content: {}", node.content);
+
             match generator.generate(&node.title, &node.content).await {
                 Ok(summary) => {
                     if summary.is_empty() {

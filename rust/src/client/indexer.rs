@@ -259,6 +259,8 @@ impl IndexerClient {
         options: &IndexOptions,
         format: DocumentFormat,
     ) -> PipelineOptions {
+        println!("[DEBUG] Building pipeline options for format: {:?} with options: {:?}", format, options);
+
         PipelineOptions {
             mode: match format {
                 DocumentFormat::Markdown => IndexMode::Markdown,
@@ -268,7 +270,8 @@ impl IndexerClient {
             },
             generate_ids: options.generate_ids,
             summary_strategy: if options.generate_summaries {
-                SummaryStrategy::selective(self.config.min_summary_tokens, false)
+                // SummaryStrategy::selective(self.config.min_summary_tokens, false)
+                SummaryStrategy::full()
             } else {
                 SummaryStrategy::none()
             },
