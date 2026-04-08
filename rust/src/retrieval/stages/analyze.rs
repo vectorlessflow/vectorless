@@ -7,14 +7,16 @@
 //! - Query complexity (Simple/Medium/Complex)
 //! - Keywords for matching
 //! - Target sections based on ToC matching
+//! - Query decomposition for complex queries
 
 use async_trait::async_trait;
 use tracing::info;
 
 use crate::document::{DocumentTree, TocView};
 use crate::retrieval::complexity::ComplexityDetector;
+use crate::retrieval::decompose::{DecompositionConfig, QueryDecomposer};
 use crate::retrieval::pipeline::{FailurePolicy, PipelineContext, RetrievalStage, StageOutcome};
-// QueryComplexity is used in context
+use crate::llm::LlmClient;
 
 /// Analyze Stage - analyzes queries for retrieval planning.
 ///
@@ -22,17 +24,25 @@ use crate::retrieval::pipeline::{FailurePolicy, PipelineContext, RetrievalStage,
 /// 1. Detects query complexity (Simple/Medium/Complex)
 /// 2. Extracts keywords for matching
 /// 3. Matches target sections from ToC
+/// 4. Decomposes complex queries into sub-queries (if enabled)
 ///
 /// # Example
 ///
 /// ```rust,ignore
 /// let stage = AnalyzeStage::new()
-///     .with_toc_matching(true);
+///     .with_toc_matching(true)
+///     .with_decomposition(true);
 /// ```
 pub struct AnalyzeStage {
     complexity_detector: ComplexityDetector,
     toc_view: TocView,
     enable_toc_matching: bool,
+    /// Query decomposer for complex queries.
+    query_decomposer: Option<QueryDecomposer>,
+    /// Enable query decomposition.
+    enable_decomposition: bool,
+    /// Complexity threshold for triggering decomposition.
+    decomposition_threshold: f32,
 }
 
 impl Default for AnalyzeStage {
@@ -48,12 +58,51 @@ impl AnalyzeStage {
             complexity_detector: ComplexityDetector::new(),
             toc_view: TocView::new(),
             enable_toc_matching: true,
+            query_decomposer: None,
+            enable_decomposition: false,
+            decomposition_threshold: 0.6,
         }
     }
 
     /// Enable or disable ToC section matching.
     pub fn with_toc_matching(mut self, enable: bool) -> Self {
         self.enable_toc_matching = enable;
+        self
+    }
+
+    /// Enable query decomposition with default configuration.
+    pub fn with_decomposition(mut self, enable: bool) -> Self {
+        self.enable_decomposition = enable;
+        if enable && self.query_decomposer.is_none() {
+            self.query_decomposer = Some(QueryDecomposer::new(DecompositionConfig::default()));
+        }
+        self
+    }
+
+    /// Enable query decomposition with custom configuration.
+    pub fn with_decomposition_config(mut self, config: DecompositionConfig) -> Self {
+        self.enable_decomposition = true;
+        self.query_decomposer = Some(QueryDecomposer::new(config));
+        self
+    }
+
+    /// Enable query decomposition with LLM client.
+    pub fn with_llm_client(mut self, client: crate::llm::LlmClient) -> Self {
+        if self.query_decomposer.is_none() {
+            self.query_decomposer = Some(
+                QueryDecomposer::new(DecompositionConfig::default())
+                    .with_llm_client(client),
+            );
+        } else if let Some(ref mut decomposer) = self.query_decomposer {
+            *decomposer = QueryDecomposer::new(DecompositionConfig::default()).with_llm_client(client);
+        }
+        self.enable_decomposition = true;
+        self
+    }
+
+    /// Set complexity threshold for triggering decomposition.
+    pub fn with_decomposition_threshold(mut self, threshold: f32) -> Self {
+        self.decomposition_threshold = threshold.clamp(0.0, 1.0);
         self
     }
 
@@ -182,7 +231,42 @@ impl RetrievalStage for AnalyzeStage {
             info!("Target sections: {:?}", ctx.target_sections);
         }
 
-        // 4. Update metrics
+        // 4. Decompose query if enabled and complex enough
+        if self.enable_decomposition {
+            if let Some(ref decomposer) = self.query_decomposer {
+                let complexity_score = ctx.complexity
+                    .as_ref()
+                    .map(|c| match c {
+                        crate::retrieval::types::QueryComplexity::Simple => 0.3,
+                        crate::retrieval::types::QueryComplexity::Medium => 0.6,
+                        crate::retrieval::types::QueryComplexity::Complex => 0.9,
+                    })
+                    .unwrap_or(0.5);
+
+                if complexity_score >= self.decomposition_threshold {
+                    info!("Decomposing query (complexity: {:.2})", complexity_score);
+                    match decomposer.decompose(&ctx.query).await {
+                        Ok(result) => {
+                            if result.was_decomposed {
+                                info!(
+                                    "Query decomposed into {} sub-queries",
+                                    result.sub_queries.len()
+                                );
+                                for (i, sq) in result.sub_queries.iter().enumerate() {
+                                    info!("  Sub-query {}: {} (priority: {})", i, sq.text, sq.priority);
+                                }
+                            }
+                            ctx.decomposition = Some(result);
+                        }
+                        Err(e) => {
+                            info!("Query decomposition failed: {}, continuing with original query", e);
+                        }
+                    }
+                }
+            }
+        }
+
+        // 5. Update metrics
         ctx.metrics.llm_calls += 0; // No LLM calls in this stage
 
         Ok(StageOutcome::cont())

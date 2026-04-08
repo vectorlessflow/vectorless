@@ -248,52 +248,170 @@ pub mod fallback {
     use super::*;
 
     pub fn system_start() -> String {
-        "You are a document navigation assistant. Help identify the best starting point for searching a hierarchical document.".to_string()
+        r#"You are a document navigation assistant. Help identify the best entry points for searching a hierarchical document.
+
+CRITICAL: You MUST respond with ONLY valid JSON. No markdown code blocks, No explanation. Just the JSON object.
+
+Your response must have this EXACT structure:
+{
+  "entry_points": ["Title 1", "Title 2"],
+  "reasoning": "Brief explanation",
+  "confidence": 0.85
+}
+
+Rules:
+- entry_points: Array of node title strings (from the candidates provided)
+- reasoning: String explaining your choice
+- confidence: Number between 0.0 and 1.0 (use a number, NOT "high"/"medium"/"low")"#.to_string()
     }
 
     pub fn user_start() -> String {
-        r#"Given the following document structure and user query, identify the best entry points for search.
+        r#"{context}
 
-{context}
-
-Respond in JSON format with your analysis."#.to_string()
+Respond with ONLY the JSON object (no markdown, no explanation):
+{
+  "entry_points": ["list of node titles as strings"],
+  "reasoning": "your reasoning here",
+  "confidence": 0.85
+}"#.to_string()
     }
 
     pub fn system_fork() -> String {
-        "You are a document navigation assistant. At each decision point, rank the candidate branches by their likelihood of containing the answer to the user's query.".to_string()
+        r#"You are a document navigation assistant. At each decision point, rank the candidate branches by their likelihood of containing the answer to the user's query.
+
+CRITICAL: You MUST respond with ONLY valid JSON. No markdown code blocks.
+
+Your response must have this EXACT structure:
+{
+  "ranked_candidates": [
+    {"index": 0, "score": 0.9, "reason": "explanation"}
+  ],
+  "direction": "go_deeper",
+  "confidence": 0.85,
+  "reasoning": "overall explanation"
+}
+
+Rules:
+- ranked_candidates: Array of objects with index (number), score (0.0-1.0), reason (string)
+- direction: One of "go_deeper", "explore_siblings", "backtrack", "found_answer"
+- confidence: Number between 0.0 and 1.0 (NOT a string)"#.to_string()
     }
 
     pub fn user_fork() -> String {
-        r#"Given the current search context and candidate branches, rank them by relevance.
+        r#"{context}
 
-{context}
-
-Respond in JSON format with ranked candidates."#
+Respond with ONLY the JSON object:
+{
+  "ranked_candidates": [
+    {"index": 0, "score": 0.9, "reason": "why this candidate"}
+  ],
+  "direction": "go_deeper",
+  "confidence": 0.85,
+  "reasoning": "overall explanation"
+}"#
             .to_string()
     }
 
     pub fn system_backtrack() -> String {
-        "You are a document navigation assistant. When a search path fails to find the answer, analyze why and suggest alternative branches to explore.".to_string()
+        r#"You are a document navigation assistant. When a search path fails to find the answer, analyze why and suggest alternative branches to explore.
+
+CRITICAL: You MUST respond with ONLY valid JSON. No markdown code blocks.
+
+Your response must have this EXACT structure:
+{
+  "alternative_branches": [
+    {"index": 0, "score": 0.8, "reason": "explanation"}
+  ],
+  "direction": "backtrack",
+  "confidence": 0.85,
+  "reasoning": "why the original path failed"
+}"#.to_string()
     }
 
     pub fn user_backtrack() -> String {
-        r#"The current search path did not find the answer. Analyze the failure and suggest alternatives.
+        r#"{context}
 
-{context}
-
-Respond in JSON format with alternative branches."#.to_string()
+Respond with ONLY the JSON object:
+{
+  "alternative_branches": [
+    {"index": 0, "score": 0.8, "reason": "why this alternative"}
+  ],
+  "direction": "backtrack",
+  "confidence": 0.85,
+  "reasoning": "why original path failed"
+}"#.to_string()
     }
 
     pub fn system_evaluate() -> String {
-        "You are a document analysis assistant. Evaluate whether the current node contains the answer to the user's query.".to_string()
+        r#"You are a document analysis assistant. Evaluate whether the current node contains the answer to the user's query.
+
+CRITICAL: You MUST respond with ONLY valid JSON. No markdown code blocks.
+
+Your response must have this EXACT structure:
+{
+  "relevance_score": 0.85,
+  "is_answer": false,
+  "direction": "go_deeper",
+  "confidence": 0.85,
+  "reasoning": "explanation"
+}"#.to_string()
     }
 
     pub fn user_evaluate() -> String {
-        r#"Evaluate if this node contains the answer to the user's query.
+        r#"{context}
 
-{context}
+Respond with ONLY the JSON object:
+{
+  "relevance_score": 0.85,
+  "is_answer": false,
+  "direction": "go_deeper",
+  "confidence": 0.85,
+  "reasoning": "explanation"
+}"#
+            .to_string()
+    }
 
-Respond in JSON format with your evaluation."#
+    pub fn system_locate_top3() -> String {
+        r#"You are a document navigation assistant. Your task is to locate the most relevant sections in a document hierarchy for a user's query.
+
+CRITICAL INSTRUCTIONS:
+1. Analyze the user query carefully to understand the intent
+2. Examine the provided Table of Contents (TOC) with node IDs
+3. Select the TOP 3 most relevant nodes that would contain the answer
+4. You MUST respond with ONLY valid JSON. No markdown code blocks. No explanations outside JSON.
+
+Your response must have this EXACT structure:
+{
+  "reasoning": "Brief analysis of the query and why you selected these nodes",
+  "candidates": [
+    {"node_id": <number_from_toc>, "relevance_score": 0.95, "reason": "Why this node matches the query"},
+    {"node_id": <number_from_toc>, "relevance_score": 0.80, "reason": "Why this node is also relevant"},
+    {"node_id": <number_from_toc>, "relevance_score": 0.65, "reason": "Why this node might be relevant"}
+  ]
+}
+
+Rules:
+- node_id: MUST be a number from the provided TOC (copy exactly)
+- relevance_score: Number between 0.0 and 1.0 (higher = more relevant)
+- reason: Brief explanation for each selection
+- candidates: Must have exactly 3 items, ordered by relevance (highest first)
+- If fewer than 3 relevant nodes exist, use lower scores for less relevant ones"#.to_string()
+    }
+
+    pub fn user_locate_top3() -> String {
+        r#"{context}
+
+Based on the query and TOC above, select the TOP 3 most relevant nodes.
+
+Respond with ONLY the JSON object:
+{
+  "reasoning": "Your analysis here",
+  "candidates": [
+    {"node_id": 1, "relevance_score": 0.95, "reason": "explanation"},
+    {"node_id": 2, "relevance_score": 0.80, "reason": "explanation"},
+    {"node_id": 3, "relevance_score": 0.65, "reason": "explanation"}
+  ]
+}"#
             .to_string()
     }
 }
@@ -335,5 +453,70 @@ impl EvaluatePrompt {
             system: fallback::system_evaluate(),
             template: fallback::user_evaluate(),
         }
+    }
+}
+
+impl LocateTop3Prompt {
+    /// Get template with fallback.
+    pub fn with_fallback() -> Self {
+        Self {
+            system: fallback::system_locate_top3(),
+            template: fallback::user_locate_top3(),
+        }
+    }
+}
+
+/// Prompt template for LOCATE_TOP3 intervention point.
+///
+/// Used at the start to directly locate top-3 relevant nodes from TOC:
+/// - Understand query intent
+/// - Identify top 3 most relevant nodes with confidence scores
+/// - Provide reasoning for each selection
+#[derive(Debug, Clone)]
+pub struct LocateTop3Prompt {
+    system: String,
+    template: String,
+}
+
+impl Default for LocateTop3Prompt {
+    fn default() -> Self {
+        Self::with_fallback()
+    }
+}
+
+impl LocateTop3Prompt {
+    /// Create a new locate top-3 prompt template.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Create with custom templates.
+    pub fn with_templates(system: String, template: String) -> Self {
+        Self { system, template }
+    }
+}
+
+impl PromptTemplate for LocateTop3Prompt {
+    fn system_prompt(&self) -> &str {
+        &self.system
+    }
+
+    fn user_prompt_template(&self) -> &str {
+        &self.template
+    }
+
+    fn intervention_point(&self) -> InterventionPoint {
+        InterventionPoint::Start
+    }
+
+    fn output_format_hint(&self) -> &str {
+        r#"{
+  "reasoning": "Overall analysis of the query and document structure",
+  "candidates": [
+    {"node_id": 1, "relevance_score": 0.95, "reason": "Why this node is relevant"},
+    {"node_id": 2, "relevance_score": 0.80, "reason": "Why this node is relevant"},
+    {"node_id": 3, "relevance_score": 0.65, "reason": "Why this node is relevant"}
+  ]
+}"#
     }
 }

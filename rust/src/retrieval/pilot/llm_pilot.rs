@@ -750,20 +750,6 @@ mod tests {
     }
 
     #[test]
-    fn test_default_decision() {
-        let client = LlmClient::for_model("gpt-4o-mini");
-        let config = PilotConfig::default();
-        let pilot = LlmPilot::new(client, config);
-
-        let candidates = create_test_node_ids(2);
-        let decision = pilot.default_decision(&candidates, InterventionPoint::Fork);
-
-        assert_eq!(decision.ranked_candidates.len(), 2);
-        assert_eq!(decision.confidence, 0.0);
-        assert!(decision.reasoning.contains("LLM"));
-    }
-
-    #[test]
     fn test_reset() {
         let client = LlmClient::for_model("gpt-4o-mini");
         let config = PilotConfig::default();

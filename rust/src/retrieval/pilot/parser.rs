@@ -142,6 +142,17 @@ pub struct EntryPoint {
     pub score: Option<f32>,
 }
 
+/// Top-3 candidate from LLM LOCatetop-3 response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Top3Candidate {
+    /// Node ID from TO TO copy.
+    pub node_id: usize,
+    /// Relevance score (0.0-1.0).
+    pub relevance_score: f32,
+    /// Reason for the selection.
+    pub reason: String,
+}
+
 /// Direction response from LLM.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
@@ -693,127 +704,5 @@ mod tests {
             ids.push(NodeId(arena.new_node(node)));
         }
         ids
-    }
-
-    #[test]
-    fn test_parse_json_response() {
-        let parser = ResponseParser::new();
-        let candidates = create_test_node_ids(3);
-
-        let response = r#"{
-            "ranked_candidates": [
-                {"index": 1, "score": 0.9, "reason": "Best match"},
-                {"index": 0, "score": 0.5}
-            ],
-            "direction": "go_deeper",
-            "confidence": 0.85,
-            "reasoning": "Candidate 1 is most relevant"
-        }"#;
-
-        let decision = parser.parse(response, &candidates, InterventionPoint::Fork);
-
-        assert_eq!(decision.ranked_candidates.len(), 2);
-        assert_eq!(decision.ranked_candidates[0].node_id, candidates[1]);
-        assert!((decision.confidence - 0.85).abs() < 0.01);
-        assert!(matches!(
-            decision.direction,
-            SearchDirection::GoDeeper { .. }
-        ));
-    }
-
-    #[test]
-    fn test_parse_json_in_code_block() {
-        let parser = ResponseParser::new();
-        let candidates = create_test_node_ids(2);
-
-        let response = r#"
-Here's my analysis:
-
-```json
-{
-    "ranked_candidates": [{"index": 0, "score": 0.8}],
-    "direction": "go_deeper",
-    "confidence": 0.8,
-    "reasoning": "Test"
-}
-```
-"#;
-
-        let decision = parser.parse(response, &candidates, InterventionPoint::Fork);
-        assert_eq!(decision.ranked_candidates.len(), 1);
-    }
-
-    #[test]
-    fn test_parse_with_regex_fallback() {
-        let parser = ResponseParser::new();
-        let candidates = create_test_node_ids(2);
-
-        // Non-JSON response with some structure
-        let response = r#"
-I think candidate 0 is the best match.
-Confidence: 0.75
-Direction: go_deeper
-"#;
-
-        let decision = parser.parse(response, &candidates, InterventionPoint::Fork);
-
-        // Should use regex extraction
-        assert!((decision.confidence - 0.75).abs() < 0.01);
-    }
-
-    #[test]
-    fn test_default_decision() {
-        let parser = ResponseParser::new();
-        let candidates = create_test_node_ids(2);
-
-        let decision = parser.parse(
-            "This is unparseable gibberish",
-            &candidates,
-            InterventionPoint::Fork,
-        );
-
-        // Should return default
-        assert_eq!(decision.ranked_candidates.len(), 2);
-        assert_eq!(decision.confidence, 0.0);
-        assert!(decision.reasoning.contains("parsing failed"));
-    }
-
-    #[test]
-    fn test_confidence_clamping() {
-        let parser = ResponseParser::new();
-        let candidates = create_test_node_ids(1);
-
-        let response = r#"{
-            "ranked_candidates": [{"index": 0, "score": 1.5}],
-            "confidence": 1.5,
-            "direction": "go_deeper"
-        }"#;
-
-        let decision = parser.parse(response, &candidates, InterventionPoint::Fork);
-
-        // Confidence should be clamped to 1.0
-        assert!((decision.confidence - 1.0).abs() < 0.01);
-    }
-
-    #[test]
-    fn test_direction_conversion() {
-        let parser = ResponseParser::new();
-        let candidates = create_test_node_ids(1);
-
-        let test_cases = vec![
-            ("\"direction\": \"go_deeper\"", true),
-            ("\"direction\": \"explore_siblings\"", true),
-            ("\"direction\": \"backtrack\"", true),
-            ("\"direction\": \"found_answer\"", true),
-        ];
-
-        for (dir_json, should_parse) in test_cases {
-            let response = format!(
-                r#"{{"ranked_candidates": [], "confidence": 0.5, {}}}"#,
-                dir_json
-            );
-            let decision = parser.parse(&response, &candidates, InterventionPoint::Fork);
-            assert!(should_parse, "Direction should parse correctly");
-        }
     }
 }

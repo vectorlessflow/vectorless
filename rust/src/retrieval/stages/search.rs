@@ -273,51 +273,142 @@ impl RetrievalStage for SearchStage {
             leaf_only: false,
         };
 
-        // Create legacy context for search algorithms
-        let legacy_ctx = RetrievalContext::new(
-            &ctx.query,
-            ctx.options.max_tokens,
-            ctx.options.sufficiency_check,
-        );
-
         // Get Pilot reference (or None if not available)
         let pilot_ref: Option<&dyn Pilot> = self.pilot.as_deref();
         println!("[DEBUG] SearchStage: pilot_ref is {}", if pilot_ref.is_some() { "Some" } else { "None" });
 
-        println!("[DEBUG] SearchStage: Starting search with algorithm={:?}, top_k={}, beam_width={}, max_iterations={}, min_score={:.2}",
-            algorithm, search_config.top_k, search_config.beam_width, search_config.max_iterations, search_config.min_score);  
-        // Execute search based on algorithm with Pilot
-        let result = match algorithm {
-            SearchAlgorithm::Greedy => {
-                let search = GreedySearch::new();
-                search
-                    .search(&ctx.tree, &legacy_ctx, &search_config, pilot_ref)
-                    .await
-            }
-            SearchAlgorithm::Beam => {
-                let search = BeamSearch::new();
-                search
-                    .search(&ctx.tree, &legacy_ctx, &search_config, pilot_ref)
-                    .await
-            }
-            SearchAlgorithm::Mcts => {
-                // Use beam search as fallback for now
-                let search = BeamSearch::new();
-                search
-                    .search(&ctx.tree, &legacy_ctx, &search_config, pilot_ref)
-                    .await
-            }
-        };
+        // === Check for decomposition ===
+        if let Some(ref decomposition) = ctx.decomposition {
+            if decomposition.was_decomposed && decomposition.is_multi_turn() {
+                info!("Processing {} decomposed sub-queries", decomposition.sub_queries.len());
 
-        info!(
-            "Search found {} paths (pilot interventions: {})",
-            result.paths.len(),
-            result.pilot_interventions
-        );
+                let mut all_paths = Vec::new();
+                let mut all_candidates = Vec::new();
+                let mut total_pilot_interventions = 0u64;
+
+                // Process each sub-query in execution order
+                let order = decomposition.execution_order();
+                for sub_idx in order {
+                    let sub_query = &decomposition.sub_queries[sub_idx];
+                    info!("Processing sub-query : {}", sub_query.text);
+
+                    // Create legacy context for this sub-query
+                    let legacy_ctx = RetrievalContext::new(
+                        &sub_query.text,
+                        ctx.options.max_tokens,
+                        ctx.options.sufficiency_check,
+                    );
+
+                    println!("[DEBUG] SearchStage: Starting search for sub-query: algorithm={:?}, top_k={}, beam_width={}",
+                        algorithm, search_config.top_k, search_config.beam_width);
+
+                    // Execute search for this sub-query
+                    let result = match algorithm {
+                        SearchAlgorithm::Greedy => {
+                            let search = GreedySearch::new();
+                            search.search(&ctx.tree, &legacy_ctx, &search_config, pilot_ref).await
+                        }
+                        SearchAlgorithm::Beam => {
+                            let search = BeamSearch::new();
+                            search.search(&ctx.tree, &legacy_ctx, &search_config, pilot_ref).await
+                        }
+                        SearchAlgorithm::Mcts => {
+                            let search = BeamSearch::new();
+                            search.search(&ctx.tree, &legacy_ctx, &search_config, pilot_ref).await
+                        }
+                    };
+
+                    all_candidates.extend(self.extract_candidates(&result.paths, &ctx.tree));
+                    all_paths.extend(result.paths);
+                    total_pilot_interventions += result.pilot_interventions as u64;
+
+                    info!("Sub-query '{}' found {} paths", sub_query.text, all_paths.len());
+                }
+
+                // Merge results
+                ctx.search_paths = all_paths;
+                ctx.candidates = all_candidates;
+
+                info!(
+                    "Search complete: {} total candidates from {} sub-queries (pilot interventions: {})",
+                    ctx.candidates.len(),
+                    decomposition.sub_queries.len(),
+                    total_pilot_interventions
+                );
+            } else {
+                // Single query (not decomposed or single sub-query) - process as normal
+                let legacy_ctx = RetrievalContext::new(
+                    &ctx.query,
+                    ctx.options.max_tokens,
+                    ctx.options.sufficiency_check,
+                );
+
+                println!("[DEBUG] SearchStage: Starting search with algorithm={:?}, top_k={}, beam_width={}, max_iterations={}, min_score={:.2}",
+                    algorithm, search_config.top_k, search_config.beam_width, search_config.max_iterations, search_config.min_score);
+
+                let result = match algorithm {
+                    SearchAlgorithm::Greedy => {
+                        let search = GreedySearch::new();
+                        search.search(&ctx.tree, &legacy_ctx, &search_config, pilot_ref).await
+                    }
+                    SearchAlgorithm::Beam => {
+                        let search = BeamSearch::new();
+                        search.search(&ctx.tree, &legacy_ctx, &search_config, pilot_ref).await
+                    }
+                    SearchAlgorithm::Mcts => {
+                        let search = BeamSearch::new();
+                        search.search(&ctx.tree, &legacy_ctx, &search_config, pilot_ref).await
+                    }
+                };
+
+                ctx.search_paths = result.paths;
+                ctx.candidates = self.extract_candidates(&ctx.search_paths, &ctx.tree);
+
+                info!(
+                    "Search found {} paths (pilot interventions: {})",
+                    ctx.search_paths.len(),
+                    result.pilot_interventions
+                );
+            }
+        } else {
+            // No decomposition available, process original query
+            let legacy_ctx = RetrievalContext::new(
+                &ctx.query,
+                ctx.options.max_tokens,
+                ctx.options.sufficiency_check,
+            );
+
+            println!("[DEBUG] SearchStage: Starting search with algorithm={:?}, top_k={}, beam_width={}, max_iterations={}, min_score={:.2}",
+                algorithm, search_config.top_k, search_config.beam_width, search_config.max_iterations, search_config.min_score);
+
+            let result = match algorithm {
+                SearchAlgorithm::Greedy => {
+                    let search = GreedySearch::new();
+                    search.search(&ctx.tree, &legacy_ctx, &search_config, pilot_ref).await
+                }
+                SearchAlgorithm::Beam => {
+                    let search = BeamSearch::new();
+                    search.search(&ctx.tree, &legacy_ctx, &search_config, pilot_ref).await
+                }
+                SearchAlgorithm::Mcts => {
+                    let search = BeamSearch::new();
+                    search.search(&ctx.tree, &legacy_ctx, &search_config, pilot_ref).await
+                }
+            };
+
+            ctx.search_paths = result.paths;
+            ctx.candidates = self.extract_candidates(&ctx.search_paths, &ctx.tree);
+
+            info!(
+                "Search found {} paths (pilot interventions: {})",
+                ctx.search_paths.len(),
+                result.pilot_interventions
+            );
+        }
 
         // Debug output
-        println!("[DEBUG] Search found {} paths", result.paths.len());
-        for (i, path) in result.paths.iter().enumerate().take(5) {
+        println!("[DEBUG] Search found {} total paths, {} candidates", ctx.search_paths.len(), ctx.candidates.len());
+        for (i, path) in ctx.search_paths.iter().enumerate().take(5) {
             if let Some(leaf_id) = path.leaf {
                 if let Some(node) = ctx.tree.get(leaf_id) {
                     println!("[DEBUG] Path {}: score={:.3}, title='{}', content_len={}",
@@ -325,10 +416,6 @@ impl RetrievalStage for SearchStage {
                 }
             }
         }
-
-        // Update context with results
-        ctx.search_paths = result.paths.clone();
-        ctx.candidates = self.extract_candidates(&result.paths, &ctx.tree);
 
         // Debug output
         println!("[DEBUG] Extracted {} candidates", ctx.candidates.len());
