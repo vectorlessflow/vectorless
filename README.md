@@ -17,11 +17,7 @@
 
 **Vectorless** is a library for querying structured documents using natural language — without vector databases or embedding models. Core engine written in Rust, with Python bindings.
 
-Instead of chunking documents into vectors, Vectorless preserves the document's tree structure and uses a **hybrid algorithm + LLM approach** to navigate it — like how a human reads a table of contents:
-
-- **Pilot (LLM)** handles "where to go"
-- **Algorithm** handles "how to walk"
-
+Instead of chunking documents into vectors, Vectorless preserves the document's tree structure and uses LLM to navigate it — like how a human reads a table of contents.
 
 ## How It Works
 
@@ -45,9 +41,9 @@ Each node gets an AI-generated summary, enabling fast navigation.
 When you ask "How do I reset the device?":
 
 1. **Analyze** — Understand query intent and complexity
-2. **Navigate** — LLM guides tree traversal (like reading a TOC)
+2. **Navigate** — LLM guides tree traversal
 3. **Retrieve** — Return the exact section with context
-4. **Verify** — Check if more information is needed (backtracking)
+4. **Verify** — Check if more information is needed
 
 ## Traditional RAG vs Vectorless
 
