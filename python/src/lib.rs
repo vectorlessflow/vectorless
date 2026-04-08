@@ -284,7 +284,16 @@ impl PyDocumentInfo {
 
 /// The main vectorless engine.
 ///
-/// Create an engine with a workspace directory:
+/// Configuration priority (later overrides earlier):
+/// 1. Default configuration
+/// 2. Auto-detected config file (vectorless.toml, config.toml, .vectorless.toml)
+/// 3. Explicit config file (config_path parameter)
+/// 4. Environment variables (OPENAI_API_KEY, VECTORLESS_MODEL, etc.)
+/// 5. Constructor parameters (api_key, model, endpoint) - highest priority
+///
+/// # Zero Configuration (Recommended)
+///
+/// Just set OPENAI_API_KEY environment variable:
 ///
 /// ```python
 /// from vectorless import Engine
@@ -292,10 +301,16 @@ impl PyDocumentInfo {
 /// engine = Engine(workspace="./data")
 /// ```
 ///
-/// Or with an explicit API key:
+/// # With Custom Model
 ///
 /// ```python
-/// engine = Engine(workspace="./data", api_key="sk-...")
+/// engine = Engine(workspace="./data", model="gpt-4o-mini")
+/// ```
+///
+/// # With Full Config File (Advanced)
+///
+/// ```python
+/// engine = Engine(config_path="./vectorless.toml")
 /// ```
 #[pyclass]
 pub struct PyEngine {
@@ -308,17 +323,26 @@ impl PyEngine {
     /// Create a new Engine.
     ///
     /// Args:
-    ///     workspace: Path to the workspace directory.
+    ///     workspace: Path to the workspace directory (optional if config_path provides it).
+    ///     config_path: Path to configuration file (optional, advanced usage).
     ///     api_key: Optional API key. If not provided, uses OPENAI_API_KEY env var.
-    ///     model: Optional model name. Default: "gpt-4o-mini".
+    ///     model: Optional model name. Default: "gpt-4o".
     ///     endpoint: Optional API endpoint.
+    ///
+    /// Configuration priority (later overrides earlier):
+    ///     1. Default configuration
+    ///     2. Auto-detected config file
+    ///     3. config_path parameter
+    ///     4. Environment variables (OPENAI_API_KEY, VECTORLESS_MODEL, etc.)
+    ///     5. Constructor parameters (api_key, model, endpoint)
     ///
     /// Raises:
     ///     VectorlessError: If engine creation fails.
     #[new]
-    #[pyo3(signature = (workspace, api_key=None, model=None, endpoint=None))]
+    #[pyo3(signature = (workspace=None, config_path=None, api_key=None, model=None, endpoint=None))]
     fn new(
-        workspace: String,
+        workspace: Option<String>,
+        config_path: Option<String>,
         api_key: Option<String>,
         model: Option<String>,
         endpoint: Option<String>,
@@ -334,18 +358,31 @@ impl PyEngine {
         let resolved_api_key = api_key.or_else(|| std::env::var("OPENAI_API_KEY").ok());
 
         let engine = rt.block_on(async {
-            let mut builder = EngineBuilder::new().with_workspace(&workspace);
+            let mut builder = EngineBuilder::new();
 
+            // Set config path first (if provided)
+            if let Some(path) = &config_path {
+                builder = builder.with_config_path(path);
+            }
+
+            // Set workspace (if provided)
+            if let Some(ws) = &workspace {
+                builder = builder.with_workspace(ws);
+            }
+
+            // Set API key
             if let Some(key) = resolved_api_key {
                 builder = builder.with_openai(key);
             }
 
-            if let Some(m) = model {
-                builder = builder.with_model(&m, None);
+            // Set model
+            if let Some(m) = &model {
+                builder = builder.with_model(m, None);
             }
 
-            if let Some(e) = endpoint {
-                builder = builder.with_endpoint(&e);
+            // Set endpoint
+            if let Some(e) = &endpoint {
+                builder = builder.with_endpoint(e);
             }
 
             builder.build().await

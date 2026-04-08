@@ -6,27 +6,67 @@
 //! This module provides [`EngineBuilder`] for configuring and building
 //! [`Engine`] instances with sensible defaults.
 //!
-//! # Example
+//! # Configuration Priority
+//!
+//! Configuration is applied in this order (later overrides earlier):
+//! 1. Default configuration
+//! 2. Auto-detected config file (`vectorless.toml`, `config.toml`, `.vectorless.toml`)
+//! 3. Explicit config file (`with_config_path`)
+//! 4. Environment variables (`OPENAI_API_KEY`, `VECTORLESS_MODEL`, etc.)
+//! 5. Builder methods (`with_openai`, `with_model`, etc.) - highest priority
+//!
+//! # Environment Variables
+//!
+//! | Variable | Description |
+//! |----------|-------------|
+//! | `OPENAI_API_KEY` | LLM API key |
+//! | `VECTORLESS_MODEL` | Default model name |
+//! | `VECTORLESS_ENDPOINT` | API endpoint URL |
+//! | `VECTORLESS_WORKSPACE` | Workspace directory |
+//!
+//! # Examples
+//!
+//! ## Zero Configuration (Recommended)
 //!
 //! ```rust,no_run
 //! use vectorless::client::EngineBuilder;
 //!
 //! # #[tokio::main]
 //! # async fn main() -> Result<(), vectorless::BuildError> {
-//! // Simple setup with workspace
-//! let engine = EngineBuilder::new()
-//!     .with_workspace("./my_workspace")
-//!     .with_openai(std::env::var("OPENAI_API_KEY").unwrap())
-//!     .build()
-//!     .await?;
-//!
-//! // Advanced configuration
+//! // Just set OPENAI_API_KEY environment variable
 //! let engine = EngineBuilder::new()
 //!     .with_workspace("./data")
-//!     .with_model("gpt-4o", None)
-//!     .with_endpoint("https://api.openai.com/v1")
-//!     .with_top_k(10)
-//!     .precise()
+//!     .build()
+//!     .await?;
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! ## With Custom Model
+//!
+//! ```rust,no_run
+//! use vectorless::client::EngineBuilder;
+//!
+//! # #[tokio::main]
+//! # async fn main() -> Result<(), vectorless::BuildError> {
+//! let engine = EngineBuilder::new()
+//!     .with_workspace("./data")
+//!     .with_model("gpt-4o-mini", None)  // Uses OPENAI_API_KEY from env
+//!     .build()
+//!     .await?;
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! ## With Full Config File (Advanced)
+//!
+//! ```rust,no_run
+//! use vectorless::client::EngineBuilder;
+//!
+//! # #[tokio::main]
+//! # async fn main() -> Result<(), vectorless::BuildError> {
+//! let engine = EngineBuilder::new()
+//!     .with_config_path("./vectorless.toml")
 //!     .build()
 //!     .await?;
 //! # Ok(())
@@ -49,16 +89,25 @@ const CONFIG_FILE_NAMES: &[&str] = &["vectorless.toml", "config.toml", ".vectorl
 /// Builder for creating a [`Engine`] client.
 ///
 /// The builder uses sensible defaults and automatically loads
-/// LLM configuration from environment variables or config files.
+/// configuration from config files and environment variables.
 ///
 /// # Configuration Priority
 ///
-/// Configuration is loaded in this order (later overrides earlier):
+/// Configuration is applied in this order (later overrides earlier):
 /// 1. Default configuration
-/// 2. Auto-detected config file
+/// 2. Auto-detected config file (`vectorless.toml`, `config.toml`, `.vectorless.toml`)
 /// 3. Explicit config file (`with_config_path`)
-/// 4. Custom config object (`with_config`)
-/// 5. Individual builder methods
+/// 4. Environment variables (`OPENAI_API_KEY`, `VECTORLESS_MODEL`, etc.)
+/// 5. Builder methods (`with_openai`, `with_model`, etc.) - highest priority
+///
+/// # Environment Variables
+///
+/// | Variable | Description |
+/// |----------|-------------|
+/// | `OPENAI_API_KEY` | LLM API key |
+/// | `VECTORLESS_MODEL` | Default model name |
+/// | `VECTORLESS_ENDPOINT` | API endpoint URL |
+/// | `VECTORLESS_WORKSPACE` | Workspace directory |
 ///
 /// # Example
 ///
@@ -67,9 +116,9 @@ const CONFIG_FILE_NAMES: &[&str] = &["vectorless.toml", "config.toml", ".vectorl
 ///
 /// # #[tokio::main]
 /// # async fn main() -> Result<(), vectorless::BuildError> {
+/// // Zero configuration - just set OPENAI_API_KEY environment variable
 /// let client = EngineBuilder::new()
 ///     .with_workspace("./my_workspace")
-///     .with_openai(std::env::var("OPENAI_API_KEY").unwrap())
 ///     .build()
 ///     .await?;
 /// # Ok(())
@@ -357,6 +406,57 @@ impl EngineBuilder {
         self
     }
 
+    /// Apply environment variable overrides to a Config.
+    ///
+    /// This is used when a custom Config is provided via `with_config`
+    /// or when using default config without a config file.
+    fn apply_env_overrides(config: &mut Config) {
+        // OPENAI_API_KEY: Set API key for all LLM clients
+        if let Ok(api_key) = std::env::var("OPENAI_API_KEY") {
+            // Set default API key
+            config.llm.api_key = Some(api_key.clone());
+            // Override individual client API keys if not explicitly set
+            if config.llm.summary.api_key.is_none() {
+                config.llm.summary.api_key = Some(api_key.clone());
+            }
+            if config.llm.retrieval.api_key.is_none() {
+                config.llm.retrieval.api_key = Some(api_key.clone());
+            }
+            if config.llm.pilot.api_key.is_none() {
+                config.llm.pilot.api_key = Some(api_key);
+            }
+            // Also set legacy config for backwards compatibility
+            if config.summary.api_key.is_none() {
+                config.summary.api_key = Some(std::env::var("OPENAI_API_KEY").unwrap());
+            }
+        }
+
+        // VECTORLESS_MODEL: Set default model
+        if let Ok(model) = std::env::var("VECTORLESS_MODEL") {
+            config.llm.summary.model = model.clone();
+            config.llm.retrieval.model = model.clone();
+            config.llm.pilot.model = model.clone();
+            // Also set legacy config
+            config.summary.model = model.clone();
+            config.retrieval.model = model;
+        }
+
+        // VECTORLESS_ENDPOINT: Set API endpoint
+        if let Ok(endpoint) = std::env::var("VECTORLESS_ENDPOINT") {
+            config.llm.summary.endpoint = endpoint.clone();
+            config.llm.retrieval.endpoint = endpoint.clone();
+            config.llm.pilot.endpoint = endpoint.clone();
+            // Also set legacy config
+            config.summary.endpoint = endpoint.clone();
+            config.retrieval.endpoint = endpoint;
+        }
+
+        // VECTORLESS_WORKSPACE: Set workspace directory
+        if let Ok(workspace) = std::env::var("VECTORLESS_WORKSPACE") {
+            config.storage.workspace_dir = PathBuf::from(workspace);
+        }
+    }
+
     /// Search for config file in current directory and parent directories.
     fn find_config_file() -> Option<PathBuf> {
         let current_dir = std::env::current_dir().ok()?;
@@ -414,8 +514,12 @@ impl EngineBuilder {
     /// ```
     pub async fn build(self) -> Result<Engine, BuildError> {
         // Load or create configuration
+        // ConfigLoader automatically applies environment variable overrides
         let mut config = if let Some(config) = self.config {
-            config
+            // Custom config - still apply env vars
+            let mut cfg = config;
+            Self::apply_env_overrides(&mut cfg);
+            cfg
         } else if let Some(path) = self.config_path {
             ConfigLoader::new()
                 .file(&path)
@@ -426,7 +530,10 @@ impl EngineBuilder {
                 BuildError::Config(format!("Failed to load {}: {}", config_path.display(), e))
             })?
         } else {
-            Config::default()
+            // No config file - use defaults with env var overrides
+            let mut cfg = Config::default();
+            Self::apply_env_overrides(&mut cfg);
+            cfg
         };
 
         // Apply builder overrides to retrieval config
