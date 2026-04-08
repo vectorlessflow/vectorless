@@ -28,6 +28,11 @@ pub struct VectorlessError {
 
 #[pymethods]
 impl VectorlessError {
+    #[new]
+    fn new_py(message: String, kind: String) -> Self {
+        Self { message, kind }
+    }
+
     #[getter]
     fn message(&self) -> &str {
         &self.message
@@ -96,7 +101,7 @@ fn to_py_err(e: RustError) -> PyErr {
 /// # From bytes
 /// ctx = IndexContext.from_bytes(data, name="doc", format="pdf")
 /// ```
-#[pyclass]
+#[pyclass(name = "IndexContext")]
 pub struct PyIndexContext {
     inner: IndexContext,
 }
@@ -134,7 +139,7 @@ impl PyIndexContext {
     ///     IndexContext for the content.
     #[staticmethod]
     #[pyo3(signature = (content, name=None, format="markdown"))]
-    fn from_text(content: String, name: Option<String>, format: &str) -> PyResult<Self> {
+    fn from_content(content: String, name: Option<String>, format: &str) -> PyResult<Self> {
         let doc_format = parse_format(format)?;
         let mut ctx = IndexContext::from_content(&content, doc_format);
         if let Some(n) = name {
@@ -168,9 +173,8 @@ fn parse_format(format: &str) -> PyResult<DocumentFormat> {
         "pdf" => Ok(DocumentFormat::Pdf),
         "docx" | "doc" => Ok(DocumentFormat::Docx),
         "html" | "htm" => Ok(DocumentFormat::Html),
-        "text" | "txt" => Ok(DocumentFormat::Text),
         _ => Err(PyErr::from(VectorlessError::new(
-            format!("Unknown format: {}", format),
+            format!("Unknown format: {}. Supported: markdown, pdf, docx, html", format),
             "config",
         ))),
     }
@@ -181,7 +185,7 @@ fn parse_format(format: &str) -> PyResult<DocumentFormat> {
 // ============================================================
 
 /// Result of a document query.
-#[pyclass]
+#[pyclass(name = "QueryResult")]
 pub struct PyQueryResult {
     inner: QueryResult,
 }
@@ -227,7 +231,7 @@ impl PyQueryResult {
 // ============================================================
 
 /// Information about an indexed document.
-#[pyclass]
+#[pyclass(name = "DocumentInfo")]
 pub struct PyDocumentInfo {
     inner: DocumentInfo,
 }
@@ -284,7 +288,16 @@ impl PyDocumentInfo {
 
 /// The main vectorless engine.
 ///
-/// Create an engine with a workspace directory:
+/// Configuration priority (later overrides earlier):
+/// 1. Default configuration
+/// 2. Auto-detected config file (vectorless.toml, config.toml, .vectorless.toml)
+/// 3. Explicit config file (config_path parameter)
+/// 4. Environment variables (OPENAI_API_KEY, VECTORLESS_MODEL, etc.)
+/// 5. Constructor parameters (api_key, model, endpoint) - highest priority
+///
+/// # Zero Configuration (Recommended)
+///
+/// Just set OPENAI_API_KEY environment variable:
 ///
 /// ```python
 /// from vectorless import Engine
@@ -292,12 +305,18 @@ impl PyDocumentInfo {
 /// engine = Engine(workspace="./data")
 /// ```
 ///
-/// Or with an explicit API key:
+/// # With Custom Model
 ///
 /// ```python
-/// engine = Engine(workspace="./data", api_key="sk-...")
+/// engine = Engine(workspace="./data", model="gpt-4o-mini")
 /// ```
-#[pyclass]
+///
+/// # With Full Config File (Advanced)
+///
+/// ```python
+/// engine = Engine(config_path="./vectorless.toml")
+/// ```
+#[pyclass(name = "Engine")]
 pub struct PyEngine {
     inner: Arc<Engine>,
     rt: Runtime,
@@ -308,17 +327,26 @@ impl PyEngine {
     /// Create a new Engine.
     ///
     /// Args:
-    ///     workspace: Path to the workspace directory.
+    ///     workspace: Path to the workspace directory (optional if config_path provides it).
+    ///     config_path: Path to configuration file (optional, advanced usage).
     ///     api_key: Optional API key. If not provided, uses OPENAI_API_KEY env var.
-    ///     model: Optional model name. Default: "gpt-4o-mini".
+    ///     model: Optional model name. Default: "gpt-4o".
     ///     endpoint: Optional API endpoint.
+    ///
+    /// Configuration priority (later overrides earlier):
+    ///     1. Default configuration
+    ///     2. Auto-detected config file
+    ///     3. config_path parameter
+    ///     4. Environment variables (OPENAI_API_KEY, VECTORLESS_MODEL, etc.)
+    ///     5. Constructor parameters (api_key, model, endpoint)
     ///
     /// Raises:
     ///     VectorlessError: If engine creation fails.
     #[new]
-    #[pyo3(signature = (workspace, api_key=None, model=None, endpoint=None))]
+    #[pyo3(signature = (workspace=None, config_path=None, api_key=None, model=None, endpoint=None))]
     fn new(
-        workspace: String,
+        workspace: Option<String>,
+        config_path: Option<String>,
         api_key: Option<String>,
         model: Option<String>,
         endpoint: Option<String>,
@@ -334,18 +362,31 @@ impl PyEngine {
         let resolved_api_key = api_key.or_else(|| std::env::var("OPENAI_API_KEY").ok());
 
         let engine = rt.block_on(async {
-            let mut builder = EngineBuilder::new().with_workspace(&workspace);
+            let mut builder = EngineBuilder::new();
 
+            // Set config path first (if provided)
+            if let Some(path) = &config_path {
+                builder = builder.with_config_path(path);
+            }
+
+            // Set workspace (if provided)
+            if let Some(ws) = &workspace {
+                builder = builder.with_workspace(ws);
+            }
+
+            // Set model first (without overriding api_key)
+            if let Some(m) = &model {
+                builder = builder.with_model(m, None);
+            }
+
+            // Set endpoint
+            if let Some(e) = &endpoint {
+                builder = builder.with_endpoint(e);
+            }
+
+            // Set API key last (this ensures it's not overwritten)
             if let Some(key) = resolved_api_key {
                 builder = builder.with_openai(key);
-            }
-
-            if let Some(m) = model {
-                builder = builder.with_model(&m, None);
-            }
-
-            if let Some(e) = endpoint {
-                builder = builder.with_endpoint(&e);
             }
 
             builder.build().await
@@ -506,7 +547,7 @@ impl PyEngine {
 /// print(result.content)
 /// ```
 #[pymodule]
-fn _vectorless(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
+fn vectorless(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<VectorlessError>()?;
     m.add_class::<PyIndexContext>()?;
     m.add_class::<PyQueryResult>()?;

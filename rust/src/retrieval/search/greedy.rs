@@ -144,6 +144,7 @@ impl SearchTree for GreedySearch {
                         children.len()
                     );
 
+                    println!("[DEBUG] GREEDY SEARCH: Pilot intervening at decision point");
                     match p.decide(&state).await {
                         decision => {
                             pilot_interventions += 1;

@@ -360,7 +360,7 @@ impl LlmExecutor {
                     ChatCompletionRequestUserMessage::from(truncated).into(),
                 ])
                 .temperature(self.config.temperature)
-                .max_tokens(tokens)
+                // .max_tokens(tokens)
                 .build()
         } else {
             CreateChatCompletionRequestArgs::default()

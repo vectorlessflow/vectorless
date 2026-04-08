@@ -101,6 +101,7 @@ impl IndexStage for EnhanceStage {
 
         // Check if we need summaries
         if !self.needs_summaries(ctx) {
+            println!("[DEBUG] Summary generation skipped (strategy: {:?})", ctx.options.summary_strategy);
             info!(
                 "Summary generation skipped (strategy: {:?})",
                 ctx.options.summary_strategy
@@ -112,6 +113,7 @@ impl IndexStage for EnhanceStage {
         let llm_client = match &self.llm_client {
             Some(client) => client,
             None => {
+                println!("[DEBUG] No LLM client configured, skipping summary generation");
                 warn!("No LLM client configured, skipping summary generation");
                 return Ok(StageResult::success("enhance"));
             }
@@ -121,11 +123,13 @@ impl IndexStage for EnhanceStage {
         let tree = match ctx.tree.as_mut() {
             Some(t) => t,
             None => {
+                println!("[DEBUG] No tree built, skipping enhance stage");
                 warn!("No tree built, skipping enhance stage");
                 return Ok(StageResult::success("enhance"));
             }
         };
 
+        println!("[DEBUG] Using summary strategy: {:?}", ctx.options.summary_strategy);
         info!("Using summary strategy: {:?}", ctx.options.summary_strategy);
 
         // Create summary generator with optional memo store
@@ -141,11 +145,14 @@ impl IndexStage for EnhanceStage {
         let node_ids: Vec<NodeId> = tree.traverse();
         let total_nodes = node_ids.len();
 
+        println!("[DEBUG] Processing {} nodes for summary generation", total_nodes);
         info!("Processing {} nodes for summary generation", total_nodes);
 
         // Process nodes
         let mut generated = 0;
         let mut failed = 0;
+        let mut skipped_no_content = 0;
+        let mut skipped_tokens = 0;
         let strategy = ctx.options.summary_strategy.clone();
 
         for node_id in node_ids {
@@ -154,15 +161,18 @@ impl IndexStage for EnhanceStage {
                 Some(n) => n.clone(),
                 None => continue,
             };
+            println!("[DEBUG] Evaluating node for summary: {} {}", node.title, node.content);
 
             // Skip if no content
             if node.content.is_empty() {
+                skipped_no_content += 1;
                 continue;
             }
 
             // Get token count and check if we should generate
             let token_count = node.token_count.unwrap_or(0);
             if !strategy.should_generate(tree, node_id, token_count) {
+                skipped_tokens += 1;
                 continue;
             }
 
@@ -194,6 +204,9 @@ impl IndexStage for EnhanceStage {
             }
 
             // Generate summary (generator also has memoization built-in)
+            println!("[DEBUG] Calling LLM to generate summary for node: {} ({} tokens)", node.title, token_count);
+            println!("[DEBUG] Node content: {}", node.content);
+
             match generator.generate(&node.title, &node.content).await {
                 Ok(summary) => {
                     if summary.is_empty() {
@@ -223,6 +236,8 @@ impl IndexStage for EnhanceStage {
         let duration = start.elapsed().as_millis() as u64;
         ctx.metrics.record_enhance(duration);
 
+        println!("[DEBUG] Generated {} summaries ({} failed, {} skipped no content, {} skipped tokens) in {}ms",
+            generated, failed, skipped_no_content, skipped_tokens, duration);
         info!(
             "Generated {} summaries ({} failed) in {}ms",
             generated, failed, duration

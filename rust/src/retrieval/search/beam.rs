@@ -126,21 +126,30 @@ impl SearchTree for BeamSearch {
         let beam_width = config.beam_width.min(self.beam_width);
         let mut visited: HashSet<NodeId> = HashSet::new();
 
+        println!("[DEBUG] BeamSearch: query='{}', beam_width={}, min_score={:.2}",
+            context.query, beam_width, config.min_score);
+
         // Track Pilot interventions
         let mut pilot_interventions = 0;
 
         // Initialize with root's children
         let root_children = tree.children(tree.root());
+        println!("[DEBUG] Root has {} children", root_children.len());
 
         // Check if Pilot wants to guide the start
         let initial_candidates = if let Some(p) = pilot {
+            println!("[DEBUG] BeamSearch: Pilot is available, name={}, guide_at_start={}",
+                p.name(), p.config().guide_at_start);
             if p.config().guide_at_start {
+                println!("[DEBUG] BeamSearch: Calling pilot.guide_start()...");
                 if let Some(guidance) = p.guide_start(tree, &context.query).await {
                     debug!(
                         "Pilot provided start guidance with confidence {}",
                         guidance.confidence
                     );
                     pilot_interventions += 1;
+                    println!("[DEBUG] BeamSearch: Pilot returned guidance! confidence={:.2}, candidates={}",
+                        guidance.confidence, guidance.ranked_candidates.len());
 
                     // Use Pilot's ranked order if available
                     if guidance.has_candidates() {
@@ -151,15 +160,19 @@ impl SearchTree for BeamSearch {
                             &context.query,
                         )
                     } else {
+                        println!("[DEBUG] BeamSearch: Guidance has no candidates, using algorithm scoring");
                         self.score_candidates_with_query(tree, &root_children, &context.query)
                     }
                 } else {
+                    println!("[DEBUG] BeamSearch: pilot.guide_start() returned None");
                     self.score_candidates_with_query(tree, &root_children, &context.query)
                 }
             } else {
+                println!("[DEBUG] BeamSearch: guide_at_start=false, skipping Pilot");
                 self.score_candidates_with_query(tree, &root_children, &context.query)
             }
         } else {
+            println!("[DEBUG] BeamSearch: No Pilot available");
             self.score_candidates_with_query(tree, &root_children, &context.query)
         };
 
@@ -167,6 +180,14 @@ impl SearchTree for BeamSearch {
             .into_iter()
             .map(|(node_id, score)| SearchPath::from_node(node_id, score))
             .collect();
+
+        // Debug: show initial scores
+        println!("[DEBUG] Initial {} candidates after scoring", current_beam.len());
+        for (i, path) in current_beam.iter().enumerate().take(5) {
+            if let Some(node) = tree.get(path.leaf.unwrap_or(tree.root())) {
+                println!("[DEBUG]   Initial {}: score={:.3}, title='{}'", i, path.score, node.title);
+            }
+        }
 
         // Keep top beam_width
         current_beam.truncate(beam_width);
@@ -215,6 +236,7 @@ impl SearchTree for BeamSearch {
                                 children.len()
                             );
 
+                            println!("[DEBUG] BEAM SEARCH: Pilot intervening at decision point");
                             match p.decide(&state).await {
                                 decision => {
                                     pilot_interventions += 1;

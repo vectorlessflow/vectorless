@@ -6,13 +6,21 @@
 //! This stage executes the selected search algorithm using
 //! the selected retrieval strategy. When a Pilot is provided,
 //! it can provide semantic guidance at key decision points.
+//!
+//! # LLM-First Search
+//!
+//! When an LLM client is provided, the stage will first attempt to
+//! directly locate the top-3 most relevant nodes using the TOC,
+//! falling back to tree traversal algorithms (Beam/Greedy) only if
+//! LLM fails or returns insufficient results.
 
 use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tracing::{info, warn};
 
-use crate::document::DocumentTree;
-// LlmClient is used via strategy
+use crate::document::{DocumentTree, TocView};
+use crate::llm::LlmClient;
 use crate::retrieval::RetrievalContext; // Legacy context
 use crate::retrieval::pilot::Pilot;
 use crate::retrieval::pipeline::{
@@ -57,6 +65,8 @@ pub struct SearchStage {
     hybrid_strategy: Option<Arc<dyn RetrievalStrategy>>,
     /// Pilot for navigation guidance (optional).
     pilot: Option<Arc<dyn Pilot>>,
+    /// LLM client for direct TOC-based search (optional).
+    llm_client: Option<LlmClient>,
 }
 
 impl Default for SearchStage {
@@ -74,7 +84,18 @@ impl SearchStage {
             semantic_strategy: None,
             hybrid_strategy: None,
             pilot: None,
+            llm_client: None,
         }
+    }
+
+    /// Add LLM client for direct TOC-based search.
+    ///
+    /// When provided, the stage will first attempt to locate relevant
+    /// nodes directly using the TOC, falling back to tree traversal
+    /// algorithms only if LLM fails or returns insufficient results.
+    pub fn with_llm_client(mut self, client: Option<LlmClient>) -> Self {
+        self.llm_client = client;
+        self
     }
 
     /// Add Pilot for semantic navigation guidance.
@@ -210,6 +231,172 @@ impl SearchStage {
 
         candidates
     }
+
+    /// Build a flat TOC list for LLM consumption.
+    ///
+    /// Returns a formatted string with numbered entries:
+    /// ```
+    /// [1] Title: "Overview"
+    ///     Summary: "This section covers..."
+    /// [2] Title: "Architecture"
+    ///     Summary: "The system architecture..."
+    /// ```
+    fn build_toc_for_llm(&self, tree: &DocumentTree) -> (String, Vec<crate::document::NodeId>) {
+        let toc_view = TocView::new();
+        let mut entries = Vec::new();
+        let mut node_ids = Vec::new();
+
+        fn collect_entries(
+            tree: &DocumentTree,
+            node_id: crate::document::NodeId,
+            entries: &mut Vec<(usize, String, String)>,
+            node_ids: &mut Vec<crate::document::NodeId>,
+            index: &mut usize,
+        ) {
+            if let Some(node) = tree.get(node_id) {
+                let title = node.title.clone();
+                let summary = if node.summary.is_empty() {
+                    "(no summary)".to_string()
+                } else {
+                    node.summary.clone()
+                };
+                entries.push((*index, title, summary));
+                node_ids.push(node_id);
+                *index += 1;
+
+                for child_id in tree.children(node_id) {
+                    collect_entries(tree, child_id, entries, node_ids, index);
+                }
+            }
+        }
+
+        collect_entries(tree, tree.root(), &mut entries, &mut node_ids, &mut 0);
+
+        let toc_str = entries
+            .iter()
+            .map(|(idx, title, summary)| {
+                format!("[{}] Title: \"{}\"\n    Summary: \"{}\"", idx + 1, title, summary)
+            })
+            .collect::<Vec<_>>()
+            .join("\n\n");
+
+        (toc_str, node_ids)
+    }
+
+    /// Locate top candidates directly via LLM using TOC.
+    ///
+    /// This method bypasses tree traversal by asking the LLM to
+    /// directly identify the most relevant nodes from the TOC.
+    async fn locate_via_llm(
+        &self,
+        query: &str,
+        tree: &DocumentTree,
+    ) -> Option<Vec<CandidateNode>> {
+        let llm_client = self.llm_client.as_ref()?;
+        let (toc_str, node_ids) = self.build_toc_for_llm(tree);
+
+        if node_ids.is_empty() {
+            warn!("No nodes in tree for LLM search");
+            return None;
+        }
+
+        let system_prompt = r#"You are a document navigation assistant. Your task is to locate the most relevant sections in a document hierarchy for a user's query.
+
+CRITICAL INSTRUCTIONS:
+1. Analyze the user query carefully to understand the intent
+2. Examine the provided Table of Contents (TOC) with numbered entries
+3. Select the TOP 3 most relevant entries that would contain the answer
+4. You MUST respond with ONLY valid JSON. No markdown code blocks. No explanations outside JSON.
+
+Your response must have this EXACT structure:
+{
+  "reasoning": "Brief analysis of the query and why you selected these entries",
+  "candidates": [
+    {"node_id": 1, "relevance_score": 0.95, "reason": "Why this entry matches the query"},
+    {"node_id": 2, "relevance_score": 0.80, "reason": "Why this entry is also relevant"},
+    {"node_id": 3, "relevance_score": 0.65, "reason": "Why this entry might be relevant"}
+  ]
+}
+
+Rules:
+- node_id: MUST be a number from the provided TOC (the number in [N] brackets)
+- relevance_score: Number between 0.0 and 1.0 (higher = more relevant)
+- reason: Brief explanation for each selection
+- candidates: Must have exactly 3 items, ordered by relevance (highest first)"#;
+
+        let user_prompt = format!(
+            "USER QUERY: {}\n\nDOCUMENT TOC ({} entries):\n{}\n\nBased on the query and TOC above, select the TOP 3 most relevant entries.\n\nRespond with ONLY the JSON object:",
+            query,
+            node_ids.len(),
+            toc_str
+        );
+
+        info!("Attempting LLM-based search for query: '{}'", query);
+
+        match llm_client.complete(system_prompt, &user_prompt).await {
+            Ok(response) => {
+                // Parse JSON response
+                match serde_json::from_str::<LlmLocateResponse>(&response) {
+                    Ok(llm_response) => {
+                        let mut candidates = Vec::new();
+
+                        for candidate in llm_response.candidates {
+                            // node_id is 1-indexed from LLM, convert to 0-indexed
+                            let idx = candidate.node_id.saturating_sub(1);
+                            if idx < node_ids.len() {
+                                let node_id = node_ids[idx];
+                                if let Some(node) = tree.get(node_id) {
+                                    candidates.push(CandidateNode::new(
+                                        node_id,
+                                        candidate.relevance_score,
+                                        node.depth,
+                                        tree.is_leaf(node_id),
+                                    ));
+                                    info!(
+                                        "LLM selected: [{}] '{}' (score: {:.2})",
+                                        candidate.node_id, node.title, candidate.relevance_score
+                                    );
+                                }
+                            }
+                        }
+
+                        if candidates.is_empty() {
+                            warn!("LLM returned no valid candidates");
+                            return None;
+                        }
+
+                        println!("LLM search found {} candidates", candidates.len());
+                        println!("LLM candidates content: {:?}", candidates);
+                        Some(candidates)
+                    }
+                    Err(e) => {
+                        warn!("Failed to parse LLM response as JSON: {}", e);
+                        warn!("Raw response: {}", response);
+                        None
+                    }
+                }
+            }
+            Err(e) => {
+                warn!("LLM call failed: {}", e);
+                None
+            }
+        }
+    }
+}
+
+/// LLM response for locate query.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct LlmLocateResponse {
+    reasoning: String,
+    candidates: Vec<LlmLocateCandidate>,
+}
+
+/// A candidate from LLM locate response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct LlmLocateCandidate {
+    node_id: usize,
+    relevance_score: f32,
+    reason: String,
 }
 
 #[async_trait]
@@ -245,6 +432,9 @@ impl RetrievalStage for SearchStage {
         // Reset Pilot state for new query
         if let Some(ref pilot) = self.pilot {
             pilot.reset();
+            println!("[DEBUG] SearchStage: Pilot is available, is_active={}", pilot.is_active());
+        } else {
+            println!("[DEBUG] SearchStage: No Pilot available");
         }
 
         info!(
@@ -261,6 +451,29 @@ impl RetrievalStage for SearchStage {
         // Increment search iteration
         ctx.increment_search_iteration();
 
+        // === Try LLM-first search (direct TOC-based location) ===
+        if self.llm_client.is_some() {
+            info!("Attempting LLM-first search for query: '{}'", ctx.query);
+
+            if let Some(candidates) = self.locate_via_llm(&ctx.query, &ctx.tree).await {
+                if !candidates.is_empty() {
+                    ctx.candidates = candidates;
+                    ctx.metrics.search_time_ms += start.elapsed().as_millis() as u64;
+                    ctx.metrics.nodes_visited += ctx.candidates.len();
+                    ctx.metrics.llm_calls += 1;
+
+                    info!(
+                        "LLM-first search found {} candidates (skipped tree traversal)",
+                        ctx.candidates.len()
+                    );
+
+                    return Ok(StageOutcome::cont());
+                }
+            }
+
+            info!("LLM-first search returned no results, falling back to tree traversal");
+        }
+
         // Build search config for search algorithms
         let search_config = SearchAlgConfig {
             top_k: config.beam_width * 2,
@@ -270,48 +483,158 @@ impl RetrievalStage for SearchStage {
             leaf_only: false,
         };
 
-        // Create legacy context for search algorithms
-        let legacy_ctx = RetrievalContext::new(
-            &ctx.query,
-            ctx.options.max_tokens,
-            ctx.options.sufficiency_check,
-        );
-
         // Get Pilot reference (or None if not available)
         let pilot_ref: Option<&dyn Pilot> = self.pilot.as_deref();
+        println!("[DEBUG] SearchStage: pilot_ref is {}", if pilot_ref.is_some() { "Some" } else { "None" });
 
-        // Execute search based on algorithm with Pilot
-        let result = match algorithm {
-            SearchAlgorithm::Greedy => {
-                let search = GreedySearch::new();
-                search
-                    .search(&ctx.tree, &legacy_ctx, &search_config, pilot_ref)
-                    .await
-            }
-            SearchAlgorithm::Beam => {
-                let search = BeamSearch::new();
-                search
-                    .search(&ctx.tree, &legacy_ctx, &search_config, pilot_ref)
-                    .await
-            }
-            SearchAlgorithm::Mcts => {
-                // Use beam search as fallback for now
-                let search = BeamSearch::new();
-                search
-                    .search(&ctx.tree, &legacy_ctx, &search_config, pilot_ref)
-                    .await
-            }
-        };
+        // === Check for decomposition ===
+        if let Some(ref decomposition) = ctx.decomposition {
+            if decomposition.was_decomposed && decomposition.is_multi_turn() {
+                info!("Processing {} decomposed sub-queries", decomposition.sub_queries.len());
 
-        info!(
-            "Search found {} paths (pilot interventions: {})",
-            result.paths.len(),
-            result.pilot_interventions
-        );
+                let mut all_paths = Vec::new();
+                let mut all_candidates = Vec::new();
+                let mut total_pilot_interventions = 0u64;
 
-        // Update context with results
-        ctx.search_paths = result.paths.clone();
-        ctx.candidates = self.extract_candidates(&result.paths, &ctx.tree);
+                // Process each sub-query in execution order
+                let order = decomposition.execution_order();
+                for sub_idx in order {
+                    let sub_query = &decomposition.sub_queries[sub_idx];
+                    info!("Processing sub-query : {}", sub_query.text);
+
+                    // Create legacy context for this sub-query
+                    let legacy_ctx = RetrievalContext::new(
+                        &sub_query.text,
+                        ctx.options.max_tokens,
+                        ctx.options.sufficiency_check,
+                    );
+
+                    println!("[DEBUG] SearchStage: Starting search for sub-query: algorithm={:?}, top_k={}, beam_width={}",
+                        algorithm, search_config.top_k, search_config.beam_width);
+
+                    // Execute search for this sub-query
+                    let result = match algorithm {
+                        SearchAlgorithm::Greedy => {
+                            let search = GreedySearch::new();
+                            search.search(&ctx.tree, &legacy_ctx, &search_config, pilot_ref).await
+                        }
+                        SearchAlgorithm::Beam => {
+                            let search = BeamSearch::new();
+                            search.search(&ctx.tree, &legacy_ctx, &search_config, pilot_ref).await
+                        }
+                        SearchAlgorithm::Mcts => {
+                            let search = BeamSearch::new();
+                            search.search(&ctx.tree, &legacy_ctx, &search_config, pilot_ref).await
+                        }
+                    };
+
+                    all_candidates.extend(self.extract_candidates(&result.paths, &ctx.tree));
+                    all_paths.extend(result.paths);
+                    total_pilot_interventions += result.pilot_interventions as u64;
+
+                    info!("Sub-query '{}' found {} paths", sub_query.text, all_paths.len());
+                }
+
+                // Merge results
+                ctx.search_paths = all_paths;
+                ctx.candidates = all_candidates;
+
+                info!(
+                    "Search complete: {} total candidates from {} sub-queries (pilot interventions: {})",
+                    ctx.candidates.len(),
+                    decomposition.sub_queries.len(),
+                    total_pilot_interventions
+                );
+            } else {
+                // Single query (not decomposed or single sub-query) - process as normal
+                let legacy_ctx = RetrievalContext::new(
+                    &ctx.query,
+                    ctx.options.max_tokens,
+                    ctx.options.sufficiency_check,
+                );
+
+                println!("[DEBUG] SearchStage: Starting search with algorithm={:?}, top_k={}, beam_width={}, max_iterations={}, min_score={:.2}",
+                    algorithm, search_config.top_k, search_config.beam_width, search_config.max_iterations, search_config.min_score);
+
+                let result = match algorithm {
+                    SearchAlgorithm::Greedy => {
+                        let search = GreedySearch::new();
+                        search.search(&ctx.tree, &legacy_ctx, &search_config, pilot_ref).await
+                    }
+                    SearchAlgorithm::Beam => {
+                        let search = BeamSearch::new();
+                        search.search(&ctx.tree, &legacy_ctx, &search_config, pilot_ref).await
+                    }
+                    SearchAlgorithm::Mcts => {
+                        let search = BeamSearch::new();
+                        search.search(&ctx.tree, &legacy_ctx, &search_config, pilot_ref).await
+                    }
+                };
+
+                ctx.search_paths = result.paths;
+                ctx.candidates = self.extract_candidates(&ctx.search_paths, &ctx.tree);
+
+                info!(
+                    "Search found {} paths (pilot interventions: {})",
+                    ctx.search_paths.len(),
+                    result.pilot_interventions
+                );
+            }
+        } else {
+            // No decomposition available, process original query
+            let legacy_ctx = RetrievalContext::new(
+                &ctx.query,
+                ctx.options.max_tokens,
+                ctx.options.sufficiency_check,
+            );
+
+            println!("[DEBUG] SearchStage: Starting search with algorithm={:?}, top_k={}, beam_width={}, max_iterations={}, min_score={:.2}",
+                algorithm, search_config.top_k, search_config.beam_width, search_config.max_iterations, search_config.min_score);
+
+            let result = match algorithm {
+                SearchAlgorithm::Greedy => {
+                    let search = GreedySearch::new();
+                    search.search(&ctx.tree, &legacy_ctx, &search_config, pilot_ref).await
+                }
+                SearchAlgorithm::Beam => {
+                    let search = BeamSearch::new();
+                    search.search(&ctx.tree, &legacy_ctx, &search_config, pilot_ref).await
+                }
+                SearchAlgorithm::Mcts => {
+                    let search = BeamSearch::new();
+                    search.search(&ctx.tree, &legacy_ctx, &search_config, pilot_ref).await
+                }
+            };
+
+            ctx.search_paths = result.paths;
+            ctx.candidates = self.extract_candidates(&ctx.search_paths, &ctx.tree);
+
+            info!(
+                "Search found {} paths (pilot interventions: {})",
+                ctx.search_paths.len(),
+                result.pilot_interventions
+            );
+        }
+
+        // Debug output
+        println!("[DEBUG] Search found {} total paths, {} candidates", ctx.search_paths.len(), ctx.candidates.len());
+        for (i, path) in ctx.search_paths.iter().enumerate().take(5) {
+            if let Some(leaf_id) = path.leaf {
+                if let Some(node) = ctx.tree.get(leaf_id) {
+                    println!("[DEBUG] Path {}: score={:.3}, title='{}', content_len={}",
+                        i, path.score, node.title, node.content.len());
+                }
+            }
+        }
+
+        // Debug output
+        println!("[DEBUG] Extracted {} candidates", ctx.candidates.len());
+        for (i, c) in ctx.candidates.iter().enumerate().take(5) {
+            if let Some(node) = ctx.tree.get(c.node_id) {
+                println!("[DEBUG] Candidate {}: score={:.3}, title='{}'",
+                    i, c.score, node.title);
+            }
+        }
 
         // Update metrics
         ctx.metrics.search_time_ms += start.elapsed().as_millis() as u64;

@@ -2,7 +2,16 @@ Analyze the following document structure and user query to identify the best ent
 
 {context}
 
-Provide your response as a JSON object with:
-- entry_points: list of section titles to start searching from
-- reasoning: brief explanation of why these entry points
-- confidence: your confidence in this recommendation (0.0-1.0)
+IMPORTANT: You MUST respond with ONLY a JSON object in this EXACT format:
+{
+  "entry_points": ["Title 1", "Title 2"],
+  "reasoning": "Brief explanation of why these entry points",
+  "confidence": 0.85
+}
+
+Rules:
+- entry_points: Array of strings (node titles from the candidates above)
+- reasoning: String explaining your choice
+- confidence: Number between 0.0 and 1.0 (NOT a string like "high")
+
+Do NOT use any other field names. Use "entry_points" not "selected_node" or "recommended_node".

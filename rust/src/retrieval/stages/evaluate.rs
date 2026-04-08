@@ -283,6 +283,7 @@ impl EvaluateStage {
     /// Calculate overall confidence score.
     fn calculate_confidence(&self, ctx: &PipelineContext) -> f32 {
         if ctx.candidates.is_empty() {
+            println!("[DEBUG] calculate_confidence: no candidates, returning 0.0");
             return 0.0;
         }
 
@@ -296,7 +297,10 @@ impl EvaluateStage {
             SufficiencyLevel::Insufficient => 0.4,
         };
 
-        avg_score * sufficiency_factor
+        let confidence = avg_score * sufficiency_factor;
+        println!("[DEBUG] calculate_confidence: avg_score={:.3}, sufficiency={:?}, factor={:.1}, confidence={:.3}",
+            avg_score, ctx.sufficiency, sufficiency_factor, confidence);
+        confidence
     }
 }
 
@@ -325,6 +329,9 @@ impl RetrievalStage for EvaluateStage {
     async fn execute(&self, ctx: &mut PipelineContext) -> crate::error::Result<StageOutcome> {
         let start = std::time::Instant::now();
 
+        println!("[DEBUG] EvaluateStage: {} candidates, iteration {}",
+            ctx.candidates.len(), ctx.search_iterations);
+        
         info!(
             "Judging sufficiency: {} candidates, iteration {}",
             ctx.candidates.len(),

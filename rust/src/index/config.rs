@@ -160,7 +160,7 @@ impl Default for PipelineOptions {
         Self {
             mode: IndexMode::Auto,
             generate_ids: true,
-            summary_strategy: SummaryStrategy::default(),
+            summary_strategy: SummaryStrategy::full(),
             thinning: ThinningConfig::default(),
             optimization: OptimizationConfig::default(),
             generate_description: true,

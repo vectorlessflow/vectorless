@@ -209,6 +209,8 @@ pub struct PipelineContext {
     pub keywords: Vec<String>,
     /// Target sections from ToC matching.
     pub target_sections: Vec<String>,
+    /// Decomposed sub-queries (if query was decomposed).
+    pub decomposition: Option<crate::retrieval::decompose::DecompositionResult>,
 
     // ============ Plan Stage Output ============
     /// Selected retrieval strategy.
@@ -268,6 +270,7 @@ impl PipelineContext {
             complexity: None,
             keywords: Vec::new(),
             target_sections: Vec::new(),
+            decomposition: None,
             selected_strategy: None,
             selected_algorithm: None,
             search_config: None,

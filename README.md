@@ -163,6 +163,105 @@ async fn main() -> vectorless::Result<()> {
 | **Feedback Learning** | Improves from user feedback over time |
 | **Multi-turn Queries** | Handles complex questions with decomposition |
 
+## Configuration
+
+### Zero Configuration (Recommended)
+
+Just set `OPENAI_API_KEY` and you're ready to go:
+
+```bash
+export OPENAI_API_KEY="sk-..."
+```
+
+<details>
+<summary><b>Python</b></summary>
+
+```python
+from vectorless import Engine
+
+# Uses OPENAI_API_KEY from environment
+engine = Engine(workspace="./data")
+```
+
+</details>
+
+<details>
+<summary><b>Rust</b></summary>
+
+```rust
+use vectorless::Engine;
+
+let client = Engine::builder()
+    .with_workspace("./workspace")
+    .build().await?;
+```
+
+</details>
+
+### Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| `OPENAI_API_KEY` | LLM API key |
+| `VECTORLESS_MODEL` | Default model (e.g., `gpt-4o-mini`) |
+| `VECTORLESS_ENDPOINT` | API endpoint URL |
+| `VECTORLESS_WORKSPACE` | Workspace directory |
+
+### Advanced Configuration
+
+For fine-grained control, use a config file:
+
+```bash
+cp config.toml ./vectorless.toml
+```
+
+<details>
+<summary><b>Python</b></summary>
+
+```python
+from vectorless import Engine
+
+# Use full configuration file
+engine = Engine(config_path="./vectorless.toml")
+
+# Or override specific settings
+engine = Engine(
+    config_path="./vectorless.toml",
+    model="gpt-4o",  # Override model from config
+)
+```
+
+</details>
+
+<details>
+<summary><b>Rust</b></summary>
+
+```rust
+use vectorless::Engine;
+
+// Use full configuration file
+let client = Engine::builder()
+    .with_config_path("./vectorless.toml")
+    .build().await?;
+
+// Or override specific settings
+let client = Engine::builder()
+    .with_config_path("./vectorless.toml")
+    .with_model("gpt-4o", None)  // Override model
+    .build().await?;
+```
+
+</details>
+
+### Configuration Priority
+
+Later overrides earlier:
+
+1. Default configuration
+2. Auto-detected config file (`vectorless.toml`, `config.toml`, `.vectorless.toml`)
+3. Explicit config file (`config_path` / `with_config_path`)
+4. Environment variables
+5. Constructor/builder parameters (highest priority)
 
 ## Architecture
 
@@ -177,7 +276,7 @@ async fn main() -> vectorless::Result<()> {
 
 ## Examples
 
-See the [examples/](examples/) directory.
+See the [examples/](examples/) directory for more usage patterns.
 
 ## Contributing
 

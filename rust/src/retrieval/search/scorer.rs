@@ -193,9 +193,9 @@ impl ScoringContext {
 
             let total_score = title_score + summary_score + content_score;
 
-            // Normalize to [0, 1] range
-            let max_possible = self.query_terms.len() as f32 * 10.0; // Rough upper bound
-            let normalized = (total_score / max_possible).clamp(0.0, 1.0);
+            // Normalize to [0, 1] range using sigmoid-like scaling
+            // This prevents over-penalization with few query terms
+            let normalized = (total_score / 3.0).tanh(); // 3.0 is a reasonable midpoint
 
             // Apply depth penalty
             let depth_factor = 1.0 - (node.depth as f32 * self.depth_penalty).min(0.5);
