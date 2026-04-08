@@ -174,7 +174,7 @@ impl Default for IndexOptions {
     fn default() -> Self {
         Self {
             mode: IndexMode::Default,
-            generate_summaries: false,
+            generate_summaries: true,
             include_text: true,
             generate_ids: true,
             generate_description: false,

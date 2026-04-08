@@ -245,6 +245,9 @@ impl RetrievalStage for SearchStage {
         // Reset Pilot state for new query
         if let Some(ref pilot) = self.pilot {
             pilot.reset();
+            println!("[DEBUG] SearchStage: Pilot is available, is_active={}", pilot.is_active());
+        } else {
+            println!("[DEBUG] SearchStage: No Pilot available");
         }
 
         info!(
@@ -279,7 +282,10 @@ impl RetrievalStage for SearchStage {
 
         // Get Pilot reference (or None if not available)
         let pilot_ref: Option<&dyn Pilot> = self.pilot.as_deref();
+        println!("[DEBUG] SearchStage: pilot_ref is {}", if pilot_ref.is_some() { "Some" } else { "None" });
 
+        println!("[DEBUG] SearchStage: Starting search with algorithm={:?}, top_k={}, beam_width={}, max_iterations={}, min_score={:.2}",
+            algorithm, search_config.top_k, search_config.beam_width, search_config.max_iterations, search_config.min_score);  
         // Execute search based on algorithm with Pilot
         let result = match algorithm {
             SearchAlgorithm::Greedy => {
@@ -309,9 +315,29 @@ impl RetrievalStage for SearchStage {
             result.pilot_interventions
         );
 
+        // Debug output
+        println!("[DEBUG] Search found {} paths", result.paths.len());
+        for (i, path) in result.paths.iter().enumerate().take(5) {
+            if let Some(leaf_id) = path.leaf {
+                if let Some(node) = ctx.tree.get(leaf_id) {
+                    println!("[DEBUG] Path {}: score={:.3}, title='{}', content_len={}",
+                        i, path.score, node.title, node.content.len());
+                }
+            }
+        }
+
         // Update context with results
         ctx.search_paths = result.paths.clone();
         ctx.candidates = self.extract_candidates(&result.paths, &ctx.tree);
+
+        // Debug output
+        println!("[DEBUG] Extracted {} candidates", ctx.candidates.len());
+        for (i, c) in ctx.candidates.iter().enumerate().take(5) {
+            if let Some(node) = ctx.tree.get(c.node_id) {
+                println!("[DEBUG] Candidate {}: score={:.3}, title='{}'",
+                    i, c.score, node.title);
+            }
+        }
 
         // Update metrics
         ctx.metrics.search_time_ms += start.elapsed().as_millis() as u64;

@@ -551,13 +551,24 @@ impl EngineBuilder {
 
         // Apply individual overrides
         if let Some(api_key) = self.api_key {
-            config.retrieval.api_key = Some(api_key);
+            // Set API key for both retrieval and summary
+            config.retrieval.api_key = Some(api_key.clone());
+            config.summary.api_key = Some(api_key);
+            // Also set LLM pool config
+            if config.llm.summary.api_key.is_none() {
+                config.llm.summary.api_key = config.summary.api_key.clone();
+            }
+            if config.llm.retrieval.api_key.is_none() {
+                config.llm.retrieval.api_key = config.summary.api_key.clone();
+            }
         }
         if let Some(model) = self.model {
-            config.retrieval.model = model;
+            config.retrieval.model = model.clone();
+            config.summary.model = model;
         }
         if let Some(endpoint) = self.endpoint {
-            config.retrieval.endpoint = endpoint;
+            config.retrieval.endpoint = endpoint.clone();
+            config.summary.endpoint = endpoint;
         }
         if let Some(top_k) = self.top_k {
             config.retrieval.top_k = top_k;
