@@ -1,8 +1,8 @@
 <div align="center">
 
-<img src="https://raw.githubusercontent.com/vectorlessflow/vectorless/main/docs/design/logo-horizontal.svg" alt="Vectorless">
+<img src="https://raw.githubusercontent.com/vectorlessflow/vectorless/main/docs/design/logo-horizontal.svg" alt="Vectorless" width="400">
 
-<h1>Reasoning-native document inteligence engine</h1>
+<h1>Document inteligence engine for AI</h1>
 
 
 [![PyPI](https://img.shields.io/pypi/v/vectorless.svg)](https://pypi.org/project/vectorless/)
@@ -16,8 +16,7 @@
 
 </div>
 
-**Vectorless** is a library for querying structured documents using natural language — without vector databases or embedding models. Core engine written in **Rust**, with Python bindings.
-Instead of chunking documents into vectors, Vectorless preserves the document's tree structure and uses LLM to navigate it — like how a human reads a table of contents.
+**Vectorless** is an ultra-performant reasoning-native document intelligence engine for AI, with the core written in Rust. It transforms documents into rich semantic trees and uses LLMs to intelligently traverse the hierarchy — retrieving the most relevant content through structural reasoning and deep contextual understanding.
 
 ⭐ Drop a star to help us grow!
 
