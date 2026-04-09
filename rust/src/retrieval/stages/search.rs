@@ -347,16 +347,18 @@ impl RetrievalStage for SearchStage {
         ctx.increment_search_iteration();
 
         // === Phase Locate: find relevant subtrees via ToC ===
-        let level_0_nodes: Vec<_> = ctx
+        // Use depth-1 nodes (root's direct children = top-level sections).
+        // level(0) is only the root itself, which is not useful for locating.
+        let top_level_nodes: Vec<_> = ctx
             .retrieval_index
             .as_ref()
-            .and_then(|idx| idx.level(0))
+            .and_then(|idx| idx.level(1))
             .map(|nodes| nodes.to_vec())
             .unwrap_or_else(|| ctx.tree.children(ctx.tree.root()));
 
         let cues = self
             .toc_navigator
-            .locate(&ctx.query, &ctx.tree, &level_0_nodes)
+            .locate(&ctx.query, &ctx.tree, &top_level_nodes)
             .await;
 
         debug!("ToCNavigator returned {} cues", cues.len());
@@ -365,7 +367,31 @@ impl RetrievalStage for SearchStage {
         let queries = Self::resolve_queries(ctx);
 
         // === Phase Traverse + Collect ===
-        let (paths, candidates) = self.run_search(ctx, &queries, &cues).await;
+        let (paths, mut candidates) = self.run_search(ctx, &queries, &cues).await;
+
+        // Add cue root nodes as direct candidates.
+        // The ToCNavigator already identified these as relevant; they may not
+        // be leaf nodes so tree traversal would skip them. This restores the
+        // old locate_via_llm behavior where LLM-selected nodes became
+        // candidates directly.
+        for cue in &cues {
+            if let Some(node) = ctx.tree.get(cue.root) {
+                candidates.push(CandidateNode::new(
+                    cue.root,
+                    cue.confidence,
+                    node.depth,
+                    ctx.tree.is_leaf(cue.root),
+                ));
+            }
+        }
+
+        // Sort by score and deduplicate
+        candidates.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        candidates.dedup_by(|a, b| a.node_id == b.node_id);
 
         ctx.search_paths = paths;
         ctx.candidates = candidates;

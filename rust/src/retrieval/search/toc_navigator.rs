@@ -4,7 +4,7 @@
 //! Hierarchical ToC-based node locator.
 //!
 //! Replaces the monolithic `build_toc_for_llm` with a two-phase approach:
-//! - Phase A: BM25 scoring on level-0 (top-level) nodes for fast filtering
+//! - Phase A: BM25 scoring on top-level nodes for fast filtering
 //! - Phase B: Optional LLM refinement when top scores are below a threshold
 
 use std::sync::Arc;
@@ -12,7 +12,8 @@ use std::sync::Arc;
 use serde::Deserialize;
 use tracing::{debug, info, warn};
 
-use crate::document::{DocumentTree, NodeId, TocView};
+use crate::document::DocumentTree;
+use crate::document::NodeId;
 use crate::llm::LlmClient;
 use crate::memo::MemoStore;
 use crate::retrieval::search::scorer::NodeScorer;
@@ -82,9 +83,9 @@ impl ToCNavigator {
         &self,
         query: &str,
         tree: &DocumentTree,
-        level_0_nodes: &[NodeId],
+        top_level_nodes: &[NodeId],
     ) -> Vec<SearchCue> {
-        if level_0_nodes.is_empty() {
+        if top_level_nodes.is_empty() {
             return vec![SearchCue {
                 root: tree.root(),
                 confidence: 0.5,
@@ -93,7 +94,7 @@ impl ToCNavigator {
 
         // Phase A: BM25 scoring
         let scorer = NodeScorer::for_query(query);
-        let scored: Vec<(NodeId, f32)> = level_0_nodes
+        let scored: Vec<(NodeId, f32)> = top_level_nodes
             .iter()
             .map(|&id| (id, scorer.score(tree, id)))
             .filter(|(_, s)| *s > 0.05)
@@ -102,8 +103,8 @@ impl ToCNavigator {
         let top_branches = take_top_n(scored, self.max_branches);
 
         debug!(
-            "ToCNavigator Phase A: {} level-0 nodes scored, top {} kept",
-            level_0_nodes.len(),
+            "ToCNavigator Phase A: {} top-level nodes scored, {} kept after filter",
+            top_level_nodes.len(),
             top_branches.len()
         );
 
@@ -116,9 +117,18 @@ impl ToCNavigator {
                     best_score, self.llm_threshold
                 );
                 return self
-                    .llm_refine(query, tree, &top_branches, client)
+                    .llm_refine(query, tree, top_level_nodes, client)
                     .await;
             }
+        }
+
+        // Fallback: if no branches passed the filter, search from root
+        if top_branches.is_empty() {
+            debug!("ToCNavigator: no branches above threshold, falling back to root");
+            return vec![SearchCue {
+                root: tree.root(),
+                confidence: 0.5,
+            }];
         }
 
         // Return BM25 results as cues
@@ -131,32 +141,33 @@ impl ToCNavigator {
             .collect()
     }
 
-    /// Phase B: Ask the LLM to refine branch selection.
+    /// Phase B: Ask the LLM to pick the most relevant subtrees.
+    ///
+    /// Presents the full top-level TOC to the LLM and lets it select the
+    /// most relevant entries. Uses direct tree traversal so that we can
+    /// correctly map LLM-selected indices back to real NodeIds.
     async fn llm_refine(
         &self,
         query: &str,
         tree: &DocumentTree,
-        top_branches: &[(NodeId, f32)],
+        top_level_nodes: &[NodeId],
         client: &LlmClient,
     ) -> Vec<SearchCue> {
-        let toc_view = TocView::new();
-        let mut toc_entries = Vec::new();
-        let mut node_ids = Vec::new();
+        // Collect (title, summary) and the corresponding NodeId directly
+        // from the tree, maintaining index correspondence for LLM response mapping.
+        let mut toc_entries: Vec<(String, Option<String>)> = Vec::new();
+        let mut node_ids: Vec<NodeId> = Vec::new();
 
-        for &(node_id, _) in top_branches {
-            let sub_toc = toc_view.generate_from(tree, node_id);
-            collect_toc_flat(&sub_toc, &mut toc_entries, &mut node_ids);
+        for &node_id in top_level_nodes {
+            collect_tree_entries(tree, node_id, &mut toc_entries, &mut node_ids, 0, 2);
         }
 
         if node_ids.is_empty() {
-            warn!("LLM refinement: no nodes collected from top branches");
-            return top_branches
-                .iter()
-                .map(|&(node_id, score)| SearchCue {
-                    root: node_id,
-                    confidence: score,
-                })
-                .collect();
+            warn!("LLM refinement: no nodes collected from top-level branches");
+            return vec![SearchCue {
+                root: tree.root(),
+                confidence: 0.5,
+            }];
         }
 
         let toc_str = toc_entries
@@ -221,13 +232,10 @@ Rules:
 
                 if cues.is_empty() {
                     warn!("LLM refinement returned no valid candidates, falling back to BM25");
-                    return top_branches
-                        .iter()
-                        .map(|&(node_id, score)| SearchCue {
-                            root: node_id,
-                            confidence: score,
-                        })
-                        .collect();
+                    return vec![SearchCue {
+                        root: tree.root(),
+                        confidence: 0.5,
+                    }];
                 }
 
                 info!(
@@ -238,14 +246,11 @@ Rules:
                 cues
             }
             Err(e) => {
-                warn!("LLM refinement failed: {}, falling back to BM25", e);
-                top_branches
-                    .iter()
-                    .map(|&(node_id, score)| SearchCue {
-                        root: node_id,
-                        confidence: score,
-                    })
-                    .collect()
+                warn!("LLM refinement failed: {}, falling back to root", e);
+                vec![SearchCue {
+                    root: tree.root(),
+                    confidence: 0.5,
+                }]
             }
         }
     }
@@ -259,20 +264,34 @@ fn take_top_n(scored: Vec<(NodeId, f32)>, n: usize) -> Vec<(NodeId, f32)> {
     sorted
 }
 
-/// Recursively collect ToC entries into flat lists for LLM consumption.
-fn collect_toc_flat(
-    toc: &crate::document::TocNode,
+/// Collect tree entries (title, summary) alongside their NodeIds.
+///
+/// Walks the subtree rooted at `node_id` up to `max_depth` levels deep.
+/// The `toc_entries[i]` ↔ `node_ids[i]` correspondence is guaranteed,
+/// so LLM response indices can be mapped back to real NodeIds.
+fn collect_tree_entries(
+    tree: &DocumentTree,
+    node_id: NodeId,
     entries: &mut Vec<(String, Option<String>)>,
     node_ids: &mut Vec<NodeId>,
+    depth: usize,
+    max_depth: usize,
 ) {
-    // Parse node_id string back to NodeId — but TocNode stores it as Option<String>.
-    // Since we only need the original NodeId from the tree, we store a placeholder.
-    // The actual mapping is handled by the caller (top_branches -> node_ids).
-    // For LLM refinement, we index into node_ids, so we just push in order.
-    entries.push((toc.title.clone(), toc.summary.clone()));
-    // Note: node_ids are populated separately by the caller using tree traversal
-    for child in &toc.children {
-        collect_toc_flat(child, entries, node_ids);
+    if depth > max_depth {
+        return;
+    }
+    if let Some(node) = tree.get(node_id) {
+        let summary = if node.summary.is_empty() {
+            None
+        } else {
+            Some(node.summary.clone())
+        };
+        entries.push((node.title.clone(), summary));
+        node_ids.push(node_id);
+
+        for child_id in tree.children(node_id) {
+            collect_tree_entries(tree, child_id, entries, node_ids, depth + 1, max_depth);
+        }
     }
 }
 
@@ -296,7 +315,6 @@ struct LocateCandidate {
 mod tests {
     #[test]
     fn test_take_top_n_logic() {
-        // take_top_n is a trivial sort+truncate — verify the ordering contract.
         let mut scored: Vec<(u32, f32)> = vec![(0, 0.1), (1, 0.9), (2, 0.5), (3, 0.3)];
         scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
         scored.truncate(2);
