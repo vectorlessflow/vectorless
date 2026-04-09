@@ -70,7 +70,6 @@ impl GreedySearch {
                 let algo_score = scorer.score(tree, node_id);
                 let pilot_score = pilot_scores.get(&node_id).copied().unwrap_or(0.0);
 
-                // Weighted combination
                 let final_score = if beta > 0.0 {
                     (alpha * algo_score + beta * pilot_score) / (alpha + beta)
                 } else {
@@ -81,32 +80,29 @@ impl GreedySearch {
             })
             .collect();
 
-        // Sort by merged score
         merged.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
 
         merged
     }
-}
 
-impl Default for GreedySearch {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-#[async_trait]
-impl SearchTree for GreedySearch {
-    async fn search(
+    /// Core greedy search logic parameterized by start node.
+    async fn search_impl(
         &self,
         tree: &DocumentTree,
         context: &RetrievalContext,
         config: &SearchConfig,
         pilot: Option<&dyn Pilot>,
+        start_node: NodeId,
     ) -> SearchResult {
         let mut result = SearchResult::default();
         let mut current_path = SearchPath::new();
-        let mut current_node = tree.root();
+        let mut current_node = start_node;
         let mut visited: std::collections::HashSet<NodeId> = std::collections::HashSet::new();
+
+        debug!(
+            "GreedySearch: query='{}', start_node={:?}, max_iterations={}, min_score={:.2}",
+            context.query, start_node, config.max_iterations, config.min_score
+        );
 
         // Track Pilot interventions
         let mut pilot_interventions = 0;
@@ -128,7 +124,6 @@ impl SearchTree for GreedySearch {
 
             // ========== Pilot Integration Point ==========
             let scored_children = if let Some(p) = pilot {
-                // Build search state for Pilot
                 let state = SearchState::new(
                     tree,
                     &context.query,
@@ -137,14 +132,12 @@ impl SearchTree for GreedySearch {
                     &visited,
                 );
 
-                // Check if Pilot wants to intervene
                 if p.should_intervene(&state) {
                     trace!(
                         "Pilot intervening at greedy decision point with {} candidates",
                         children.len()
                     );
 
-                    println!("[DEBUG] GREEDY SEARCH: Pilot intervening at decision point");
                     match p.decide(&state).await {
                         decision => {
                             pilot_interventions += 1;
@@ -154,7 +147,6 @@ impl SearchTree for GreedySearch {
                                 std::mem::discriminant(&decision.direction)
                             );
 
-                            // Merge algorithm scores with Pilot decision
                             self.merge_with_pilot_decision(
                                 tree,
                                 &children,
@@ -164,11 +156,9 @@ impl SearchTree for GreedySearch {
                         }
                     }
                 } else {
-                    // No intervention, use algorithm scoring
                     self.score_candidates_with_query(tree, &children, &context.query)
                 }
             } else {
-                // No Pilot, use algorithm scoring
                 self.score_candidates_with_query(tree, &children, &context.query)
             };
             // ==============================================
@@ -205,7 +195,6 @@ impl SearchTree for GreedySearch {
                 current_node = child_id;
                 result.nodes_visited += 1;
 
-                // Check if we have enough results
                 if result.paths.len() >= config.top_k {
                     break;
                 }
@@ -219,10 +208,39 @@ impl SearchTree for GreedySearch {
             }
         }
 
-        // Record Pilot interventions
         result.pilot_interventions = pilot_interventions;
 
         result
+    }
+}
+
+impl Default for GreedySearch {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[async_trait]
+impl SearchTree for GreedySearch {
+    async fn search(
+        &self,
+        tree: &DocumentTree,
+        context: &RetrievalContext,
+        config: &SearchConfig,
+        pilot: Option<&dyn Pilot>,
+    ) -> SearchResult {
+        self.search_impl(tree, context, config, pilot, tree.root()).await
+    }
+
+    async fn search_from(
+        &self,
+        tree: &DocumentTree,
+        context: &RetrievalContext,
+        config: &SearchConfig,
+        pilot: Option<&dyn Pilot>,
+        start_node: NodeId,
+    ) -> SearchResult {
+        self.search_impl(tree, context, config, pilot, start_node).await
     }
 
     fn name(&self) -> &'static str {

@@ -7,7 +7,7 @@ use async_trait::async_trait;
 
 use super::super::RetrievalContext;
 use super::super::types::{NavigationStep, SearchPath};
-use crate::document::DocumentTree;
+use crate::document::{DocumentTree, NodeId};
 use crate::retrieval::pilot::Pilot;
 
 /// Result of a search operation.
@@ -110,6 +110,23 @@ pub trait SearchTree: Send + Sync {
         config: &SearchConfig,
     ) -> SearchResult {
         self.search(tree, context, config, None).await
+    }
+
+    /// Search starting from a specific node instead of the root.
+    ///
+    /// This allows tree traversal to be constrained to a subtree
+    /// identified by the ToCNavigator. The default implementation
+    /// falls back to a full search from root.
+    async fn search_from(
+        &self,
+        tree: &DocumentTree,
+        context: &RetrievalContext,
+        config: &SearchConfig,
+        pilot: Option<&dyn Pilot>,
+        start_node: NodeId,
+    ) -> SearchResult {
+        let _ = start_node; // default: ignore start_node
+        self.search(tree, context, config, pilot).await
     }
 
     /// Get the name of this search algorithm.
