@@ -32,6 +32,18 @@ pub struct IndexMetrics {
     #[serde(default)]
     pub persist_time_ms: u64,
 
+    /// Reasoning index build duration (ms).
+    #[serde(default)]
+    pub reasoning_index_time_ms: u64,
+
+    /// Number of topics indexed in reasoning index.
+    #[serde(default)]
+    pub topics_indexed: usize,
+
+    /// Number of keywords indexed in reasoning index.
+    #[serde(default)]
+    pub keywords_indexed: usize,
+
     /// Total tokens generated (summaries).
     #[serde(default)]
     pub total_tokens_generated: usize,
@@ -93,6 +105,13 @@ impl IndexMetrics {
         self.persist_time_ms = duration_ms;
     }
 
+    /// Record reasoning index build time.
+    pub fn record_reasoning_index(&mut self, duration_ms: u64, topics: usize, keywords: usize) {
+        self.reasoning_index_time_ms = duration_ms;
+        self.topics_indexed = topics;
+        self.keywords_indexed = keywords;
+    }
+
     /// Increment LLM calls.
     pub fn increment_llm_calls(&mut self) {
         self.llm_calls += 1;
@@ -129,6 +148,7 @@ impl IndexMetrics {
             + self.build_time_ms
             + self.enhance_time_ms
             + self.enrich_time_ms
+            + self.reasoning_index_time_ms
             + self.optimize_time_ms
             + self.persist_time_ms
     }

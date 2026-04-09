@@ -11,6 +11,7 @@
 
 use super::summary::SummaryStrategy;
 use crate::config::{ConcurrencyConfig, IndexerConfig};
+use crate::document::ReasoningIndexConfig;
 
 /// Index mode for document processing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -153,6 +154,9 @@ pub struct PipelineOptions {
 
     /// Indexer configuration.
     pub indexer: IndexerConfig,
+
+    /// Reasoning index configuration.
+    pub reasoning_index: ReasoningIndexConfig,
 }
 
 impl Default for PipelineOptions {
@@ -166,6 +170,7 @@ impl Default for PipelineOptions {
             generate_description: true,
             concurrency: ConcurrencyConfig::default(),
             indexer: IndexerConfig::default(),
+            reasoning_index: ReasoningIndexConfig::default(),
         }
     }
 }
@@ -221,6 +226,12 @@ impl PipelineOptions {
     /// Set the indexer configuration.
     pub fn with_indexer(mut self, indexer: IndexerConfig) -> Self {
         self.indexer = indexer;
+        self
+    }
+
+    /// Set the reasoning index configuration.
+    pub fn with_reasoning_index(mut self, config: ReasoningIndexConfig) -> Self {
+        self.reasoning_index = config;
         self
     }
 }

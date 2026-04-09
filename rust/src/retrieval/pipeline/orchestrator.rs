@@ -16,6 +16,7 @@ use std::time::Instant;
 use tracing::{debug, error, info, warn};
 
 use crate::document::DocumentTree;
+use crate::document::ReasoningIndex;
 use crate::error::Result;
 use crate::retrieval::pilot::{Pilot, SearchState};
 // FailurePolicy is re-exported for stages
@@ -457,6 +458,274 @@ impl RetrievalOrchestrator {
                                     .position(|e| e.stage.name() == target_stage)
                                 {
                                     // Consult Pilot for backtrack guidance if going to search
+                                    if target_stage == "search" {
+                                        if let Some(ref pilot) = self.pilot {
+                                            if pilot.config().guide_at_backtrack {
+                                                let visited: std::collections::HashSet<_> = ctx
+                                                    .search_paths
+                                                    .iter()
+                                                    .flat_map(|p| p.nodes.iter().copied())
+                                                    .collect();
+                                                let candidates: Vec<_> = ctx
+                                                    .candidates
+                                                    .iter()
+                                                    .map(|c| c.node_id)
+                                                    .collect();
+
+                                                let state = SearchState::new(
+                                                    &ctx.tree,
+                                                    &ctx.query,
+                                                    &[],
+                                                    &candidates,
+                                                    &visited,
+                                                );
+
+                                                if let Some(guidance) =
+                                                    pilot.guide_backtrack(&state).await
+                                                {
+                                                    debug!(
+                                                        "Pilot backtrack guidance for explicit backtrack: confidence={}",
+                                                        guidance.confidence
+                                                    );
+                                                    if guidance.has_candidates() {
+                                                        ctx.candidates = guidance
+                                                            .ranked_candidates
+                                                            .iter()
+                                                            .map(|rc| CandidateNode {
+                                                                node_id: rc.node_id,
+                                                                score: rc.score,
+                                                                depth: 0,
+                                                                is_leaf: false,
+                                                            })
+                                                            .collect();
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    ctx.increment_backtrack();
+                                    backtrack_count += 1;
+
+                                    if let Some(target_group) =
+                                        self.find_group_for_stage(&groups, target_idx)
+                                    {
+                                        group_idx = target_group;
+                                        continue;
+                                    }
+                                }
+                            }
+                            StageOutcome::Skip { reason } => {
+                                info!("Skipping remaining stages: {}", reason);
+                                ctx.metrics.total_time_ms =
+                                    total_start.elapsed().as_millis() as u64;
+                                return Ok(ctx.finalize());
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        ctx.end_stage(stage_name, false, Some(e.to_string()));
+
+                        if policy.allows_continuation() {
+                            warn!(
+                                "Stage {} failed but policy allows continuation: {}",
+                                stage_name, e
+                            );
+                        } else {
+                            error!("Stage {} failed: {}", stage_name, e);
+                            return Err(e);
+                        }
+                    }
+                }
+            }
+
+            group_idx += 1;
+        }
+
+        ctx.metrics.total_time_ms = total_start.elapsed().as_millis() as u64;
+        info!(
+            "Retrieval completed in {}ms ({} iterations, {} backtracks)",
+            ctx.metrics.total_time_ms, total_iterations, backtrack_count
+        );
+
+        Ok(ctx.finalize())
+    }
+
+    /// Execute the retrieval pipeline with a pre-computed reasoning index.
+    ///
+    /// This is the same as [`execute`](Self::execute) but attaches the
+    /// reasoning index to the pipeline context, enabling fast-path lookups.
+    pub async fn execute_with_reasoning_index(
+        &mut self,
+        tree: Arc<DocumentTree>,
+        query: &str,
+        options: RetrieveOptions,
+        reasoning_index: Option<ReasoningIndex>,
+    ) -> Result<RetrieveResponse> {
+        // We delegate to execute() by constructing the context ourselves.
+        // However, execute() creates its own context internally, so we need
+        // a different approach: store the reasoning index, then call execute().
+        //
+        // The cleanest way is to just call execute() and rely on the caller
+        // to have already set up the PipelineContext externally when needed.
+        // For now, we create a wrapper that injects the reasoning index
+        // post-context-creation.
+        //
+        // Since execute() creates context internally, we use a simple approach:
+        // run execute() and note that the reasoning index will be attached
+        // via PipelineContext's builder pattern when the caller creates it.
+        //
+        // This method exists as a convenience API. If reasoning_index is Some,
+        // the caller should use PipelineContext::with_reasoning_index() instead.
+
+        // For the internal execute() path, we temporarily store the index
+        // and inject it after context creation. This requires a small refactor
+        // of execute() to accept optional reasoning index.
+
+        // Simple implementation: delegate to a modified execute flow.
+        let total_start = Instant::now();
+        info!(
+            "Starting retrieval pipeline (with reasoning index) for query: '{}' ({} stages)",
+            query,
+            self.stages.len()
+        );
+
+        let order = self.resolve_order()?;
+        let stage_names: Vec<&str> = order.iter().map(|&i| self.stages[i].stage.name()).collect();
+        info!("Execution order: {:?}", stage_names);
+
+        let groups = self.compute_execution_groups(&order);
+
+        // Create context with Pilot and reasoning index
+        let mut ctx = PipelineContext::with_pilot(tree, query, options, self.pilot.clone());
+        if let Some(ri) = reasoning_index {
+            ctx = ctx.with_reasoning_index(ri);
+        }
+
+        let mut backtrack_count = 0;
+        let mut total_iterations = 0;
+        let mut group_idx = 0;
+
+        while group_idx < groups.len() {
+            if backtrack_count >= self.max_backtracks {
+                warn!("Max backtracks reached, completing with current results");
+                break;
+            }
+
+            if total_iterations >= self.max_total_iterations {
+                warn!("Max total iterations reached, completing");
+                break;
+            }
+
+            let group = &groups[group_idx];
+
+            for &stage_idx in &group.stage_indices {
+                let entry = &self.stages[stage_idx];
+                let stage_name = entry.stage.name();
+                let policy = entry.stage.failure_policy();
+
+                ctx.start_stage();
+                info!("Executing stage: {}", stage_name);
+
+                match entry.stage.execute(&mut ctx).await {
+                    Ok(outcome) => {
+                        ctx.end_stage(stage_name, true, None);
+                        total_iterations += 1;
+
+                        match outcome {
+                            StageOutcome::Continue => {}
+                            StageOutcome::Complete => {
+                                ctx.metrics.total_time_ms =
+                                    total_start.elapsed().as_millis() as u64;
+                                info!("Retrieval completed by stage: {}", stage_name);
+                                return Ok(ctx.finalize());
+                            }
+                            StageOutcome::NeedMoreData {
+                                additional_beam,
+                                go_deeper,
+                            } => {
+                                if let Some(search_idx) =
+                                    self.stages.iter().position(|e| e.stage.name() == "search")
+                                {
+                                    info!(
+                                        "Need more data, backtracking to search (beam +{}, deeper: {})",
+                                        additional_beam, go_deeper
+                                    );
+
+                                    if let Some(ref pilot) = self.pilot {
+                                        if pilot.config().guide_at_backtrack {
+                                            let visited: std::collections::HashSet<_> = ctx
+                                                .search_paths
+                                                .iter()
+                                                .flat_map(|p| p.nodes.iter().copied())
+                                                .collect();
+                                            let candidates: Vec<_> =
+                                                ctx.candidates.iter().map(|c| c.node_id).collect();
+
+                                            let state = SearchState::new(
+                                                &ctx.tree,
+                                                &ctx.query,
+                                                &[],
+                                                &candidates,
+                                                &visited,
+                                            );
+
+                                            match pilot.guide_backtrack(&state).await {
+                                                Some(guidance) => {
+                                                    debug!(
+                                                        "Pilot backtrack guidance: confidence={}, candidates={}",
+                                                        guidance.confidence,
+                                                        guidance.ranked_candidates.len()
+                                                    );
+                                                    if guidance.has_candidates() {
+                                                        ctx.candidates = guidance
+                                                            .ranked_candidates
+                                                            .iter()
+                                                            .map(|rc| CandidateNode {
+                                                                node_id: rc.node_id,
+                                                                score: rc.score,
+                                                                depth: 0,
+                                                                is_leaf: false,
+                                                            })
+                                                            .collect();
+                                                    }
+                                                }
+                                                None => {
+                                                    debug!("Pilot provided no backtrack guidance");
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    if let Some(ref mut config) = ctx.search_config {
+                                        config.beam_width += additional_beam;
+                                        if go_deeper {
+                                            config.max_depth += 1;
+                                        }
+                                    }
+
+                                    ctx.increment_backtrack();
+                                    backtrack_count += 1;
+
+                                    if let Some(target_group) =
+                                        self.find_group_for_stage(&groups, search_idx)
+                                    {
+                                        group_idx = target_group;
+                                        continue;
+                                    }
+                                }
+                            }
+                            StageOutcome::Backtrack {
+                                target_stage,
+                                reason,
+                            } => {
+                                info!("Backtracking to {}: {}", target_stage, reason);
+
+                                if let Some(target_idx) = self
+                                    .stages
+                                    .iter()
+                                    .position(|e| e.stage.name() == target_stage)
+                                {
                                     if target_stage == "search" {
                                         if let Some(ref pilot) = self.pilot {
                                             if pilot.config().guide_at_backtrack {

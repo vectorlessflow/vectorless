@@ -17,12 +17,17 @@
 //! - [`RefType`] - Type of reference (Section, Appendix, Table, etc.)
 
 mod node;
+mod reasoning;
 mod reference;
 mod structure;
 mod toc;
 mod tree;
 
 pub use node::{NodeId, TreeNode};
+pub use reasoning::{
+    HotNodeEntry, ReasoningIndex, ReasoningIndexBuilder, ReasoningIndexConfig, SectionSummary,
+    SummaryShortcut, TopicEntry,
+};
 pub use reference::{
     NodeReference, RefType, ReferenceExtractor, ReferenceResolver,
 };

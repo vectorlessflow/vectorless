@@ -13,6 +13,7 @@ use std::sync::Arc;
 use tracing::{debug, info, warn};
 
 use crate::document::DocumentTree;
+use crate::document::ReasoningIndex;
 use crate::llm::LlmClient;
 use crate::retrieval::RetrievalContext;
 use crate::retrieval::pilot::Pilot;
@@ -25,6 +26,7 @@ use crate::retrieval::search::{
     BeamSearch, GreedySearch, SearchConfig as SearchAlgConfig, SearchCue, SearchTree,
     ToCNavigator,
 };
+use crate::retrieval::search::extract_keywords;
 use crate::retrieval::strategy::{
     HybridConfig, HybridStrategy, KeywordStrategy, LlmStrategy, RetrievalStrategy,
 };
@@ -303,6 +305,115 @@ impl SearchStage {
 
         (all_paths, all_candidates)
     }
+
+    /// Check if a query is asking for a document summary/overview.
+    fn is_summary_query(query: &str) -> bool {
+        let lower = query.to_lowercase();
+        let patterns = [
+            "what is this document",
+            "what is this about",
+            "summarize",
+            "summary",
+            "overview",
+            "give me an overview",
+            "describe this document",
+            "main topics",
+            "table of contents",
+            "这篇文档讲了什么",
+            "总结",
+            "概述",
+            "概要",
+            "主要内容",
+            "文档简介",
+            "介绍一下",
+        ];
+        patterns.iter().any(|p| lower.contains(p))
+    }
+
+    /// Try to match the query against pre-computed reasoning index entries.
+    ///
+    /// Returns candidates if a high-confidence match is found, None otherwise.
+    fn try_reasoning_shortcut(
+        ridx: &ReasoningIndex,
+        ctx: &PipelineContext,
+    ) -> Option<Vec<CandidateNode>> {
+        // Check 1: Summary shortcut — handle "overview" style queries
+        if let Some(ref shortcut) = ridx.summary_shortcut() {
+            if Self::is_summary_query(&ctx.query) {
+                let mut candidates = vec![CandidateNode::new(
+                    shortcut.root_node,
+                    1.0,
+                    0,
+                    ctx.tree.is_leaf(shortcut.root_node),
+                )];
+                for section in &shortcut.section_summaries {
+                    candidates.push(CandidateNode::new(
+                        section.node_id,
+                        0.9,
+                        section.depth,
+                        ctx.tree.is_leaf(section.node_id),
+                    ));
+                }
+                return Some(candidates);
+            }
+        }
+
+        // Check 2: Keyword → Topic path matching
+        let keywords = extract_keywords(&ctx.query);
+        if keywords.is_empty() {
+            return None;
+        }
+
+        let mut scored_nodes: std::collections::HashMap<crate::document::NodeId, f32> =
+            std::collections::HashMap::new();
+        for keyword in &keywords {
+            if let Some(entries) = ridx.topic_entries(keyword) {
+                for entry in entries {
+                    let score = scored_nodes.entry(entry.node_id).or_insert(0.0);
+                    *score += entry.weight;
+                }
+            }
+        }
+
+        if scored_nodes.is_empty() {
+            return None;
+        }
+
+        // Boost hot nodes by 20%
+        for (node_id, score) in scored_nodes.iter_mut() {
+            if ridx.is_hot(*node_id) {
+                *score *= 1.2;
+            }
+        }
+
+        // Convert to candidates, only return if best match is high-confidence
+        let mut candidates: Vec<CandidateNode> = scored_nodes
+            .into_iter()
+            .filter_map(|(node_id, score)| {
+                let depth = ctx.tree.get(node_id).map(|n| n.depth)?;
+                Some(CandidateNode::new(
+                    node_id,
+                    score,
+                    depth,
+                    ctx.tree.is_leaf(node_id),
+                ))
+            })
+            .collect();
+
+        candidates.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+
+        // Only return shortcut results if we have a high-confidence match
+        let best_score = candidates.first().map(|c| c.score).unwrap_or(0.0);
+        if best_score > 0.5 {
+            Some(candidates)
+        } else {
+            None
+        }
+    }
 }
 
 #[async_trait]
@@ -399,6 +510,25 @@ impl RetrievalStage for SearchStage {
             ctx.metrics.cache_misses += 1;
         }
 
+        // === Reasoning Index Quick Match ===
+        // Check pre-computed index before running expensive ToC navigation.
+        if let Some(ref ridx) = ctx.reasoning_index {
+            if let Some(shortcut_candidates) = Self::try_reasoning_shortcut(ridx, ctx) {
+                info!(
+                    "Reasoning index shortcut match, returning {} candidates",
+                    shortcut_candidates.len()
+                );
+                ctx.candidates = shortcut_candidates;
+                ctx.metrics.cache_hits += 1;
+                ctx.record_reasoning(
+                    StageName::Search,
+                    "Reasoning index shortcut: direct path match".to_string(),
+                    NavigationDecision::ThisIsTheAnswer,
+                );
+                return Ok(StageOutcome::cont());
+            }
+        }
+
         // === Phase Locate: find relevant subtrees via ToC ===
         // Use depth-1 nodes (root's direct children = top-level sections).
         // level(0) is only the root itself, which is not useful for locating.
@@ -476,6 +606,16 @@ impl RetrievalStage for SearchStage {
         // Update metrics and budget
         ctx.metrics.search_time_ms += start.elapsed().as_millis() as u64;
         ctx.metrics.nodes_visited += ctx.candidates.len();
+
+        // Update hot node tracker with retrieval results
+        if let Some(ref tracker) = ctx.hot_tracker {
+            let hits: Vec<(crate::document::NodeId, f32)> = ctx
+                .candidates
+                .iter()
+                .map(|c| (c.node_id, c.score))
+                .collect();
+            tracker.record_hits(&hits);
+        }
         // Estimate tokens consumed by this search iteration (content-based heuristic)
         let search_tokens: usize = ctx
             .candidates

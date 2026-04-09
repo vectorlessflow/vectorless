@@ -6,7 +6,7 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use crate::document::{DocumentTree, NodeId};
+use crate::document::{DocumentTree, NodeId, ReasoningIndex};
 use crate::llm::LlmClient;
 use crate::parser::{DocumentFormat, RawNode};
 
@@ -242,6 +242,9 @@ pub struct IndexContext {
     /// Summary cache for lazy generation.
     pub summary_cache: SummaryCache,
 
+    /// Pre-computed reasoning index (built by ReasoningIndexStage).
+    pub reasoning_index: Option<ReasoningIndex>,
+
     /// Stage execution results.
     pub stage_results: HashMap<String, StageResult>,
 
@@ -272,6 +275,7 @@ impl IndexContext {
             options,
             llm_client: None,
             summary_cache: SummaryCache::default(),
+            reasoning_index: None,
             stage_results: HashMap::new(),
             metrics: IndexMetrics::default(),
             description: None,
@@ -345,6 +349,7 @@ impl IndexContext {
             line_count: self.line_count,
             metrics: self.metrics,
             summary_cache: self.summary_cache,
+            reasoning_index: self.reasoning_index,
         }
     }
 }
@@ -381,6 +386,9 @@ pub struct IndexResult {
 
     /// Summary cache.
     pub summary_cache: SummaryCache,
+
+    /// Pre-computed reasoning index for retrieval acceleration.
+    pub reasoning_index: Option<ReasoningIndex>,
 }
 
 impl IndexResult {
@@ -400,6 +408,7 @@ impl IndexResult {
             + self.metrics.build_time_ms
             + self.metrics.enhance_time_ms
             + self.metrics.enrich_time_ms
+            + self.metrics.reasoning_index_time_ms
             + self.metrics.optimize_time_ms
             + self.metrics.persist_time_ms
     }

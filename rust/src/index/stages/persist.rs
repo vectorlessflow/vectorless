@@ -51,8 +51,13 @@ impl PersistStage {
 
         let doc = PersistedDocument::new(meta, tree.clone());
 
-        // Add pages if available (for PDFs)
         // Note: pages would need to be stored in context during parse stage
+
+        // Attach reasoning index if available
+        let mut doc = doc;
+        if let Some(ref reasoning_index) = ctx.reasoning_index {
+            doc.reasoning_index = Some(reasoning_index.clone());
+        }
 
         workspace.add(&doc).await?;
         info!("Saved document {} to workspace", ctx.doc_id);

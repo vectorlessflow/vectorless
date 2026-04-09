@@ -14,6 +14,7 @@ use crate::llm::LlmClient;
 use super::super::PipelineOptions;
 use super::super::stages::{
     BuildStage, EnhanceStage, EnrichStage, IndexStage, OptimizeStage, ParseStage, PersistStage,
+    ReasoningIndexStage,
 };
 use super::context::{IndexInput, IndexResult};
 use super::orchestrator::PipelineOrchestrator;
@@ -51,12 +52,14 @@ impl PipelineExecutor {
     /// 1. `parse` - Parse document into raw nodes
     /// 2. `build` - Build tree structure
     /// 3. `enrich` - Add metadata and cross-references
-    /// 4. `optimize` - Optimize tree structure
+    /// 4. `reasoning_index` - Build pre-computed reasoning index
+    /// 5. `optimize` - Optimize tree structure
     pub fn new() -> Self {
         let orchestrator = PipelineOrchestrator::new()
             .stage_with_priority(ParseStage::new(), 10)
             .stage_with_priority(BuildStage::new(), 20)
             .stage_with_priority(EnrichStage::new(), 40)
+            .stage_with_priority(ReasoningIndexStage::new(), 45)
             .stage_with_priority(OptimizeStage::new(), 60);
 
         Self { orchestrator }
@@ -69,13 +72,15 @@ impl PipelineExecutor {
     /// 2. `build` - Build tree
     /// 3. `enhance` - LLM-based enhancement (summaries)
     /// 4. `enrich` - Add metadata
-    /// 5. `optimize` - Optimize tree
+    /// 5. `reasoning_index` - Build pre-computed reasoning index
+    /// 6. `optimize` - Optimize tree
     pub fn with_llm(client: LlmClient) -> Self {
         let orchestrator = PipelineOrchestrator::new()
             .stage_with_priority(ParseStage::new(), 10)
             .stage_with_priority(BuildStage::new(), 20)
             .stage_with_priority(EnhanceStage::with_llm_client(client), 30)
             .stage_with_priority(EnrichStage::new(), 40)
+            .stage_with_priority(ReasoningIndexStage::new(), 45)
             .stage_with_priority(OptimizeStage::new(), 60);
 
         Self { orchestrator }

@@ -10,8 +10,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
-use crate::document::{DocumentTree, NodeId, RetrievalIndex};
-use crate::retrieval::cache::ReasoningCache;
+use crate::document::{DocumentTree, NodeId, ReasoningIndex, RetrievalIndex};
+use crate::retrieval::cache::{HotNodeTracker, ReasoningCache};
 use crate::retrieval::pipeline::budget::RetrievalBudgetController;
 use crate::retrieval::pilot::Pilot;
 use crate::retrieval::types::{
@@ -208,6 +208,12 @@ pub struct PipelineContext {
     /// Tiered reasoning cache (L1 exact, L2 path pattern, L3 strategy score).
     pub reasoning_cache: Arc<ReasoningCache>,
 
+    /// Pre-computed reasoning index for fast path resolution.
+    pub reasoning_index: Option<Arc<ReasoningIndex>>,
+
+    /// Hot node tracker for recording retrieval frequency (session-scoped).
+    pub hot_tracker: Option<Arc<HotNodeTracker>>,
+
     // ============ Analyze Stage Output ============
     /// Detected query complexity.
     pub complexity: Option<QueryComplexity>,
@@ -279,6 +285,8 @@ impl PipelineContext {
             pilot: None,
             budget_controller,
             reasoning_cache: Arc::new(ReasoningCache::new()),
+            reasoning_index: None,
+            hot_tracker: None,
             complexity: None,
             keywords: Vec::new(),
             target_sections: Vec::new(),
@@ -316,6 +324,18 @@ impl PipelineContext {
     /// Set the Pilot for this context.
     pub fn set_pilot(&mut self, pilot: Option<Arc<dyn Pilot>>) {
         self.pilot = pilot;
+    }
+
+    /// Set the reasoning index for this retrieval context.
+    pub fn with_reasoning_index(mut self, index: ReasoningIndex) -> Self {
+        self.reasoning_index = Some(Arc::new(index));
+        self
+    }
+
+    /// Set the hot node tracker for this retrieval context.
+    pub fn with_hot_tracker(mut self, tracker: HotNodeTracker) -> Self {
+        self.hot_tracker = Some(Arc::new(tracker));
+        self
     }
 
     /// Get the Pilot reference, if available.

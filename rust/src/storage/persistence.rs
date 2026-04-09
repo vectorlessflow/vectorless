@@ -16,7 +16,7 @@ use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::{Path, PathBuf};
 
 use crate::Error;
-use crate::document::DocumentTree;
+use crate::document::{DocumentTree, ReasoningIndex};
 use crate::error::Result;
 
 /// Current format version for persisted documents.
@@ -191,6 +191,10 @@ pub struct PersistedDocument {
     /// Per-page content (for PDFs).
     #[serde(default)]
     pub pages: Vec<PageContent>,
+
+    /// Pre-computed reasoning index for retrieval acceleration.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reasoning_index: Option<ReasoningIndex>,
 }
 
 impl PersistedDocument {
@@ -200,6 +204,7 @@ impl PersistedDocument {
             meta,
             tree,
             pages: Vec::new(),
+            reasoning_index: None,
         }
     }
 
