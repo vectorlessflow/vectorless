@@ -1,10 +1,6 @@
 <div align="center">
 
-<div style="height: 200px; overflow: hidden; display: flex; align-items: center; justify-content: center;">
-  <img src="https://raw.githubusercontent.com/vectorlessflow/vectorless/main/docs/design/logo-horizontal.svg" 
-       alt="Vectorless" 
-       style="height: 300px; transform: scale(1.2); object-fit: contain;">
-</div>
+<img src="https://raw.githubusercontent.com/vectorlessflow/vectorless/main/docs/design/logo-horizontal.svg" alt="Vectorless">
 
 <h1>Reasoning-native document inteligence engine</h1>
 
