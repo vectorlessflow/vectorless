@@ -12,6 +12,7 @@ use std::time::Instant;
 
 use crate::document::{DocumentTree, NodeId, RetrievalIndex};
 use crate::retrieval::pilot::Pilot;
+use crate::retrieval::pipeline::budget::RetrievalBudgetController;
 use crate::retrieval::types::{
     NavigationDecision, QueryComplexity, ReasoningChain, ReasoningStep, RetrieveOptions,
     RetrieveResponse, SearchPath, StageName, StrategyPreference, SufficiencyLevel,
@@ -201,6 +202,8 @@ pub struct PipelineContext {
     pub options: RetrieveOptions,
     /// Optional Pilot for navigation guidance.
     pub pilot: Option<Arc<dyn Pilot>>,
+    /// Adaptive token budget controller for the entire pipeline.
+    pub budget_controller: RetrievalBudgetController,
 
     // ============ Analyze Stage Output ============
     /// Detected query complexity.
@@ -260,6 +263,7 @@ impl PipelineContext {
     ) -> Self {
         // Build retrieval index for efficient operations
         let retrieval_index = Some(tree.build_retrieval_index());
+        let budget_controller = RetrievalBudgetController::new(options.max_tokens);
 
         Self {
             query: query.into(),
@@ -267,6 +271,7 @@ impl PipelineContext {
             retrieval_index,
             options,
             pilot: None,
+            budget_controller,
             complexity: None,
             keywords: Vec::new(),
             target_sections: Vec::new(),

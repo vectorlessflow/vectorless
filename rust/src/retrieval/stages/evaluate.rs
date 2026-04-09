@@ -12,7 +12,7 @@ use tracing::{info, warn};
 
 use crate::llm::LlmClient;
 use crate::retrieval::content::{ContentAggregator, ContentAggregatorConfig};
-use crate::retrieval::pipeline::{FailurePolicy, PipelineContext, RetrievalStage, StageOutcome};
+use crate::retrieval::pipeline::{BudgetStatus, FailurePolicy, PipelineContext, RetrievalStage, StageOutcome};
 use crate::retrieval::sufficiency::{LlmJudge, SufficiencyChecker, ThresholdChecker};
 use crate::retrieval::types::{NavigationDecision, ReasoningChain, RetrievalResult, RetrieveResponse, StageName, SufficiencyLevel};
 use crate::utils::estimate_tokens;
@@ -345,13 +345,41 @@ impl RetrievalStage for EvaluateStage {
 
         info!("Aggregated {} tokens", tokens);
 
-        // 2. Check sufficiency
+        // 2. Report token consumption to budget controller
+        ctx.budget_controller.record_tokens(tokens);
+
+        // 3. Check sufficiency
         ctx.sufficiency = self.check_sufficiency(ctx);
         info!("Sufficiency level: {:?}", ctx.sufficiency);
 
         // Update metrics
         ctx.metrics.evaluate_time_ms += start.elapsed().as_millis() as u64;
         ctx.metrics.tokens_used = tokens;
+
+        // 4. Check budget status for adaptive decision
+        let budget_status = ctx.budget_controller.status();
+        let confidence = self.calculate_confidence(ctx);
+
+        // If budget is exhausted, force completion regardless of sufficiency
+        if budget_status.should_stop() && ctx.search_iterations >= 1 {
+            info!(
+                "Budget exhausted ({}/{}), completing with current results",
+                ctx.budget_controller.consumed(),
+                ctx.budget_controller.total_budget(),
+            );
+            ctx.result = Some(self.build_response(ctx));
+            ctx.record_reasoning(
+                StageName::Evaluate,
+                format!(
+                    "Budget exhausted ({}/{}), forced completion; confidence={:.3}",
+                    ctx.budget_controller.consumed(),
+                    ctx.budget_controller.total_budget(),
+                    confidence,
+                ),
+                NavigationDecision::Skip,
+            );
+            return Ok(StageOutcome::complete());
+        }
 
         // 3. Decide next action based on sufficiency
         let outcome = match ctx.sufficiency {
@@ -396,7 +424,7 @@ impl RetrievalStage for EvaluateStage {
             ctx.metrics.llm_calls += 1;
         }
 
-        // Record evaluation reasoning
+        // Record evaluation reasoning with budget status
         let sufficiency_str = format!("{:?}", ctx.sufficiency);
         let decision = match ctx.sufficiency {
             SufficiencyLevel::Sufficient => NavigationDecision::ThisIsTheAnswer,
@@ -406,12 +434,15 @@ impl RetrievalStage for EvaluateStage {
         ctx.record_reasoning(
             StageName::Evaluate,
             format!(
-                "Sufficiency={}, confidence={:.3}, tokens={}, candidates={}, iteration={}",
+                "Sufficiency={}, confidence={:.3}, tokens={}, candidates={}, iteration={}, budget={:?} ({}/{})",
                 sufficiency_str,
                 self.calculate_confidence(ctx),
                 ctx.token_count,
                 ctx.candidates.len(),
                 ctx.search_iterations,
+                budget_status,
+                ctx.budget_controller.consumed(),
+                ctx.budget_controller.total_budget(),
             ),
             decision,
         );

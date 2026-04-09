@@ -17,7 +17,8 @@ use crate::llm::LlmClient;
 use crate::retrieval::RetrievalContext;
 use crate::retrieval::pilot::Pilot;
 use crate::retrieval::pipeline::{
-    CandidateNode, FailurePolicy, PipelineContext, RetrievalStage, SearchAlgorithm, StageOutcome,
+    BudgetStatus, CandidateNode, FailurePolicy, PipelineContext, RetrievalStage, SearchAlgorithm,
+    StageOutcome,
 };
 use crate::retrieval::search::{
     BeamSearch, GreedySearch, SearchConfig as SearchAlgConfig, SearchCue, SearchTree,
@@ -331,16 +332,42 @@ impl RetrievalStage for SearchStage {
         let algorithm = ctx.selected_algorithm.unwrap_or(SearchAlgorithm::Beam);
         let config = ctx.search_config.clone().unwrap_or_default();
 
+        // Budget check: skip search iteration if exhausted
+        let budget_status = ctx.budget_controller.status();
+        if budget_status.should_stop() && ctx.search_iterations > 0 {
+            info!(
+                "Budget exhausted ({}/{}), skipping search iteration",
+                ctx.budget_controller.consumed(),
+                ctx.budget_controller.total_budget(),
+            );
+            ctx.record_reasoning(
+                StageName::Search,
+                format!(
+                    "Budget exhausted ({}/{}), returning current candidates",
+                    ctx.budget_controller.consumed(),
+                    ctx.budget_controller.total_budget(),
+                ),
+                NavigationDecision::Skip,
+            );
+            return Ok(StageOutcome::complete());
+        }
+
         // Reset Pilot state for new query
         if let Some(ref pilot) = self.pilot {
             pilot.reset();
             debug!("SearchStage: Pilot is available, is_active={}", pilot.is_active());
         }
 
+        // Apply budget-aware beam width adjustment
+        let effective_beam = ctx
+            .budget_controller
+            .suggested_beam_width(config.beam_width, ctx.search_iterations);
+
         info!(
-            "Executing search: algorithm={:?}, beam_width={}, pilot={}",
+            "Executing search: algorithm={:?}, beam_width={} (budget: {:?}), pilot={}",
             algorithm,
-            config.beam_width,
+            effective_beam,
+            budget_status,
             if self.has_pilot() { "enabled" } else { "disabled" }
         );
 
@@ -407,9 +434,17 @@ impl RetrievalStage for SearchStage {
             }
         }
 
-        // Update metrics
+        // Update metrics and budget
         ctx.metrics.search_time_ms += start.elapsed().as_millis() as u64;
         ctx.metrics.nodes_visited += ctx.candidates.len();
+        // Estimate tokens consumed by this search iteration (content-based heuristic)
+        let search_tokens: usize = ctx
+            .candidates
+            .iter()
+            .filter_map(|c| ctx.tree.get(c.node_id).map(|n| n.content.len()))
+            .sum::<usize>()
+            / 4; // rough: 4 chars ≈ 1 token
+        ctx.budget_controller.record_tokens(search_tokens);
 
         info!(
             "Search complete: {} candidates (iteration {})",

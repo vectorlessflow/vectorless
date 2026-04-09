@@ -78,8 +78,9 @@ pub use types::StrategyPreference as Strategy;
 
 // Pipeline exports
 pub use pipeline::{
-    CandidateNode, ExecutionGroup, FailurePolicy, PipelineContext, RetrievalMetrics,
-    RetrievalOrchestrator, RetrievalStage, SearchAlgorithm, SearchConfig, StageOutcome,
+    CandidateNode, ExecutionGroup, FailurePolicy, PipelineContext, RetrievalBudgetController,
+    RetrievalMetrics, RetrievalOrchestrator, RetrievalStage, SearchAlgorithm, SearchConfig,
+    StageOutcome, BudgetStatus,
 };
 
 // Re-export PipelineContext as RetrievalContext for stages (alias for clarity)
