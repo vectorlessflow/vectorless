@@ -16,6 +16,7 @@ use crate::document::DocumentTree;
 use crate::llm::LlmClient;
 use crate::retrieval::RetrievalContext;
 use crate::retrieval::pilot::Pilot;
+use crate::retrieval::cache::CachedCandidate;
 use crate::retrieval::pipeline::{
     BudgetStatus, CandidateNode, FailurePolicy, PipelineContext, RetrievalStage, SearchAlgorithm,
     StageOutcome,
@@ -373,6 +374,31 @@ impl RetrievalStage for SearchStage {
 
         ctx.increment_search_iteration();
 
+        // === L1 Cache check: return cached results if available ===
+        if ctx.options.enable_cache && ctx.search_iterations <= 1 {
+            let scope_fp = crate::utils::fingerprint::Fingerprint::from_str(
+                &format!("{:?}", ctx.tree.root()),
+            );
+            if let Some(cached) = ctx.reasoning_cache.l1_get(&ctx.query, &scope_fp) {
+                info!("L1 cache hit for query, returning {} cached candidates", cached.len());
+                ctx.candidates = cached
+                    .into_iter()
+                    .map(|c| CandidateNode::new(c.node_id, c.score, c.depth, ctx.tree.is_leaf(c.node_id)))
+                    .collect();
+                ctx.metrics.cache_hits += 1;
+                ctx.record_reasoning(
+                    StageName::Search,
+                    format!(
+                        "L1 cache hit: {} candidates returned from cache",
+                        ctx.candidates.len()
+                    ),
+                    NavigationDecision::ThisIsTheAnswer,
+                );
+                return Ok(StageOutcome::cont());
+            }
+            ctx.metrics.cache_misses += 1;
+        }
+
         // === Phase Locate: find relevant subtrees via ToC ===
         // Use depth-1 nodes (root's direct children = top-level sections).
         // level(0) is only the root itself, which is not useful for locating.
@@ -458,6 +484,30 @@ impl RetrievalStage for SearchStage {
             .sum::<usize>()
             / 4; // rough: 4 chars ≈ 1 token
         ctx.budget_controller.record_tokens(search_tokens);
+
+        // Store results in L1 cache
+        if ctx.options.enable_cache && ctx.search_iterations <= 1 && !ctx.candidates.is_empty() {
+            let scope_fp = crate::utils::fingerprint::Fingerprint::from_str(
+                &format!("{:?}", ctx.tree.root()),
+            );
+            let cached: Vec<CachedCandidate> = ctx
+                .candidates
+                .iter()
+                .map(|c| CachedCandidate {
+                    node_id: c.node_id,
+                    score: c.score,
+                    depth: c.depth,
+                })
+                .collect();
+            ctx.reasoning_cache.l1_store(
+                &ctx.query,
+                scope_fp,
+                cached,
+                ctx.selected_strategy
+                    .map(|s| format!("{:?}", s))
+                    .unwrap_or_else(|| "auto".to_string()),
+            );
+        }
 
         info!(
             "Search complete: {} candidates (iteration {})",

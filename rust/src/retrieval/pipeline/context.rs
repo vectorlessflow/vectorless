@@ -11,6 +11,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use crate::document::{DocumentTree, NodeId, RetrievalIndex};
+use crate::retrieval::cache::ReasoningCache;
 use crate::retrieval::pipeline::budget::RetrievalBudgetController;
 use crate::retrieval::pilot::Pilot;
 use crate::retrieval::types::{
@@ -204,6 +205,8 @@ pub struct PipelineContext {
     pub pilot: Option<Arc<dyn Pilot>>,
     /// Adaptive token budget controller for the entire pipeline.
     pub budget_controller: RetrievalBudgetController,
+    /// Tiered reasoning cache (L1 exact, L2 path pattern, L3 strategy score).
+    pub reasoning_cache: Arc<ReasoningCache>,
 
     // ============ Analyze Stage Output ============
     /// Detected query complexity.
@@ -275,6 +278,7 @@ impl PipelineContext {
             options,
             pilot: None,
             budget_controller,
+            reasoning_cache: Arc::new(ReasoningCache::new()),
             complexity: None,
             keywords: Vec::new(),
             target_sections: Vec::new(),

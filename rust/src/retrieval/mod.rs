@@ -108,6 +108,7 @@ pub use complexity::ComplexityDetector;
 
 // Cache exports
 pub use cache::PathCache;
+pub use cache::{CachedCandidate, ReasoningCache, ReasoningCacheConfig, ReasoningCacheStats};
 
 // Content aggregation exports
 pub use content::{

@@ -381,6 +381,18 @@ impl RetrievalStage for EvaluateStage {
             return Ok(StageOutcome::complete());
         }
 
+        // 2.5 Record successful navigation paths to L2 cache
+        if confidence > 0.5 {
+            let doc_key = format!("{:?}", ctx.tree.root());
+            for candidate in ctx.candidates.iter().take(3) {
+                if let Some(node) = ctx.tree.get(candidate.node_id) {
+                    let path = format!("{}", node.depth);
+                    // Use the node title as path identifier for L2
+                    ctx.reasoning_cache.l2_record(&doc_key, &node.title, candidate.score);
+                }
+            }
+        }
+
         // 3. Decide next action based on sufficiency
         let outcome = match ctx.sufficiency {
             SufficiencyLevel::Sufficient => {
