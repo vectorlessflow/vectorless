@@ -2,6 +2,9 @@
 
 <img src="https://raw.githubusercontent.com/vectorlessflow/vectorless/main/docs/design/logo-horizontal.svg" alt="Vectorless">
 
+<h1>Reasoning-native document inteligence engine</h1>
+
+
 [![PyPI](https://img.shields.io/pypi/v/vectorless.svg)](https://pypi.org/project/vectorless/)
 [![Python](https://img.shields.io/pypi/pyversions/vectorless.svg)](https://pypi.org/project/vectorless/)
 [![PyPI Downloads](https://static.pepy.tech/badge/vectorless/month)](https://pepy.tech/projects/vectorless)
@@ -13,11 +16,10 @@
 
 </div>
 
-## What is Vectorless?
-
-**Vectorless** is a library for querying structured documents using natural language — without vector databases or embedding models. Core engine written in Rust, with Python bindings.
-
+**Vectorless** is a library for querying structured documents using natural language — without vector databases or embedding models. Core engine written in **Rust**, with Python bindings.
 Instead of chunking documents into vectors, Vectorless preserves the document's tree structure and uses LLM to navigate it — like how a human reads a table of contents.
+
+⭐ Drop a star to help us grow!
 
 ## How It Works
 
@@ -280,11 +282,11 @@ Contributions welcome! If you find this useful, please ⭐ the repo — it helps
 
 ## Star History
 
-<a href="https://www.star-history.com/?repos=vectorlessflow%2Fvectorless&type=date&legend=bottom-right">
+<a href="https://www.star-history.com/?repos=vectorlessflow%2Fvectorless&type=date&legend=top-left">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/image?repos=vectorlessflow/vectorless&type=date&theme=dark&legend=bottom-right" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/image?repos=vectorlessflow/vectorless&type=date&legend=bottom-right" />
-   <img alt="Star History Chart" src="https://api.star-history.com/image?repos=vectorlessflow/vectorless&type=date&legend=bottom-right" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=vectorlessflow/vectorless&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=vectorlessflow/vectorless&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=vectorlessflow/vectorless&type=date&legend=top-left" />
  </picture>
 </a>
 
