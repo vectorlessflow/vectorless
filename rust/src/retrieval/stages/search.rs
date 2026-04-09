@@ -383,12 +383,25 @@ impl RetrievalStage for SearchStage {
             .map(|nodes| nodes.to_vec())
             .unwrap_or_else(|| ctx.tree.children(ctx.tree.root()));
 
-        let cues = self
+        let mut cues = self
             .toc_navigator
             .locate(&ctx.query, &ctx.tree, &top_level_nodes)
             .await;
 
         debug!("ToCNavigator returned {} cues", cues.len());
+
+        // Inject structure hints from Analyze stage as high-priority cues
+        if !ctx.resolved_path_hints.is_empty() {
+            for (hint_text, node_id) in &ctx.resolved_path_hints {
+                if ctx.tree.get(*node_id).is_some() {
+                    info!("Injecting structure hint '{}' as search cue", hint_text);
+                    cues.push(SearchCue {
+                        root: *node_id,
+                        confidence: 1.0, // Direct match from query structure
+                    });
+                }
+            }
+        }
 
         // === Resolve queries (decomposed or original) ===
         let queries = Self::resolve_queries(ctx);

@@ -11,8 +11,8 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use crate::document::{DocumentTree, NodeId, RetrievalIndex};
-use crate::retrieval::pilot::Pilot;
 use crate::retrieval::pipeline::budget::RetrievalBudgetController;
+use crate::retrieval::pilot::Pilot;
 use crate::retrieval::types::{
     NavigationDecision, QueryComplexity, ReasoningChain, ReasoningStep, RetrieveOptions,
     RetrieveResponse, SearchPath, StageName, StrategyPreference, SufficiencyLevel,
@@ -212,6 +212,9 @@ pub struct PipelineContext {
     pub keywords: Vec<String>,
     /// Target sections from ToC matching.
     pub target_sections: Vec<String>,
+    /// Resolved structural path hints — node IDs extracted from the query
+    /// (e.g. "第3章" → NodeId of Chapter 3). Search should start from these nodes.
+    pub resolved_path_hints: Vec<(String, NodeId)>,
     /// Decomposed sub-queries (if query was decomposed).
     pub decomposition: Option<crate::retrieval::decompose::DecompositionResult>,
 
@@ -275,6 +278,7 @@ impl PipelineContext {
             complexity: None,
             keywords: Vec::new(),
             target_sections: Vec::new(),
+            resolved_path_hints: Vec::new(),
             decomposition: None,
             selected_strategy: None,
             selected_algorithm: None,
