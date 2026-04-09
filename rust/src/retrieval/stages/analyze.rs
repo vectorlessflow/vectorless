@@ -16,6 +16,7 @@ use crate::document::{DocumentTree, TocView};
 use crate::retrieval::complexity::ComplexityDetector;
 use crate::retrieval::decompose::{DecompositionConfig, QueryDecomposer};
 use crate::retrieval::pipeline::{FailurePolicy, PipelineContext, RetrievalStage, StageOutcome};
+use crate::retrieval::types::{NavigationDecision, StageName};
 use crate::llm::LlmClient;
 
 /// Analyze Stage - analyzes queries for retrieval planning.
@@ -268,6 +269,29 @@ impl RetrievalStage for AnalyzeStage {
 
         // 5. Update metrics
         ctx.metrics.llm_calls += 0; // No LLM calls in this stage
+
+        // 6. Record reasoning
+        let complexity_str = format!("{:?}", ctx.complexity.unwrap_or_default());
+        let mut reasoning_parts = vec![
+            format!("Query complexity: {}", complexity_str),
+            format!("Keywords: {:?}", ctx.keywords),
+        ];
+        if !ctx.target_sections.is_empty() {
+            reasoning_parts.push(format!("Target sections: {:?}", ctx.target_sections));
+        }
+        if let Some(ref decomp) = ctx.decomposition {
+            if decomp.was_decomposed {
+                reasoning_parts.push(format!(
+                    "Decomposed into {} sub-queries",
+                    decomp.sub_queries.len()
+                ));
+            }
+        }
+        ctx.record_reasoning(
+            StageName::Analyze,
+            reasoning_parts.join("; "),
+            NavigationDecision::ExploreMore,
+        );
 
         Ok(StageOutcome::cont())
     }

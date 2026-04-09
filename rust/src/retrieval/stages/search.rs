@@ -26,7 +26,7 @@ use crate::retrieval::search::{
 use crate::retrieval::strategy::{
     HybridConfig, HybridStrategy, KeywordStrategy, LlmStrategy, RetrievalStrategy,
 };
-use crate::retrieval::types::StrategyPreference;
+use crate::retrieval::types::{NavigationDecision, ReasoningCandidate, ReasoningStep, StageName, StrategyPreference};
 
 /// Search Stage - executes tree search with optional Pilot guidance.
 ///
@@ -416,6 +416,67 @@ impl RetrievalStage for SearchStage {
             ctx.candidates.len(),
             ctx.search_iterations
         );
+
+        // Record reasoning — collect data first to avoid borrow conflicts
+        let strategy_str = ctx
+            .selected_strategy
+            .map(|s| format!("{:?}", s))
+            .unwrap_or_else(|| "auto".to_string());
+        let search_iterations = ctx.search_iterations;
+
+        let reasoning_data: Vec<(String, Option<String>, f32, usize, String, Vec<ReasoningCandidate>)> = ctx
+            .candidates
+            .iter()
+            .take(5)
+            .map(|candidate| {
+                let (title, depth) = ctx
+                    .tree
+                    .get(candidate.node_id)
+                    .map(|n| (n.title.clone(), n.depth))
+                    .unwrap_or_else(|| ("(unknown)".to_string(), 0));
+
+                let considered: Vec<ReasoningCandidate> = ctx
+                    .candidates
+                    .iter()
+                    .filter(|c| c.node_id != candidate.node_id)
+                    .take(5)
+                    .filter_map(|c| {
+                        ctx.tree.get(c.node_id).map(|n| ReasoningCandidate {
+                            node_id: format!("{:?}", c.node_id),
+                            title: n.title.clone(),
+                            score: c.score,
+                        })
+                    })
+                    .collect();
+
+                let reasoning = format!(
+                    "Candidate '{}' (score={:.3}) found via {} search, iteration {}",
+                    title, candidate.score, algorithm.name(), search_iterations
+                );
+
+                (format!("{:?}", candidate.node_id), Some(title), candidate.score, depth, reasoning, considered)
+            })
+            .collect();
+
+        for (node_id, title, score, depth, reasoning, considered) in reasoning_data {
+            ctx.push_reasoning_step(ReasoningStep {
+                stage: StageName::Search,
+                node_id: Some(node_id),
+                title,
+                score,
+                decision: if score > 0.7 {
+                    NavigationDecision::ThisIsTheAnswer
+                } else {
+                    NavigationDecision::ExploreMore
+                },
+                depth,
+                reasoning,
+                candidates: considered,
+                strategy_used: Some(strategy_str.clone()),
+                llm_call: None,
+                references_followed: Vec::new(),
+            });
+        }
 
         Ok(StageOutcome::cont())
     }

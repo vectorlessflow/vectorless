@@ -14,7 +14,7 @@ use crate::llm::LlmClient;
 use crate::retrieval::content::{ContentAggregator, ContentAggregatorConfig};
 use crate::retrieval::pipeline::{FailurePolicy, PipelineContext, RetrievalStage, StageOutcome};
 use crate::retrieval::sufficiency::{LlmJudge, SufficiencyChecker, ThresholdChecker};
-use crate::retrieval::types::{RetrievalResult, RetrieveResponse, SufficiencyLevel};
+use crate::retrieval::types::{NavigationDecision, ReasoningChain, RetrievalResult, RetrieveResponse, StageName, SufficiencyLevel};
 use crate::utils::estimate_tokens;
 
 /// Evaluate Stage - evaluates retrieval sufficiency.
@@ -275,7 +275,7 @@ impl EvaluateStage {
                 .map(|s| format!("{:?}", s))
                 .unwrap_or_else(|| "unknown".to_string()),
             complexity: ctx.complexity.unwrap_or_default(),
-            trace: ctx.navigation_trace.clone(),
+            reasoning_chain: ctx.reasoning_chain.clone(),
             tokens_used: ctx.token_count,
         }
     }
@@ -395,6 +395,26 @@ impl RetrievalStage for EvaluateStage {
         if self.use_llm_judge && self.llm_judge.is_some() {
             ctx.metrics.llm_calls += 1;
         }
+
+        // Record evaluation reasoning
+        let sufficiency_str = format!("{:?}", ctx.sufficiency);
+        let decision = match ctx.sufficiency {
+            SufficiencyLevel::Sufficient => NavigationDecision::ThisIsTheAnswer,
+            SufficiencyLevel::PartialSufficient => NavigationDecision::ExploreMore,
+            SufficiencyLevel::Insufficient => NavigationDecision::ExploreMore,
+        };
+        ctx.record_reasoning(
+            StageName::Evaluate,
+            format!(
+                "Sufficiency={}, confidence={:.3}, tokens={}, candidates={}, iteration={}",
+                sufficiency_str,
+                self.calculate_confidence(ctx),
+                ctx.token_count,
+                ctx.candidates.len(),
+                ctx.search_iterations,
+            ),
+            decision,
+        );
 
         Ok(outcome)
     }

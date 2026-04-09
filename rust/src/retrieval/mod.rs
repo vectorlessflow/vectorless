@@ -71,6 +71,7 @@ pub use context::{
 pub use pipeline_retriever::PipelineRetriever;
 pub use retriever::{RetrievalContext, Retriever, RetrieverError, RetrieverResult};
 pub use types::*;
+pub use types::{LlmCallSummary, ReasoningCandidate, ReasoningChain, ReasoningStep, StageName};
 
 // Re-export StrategyPreference as Strategy for convenience
 pub use types::StrategyPreference as Strategy;

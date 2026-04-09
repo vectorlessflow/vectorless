@@ -13,8 +13,8 @@ use std::time::Instant;
 use crate::document::{DocumentTree, NodeId, RetrievalIndex};
 use crate::retrieval::pilot::Pilot;
 use crate::retrieval::types::{
-    NavigationStep, QueryComplexity, RetrieveOptions, RetrieveResponse, SearchPath,
-    StrategyPreference, SufficiencyLevel,
+    NavigationDecision, QueryComplexity, ReasoningChain, ReasoningStep, RetrieveOptions,
+    RetrieveResponse, SearchPath, StageName, StrategyPreference, SufficiencyLevel,
 };
 
 /// Search algorithm type.
@@ -225,8 +225,8 @@ pub struct PipelineContext {
     pub candidates: Vec<CandidateNode>,
     /// Search paths explored.
     pub search_paths: Vec<SearchPath>,
-    /// Navigation trace for debugging.
-    pub navigation_trace: Vec<NavigationStep>,
+    /// Reasoning chain — ordered steps explaining every retrieval decision.
+    pub reasoning_chain: ReasoningChain,
     /// Number of search iterations performed.
     pub search_iterations: usize,
 
@@ -276,7 +276,7 @@ impl PipelineContext {
             search_config: None,
             candidates: Vec::new(),
             search_paths: Vec::new(),
-            navigation_trace: Vec::new(),
+            reasoning_chain: ReasoningChain::new(),
             search_iterations: 0,
             sufficiency: SufficiencyLevel::default(),
             accumulated_content: String::new(),
@@ -372,6 +372,33 @@ impl PipelineContext {
         }
     }
 
+    /// Append a reasoning step to the chain.
+    pub fn push_reasoning_step(&mut self, step: ReasoningStep) {
+        self.reasoning_chain.push(step);
+    }
+
+    /// Convenience: push a simple reasoning step with no node association.
+    pub fn record_reasoning(
+        &mut self,
+        stage: StageName,
+        reasoning: impl Into<String>,
+        decision: NavigationDecision,
+    ) {
+        self.push_reasoning_step(ReasoningStep {
+            stage,
+            node_id: None,
+            title: None,
+            score: 0.0,
+            decision,
+            depth: 0,
+            reasoning: reasoning.into(),
+            candidates: Vec::new(),
+            strategy_used: None,
+            llm_call: None,
+            references_followed: Vec::new(),
+        });
+    }
+
     /// Finalize the context into a response.
     pub fn finalize(self) -> RetrieveResponse {
         self.result.unwrap_or_else(|| RetrieveResponse {
@@ -384,7 +411,7 @@ impl PipelineContext {
                 .map(|s| format!("{:?}", s))
                 .unwrap_or_else(|| "unknown".to_string()),
             complexity: self.complexity.unwrap_or_default(),
-            trace: self.navigation_trace,
+            reasoning_chain: self.reasoning_chain,
             tokens_used: self.token_count,
         })
     }

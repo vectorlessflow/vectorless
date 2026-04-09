@@ -17,7 +17,7 @@ use crate::llm::LlmClient;
 use crate::retrieval::pipeline::{
     FailurePolicy, PipelineContext, RetrievalStage, SearchAlgorithm, SearchConfig, StageOutcome,
 };
-use crate::retrieval::types::{QueryComplexity, StrategyPreference};
+use crate::retrieval::types::{NavigationDecision, QueryComplexity, StageName, StrategyPreference};
 
 /// Plan Stage - plans the retrieval strategy.
 ///
@@ -175,6 +175,29 @@ impl RetrievalStage for PlanStage {
                 .as_ref()
                 .map(|c| c.beam_width)
                 .unwrap_or(0)
+        );
+
+        // Record reasoning
+        let strategy_str = ctx
+            .selected_strategy
+            .map(|s| format!("{:?}", s))
+            .unwrap_or_else(|| "auto".to_string());
+        let algorithm_str = ctx
+            .selected_algorithm
+            .map(|a| a.name().to_string())
+            .unwrap_or_else(|| "unknown".to_string());
+        let beam_width = ctx
+            .search_config
+            .as_ref()
+            .map(|c| c.beam_width)
+            .unwrap_or(3);
+        ctx.record_reasoning(
+            StageName::Plan,
+            format!(
+                "Selected strategy={}, algorithm={}, beam_width={}",
+                strategy_str, algorithm_str, beam_width
+            ),
+            NavigationDecision::ExploreMore,
         );
 
         Ok(StageOutcome::cont())
