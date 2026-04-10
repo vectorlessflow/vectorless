@@ -152,8 +152,7 @@
 //! ## Quick Start
 //!
 //! ```rust,no_run
-//! use vectorless::{EngineBuilder, Engine};
-//! use vectorless::client::IndexContext;
+//! use vectorless::{EngineBuilder, IndexContext, QueryContext};
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -164,10 +163,13 @@
 //!         .await?;
 //!
 //!     // Index a document
-//!     let doc_id = client.index(IndexContext::from_path("./document.md")).await?;
+//!     let result = client.index(IndexContext::from_path("./document.md")).await?;
+//!     let doc_id = result.doc_id().unwrap();
 //!
 //!     // Query with natural language
-//!     let result = client.query(&doc_id, "What is this about?").await?;
+//!     let result = client.query(
+//!         QueryContext::new("What is this about?").with_doc_id(doc_id)
+//!     ).await?;
 //!     println!("{}", result.content);
 //!
 //!     Ok(())
@@ -214,8 +216,8 @@ pub mod utils;
 
 // Client API (most common entry point)
 pub use client::{
-    BuildError, DocumentInfo, Engine, EngineBuilder, IndexContext, IndexItem, IndexMode,
-    IndexOptions, IndexResult, IndexSource, IndexedDocument, QueryContext,
+    BuildError, ClientError, DocumentInfo, Engine, EngineBuilder, EventEmitter, IndexContext,
+    IndexItem, IndexMode, IndexOptions, IndexResult, QueryContext, QueryResult,
 };
 
 // Error types

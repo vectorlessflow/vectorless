@@ -34,7 +34,8 @@ async fn main() -> vectorless::Result<()> {
     // Example: Use DeepSeek API
     let client = EngineBuilder::new()
         .with_workspace("./workspace")
-        .with_model("deepseek-chat", Some("sk-your-deepseek-key".to_string()))
+        .with_model("deepseek-chat")
+        .with_key("sk-your-deepseek-key")
         .with_endpoint("https://api.deepseek.com/v1")
         .build()
         .await
@@ -69,7 +70,8 @@ async fn main() -> vectorless::Result<()> {
     // Azure OpenAI:
     // let client = EngineBuilder::new()
     //     .with_workspace("./workspace")
-    //     .with_model("gpt-4o", Some("your-azure-key".to_string()))
+    //     .with_model("gpt-4o")
+    //     .with_key("your-azure-key")
     //     .with_endpoint("https://your-resource.openai.azure.com/openai/deployments/your-deployment")
     //     .build()
     //     .await?;
@@ -77,7 +79,7 @@ async fn main() -> vectorless::Result<()> {
     // Local LLM (e.g., Ollama with OpenAI-compatible API):
     // let client = EngineBuilder::new()
     //     .with_workspace("./workspace")
-    //     .with_model("llama3", None)  // No API key needed
+    //     .with_model("llama3")
     //     .with_endpoint("http://localhost:11434/v1")
     //     .build()
     //     .await?;
@@ -85,7 +87,8 @@ async fn main() -> vectorless::Result<()> {
     // Anthropic Claude (via OpenAI-compatible proxy):
     // let client = EngineBuilder::new()
     //     .with_workspace("./workspace")
-    //     .with_model("claude-3-5-sonnet-20241022", Some("sk-ant-...".to_string()))
+    //     .with_model("claude-3-5-sonnet-20241022")
+    //     .with_key("sk-ant-...")
     //     .with_endpoint("https://api.anthropic.com/v1")
     //     .build()
     //     .await?;

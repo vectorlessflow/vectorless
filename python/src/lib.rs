@@ -439,19 +439,16 @@ impl PyEngine {
                 builder = builder.with_workspace(ws);
             }
 
-            // Set model first (without overriding api_key)
             if let Some(m) = &model {
-                builder = builder.with_model(m, None);
+                builder = builder.with_model(m);
             }
 
-            // Set endpoint
             if let Some(e) = &endpoint {
                 builder = builder.with_endpoint(e);
             }
 
-            // Set API key last (this ensures it's not overwritten)
             if let Some(key) = resolved_api_key {
-                builder = builder.with_openai(key);
+                builder = builder.with_key(key);
             }
 
             builder.build().await

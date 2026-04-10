@@ -58,7 +58,7 @@ async fn main() -> vectorless::Result<()> {
     println!("  2. Auto-detected config file (vectorless.toml, config.toml, .vectorless.toml)");
     println!("  3. Explicit config file (with_config_path)");
     println!("  4. Environment variables (OPENAI_API_KEY, VECTORLESS_MODEL, etc.)");
-    println!("  5. Builder methods (with_openai, with_model, etc.)");
+    println!("  5. Builder methods (with_key, with_model, with_endpoint)");
     println!();
     println!("Environment Variables:");
     println!("  OPENAI_API_KEY       - LLM API key");

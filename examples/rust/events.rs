@@ -17,7 +17,8 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use vectorless::client::{EngineBuilder, EventEmitter, IndexContext, IndexEvent, QueryContext, QueryEvent};
+use vectorless::client::{EngineBuilder, EventEmitter, IndexContext, QueryContext};
+use vectorless::client::events::{IndexEvent, QueryEvent};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
