@@ -31,7 +31,6 @@ use crate::index::{IndexInput, IndexMode, PipelineExecutor, PipelineOptions, Sum
 use crate::parser::DocumentFormat;
 use crate::storage::{DocumentMeta, PersistedDocument};
 
-use super::context::ClientContext;
 use super::events::{EventEmitter, IndexEvent};
 use super::index_context::{IndexContext, IndexSource};
 use super::types::{IndexOptions, IndexedDocument};

@@ -37,7 +37,6 @@ use crate::retrieval::RetrieveOptions;
 use crate::storage::PersistedDocument;
 use crate::{DocumentTree, Error};
 
-use super::context::ClientContext;
 use super::events::EventEmitter;
 use super::indexer::IndexerClient;
 use super::retriever::RetrieverClient;

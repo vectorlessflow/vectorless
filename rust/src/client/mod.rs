@@ -63,7 +63,6 @@
 //! ```
 
 mod builder;
-mod context;
 mod engine;
 pub mod events;
 mod index_context;
