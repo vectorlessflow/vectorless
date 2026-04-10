@@ -149,7 +149,7 @@ impl IndexSource {
 /// # Examples
 ///
 /// ```rust,no_run
-/// use vectorless::client::{Engine, EngineBuilder, IndexContext, IndexMode};
+/// use vectorless::client::{EngineBuilder, IndexContext, IndexMode};
 /// use vectorless::parser::DocumentFormat;
 ///
 /// # #[tokio::main]

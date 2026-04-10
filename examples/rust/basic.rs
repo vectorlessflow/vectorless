@@ -11,14 +11,14 @@
 //! cargo run --example basic
 //! ```
 
-use vectorless::{Engine, IndexContext};
+use vectorless::{EngineBuilder, IndexContext};
 
 #[tokio::main]
 async fn main() -> vectorless::Result<()> {
     println!("=== Vectorless Basic Example ===\n");
 
     // 1. Create a client
-    let client = Engine::builder()
+    let client = EngineBuilder::new()
         .with_workspace("./workspace")
         .build()
         .await

@@ -19,7 +19,7 @@
 //! # Example
 //!
 //! ```rust,no_run
-//! use vectorless::client::{Engine, EngineBuilder, IndexContext};
+//! use vectorless::client::{EngineBuilder, IndexContext};
 //!
 //! # #[tokio::main]
 //! # async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -98,29 +98,6 @@ pub struct Engine {
 }
 
 impl Engine {
-    /// Create a builder for custom configuration.
-    #[must_use]
-    pub fn builder() -> super::EngineBuilder {
-        super::EngineBuilder::new()
-    }
-
-    /// Create a new client with default configuration.
-    ///
-    /// Note: Prefer using [`Engine::builder()`] for more control.
-    async fn new() -> Result<Self> {
-        let config = Config::default();
-        let workspace = Workspace::new("./workspace")
-            .await
-            .map_err(|e| Error::Workspace(e.to_string()))?;
-        Self::with_components(
-            config,
-            workspace,
-            PipelineRetriever::new(),
-            PipelineExecutor::new(),
-        )
-        .await
-    }
-
     // ============================================================
     // Constructor (for Builder)
     // ============================================================
@@ -184,7 +161,7 @@ impl Engine {
     /// # Example
     ///
     /// ```rust,no_run
-    /// use vectorless::client::{Engine, EngineBuilder, IndexContext, IndexMode};
+    /// use vectorless::client::{EngineBuilder, IndexContext, IndexMode};
     /// use vectorless::parser::DocumentFormat;
     ///
     /// # #[tokio::main]
@@ -596,11 +573,11 @@ impl std::fmt::Debug for Engine {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::super::EngineBuilder;
 
     #[test]
     fn test_engine_builder() {
-        let builder = Engine::builder();
+        let builder = EngineBuilder::new();
         // Builder exists
         let _ = builder;
     }

@@ -775,7 +775,7 @@ vectorless --version
 4. Query!
 
 ```rust
-let client = Engine::builder().build()?;
+let client = EngineBuilder::new().build()?;
 let doc_id = client.index("./doc.md").await?;
 let result = client.query(&doc_id, "What is this?").await?;
 ```

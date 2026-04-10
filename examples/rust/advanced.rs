@@ -16,7 +16,7 @@
 //! cargo run --example advanced
 //! ```
 
-use vectorless::{Engine, IndexContext};
+use vectorless::{EngineBuilder, IndexContext};
 
 #[tokio::main]
 async fn main() -> vectorless::Result<()> {
@@ -24,7 +24,7 @@ async fn main() -> vectorless::Result<()> {
 
     // Method 1: Use explicit config file path
     // This loads all settings from the specified config file
-    let client = Engine::builder()
+    let client = EngineBuilder::new()
         .with_config_path("./config.toml") // or "./my_vectorless.toml"
         .build()
         .await

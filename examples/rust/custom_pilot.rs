@@ -242,7 +242,7 @@ fn main() {
     println!("use vectorless::Engine;");
     println!();
     println!("let pilot = Arc::new(KeywordPilot::new());");
-    println!("let engine = Engine::builder()");
+    println!("let engine = EngineBuilder::new()");
     println!("    .with_workspace(\"./workspace\")");
     println!("    .with_pilot(pilot)");
     println!("    .build()");
