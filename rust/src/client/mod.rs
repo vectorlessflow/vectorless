@@ -30,7 +30,9 @@
 //! let result = client.query(
 //!     QueryContext::new("What is this?").with_doc_id(doc_id)
 //! ).await?;
-//! println!("{}", result.content);
+//! if let Some(item) = result.single() {
+//!     println!("{}", item.content);
+//! }
 //!
 //! // List all documents
 //! for doc in client.list().await? {
@@ -104,6 +106,7 @@ pub use types::{
     IndexOptions,
     IndexResult,
     QueryResult,
+    QueryResultItem,
 };
 
 // ============================================================

@@ -42,10 +42,12 @@ async fn main() -> vectorless::Result<()> {
         .await
     {
         Ok(result) => {
-            println!("Score: {:.2}", result.score);
-            if !result.content.is_empty() {
-                let preview: String = result.content.chars().take(150).collect();
-                println!("Result: {}...", preview);
+            if let Some(item) = result.single() {
+                println!("Score: {:.2}", item.score);
+                if !item.content.is_empty() {
+                    let preview: String = item.content.chars().take(150).collect();
+                    println!("Result: {}...", preview);
+                }
             }
         }
         Err(e) => println!("Query: {}", e),

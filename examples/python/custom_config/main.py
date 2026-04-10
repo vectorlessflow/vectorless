@@ -94,14 +94,16 @@ Vectorless supports multiple configuration methods:
     # Query
     result = engine.query(doc_id, "How do I install the product?")
     print("Query: How do I install the product?")
-    print(f"Score: {result.score:.2f}")
-    print(f"Result: {result.content}\n")
+    if item := result.single():
+        print(f"Score: {item.score:.2f}")
+        print(f"Result: {item.content}\n")
 
     # Another query
     result = engine.query(doc_id, "What features are available?")
     print("Query: What features are available?")
-    print(f"Score: {result.score:.2f}")
-    print(f"Result: {result.content}\n")
+    if item := result.single():
+        print(f"Score: {item.score:.2f}")
+        print(f"Result: {item.content}\n")
 
     # Cleanup
     engine.remove(doc_id)

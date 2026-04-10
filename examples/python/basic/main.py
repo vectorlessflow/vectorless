@@ -59,8 +59,9 @@ print(result.content)
         # Query
         result = engine.query(doc_id, "How do I install vectorless?")
         print("Query: How do I install vectorless?")
-        print(f"Score: {result.score:.2f}")
-        print(f"Result: {result.content[:200]}...\n")
+        if item := result.single():
+            print(f"Score: {item.score:.2f}")
+            print(f"Result: {item.content[:200]}...\n")
 
         # Cleanup
         engine.remove(doc_id)

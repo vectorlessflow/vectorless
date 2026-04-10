@@ -16,7 +16,7 @@ use super::super::stages::{
     BuildStage, EnhanceStage, EnrichStage, IndexStage, OptimizeStage, ParseStage, PersistStage,
     ReasoningIndexStage,
 };
-use super::context::{IndexInput, IndexResult};
+use super::context::{IndexInput, PipelineResult};
 use super::orchestrator::PipelineOrchestrator;
 
 /// Pipeline executor for document indexing.
@@ -165,7 +165,7 @@ impl PipelineExecutor {
         &mut self,
         input: IndexInput,
         options: PipelineOptions,
-    ) -> Result<IndexResult> {
+    ) -> Result<PipelineResult> {
         info!(
             "Starting index pipeline with {} stages",
             self.orchestrator.stage_count()

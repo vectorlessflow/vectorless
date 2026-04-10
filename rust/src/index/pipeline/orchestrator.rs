@@ -31,7 +31,7 @@ use crate::error::Result;
 
 use super::super::PipelineOptions;
 use super::super::stages::IndexStage;
-use super::context::{IndexContext, IndexInput, IndexResult, StageResult};
+use super::context::{IndexContext, IndexInput, PipelineResult, StageResult};
 use super::policy::FailurePolicy;
 
 /// Stage entry with metadata for orchestration.
@@ -398,7 +398,7 @@ impl PipelineOrchestrator {
         &mut self,
         input: IndexInput,
         options: PipelineOptions,
-    ) -> Result<IndexResult> {
+    ) -> Result<PipelineResult> {
         let total_start = Instant::now();
         info!(
             "Starting orchestrated pipeline with {} stages",

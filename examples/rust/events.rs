@@ -138,11 +138,13 @@ The event system uses handlers that can be attached to the engine builder.
 
     // 5. Show results
     println!("Step 5: Query result:");
-    println!("  - Score: {:.2}", result.score);
-    println!("  - Nodes: {}", result.node_ids.len());
-    if !result.content.is_empty() {
-        let preview: String = result.content.chars().take(100).collect();
-        println!("  - Content: {}...", preview);
+    if let Some(item) = result.single() {
+        println!("  - Score: {:.2}", item.score);
+        println!("  - Nodes: {}", item.node_ids.len());
+        if !item.content.is_empty() {
+            let preview: String = item.content.chars().take(100).collect();
+            println!("  - Content: {}...", preview);
+        }
     }
     println!();
 

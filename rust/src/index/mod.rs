@@ -44,7 +44,7 @@ pub mod summary;
 
 // Re-export main types from pipeline
 pub use pipeline::{
-    ExecutionGroup, FailurePolicy, IndexContext, IndexInput, IndexMetrics, IndexResult,
+    ExecutionGroup, FailurePolicy, IndexContext, IndexInput, IndexMetrics, PipelineResult,
     PipelineExecutor, PipelineOrchestrator, StageResult, StageRetryConfig,
 };
 

@@ -337,8 +337,8 @@ impl IndexContext {
     }
 
     /// Finalize and build the result.
-    pub fn finalize(self) -> IndexResult {
-        IndexResult {
+    pub fn finalize(self) -> PipelineResult {
+        PipelineResult {
             doc_id: self.doc_id,
             name: self.name,
             format: self.format,
@@ -356,7 +356,7 @@ impl IndexContext {
 
 /// Final result from the index pipeline.
 #[derive(Debug)]
-pub struct IndexResult {
+pub struct PipelineResult {
     /// Document ID.
     pub doc_id: String,
 
@@ -391,7 +391,7 @@ pub struct IndexResult {
     pub reasoning_index: Option<ReasoningIndex>,
 }
 
-impl IndexResult {
+impl PipelineResult {
     /// Check if the result has a tree.
     pub fn has_tree(&self) -> bool {
         self.tree.is_some()

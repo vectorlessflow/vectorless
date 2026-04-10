@@ -53,10 +53,12 @@ async fn main() -> vectorless::Result<()> {
         .query(QueryContext::new("What is Vectorless?").with_doc_id(&doc_id))
         .await?;
     println!("Query: What is Vectorless?");
-    println!("Score: {:.2}", result.score);
-    if !result.content.is_empty() {
-        let preview: String = result.content.chars().take(200).collect();
-        println!("Result: {}...\n", preview);
+    if let Some(item) = result.single() {
+        println!("Score: {:.2}", item.score);
+        if !item.content.is_empty() {
+            let preview: String = item.content.chars().take(200).collect();
+            println!("Result: {}...\n", preview);
+        }
     }
 
     // Cleanup

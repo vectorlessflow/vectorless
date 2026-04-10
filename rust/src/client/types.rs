@@ -259,6 +259,10 @@ pub struct IndexItem {
     pub name: String,
     /// The document format.
     pub format: DocumentFormat,
+    /// Document description (from root summary).
+    pub description: Option<String>,
+    /// Page count (for PDFs).
+    pub page_count: Option<usize>,
 }
 
 impl IndexItem {
@@ -267,11 +271,15 @@ impl IndexItem {
         doc_id: impl Into<String>,
         name: impl Into<String>,
         format: DocumentFormat,
+        description: Option<String>,
+        page_count: Option<usize>,
     ) -> Self {
         Self {
             doc_id: doc_id.into(),
             name: name.into(),
             format,
+            description,
+            page_count,
         }
     }
 }
@@ -280,9 +288,9 @@ impl IndexItem {
 // Query Types
 // ============================================================
 
-/// Result of a document query.
+/// A single document's query result.
 #[derive(Debug, Clone)]
-pub struct QueryResult {
+pub struct QueryResultItem {
     /// The document ID.
     pub doc_id: String,
 
@@ -296,25 +304,47 @@ pub struct QueryResult {
     pub score: f32,
 }
 
+/// Result of a document query.
+///
+/// Contains results from one or more documents. For single-document queries,
+/// `items` has one entry. For multi-document or workspace queries, it has
+/// one entry per document that matched.
+#[derive(Debug, Clone)]
+pub struct QueryResult {
+    /// Query results per document.
+    pub items: Vec<QueryResultItem>,
+}
+
 impl QueryResult {
-    /// Create a new query result.
-    pub fn new(doc_id: impl Into<String>) -> Self {
-        Self {
-            doc_id: doc_id.into(),
-            node_ids: Vec::new(),
-            content: String::new(),
-            score: 0.0,
-        }
+    /// Create a new query result (empty).
+    pub fn new() -> Self {
+        Self { items: Vec::new() }
+    }
+
+    /// Create a query result with a single item.
+    pub fn from_single(item: QueryResultItem) -> Self {
+        Self { items: vec![item] }
     }
 
     /// Check if the result is empty.
     pub fn is_empty(&self) -> bool {
-        self.node_ids.is_empty()
+        self.items.is_empty()
     }
 
-    /// Get the number of results.
+    /// Get the number of result items.
     pub fn len(&self) -> usize {
-        self.node_ids.len()
+        self.items.len()
+    }
+
+    /// Get the first (single-doc) result item, if any.
+    pub fn single(&self) -> Option<&QueryResultItem> {
+        self.items.first()
+    }
+}
+
+impl Default for QueryResult {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -415,9 +445,24 @@ mod tests {
 
     #[test]
     fn test_query_result() {
-        let result = QueryResult::new("doc-1");
+        let result = QueryResult::new();
         assert!(result.is_empty());
         assert_eq!(result.len(), 0);
+    }
+
+    #[test]
+    fn test_query_result_single() {
+        let item = QueryResultItem {
+            doc_id: "doc-1".into(),
+            node_ids: vec!["n1".into()],
+            content: "content".into(),
+            score: 0.9,
+        };
+        let result = QueryResult::from_single(item);
+        assert!(!result.is_empty());
+        assert_eq!(result.len(), 1);
+        assert!(result.single().is_some());
+        assert_eq!(result.single().unwrap().doc_id, "doc-1");
     }
 
     #[test]
@@ -430,7 +475,7 @@ mod tests {
 
     #[test]
     fn test_index_result() {
-        let item = IndexItem::new("doc-1", "Test", DocumentFormat::Markdown);
+        let item = IndexItem::new("doc-1", "Test", DocumentFormat::Markdown, None, None);
         let result = IndexResult::new(vec![item]);
 
         assert_eq!(result.doc_id(), Some("doc-1"));
@@ -448,8 +493,8 @@ mod tests {
     #[test]
     fn test_index_result_multiple() {
         let items = vec![
-            IndexItem::new("doc-1", "A", DocumentFormat::Markdown),
-            IndexItem::new("doc-2", "B", DocumentFormat::Pdf),
+            IndexItem::new("doc-1", "A", DocumentFormat::Markdown, None, None),
+            IndexItem::new("doc-2", "B", DocumentFormat::Pdf, None, None),
         ];
         let result = IndexResult::new(items);
         assert_eq!(result.len(), 2);

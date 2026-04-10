@@ -135,18 +135,20 @@ impl IndexerClient {
     ///         .with_name("webpage")
     /// ).await?;
     /// ```
-    pub async fn index(&self, ctx: IndexContext) -> Result<IndexedDocument> {
-        match &ctx.source {
-            IndexSource::Path(path) => self.index_from_path(path, &ctx).await,
+    pub async fn index(&self, source: &IndexSource, name: Option<&str>, options: &IndexOptions) -> Result<IndexedDocument> {
+        match source {
+            IndexSource::Path(path) => self.index_from_path(path, name, options).await,
             IndexSource::Content { data, format } => {
-                self.index_from_content(data, *format, &ctx).await
+                self.index_from_content(data, *format, name, options).await
             }
-            IndexSource::Bytes { data, format } => self.index_from_bytes(data, *format, &ctx).await,
+            IndexSource::Bytes { data, format } => {
+                self.index_from_bytes(data, *format, name, options).await
+            }
         }
     }
 
     /// Index from a file path.
-    async fn index_from_path(&self, path: &Path, ctx: &IndexContext) -> Result<IndexedDocument> {
+    async fn index_from_path(&self, path: &Path, name: Option<&str>, options: &IndexOptions) -> Result<IndexedDocument> {
         let path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
 
         if !path.exists() {
@@ -169,7 +171,7 @@ impl IndexerClient {
         info!("Indexing {:?} document: {}", format, path.display());
 
         // Build pipeline options
-        let pipeline_options = self.build_pipeline_options(&ctx.options, format);
+        let pipeline_options = self.build_pipeline_options(options, format);
 
         // Create pipeline input and execute
         let input = IndexInput::file(&path);
@@ -181,7 +183,7 @@ impl IndexerClient {
             executor.execute(input, pipeline_options).await?
         };
 
-        self.build_indexed_document(doc_id, result, format, ctx.name.as_deref(), Some(&path))
+        self.build_indexed_document(doc_id, result, format, name, Some(&path))
     }
 
     /// Index from content string.
@@ -189,11 +191,11 @@ impl IndexerClient {
         &self,
         content: &str,
         format: DocumentFormat,
-        ctx: &IndexContext,
+        name: Option<&str>,
+        options: &IndexOptions,
     ) -> Result<IndexedDocument> {
-        // Emit start event
         self.events.emit_index(IndexEvent::Started {
-            path: ctx.name.clone().unwrap_or_else(|| "content".to_string()),
+            path: name.unwrap_or("content").to_string(),
         });
 
         let doc_id = Uuid::new_v4().to_string();
@@ -202,7 +204,7 @@ impl IndexerClient {
 
         info!("Indexing {:?} document from content", format);
 
-        let pipeline_options = self.build_pipeline_options(&ctx.options, format);
+        let pipeline_options = self.build_pipeline_options(options, format);
 
         let input = IndexInput::content(content);
         let result = {
@@ -213,7 +215,7 @@ impl IndexerClient {
             executor.execute(input, pipeline_options).await?
         };
 
-        self.build_indexed_document(doc_id, result, format, ctx.name.as_deref(), None)
+        self.build_indexed_document(doc_id, result, format, name, None)
     }
 
     /// Index from binary data.
@@ -221,11 +223,11 @@ impl IndexerClient {
         &self,
         bytes: &[u8],
         format: DocumentFormat,
-        ctx: &IndexContext,
+        name: Option<&str>,
+        options: &IndexOptions,
     ) -> Result<IndexedDocument> {
-        // Emit start event
         self.events.emit_index(IndexEvent::Started {
-            path: ctx.name.clone().unwrap_or_else(|| "bytes".to_string()),
+            path: name.unwrap_or("bytes").to_string(),
         });
 
         let doc_id = Uuid::new_v4().to_string();
@@ -238,7 +240,7 @@ impl IndexerClient {
             bytes.len()
         );
 
-        let pipeline_options = self.build_pipeline_options(&ctx.options, format);
+        let pipeline_options = self.build_pipeline_options(options, format);
 
         let input = IndexInput::bytes(bytes);
         let result = {
@@ -249,7 +251,7 @@ impl IndexerClient {
             executor.execute(input, pipeline_options).await?
         };
 
-        self.build_indexed_document(doc_id, result, format, ctx.name.as_deref(), None)
+        self.build_indexed_document(doc_id, result, format, name, None)
     }
 
     /// Build pipeline options from client options.
@@ -283,7 +285,7 @@ impl IndexerClient {
     fn build_indexed_document(
         &self,
         doc_id: String,
-        result: crate::index::IndexResult,
+        result: crate::index::PipelineResult,
         format: DocumentFormat,
         name: Option<&str>,
         path: Option<&Path>,

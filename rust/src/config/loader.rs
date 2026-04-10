@@ -238,40 +238,6 @@ impl ConfigLoader {
     }
 }
 
-/// Default configuration file names to search for.
-pub const CONFIG_FILE_NAMES: &[&str] = &["vectorless.toml", "config.toml", ".vectorless.toml"];
-
-/// Find a configuration file in current or parent directories.
-pub fn find_config_file() -> Option<PathBuf> {
-    let current_dir = std::env::current_dir().ok()?;
-
-    // Search in current directory first
-    for name in CONFIG_FILE_NAMES {
-        let path = current_dir.join(name);
-        if path.exists() {
-            return Some(path);
-        }
-    }
-
-    // Search in parent directories (up to 3 levels)
-    let mut dir = current_dir.as_path();
-    for _ in 0..3 {
-        if let Some(parent) = dir.parent() {
-            for name in CONFIG_FILE_NAMES {
-                let path = parent.join(name);
-                if path.exists() {
-                    return Some(path);
-                }
-            }
-            dir = parent;
-        } else {
-            break;
-        }
-    }
-
-    None
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

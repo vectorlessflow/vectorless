@@ -49,9 +49,9 @@ use crate::{DocumentTree, Error};
 use super::events::EventEmitter;
 use super::index_context::IndexContext;
 use super::indexer::IndexerClient;
-use super::query_context::QueryContext;
+use super::query_context::{QueryContext, QueryScope};
 use super::retriever::RetrieverClient;
-use super::types::{DocumentInfo, IndexItem, IndexResult, QueryResult};
+use super::types::{DocumentInfo, IndexItem, IndexResult, QueryResult, QueryResultItem};
 use super::workspace::WorkspaceClient;
 
 /// The main Engine client.
@@ -149,34 +149,52 @@ impl Engine {
     /// # }
     /// ```
     pub async fn index(&self, ctx: IndexContext) -> Result<IndexResult> {
-        let doc = self.indexer.index(ctx).await?;
-
-        let item = IndexItem::new(doc.id.clone(), doc.name.clone(), doc.format.clone());
-
-        let persisted = self.indexer.to_persisted(doc);
-
-        // Save to workspace if configured
-        if let Some(ref workspace) = self.workspace {
-            workspace.save(&persisted).await?;
+        if ctx.is_empty() {
+            return Err(Error::Config("No document sources provided".to_string()));
         }
 
-        info!("Indexed document: {}", item.doc_id);
-        Ok(IndexResult::new(vec![item]))
+        let mut items = Vec::with_capacity(ctx.len());
+
+        for source in &ctx.sources {
+            let doc = self
+                .indexer
+                .index(source, ctx.name.as_deref(), &ctx.options)
+                .await?;
+
+            let item = IndexItem::new(
+                doc.id.clone(),
+                doc.name.clone(),
+                doc.format.clone(),
+                doc.description.clone(),
+                doc.page_count,
+            );
+
+            let persisted = self.indexer.to_persisted(doc);
+
+            if let Some(ref workspace) = self.workspace {
+                workspace.save(&persisted).await?;
+            }
+
+            info!("Indexed document: {}", item.doc_id);
+            items.push(item);
+        }
+
+        Ok(IndexResult::new(items))
     }
 
     // ============================================================
     // Document Querying
     // ============================================================
 
-    /// Query a document.
+    /// Query documents.
     ///
-    /// Accepts a [`QueryContext`] that specifies the query text, target document,
-    /// and optional retrieval parameters.
+    /// Accepts a [`QueryContext`] that specifies the query text and scope
+    /// (single document, multiple documents, or entire workspace).
     ///
     /// # Example
     ///
     /// ```rust,no_run
-    /// use vectorless::client::{EngineBuilder, IndexContext, QueryContext};
+    /// use vectorless::client::{EngineBuilder, QueryContext};
     ///
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -185,39 +203,62 @@ impl Engine {
     ///     .build()
     ///     .await?;
     ///
+    /// // Single document
     /// let result = engine.query(
     ///     QueryContext::new("What is the total revenue?")
     ///         .with_doc_id("doc-123")
     /// ).await?;
     ///
-    /// println!("Answer: {}", result.content);
+    /// if let Some(item) = result.single() {
+    ///     println!("Answer: {}", item.content);
+    /// }
+    ///
+    /// // Entire workspace
+    /// let result = engine.query(
+    ///     QueryContext::new("Summarize all documents")
+    /// ).await?;
+    /// for item in &result.items {
+    ///     println!("{}: score={}", item.doc_id, item.score);
+    /// }
     /// # Ok(())
     /// # }
     /// ```
     pub async fn query(&self, ctx: QueryContext) -> Result<QueryResult> {
-        let doc_id = ctx.doc_id.as_deref().ok_or_else(|| {
-            Error::Config("doc_id is required for query".to_string())
-        })?;
-
-        let tree = self.get_structure(doc_id).await?;
+        let doc_ids = self.resolve_scope(&ctx.scope).await?;
         let options = ctx.to_retrieve_options(&self.config);
 
-        let mut result = self.retriever.query(&tree, &ctx.query, &options).await?;
-        result.doc_id = doc_id.to_string();
+        let mut items = Vec::with_capacity(doc_ids.len());
 
-        Ok(result)
+        for doc_id in doc_ids {
+            let tree = match self.get_structure(&doc_id).await {
+                Ok(t) => t,
+                Err(e) => {
+                    tracing::warn!("Skipping document {}: {}", doc_id, e);
+                    continue;
+                }
+            };
+
+            let mut result = self.retriever.query(&tree, &ctx.query, &options).await?;
+            result.doc_id = doc_id;
+            items.push(result);
+        }
+
+        Ok(QueryResult { items })
     }
 
     /// Query a document with streaming results.
     ///
     /// Returns a [`RetrieveEventReceiver`] that yields [`RetrieveEvent`](crate::retrieval::RetrieveEvent)s
     /// as the retrieval pipeline progresses through each stage.
+    ///
+    /// Only supports single-document scope (via `with_doc_id`).
     pub async fn query_stream(&self, ctx: QueryContext) -> Result<RetrieveEventReceiver> {
-        let doc_id = ctx.doc_id.as_deref().ok_or_else(|| {
-            Error::Config("doc_id is required for query".to_string())
-        })?;
+        let doc_id = match &ctx.scope {
+            QueryScope::Single(id) => id.clone(),
+            _ => return Err(Error::Config("query_stream requires a single doc_id".to_string())),
+        };
 
-        let tree = self.get_structure(doc_id).await?;
+        let tree = self.get_structure(&doc_id).await?;
         let options = ctx.to_retrieve_options(&self.config);
 
         let rx = self.retriever.query_stream(&tree, &ctx.query, &options).await?;
@@ -288,6 +329,21 @@ impl Engine {
             .ok_or_else(|| Error::DocumentNotFound(format!("Document not found: {}", doc_id)))?;
 
         Ok(doc.tree)
+    }
+
+    /// Resolve QueryScope into a list of document IDs.
+    async fn resolve_scope(&self, scope: &QueryScope) -> Result<Vec<String>> {
+        match scope {
+            QueryScope::Single(id) => Ok(vec![id.clone()]),
+            QueryScope::Multiple(ids) => Ok(ids.clone()),
+            QueryScope::Workspace => {
+                let docs = self.list().await?;
+                if docs.is_empty() {
+                    return Err(Error::Config("Workspace is empty".to_string()));
+                }
+                Ok(docs.into_iter().map(|d| d.id).collect())
+            }
+        }
     }
 }
 
