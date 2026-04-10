@@ -244,7 +244,7 @@ fn demo_engine_integration() {
     println!("Integration with Engine:\n");
 
     println!("```rust");
-    println!("use vectorless::{{EngineBuilder, IndexContext}};");
+    println!("use vectorless::{{EngineBuilder, IndexContext, QueryContext}};");
     println!("use vectorless::parser::DocumentFormat;");
     println!();
     println!("# #[tokio::main]");
@@ -255,9 +255,10 @@ fn demo_engine_integration() {
     println!("        .await?;");
     println!();
     println!("    // Method 1: From HTML file");
-    println!("    let doc_id = engine.index(");
+    println!("    let result = engine.index(");
     println!("        IndexContext::from_path(\"./documentation.html\")");
     println!("    ).await?;");
+    println!("    let doc_id = result.doc_id().unwrap().to_string();");
     println!();
     println!("    // Method 2: From HTML content");
     println!("    let html = r#\"");
@@ -270,13 +271,16 @@ fn demo_engine_integration() {
     println!("</html>");
     println!("\"#;");
     println!();
-    println!("    let doc_id = engine.index(");
+    println!("    let result = engine.index(");
     println!("        IndexContext::from_content(html, DocumentFormat::Html)");
     println!("            .with_name(\"my-document\")");
     println!("    ).await?;");
+    println!("    let doc_id = result.doc_id().unwrap().to_string();");
     println!();
     println!("    // Query the indexed document");
-    println!("    let result = engine.query(&doc_id, \"What is the introduction?\").await?;");
+    println!("    let result = engine.query(");
+    println!("        QueryContext::new(\"What is the introduction?\").with_doc_id(&doc_id)");
+    println!("    ).await?;");
     println!("    println!(\"{{}}\", result.content);");
     println!();
     println!("    Ok(())");

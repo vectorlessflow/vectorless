@@ -1,13 +1,12 @@
 // Copyright (c) 2026 vectorless developers
 // SPDX-License-Identifier: Apache-2.0
 
-//! Session-based multi-document operations example.
+//! Multi-document operations example.
 //!
-//! This example demonstrates the Session API for:
-//! - Managing multiple documents in a single session
-//! - Cross-document queries
-//! - Session caching for improved performance
-//! - Session statistics
+//! This example demonstrates how to use the Engine API for:
+//! - Managing multiple documents
+//! - Querying individual documents
+//! - Tracking document statistics
 //!
 //! # Usage
 //!
@@ -15,11 +14,11 @@
 //! cargo run --example session
 //! ```
 
-use vectorless::client::{EngineBuilder, IndexContext};
+use vectorless::client::{EngineBuilder, IndexContext, QueryContext};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    println!("=== Session-Based Multi-Document Example ===\n");
+    println!("=== Multi-Document Example ===\n");
 
     // 1. Create the engine
     println!("Step 1: Creating engine...");
@@ -30,13 +29,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .map_err(|e: vectorless::BuildError| vectorless::Error::Config(e.to_string()))?;
     println!("  ✓ Engine created\n");
 
-    // 2. Create a session for multi-document operations
-    println!("Step 2: Creating session...");
-    let session = engine.session().await;
-    println!("  ✓ Session ID: {}\n", session.id());
-
-    // 3. Index multiple documents into the session
-    println!("Step 3: Indexing documents...");
+    // 2. Index multiple documents
+    println!("Step 2: Indexing documents...");
 
     // Create sample documents
     let temp_dir = tempfile::tempdir()?;
@@ -63,18 +57,12 @@ The main entry point for vectorless operations.
 ### Methods
 
 - `index(path)`: Index a document
-- `query(doc_id, question)`: Query a document
-- `list_documents()`: List all documents
+- `query(question)`: Query a document
+- `list()`: List all documents
 
-## Session
+## Configuration
 
-Multi-document operations with caching.
-
-### Methods
-
-- `index(path)`: Index into session
-- `query(doc_id, question)`: Query cached document
-- `query_all(question)`: Query across all documents
+Custom configuration via builder methods.
 "#;
 
     let doc3_content = r#"# Configuration Guide
@@ -118,31 +106,36 @@ token_budget = 4000
     tokio::fs::write(&doc2_path, doc2_content).await?;
     tokio::fs::write(&doc3_path, doc3_content).await?;
 
-    // Index into session
-    let doc1_id = session.index(IndexContext::from_path(&doc1_path)).await?;
+    // Index documents
+    let index1 = engine.index(IndexContext::from_path(&doc1_path)).await?;
+    let doc1_id = index1.doc_id().unwrap().to_string();
     println!("  ✓ Indexed: architecture.md -> {}", &doc1_id[..8]);
 
-    let doc2_id = session.index(IndexContext::from_path(&doc2_path)).await?;
+    let index2 = engine.index(IndexContext::from_path(&doc2_path)).await?;
+    let doc2_id = index2.doc_id().unwrap().to_string();
     println!("  ✓ Indexed: api.md -> {}", &doc2_id[..8]);
 
-    let doc3_id = session.index(IndexContext::from_path(&doc3_path)).await?;
+    let index3 = engine.index(IndexContext::from_path(&doc3_path)).await?;
+    let doc3_id = index3.doc_id().unwrap().to_string();
     println!("  ✓ Indexed: config.md -> {}", &doc3_id[..8]);
     println!();
 
-    // 4. List documents in session
-    println!("Step 4: Session documents:");
-    for doc in session.list_documents() {
+    // 3. List documents
+    println!("Step 3: Indexed documents:");
+    for doc in engine.list().await? {
         println!("  - {} ({})", doc.name, &doc.id[..8]);
     }
     println!();
 
-    // 5. Query individual documents (uses cache)
-    println!("Step 5: Query individual documents...");
+    // 4. Query individual documents
+    println!("Step 4: Query individual documents...");
     let query = "What methods are available?";
 
     println!("  Query: \"{}\"", query);
     let start = std::time::Instant::now();
-    let result = session.query(&doc2_id, query).await?;
+    let result = engine
+        .query(QueryContext::new(query).with_doc_id(&doc2_id))
+        .await?;
     let elapsed = start.elapsed();
     println!("    - Time: {:?}", elapsed);
     println!("    - Score: {:.2}", result.score);
@@ -152,49 +145,51 @@ token_budget = 4000
     }
     println!();
 
-    // 6. Query same document again (should be faster due to cache)
-    println!("Step 6: Query cached document (should be faster)...");
+    // 5. Query the same document again
+    println!("Step 5: Query another document...");
     let start = std::time::Instant::now();
-    let result = session.query(&doc2_id, "How to list documents?").await?;
-    let cached_elapsed = start.elapsed();
-    println!("    - Time: {:?}", cached_elapsed);
+    let result = engine
+        .query(QueryContext::new("How to list documents?").with_doc_id(&doc2_id))
+        .await?;
+    let elapsed = start.elapsed();
+    println!("    - Time: {:?}", elapsed);
     println!("    - Score: {:.2}", result.score);
     println!();
 
-    // 7. Query across all documents
-    println!("Step 7: Cross-document query...");
+    // 6. Query each document individually
+    println!("Step 6: Query each document...");
     let query = "How to configure the workspace?";
     println!("  Query: \"{}\"", query);
 
-    let results = session.query_all(query).await?;
-    println!("  Found {} relevant documents:", results.len());
+    let doc_ids = vec![
+        ("architecture.md", &doc1_id),
+        ("api.md", &doc2_id),
+        ("config.md", &doc3_id),
+    ];
 
-    for (i, result) in results.iter().enumerate() {
-        println!(
-            "    {}. {} (score: {:.2})",
-            i + 1,
-            &result.doc_id[..8],
-            result.score
-        );
+    for (name, id) in &doc_ids {
+        match engine.query(QueryContext::new(query).with_doc_id(&**id)).await {
+            Ok(result) => {
+                println!(
+                    "    - {} (score: {:.2})",
+                    name, result.score
+                );
+            }
+            Err(e) => {
+                println!("    - {} Error: {}", name, e);
+            }
+        }
     }
     println!();
 
-    // 8. Show session statistics
-    println!("Step 8: Session statistics:");
-    let stats = session.stats();
-    println!("  - Documents: {}", session.list_documents().len());
-    println!("  - Queries: {}", stats.query_count.get());
-    println!("  - Cache hits: {}", stats.cache_hits.get());
-    println!("  - Cache misses: {}", stats.cache_misses.get());
-    println!("  - Cache hit rate: {:.1}%", stats.cache_hit_rate() * 100.0);
-    if let Some(avg_time) = stats.avg_query_time() {
-        println!("  - Avg query time: {:?}", avg_time);
-    }
-    println!("  - Session age: {:?}", session.age());
+    // 7. Show document count
+    println!("Step 7: Document statistics:");
+    let docs = engine.list().await?;
+    println!("  - Total documents: {}", docs.len());
     println!();
 
-    // 9. Cleanup
-    println!("Step 9: Cleanup...");
+    // 8. Cleanup
+    println!("Step 8: Cleanup...");
     engine.remove(&doc1_id).await?;
     engine.remove(&doc2_id).await?;
     engine.remove(&doc3_id).await?;

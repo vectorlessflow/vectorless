@@ -43,7 +43,8 @@ from vectorless import Engine, IndexContext
 engine = Engine(workspace="./data")
 
 # Index a document (PDF, Markdown, DOCX, HTML)
-doc_id = engine.index(IndexContext.from_file("./report.pdf"))
+result = engine.index(IndexContext.from_file("./report.pdf"))
+doc_id = result.doc_id
 
 # Query
 result = engine.query(doc_id, "What is the total revenue?")
@@ -60,7 +61,7 @@ vectorless = "0.1"
 ```
 
 ```rust
-use vectorless::client::{EngineBuilder, IndexContext};
+use vectorless::client::{EngineBuilder, IndexContext, QueryContext};
 
 #[tokio::main]
 async fn main() -> vectorless::Result<()> {
@@ -70,10 +71,13 @@ async fn main() -> vectorless::Result<()> {
         .await?;
 
     // Index
-    let doc_id = engine.index(IndexContext::from_path("./report.pdf")).await?;
+    let result = engine.index(IndexContext::from_path("./report.pdf")).await?;
+    let doc_id = result.doc_id().unwrap();
 
     // Query
-    let result = engine.query(&doc_id, "What is the total revenue?").await?;
+    let result = engine.query(
+        QueryContext::new("What is the total revenue?").with_doc_id(doc_id)
+    ).await?;
     println!("Answer: {}", result.content);
 
     Ok(())

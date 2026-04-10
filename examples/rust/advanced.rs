@@ -16,7 +16,7 @@
 //! cargo run --example advanced
 //! ```
 
-use vectorless::{EngineBuilder, IndexContext};
+use vectorless::{EngineBuilder, IndexContext, QueryContext};
 
 #[tokio::main]
 async fn main() -> vectorless::Result<()> {
@@ -33,11 +33,14 @@ async fn main() -> vectorless::Result<()> {
     println!("✓ Client created with config file\n");
 
     // Index a document
-    let doc_id = client.index(IndexContext::from_path("./README.md")).await?;
+    let result = client.index(IndexContext::from_path("./README.md")).await?;
+    let doc_id = result.doc_id().unwrap().to_string();
     println!("✓ Indexed: {}\n", doc_id);
 
     // Query
-    let result = client.query(&doc_id, "What features does Vectorless provide?").await?;
+    let result = client
+        .query(QueryContext::new("What features does Vectorless provide?").with_doc_id(&doc_id))
+        .await?;
     println!("Query: What features does Vectorless provide?");
     println!("Score: {:.2}", result.score);
     if !result.content.is_empty() {

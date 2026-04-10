@@ -214,6 +214,69 @@ impl IndexOptions {
 }
 
 // ============================================================
+// Index Result Types
+// ============================================================
+
+/// Result of a document indexing operation.
+#[derive(Debug, Clone)]
+pub struct IndexResult {
+    /// Indexed items.
+    pub items: Vec<IndexItem>,
+}
+
+impl IndexResult {
+    /// Create a new index result.
+    pub fn new(items: Vec<IndexItem>) -> Self {
+        Self { items }
+    }
+
+    /// Get the single document ID (convenience for single-document indexing).
+    pub fn doc_id(&self) -> Option<&str> {
+        if self.items.len() == 1 {
+            Some(&self.items[0].doc_id)
+        } else {
+            None
+        }
+    }
+
+    /// Check if the result is empty.
+    pub fn is_empty(&self) -> bool {
+        self.items.is_empty()
+    }
+
+    /// Get the number of indexed items.
+    pub fn len(&self) -> usize {
+        self.items.len()
+    }
+}
+
+/// A single indexed document item.
+#[derive(Debug, Clone)]
+pub struct IndexItem {
+    /// The unique document ID.
+    pub doc_id: String,
+    /// The document name.
+    pub name: String,
+    /// The document format.
+    pub format: DocumentFormat,
+}
+
+impl IndexItem {
+    /// Create a new index item.
+    pub fn new(
+        doc_id: impl Into<String>,
+        name: impl Into<String>,
+        format: DocumentFormat,
+    ) -> Self {
+        Self {
+            doc_id: doc_id.into(),
+            name: name.into(),
+            format,
+        }
+    }
+}
+
+// ============================================================
 // Query Types
 // ============================================================
 
@@ -363,5 +426,33 @@ mod tests {
 
         assert_eq!(info.id, "doc-1");
         assert_eq!(info.format, "markdown");
+    }
+
+    #[test]
+    fn test_index_result() {
+        let item = IndexItem::new("doc-1", "Test", DocumentFormat::Markdown);
+        let result = IndexResult::new(vec![item]);
+
+        assert_eq!(result.doc_id(), Some("doc-1"));
+        assert_eq!(result.len(), 1);
+        assert!(!result.is_empty());
+    }
+
+    #[test]
+    fn test_index_result_empty() {
+        let result = IndexResult::new(vec![]);
+        assert!(result.is_empty());
+        assert_eq!(result.doc_id(), None);
+    }
+
+    #[test]
+    fn test_index_result_multiple() {
+        let items = vec![
+            IndexItem::new("doc-1", "A", DocumentFormat::Markdown),
+            IndexItem::new("doc-2", "B", DocumentFormat::Pdf),
+        ];
+        let result = IndexResult::new(items);
+        assert_eq!(result.len(), 2);
+        assert_eq!(result.doc_id(), None);
     }
 }

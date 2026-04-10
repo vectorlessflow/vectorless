@@ -124,6 +124,7 @@ mod engine;
 pub mod events;
 mod index_context;
 mod indexer;
+mod query_context;
 mod retriever;
 mod session;
 mod types;
@@ -141,6 +142,12 @@ pub use engine::Engine;
 // ============================================================
 
 pub use index_context::{IndexContext, IndexSource};
+
+// ============================================================
+// Query Context
+// ============================================================
+
+pub use query_context::QueryContext;
 
 // ============================================================
 // Sub-Clients
@@ -170,8 +177,10 @@ pub use types::{
     // Document info
     DocumentInfo,
     // Index types
+    IndexItem,
     IndexMode,
     IndexOptions,
+    IndexResult,
     // Document types
     IndexedDocument,
     PageContent,

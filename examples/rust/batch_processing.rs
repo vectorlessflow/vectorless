@@ -4,7 +4,7 @@
 //! Batch document processing example.
 //!
 //! This example demonstrates how to efficiently process
-//! multiple documents in batch mode using sessions.
+//! multiple documents in batch mode.
 //!
 //! # Usage
 //!
@@ -12,13 +12,13 @@
 //! cargo run --example batch_processing
 //! ```
 
-use vectorless::client::{EngineBuilder, IndexContext};
+use vectorless::client::{EngineBuilder, IndexContext, QueryContext};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("=== Batch Document Processing Example ===\n");
 
-    // 1. Create engine and session
+    // 1. Create engine
     println!("Step 1: Setting up...");
     let engine = EngineBuilder::new()
         .with_workspace("./workspace_batch_example")
@@ -26,8 +26,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await
         .map_err(|e: vectorless::BuildError| vectorless::Error::Config(e.to_string()))?;
 
-    let session = engine.session().await;
-    println!("  ✓ Session created: {}\n", session.id());
+    println!("  ✓ Engine created\n");
 
     // 2. Create sample documents
     println!("Step 2: Creating sample documents...");
@@ -1059,8 +1058,9 @@ Implement authentication for production.
 
     for (name, _) in &documents {
         let path = temp_dir.path().join(name);
-        match session.index(IndexContext::from_path(&path)).await {
-            Ok(doc_id) => {
+        match engine.index(IndexContext::from_path(&path)).await {
+            Ok(result) => {
+                let doc_id = result.doc_id().unwrap().to_string();
                 doc_ids.push(doc_id);
             }
             Err(e) => {
@@ -1077,14 +1077,13 @@ Implement authentication for production.
     );
     println!();
 
-    // 4. Show session stats
-    println!("Step 4: Session statistics:");
-    let stats = session.stats();
+    // 4. Show indexed documents
+    println!("Step 4: Indexed documents:");
+    let docs = engine.list().await?;
     println!(
-        "  - Documents in session: {}",
-        session.list_documents().len()
+        "  - Documents indexed: {}",
+        docs.len()
     );
-    println!("  - Queries: {}", stats.query_count.get());
     println!();
 
     // 5. Batch query with progress
@@ -1106,15 +1105,21 @@ Implement authentication for production.
     let mut success_count = 0;
 
     for query in &queries {
-        match session.query_all(query).await {
-            Ok(results) => {
-                if !results.is_empty() {
-                    success_count += 1;
+        // Query against each indexed document, count as success if any returns content
+        let mut found = false;
+        for doc_id in &doc_ids {
+            match engine.query(QueryContext::new(*query).with_doc_id(doc_id)).await {
+                Ok(result) => {
+                    if !result.content.is_empty() {
+                        found = true;
+                        break;
+                    }
                 }
+                Err(_) => {}
             }
-            Err(e) => {
-                eprintln!("  ✗ Query failed: {}", e);
-            }
+        }
+        if found {
+            success_count += 1;
         }
     }
 
@@ -1132,16 +1137,8 @@ Implement authentication for production.
 
     // 6. Final statistics
     println!("Step 6: Final statistics:");
-    let stats = session.stats();
-    println!("  - Total documents: {}", session.list_documents().len());
-    println!("  - Total queries: {}", stats.query_count.get());
-    println!("  - Cache hits: {}", stats.cache_hits.get());
-    println!("  - Cache misses: {}", stats.cache_misses.get());
-    println!("  - Cache hit rate: {:.1}%", stats.cache_hit_rate() * 100.0);
-    if let Some(avg_time) = stats.avg_query_time() {
-        println!("  - Avg query time: {:?}", avg_time);
-    }
-    println!("  - Session age: {:?}", session.age());
+    let docs = engine.list().await?;
+    println!("  - Total documents: {}", docs.len());
     println!();
 
     // 7. Cleanup

@@ -11,7 +11,7 @@ use std::sync::Arc;
 use tokio::runtime::Runtime;
 
 // Use ::vectorless to avoid conflict with the #[pymodule] named vectorless
-use ::vectorless::client::{Engine, EngineBuilder, IndexContext, QueryResult, DocumentInfo};
+use ::vectorless::client::{Engine, EngineBuilder, IndexContext, IndexItem, IndexResult, QueryContext, QueryResult, DocumentInfo};
 use ::vectorless::parser::DocumentFormat;
 use ::vectorless::error::Error as RustError;
 
@@ -227,6 +227,71 @@ impl PyQueryResult {
 }
 
 // ============================================================
+// IndexResult
+// ============================================================
+
+/// Result of a document indexing operation.
+#[pyclass(name = "IndexResult")]
+pub struct PyIndexResult {
+    inner: IndexResult,
+}
+
+#[pymethods]
+impl PyIndexResult {
+    /// The document ID (convenience for single-document indexing).
+    #[getter]
+    fn doc_id(&self) -> Option<String> {
+        self.inner.doc_id().map(|s| s.to_string())
+    }
+
+    /// All indexed items.
+    #[getter]
+    fn items(&self) -> Vec<PyIndexItem> {
+        self.inner
+            .items
+            .iter()
+            .map(|i| PyIndexItem { inner: i.clone() })
+            .collect()
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "IndexResult(doc_id={:?}, count={})",
+            self.inner.doc_id(),
+            self.inner.items.len()
+        )
+    }
+}
+
+/// A single indexed document item.
+#[pyclass(name = "IndexItem")]
+pub struct PyIndexItem {
+    inner: IndexItem,
+}
+
+#[pymethods]
+impl PyIndexItem {
+    #[getter]
+    fn doc_id(&self) -> &str {
+        &self.inner.doc_id
+    }
+
+    #[getter]
+    fn name(&self) -> &str {
+        &self.inner.name
+    }
+
+    #[getter]
+    fn format(&self) -> String {
+        format!("{:?}", self.inner.format).to_lowercase()
+    }
+
+    fn __repr__(&self) -> String {
+        format!("IndexItem(doc_id='{}', name='{}')", self.inner.doc_id, self.inner.name)
+    }
+}
+
+// ============================================================
 // DocumentInfo
 // ============================================================
 
@@ -411,17 +476,19 @@ impl PyEngine {
     ///     ctx: IndexContext created from from_file, from_text, or from_bytes.
     ///
     /// Returns:
-    ///     Document ID string.
+    ///     IndexResult with doc_id and metadata.
     ///
     /// Raises:
     ///     VectorlessError: If indexing fails.
-    fn index(&self, ctx: &PyIndexContext) -> PyResult<String> {
+    fn index(&self, ctx: &PyIndexContext) -> PyResult<PyIndexResult> {
         let engine = Arc::clone(&self.inner);
         let index_ctx = ctx.inner.clone();
 
-        self.rt.block_on(async move {
+        let result = self.rt.block_on(async move {
             engine.index(index_ctx).await.map_err(to_py_err)
-        })
+        })?;
+
+        Ok(PyIndexResult { inner: result })
     }
 
     /// Query a document.
@@ -438,8 +505,10 @@ impl PyEngine {
     fn query(&self, doc_id: String, question: String) -> PyResult<PyQueryResult> {
         let engine = Arc::clone(&self.inner);
 
+        let ctx = QueryContext::new(&question).with_doc_id(&doc_id);
+
         let result = self.rt.block_on(async move {
-            engine.query(&doc_id, &question).await.map_err(to_py_err)
+            engine.query(ctx).await.map_err(to_py_err)
         })?;
 
         Ok(PyQueryResult { inner: result })
@@ -452,11 +521,11 @@ impl PyEngine {
     ///
     /// Raises:
     ///     VectorlessError: If listing fails.
-    fn list_docs(&self) -> PyResult<Vec<PyDocumentInfo>> {
+    fn list(&self) -> PyResult<Vec<PyDocumentInfo>> {
         let engine = Arc::clone(&self.inner);
 
         let docs = self.rt.block_on(async move {
-            engine.list_documents().await.map_err(to_py_err)
+            engine.list().await.map_err(to_py_err)
         })?;
 
         Ok(docs
@@ -509,13 +578,6 @@ impl PyEngine {
         self.rt.block_on(async move { engine.exists(&doc_id).await.map_err(to_py_err) })
     }
 
-    /// Get the number of indexed documents.
-    fn len(&self) -> PyResult<usize> {
-        let engine = Arc::clone(&self.inner);
-
-        self.rt.block_on(async move { engine.len().await.map_err(to_py_err) })
-    }
-
     fn __repr__(&self) -> String {
         "Engine(workspace=...)".to_string()
     }
@@ -550,6 +612,8 @@ impl PyEngine {
 fn vectorless(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<VectorlessError>()?;
     m.add_class::<PyIndexContext>()?;
+    m.add_class::<PyIndexResult>()?;
+    m.add_class::<PyIndexItem>()?;
     m.add_class::<PyQueryResult>()?;
     m.add_class::<PyDocumentInfo>()?;
     m.add_class::<PyEngine>()?;
