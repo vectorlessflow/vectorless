@@ -8,9 +8,10 @@
 
 use async_trait::async_trait;
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use super::r#trait::{NodeEvaluation, RetrievalStrategy, StrategyCapabilities};
-use crate::document::{DocumentTree, NodeId};
+use crate::document::{DocumentGraph, DocumentTree, NodeId};
 use crate::retrieval::types::{NavigationDecision, QueryComplexity};
 use crate::retrieval::RetrievalContext;
 
@@ -61,6 +62,8 @@ pub enum MergeStrategy {
     BestPerDocument,
     /// Weight results by document relevance score.
     WeightedByRelevance,
+    /// Use graph connectivity to boost connected documents.
+    GraphBoosted,
 }
 
 /// Configuration for cross-document retrieval.
@@ -122,6 +125,8 @@ pub struct CrossDocumentStrategy {
     config: CrossDocumentConfig,
     /// Documents to search.
     documents: Vec<DocumentEntry>,
+    /// Optional document graph for graph-aware ranking.
+    graph: Option<Arc<DocumentGraph>>,
 }
 
 impl CrossDocumentStrategy {
@@ -131,6 +136,7 @@ impl CrossDocumentStrategy {
             inner,
             config: CrossDocumentConfig::default(),
             documents: Vec::new(),
+            graph: None,
         }
     }
 
@@ -156,6 +162,59 @@ impl CrossDocumentStrategy {
     /// Get the number of documents.
     pub fn document_count(&self) -> usize {
         self.documents.len()
+    }
+
+    /// Set the document graph for graph-aware ranking.
+    pub fn with_graph(mut self, graph: Arc<DocumentGraph>) -> Self {
+        self.graph = Some(graph);
+        self
+    }
+
+    /// Apply graph-based score boosting to merged results.
+    ///
+    /// For each high-confidence result (score > 0.5), find its graph neighbors
+    /// and boost their scores by `boost_factor * edge_weight`.
+    fn apply_graph_boost(
+        &self,
+        results: &mut Vec<(DocumentId, NodeId, NodeEvaluation)>,
+        boost_factor: f32,
+    ) {
+        let graph = match self.graph {
+            Some(ref g) => g,
+            None => return,
+        };
+
+        // Collect doc_ids with high scores
+        let high_score_docs: Vec<(String, f32)> = results
+            .iter()
+            .filter(|(_, _, eval)| eval.score > 0.5)
+            .map(|(doc_id, _, eval)| (doc_id.clone(), eval.score))
+            .collect();
+
+        if high_score_docs.is_empty() {
+            return;
+        }
+
+        // For each high-score doc, boost its graph neighbors
+        for (doc_id, base_score) in &high_score_docs {
+            let neighbors = graph.get_neighbors(doc_id);
+            for edge in neighbors {
+                // Find results from the neighbor doc and boost them
+                for result in results.iter_mut() {
+                    if result.0 == edge.target_doc_id {
+                        let boost = boost_factor * edge.weight * base_score;
+                        result.2.score += boost;
+                    }
+                }
+            }
+        }
+
+        // Re-sort by score after boosting
+        results.sort_by(|a, b| {
+            b.2.score
+                .partial_cmp(&a.2.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
     }
 
     /// Search a single document and return results.
@@ -248,6 +307,26 @@ impl CrossDocumentStrategy {
                     .collect();
 
                 all_results.sort_by(|a, b| b.2.score.partial_cmp(&a.2.score).unwrap_or(std::cmp::Ordering::Equal));
+                all_results.truncate(self.config.max_total_results);
+                all_results
+            }
+
+            MergeStrategy::GraphBoosted => {
+                // First do TopK merge
+                let mut all_results: Vec<_> = doc_results
+                    .into_iter()
+                    .flat_map(|doc| {
+                        doc.evaluations.into_iter().map(move |(node_id, eval)| {
+                            (doc.doc_id.clone(), node_id, eval)
+                        })
+                    })
+                    .collect();
+
+                all_results.sort_by(|a, b| b.2.score.partial_cmp(&a.2.score).unwrap_or(std::cmp::Ordering::Equal));
+
+                // Apply graph-based boosting
+                self.apply_graph_boost(&mut all_results, 0.15);
+
                 all_results.truncate(self.config.max_total_results);
                 all_results
             }

@@ -10,7 +10,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
-use crate::document::{DocumentTree, NodeId, ReasoningIndex, RetrievalIndex};
+use crate::document::{DocumentGraph, DocumentTree, NodeId, ReasoningIndex, RetrievalIndex};
 use crate::retrieval::cache::{HotNodeTracker, ReasoningCache};
 use crate::retrieval::pipeline::budget::RetrievalBudgetController;
 use crate::retrieval::pilot::Pilot;
@@ -214,6 +214,9 @@ pub struct PipelineContext {
     /// Hot node tracker for recording retrieval frequency (session-scoped).
     pub hot_tracker: Option<Arc<HotNodeTracker>>,
 
+    /// Cross-document relationship graph for graph-aware retrieval.
+    pub document_graph: Option<Arc<DocumentGraph>>,
+
     // ============ Analyze Stage Output ============
     /// Detected query complexity.
     pub complexity: Option<QueryComplexity>,
@@ -287,6 +290,7 @@ impl PipelineContext {
             reasoning_cache: Arc::new(ReasoningCache::new()),
             reasoning_index: None,
             hot_tracker: None,
+            document_graph: None,
             complexity: None,
             keywords: Vec::new(),
             target_sections: Vec::new(),
@@ -335,6 +339,12 @@ impl PipelineContext {
     /// Set the hot node tracker for this retrieval context.
     pub fn with_hot_tracker(mut self, tracker: HotNodeTracker) -> Self {
         self.hot_tracker = Some(Arc::new(tracker));
+        self
+    }
+
+    /// Set the document graph for graph-aware retrieval.
+    pub fn with_document_graph(mut self, graph: DocumentGraph) -> Self {
+        self.document_graph = Some(Arc::new(graph));
         self
     }
 
