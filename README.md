@@ -1,12 +1,6 @@
 <div align="center">
 
-<div align="center">
-  <img src="https://raw.githubusercontent.com/vectorlessflow/vectorless/main/docs/design/lovable-vectorless.png" alt="Vectorless" width="100" style="vertical-align:middle;">
-  &nbsp;
-  <span style="font-size:48px; font-weight:800; vertical-align:middle; color:#AF788B;">
-    Vectorless
-  </span>
-</div>
+<img src="https://raw.githubusercontent.com/vectorlessflow/vectorless/main/docs/design/logo-title.svg" alt="Vectorless" width="400" style="vertical-align:middle;">
 
 <h1>Reasoning-native Document Intelligence Engine</h1>
 
