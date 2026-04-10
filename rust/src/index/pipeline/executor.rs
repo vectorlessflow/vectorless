@@ -13,7 +13,7 @@ use crate::llm::LlmClient;
 
 use super::super::PipelineOptions;
 use super::super::stages::{
-    BuildStage, EnhanceStage, EnrichStage, IndexStage, OptimizeStage, ParseStage, PersistStage,
+    BuildStage, EnhanceStage, EnrichStage, IndexStage, OptimizeStage, ParseStage,
     ReasoningIndexStage,
 };
 use super::context::{IndexInput, PipelineResult};
@@ -137,14 +137,6 @@ impl PipelineExecutor {
         self.orchestrator = self
             .orchestrator
             .stage_with_deps(stage, priority, depends_on);
-        self
-    }
-
-    /// Add persistence stage with async workspace.
-    pub fn with_persistence(mut self, workspace: crate::storage::Workspace) -> Self {
-        self.orchestrator = self
-            .orchestrator
-            .stage_with_priority(PersistStage::with_workspace(workspace), 80);
         self
     }
 

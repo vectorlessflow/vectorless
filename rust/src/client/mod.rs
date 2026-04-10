@@ -101,6 +101,7 @@ pub use events::EventEmitter;
 pub use types::{
     ClientError,
     DocumentInfo,
+    FailedItem,
     IndexItem,
     IndexMode,
     IndexOptions,

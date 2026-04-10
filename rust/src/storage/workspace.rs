@@ -381,6 +381,21 @@ impl Workspace {
         inner.meta_index.is_empty()
     }
 
+    /// Find a document ID by its source path.
+    ///
+    /// Returns the first document whose `source_path` matches.
+    /// Used for incremental indexing to check if a file has already been indexed.
+    pub async fn find_by_source_path(&self, path: &std::path::Path) -> Option<String> {
+        let target = path.to_string_lossy().to_string();
+        let inner = self.inner.read().await;
+        for (_, entry) in &inner.meta_index {
+            if entry.path.as_deref() == Some(target.as_str()) {
+                return Some(entry.id.clone());
+            }
+        }
+        None
+    }
+
     /// Get the number of items currently in the LRU cache.
     pub async fn cache_len(&self) -> usize {
         let inner = self.inner.read().await;

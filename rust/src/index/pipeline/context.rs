@@ -410,6 +410,5 @@ impl PipelineResult {
             + self.metrics.enrich_time_ms
             + self.metrics.reasoning_index_time_ms
             + self.metrics.optimize_time_ms
-            + self.metrics.persist_time_ms
     }
 }

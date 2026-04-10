@@ -123,6 +123,29 @@ pub struct PageContent {
 }
 
 // ============================================================
+// Partial Success
+// ============================================================
+
+/// A failed item in a batch operation.
+#[derive(Debug, Clone)]
+pub struct FailedItem {
+    /// Source description (file path, content name, or doc ID).
+    pub source: String,
+    /// Error message.
+    pub error: String,
+}
+
+impl FailedItem {
+    /// Create a new failed item.
+    pub fn new(source: impl Into<String>, error: impl Into<String>) -> Self {
+        Self {
+            source: source.into(),
+            error: error.into(),
+        }
+    }
+}
+
+// ============================================================
 // Index Types
 // ============================================================
 
@@ -220,14 +243,25 @@ impl IndexOptions {
 /// Result of a document indexing operation.
 #[derive(Debug, Clone)]
 pub struct IndexResult {
-    /// Indexed items.
+    /// Successfully indexed items.
     pub items: Vec<IndexItem>,
+
+    /// Items that failed to index (partial success).
+    pub failed: Vec<FailedItem>,
 }
 
 impl IndexResult {
     /// Create a new index result.
     pub fn new(items: Vec<IndexItem>) -> Self {
-        Self { items }
+        Self {
+            items,
+            failed: Vec::new(),
+        }
+    }
+
+    /// Create with both successes and failures.
+    pub fn with_partial(items: Vec<IndexItem>, failed: Vec<FailedItem>) -> Self {
+        Self { items, failed }
     }
 
     /// Get the single document ID (convenience for single-document indexing).
@@ -247,6 +281,16 @@ impl IndexResult {
     /// Get the number of indexed items.
     pub fn len(&self) -> usize {
         self.items.len()
+    }
+
+    /// Whether any items failed.
+    pub fn has_failures(&self) -> bool {
+        !self.failed.is_empty()
+    }
+
+    /// Total number of sources (success + failed).
+    pub fn total(&self) -> usize {
+        self.items.len() + self.failed.len()
     }
 }
 
@@ -313,17 +357,31 @@ pub struct QueryResultItem {
 pub struct QueryResult {
     /// Query results per document.
     pub items: Vec<QueryResultItem>,
+
+    /// Documents that failed during multi-doc query.
+    pub failed: Vec<FailedItem>,
 }
 
 impl QueryResult {
     /// Create a new query result (empty).
     pub fn new() -> Self {
-        Self { items: Vec::new() }
+        Self {
+            items: Vec::new(),
+            failed: Vec::new(),
+        }
     }
 
     /// Create a query result with a single item.
     pub fn from_single(item: QueryResultItem) -> Self {
-        Self { items: vec![item] }
+        Self {
+            items: vec![item],
+            failed: Vec::new(),
+        }
+    }
+
+    /// Create with both successes and failures.
+    pub fn with_partial(items: Vec<QueryResultItem>, failed: Vec<FailedItem>) -> Self {
+        Self { items, failed }
     }
 
     /// Check if the result is empty.
@@ -339,6 +397,11 @@ impl QueryResult {
     /// Get the first (single-doc) result item, if any.
     pub fn single(&self) -> Option<&QueryResultItem> {
         self.items.first()
+    }
+
+    /// Whether any documents failed.
+    pub fn has_failures(&self) -> bool {
+        !self.failed.is_empty()
     }
 }
 
@@ -499,5 +562,17 @@ mod tests {
         let result = IndexResult::new(items);
         assert_eq!(result.len(), 2);
         assert_eq!(result.doc_id(), None);
+    }
+
+    #[test]
+    fn test_partial_success() {
+        let items = vec![IndexItem::new("doc-1", "A", DocumentFormat::Markdown, None, None)];
+        let failed = vec![FailedItem::new("missing.pdf", "File not found")];
+        let result = IndexResult::with_partial(items, failed);
+
+        assert_eq!(result.len(), 1);
+        assert!(result.has_failures());
+        assert_eq!(result.total(), 2);
+        assert_eq!(result.failed[0].source, "missing.pdf");
     }
 }

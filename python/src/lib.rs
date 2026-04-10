@@ -11,7 +11,7 @@ use std::sync::Arc;
 use tokio::runtime::Runtime;
 
 // Use ::vectorless to avoid conflict with the #[pymodule] named vectorless
-use ::vectorless::client::{Engine, EngineBuilder, IndexContext, IndexItem, IndexResult, QueryContext, QueryResult, QueryResultItem, DocumentInfo};
+use ::vectorless::client::{Engine, EngineBuilder, IndexContext, IndexItem, IndexResult, QueryContext, QueryResult, QueryResultItem, DocumentInfo, FailedItem};
 use ::vectorless::client::DocumentFormat;
 use ::vectorless::error::Error as RustError;
 
@@ -227,6 +227,35 @@ impl PyQueryResultItem {
 }
 
 // ============================================================
+// FailedItem
+// ============================================================
+
+/// A failed item in a batch operation.
+#[pyclass(name = "FailedItem")]
+pub struct PyFailedItem {
+    inner: FailedItem,
+}
+
+#[pymethods]
+impl PyFailedItem {
+    /// Source description.
+    #[getter]
+    fn source(&self) -> &str {
+        &self.inner.source
+    }
+
+    /// Error message.
+    #[getter]
+    fn error(&self) -> &str {
+        &self.inner.error
+    }
+
+    fn __repr__(&self) -> String {
+        format!("FailedItem(source='{}', error='{}')", self.inner.source, self.inner.error)
+    }
+}
+
+// ============================================================
 // QueryResult
 // ============================================================
 
@@ -262,8 +291,23 @@ impl PyQueryResult {
         self.inner.len()
     }
 
+    /// Whether any documents failed.
+    fn has_failures(&self) -> bool {
+        self.inner.has_failures()
+    }
+
+    /// Failed items.
+    #[getter]
+    fn failed(&self) -> Vec<PyFailedItem> {
+        self.inner
+            .failed
+            .iter()
+            .map(|f| PyFailedItem { inner: f.clone() })
+            .collect()
+    }
+
     fn __repr__(&self) -> String {
-        format!("QueryResult(items={})", self.inner.len())
+        format!("QueryResult(items={}, failed={})", self.inner.len(), self.inner.failed.len())
     }
 }
 
@@ -295,11 +339,27 @@ impl PyIndexResult {
             .collect()
     }
 
+    /// Failed items.
+    #[getter]
+    fn failed(&self) -> Vec<PyFailedItem> {
+        self.inner
+            .failed
+            .iter()
+            .map(|f| PyFailedItem { inner: f.clone() })
+            .collect()
+    }
+
+    /// Whether any items failed.
+    fn has_failures(&self) -> bool {
+        self.inner.has_failures()
+    }
+
     fn __repr__(&self) -> String {
         format!(
-            "IndexResult(doc_id={:?}, count={})",
+            "IndexResult(doc_id={:?}, count={}, failed={})",
             self.inner.doc_id(),
-            self.inner.items.len()
+            self.inner.items.len(),
+            self.inner.failed.len()
         )
     }
 }
@@ -649,6 +709,7 @@ fn vectorless(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyIndexItem>()?;
     m.add_class::<PyQueryResultItem>()?;
     m.add_class::<PyQueryResult>()?;
+    m.add_class::<PyFailedItem>()?;
     m.add_class::<PyDocumentInfo>()?;
     m.add_class::<PyEngine>()?;
 

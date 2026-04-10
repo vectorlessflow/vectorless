@@ -28,10 +28,6 @@ pub struct IndexMetrics {
     #[serde(default)]
     pub optimize_time_ms: u64,
 
-    /// Persist stage duration (ms).
-    #[serde(default)]
-    pub persist_time_ms: u64,
-
     /// Reasoning index build duration (ms).
     #[serde(default)]
     pub reasoning_index_time_ms: u64,
@@ -100,11 +96,6 @@ impl IndexMetrics {
         self.optimize_time_ms = duration_ms;
     }
 
-    /// Record persist stage time.
-    pub fn record_persist(&mut self, duration_ms: u64) {
-        self.persist_time_ms = duration_ms;
-    }
-
     /// Record reasoning index build time.
     pub fn record_reasoning_index(&mut self, duration_ms: u64, topics: usize, keywords: usize) {
         self.reasoning_index_time_ms = duration_ms;
@@ -150,6 +141,5 @@ impl IndexMetrics {
             + self.enrich_time_ms
             + self.reasoning_index_time_ms
             + self.optimize_time_ms
-            + self.persist_time_ms
     }
 }

@@ -47,11 +47,11 @@ use crate::storage::Workspace;
 use crate::{DocumentTree, Error};
 
 use super::events::EventEmitter;
-use super::index_context::IndexContext;
+use super::index_context::{IndexContext, IndexSource};
 use super::indexer::IndexerClient;
 use super::query_context::{QueryContext, QueryScope};
 use super::retriever::RetrieverClient;
-use super::types::{DocumentInfo, IndexItem, IndexResult, QueryResult, QueryResultItem};
+use super::types::{DocumentInfo, FailedItem, IndexItem, IndexMode, IndexResult, QueryResult, QueryResultItem};
 use super::workspace::WorkspaceClient;
 
 /// The main Engine client.
@@ -154,32 +154,63 @@ impl Engine {
         }
 
         let mut items = Vec::with_capacity(ctx.len());
+        let mut failed = Vec::new();
 
         for source in &ctx.sources {
-            let doc = self
-                .indexer
-                .index(source, ctx.name.as_deref(), &ctx.options)
-                .await?;
+            let source_label = source.to_string();
 
-            let item = IndexItem::new(
-                doc.id.clone(),
-                doc.name.clone(),
-                doc.format.clone(),
-                doc.description.clone(),
-                doc.page_count,
-            );
-
-            let persisted = self.indexer.to_persisted(doc);
-
-            if let Some(ref workspace) = self.workspace {
-                workspace.save(&persisted).await?;
+            // Check if we should skip this source (Default or Incremental mode)
+            if let Some(skipped_item) = self
+                .check_skip_source(source, &ctx.options)
+                .await?
+            {
+                info!("Skipped (already indexed): {}", source_label);
+                items.push(skipped_item);
+                continue;
             }
 
-            info!("Indexed document: {}", item.doc_id);
-            items.push(item);
+            match self
+                .indexer
+                .index(source, ctx.name.as_deref(), &ctx.options)
+                .await
+            {
+                Ok(doc) => {
+                    let item = IndexItem::new(
+                        doc.id.clone(),
+                        doc.name.clone(),
+                        doc.format.clone(),
+                        doc.description.clone(),
+                        doc.page_count,
+                    );
+
+                    let persisted = self.indexer.to_persisted(doc);
+
+                    if let Some(ref workspace) = self.workspace {
+                        if let Err(e) = workspace.save(&persisted).await {
+                            failed.push(FailedItem::new(&source_label, e.to_string()));
+                            continue;
+                        }
+                    }
+
+                    info!("Indexed document: {}", item.doc_id);
+                    items.push(item);
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to index {}: {}", source_label, e);
+                    failed.push(FailedItem::new(&source_label, e.to_string()));
+                }
+            }
         }
 
-        Ok(IndexResult::new(items))
+        // If everything failed, return error
+        if items.is_empty() && !failed.is_empty() {
+            return Err(Error::Config(format!(
+                "All {} source(s) failed to index",
+                failed.len()
+            )));
+        }
+
+        Ok(IndexResult::with_partial(items, failed))
     }
 
     // ============================================================
@@ -228,22 +259,39 @@ impl Engine {
         let options = ctx.to_retrieve_options(&self.config);
 
         let mut items = Vec::with_capacity(doc_ids.len());
+        let mut failed = Vec::new();
 
         for doc_id in doc_ids {
             let tree = match self.get_structure(&doc_id).await {
                 Ok(t) => t,
                 Err(e) => {
                     tracing::warn!("Skipping document {}: {}", doc_id, e);
+                    failed.push(FailedItem::new(&doc_id, e.to_string()));
                     continue;
                 }
             };
 
-            let mut result = self.retriever.query(&tree, &ctx.query, &options).await?;
-            result.doc_id = doc_id;
-            items.push(result);
+            match self.retriever.query(&tree, &ctx.query, &options).await {
+                Ok(mut result) => {
+                    result.doc_id = doc_id;
+                    items.push(result);
+                }
+                Err(e) => {
+                    tracing::warn!("Query failed for {}: {}", doc_id, e);
+                    failed.push(FailedItem::new(&doc_id, e.to_string()));
+                }
+            }
         }
 
-        Ok(QueryResult { items })
+        // If everything failed, return error
+        if items.is_empty() && !failed.is_empty() {
+            return Err(Error::Config(format!(
+                "Query failed for all {} document(s)",
+                failed.len()
+            )));
+        }
+
+        Ok(QueryResult::with_partial(items, failed))
     }
 
     /// Query a document with streaming results.
@@ -343,6 +391,102 @@ impl Engine {
                 }
                 Ok(docs.into_iter().map(|d| d.id).collect())
             }
+        }
+    }
+
+    /// Check if a source should be skipped based on IndexMode.
+    ///
+    /// Returns `Some(IndexItem)` if the source should be skipped (already indexed),
+    /// or `None` if indexing should proceed.
+    async fn check_skip_source(
+        &self,
+        source: &IndexSource,
+        options: &super::types::IndexOptions,
+    ) -> Result<Option<IndexItem>> {
+        let workspace = match self.workspace {
+            Some(ref ws) => ws,
+            None => return Ok(None),
+        };
+
+        // Force mode always re-indexes
+        if options.mode == IndexMode::Force {
+            return Ok(None);
+        }
+
+        // Only path sources can be checked for incremental indexing
+        let path = match source {
+            IndexSource::Path(p) => p,
+            _ => return Ok(None),
+        };
+
+        // Check if this file has already been indexed
+        let existing_id = match workspace.find_by_source_path(path).await {
+            Some(id) => id,
+            None => return Ok(None), // Not indexed yet
+        };
+
+        match options.mode {
+            IndexMode::Default => {
+                // Default: skip if already indexed
+                let info = workspace.get_document_info(&existing_id).await?;
+                let (name, format_str, desc, pages) = match info {
+                    Some(i) => (i.name, i.format, i.description, i.page_count),
+                    None => (String::new(), String::new(), None, None),
+                };
+
+                Ok(Some(IndexItem::new(
+                    existing_id,
+                    name,
+                    crate::parser::DocumentFormat::from_extension(&format_str)
+                        .unwrap_or(crate::parser::DocumentFormat::Markdown),
+                    desc,
+                    pages,
+                )))
+            }
+            IndexMode::Incremental => {
+                // Incremental: skip only if file hasn't been modified
+                let file_mtime = std::fs::metadata(path)
+                    .ok()
+                    .and_then(|m| m.modified().ok())
+                    .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                    .map(|d| d.as_secs());
+
+                let doc = workspace.load(&existing_id).await?;
+                let stored_mtime = doc.as_ref().and_then(|d| {
+                    d.meta.modified_at
+                        .timestamp()
+                        .try_into()
+                        .ok()
+                });
+
+                match (file_mtime, stored_mtime) {
+                    (Some(file_ts), Some(stored_ts)) if file_ts <= stored_ts => {
+                        // File unchanged — skip
+                        let info = workspace.get_document_info(&existing_id).await?;
+                        let (name, format_str, desc, pages) = match info {
+                            Some(i) => (i.name, i.format, i.description, i.page_count),
+                            None => (String::new(), String::new(), None, None),
+                        };
+
+                        Ok(Some(IndexItem::new(
+                            existing_id,
+                            name,
+                            crate::parser::DocumentFormat::from_extension(&format_str)
+                                .unwrap_or(crate::parser::DocumentFormat::Markdown),
+                            desc,
+                            pages,
+                        )))
+                    }
+                    _ => {
+                        // File modified or mtime unavailable — re-index
+                        info!("File modified, re-indexing: {}", path.display());
+                        // Remove old document so we don't have duplicates
+                        let _ = workspace.remove(&existing_id).await;
+                        Ok(None)
+                    }
+                }
+            }
+            IndexMode::Force => Ok(None), // Already handled above
         }
     }
 }
