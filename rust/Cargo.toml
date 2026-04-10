@@ -27,32 +27,16 @@ name = "cli_tool"
 path = "../examples/rust/cli_tool.rs"
 
 [[example]]
-name = "content_aggregation"
-path = "../examples/rust/content_aggregation.rs"
-
-[[example]]
 name = "custom_config"
 path = "../examples/rust/custom_config.rs"
-
-[[example]]
-name = "custom_pilot"
-path = "../examples/rust/custom_pilot.rs"
 
 [[example]]
 name = "events"
 path = "../examples/rust/events.rs"
 
 [[example]]
-name = "feedback_learning"
-path = "../examples/rust/feedback_learning.rs"
-
-[[example]]
 name = "html_parser"
 path = "../examples/rust/html_parser.rs"
-
-[[example]]
-name = "index"
-path = "../examples/rust/index.rs"
 
 [[example]]
 name = "markdownflow"
@@ -61,50 +45,6 @@ path = "../examples/rust/markdownflow.rs"
 [[example]]
 name = "multi_format"
 path = "../examples/rust/multi_format.rs"
-
-[[example]]
-name = "reference_following"
-path = "../examples/rust/reference_following.rs"
-
-[[example]]
-name = "retrieve"
-path = "../examples/rust/retrieve.rs"
-
-[[example]]
-name = "storage_backend"
-path = "../examples/rust/storage_backend.rs"
-
-[[example]]
-name = "storage_compression"
-path = "../examples/rust/storage_compression.rs"
-
-[[example]]
-name = "storage_migration"
-path = "../examples/rust/storage_migration.rs"
-
-[[example]]
-name = "storage_workspace"
-path = "../examples/rust/storage_workspace.rs"
-
-[[example]]
-name = "strategy_cross_document"
-path = "../examples/rust/strategy_cross_document.rs"
-
-[[example]]
-name = "strategy_hybrid"
-path = "../examples/rust/strategy_hybrid.rs"
-
-[[example]]
-name = "strategy_page_range"
-path = "../examples/rust/strategy_page_range.rs"
-
-[[example]]
-name = "streaming"
-path = "../examples/rust/streaming.rs"
-
-[[example]]
-name = "document_graph"
-path = "../examples/rust/document_graph.rs"
 
 [dependencies]
 # Async runtime
