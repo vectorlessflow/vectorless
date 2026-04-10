@@ -18,21 +18,21 @@ mod storage;
 
 use serde::{Deserialize, Serialize};
 
-pub use concurrency::ConcurrencyConfig;
-pub use content::ContentAggregatorConfig;
-pub use fallback::{FallbackBehavior, FallbackConfig, OnAllFailedBehavior};
-pub use indexer::IndexerConfig;
-pub use llm::{LlmConfig, SummaryConfig};
-pub use llm_pool::{
+pub(crate) use concurrency::ConcurrencyConfig;
+pub(crate) use content::ContentAggregatorConfig;
+pub(crate) use fallback::{FallbackBehavior, FallbackConfig, OnAllFailedBehavior};
+pub(crate) use indexer::IndexerConfig;
+pub(crate) use llm::{LlmConfig, SummaryConfig};
+pub(crate) use llm_pool::{
     FallbackBehavior as LlmFallbackBehavior, FallbackConfig as LlmFallbackConfig,
     LlmClientConfig, LlmPoolConfig, OnAllFailedBehavior as LlmOnAllFailedBehavior, RetryConfig,
     ThrottleConfig,
 };
-pub use metrics::{
+pub(crate) use metrics::{
     LlmMetricsConfig, MetricsConfig, PilotMetricsConfig, RetrievalMetricsConfig,
 };
-pub use retrieval::{RetrievalConfig, SearchConfig};
-pub use storage::{
+pub(crate) use retrieval::{RetrievalConfig, SearchConfig};
+pub(crate) use storage::{
     CacheConfig, CompressionAlgorithm, CompressionConfig, StorageConfig, StrategyConfig,
     SufficiencyConfig,
 };

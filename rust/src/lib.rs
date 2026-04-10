@@ -197,7 +197,7 @@
 // =============================================================================
 
 pub mod client;
-pub mod config;
+mod config;
 pub mod document;
 pub mod error;
 pub mod index;
@@ -231,9 +231,6 @@ pub use document::{
 
 // Utility functions
 pub use utils::{estimate_tokens, estimate_tokens_fast};
-
-// Configuration
-pub use config::{Config, ConfigLoader, RetrievalConfig, SummaryConfig};
 
 // LLM
 pub use llm::{LlmClient, LlmConfig, LlmConfigs, LlmError, LlmPool, RetryConfig};

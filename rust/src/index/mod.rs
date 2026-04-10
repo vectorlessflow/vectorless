@@ -63,5 +63,4 @@ pub use summary::{
 // Re-export incremental
 pub use incremental::{ChangeDetector, ChangeSet, PartialUpdater};
 
-// Re-export config types from crate config
-pub use crate::config::{ConcurrencyConfig, IndexerConfig};
+pub(crate) use crate::config::{ConcurrencyConfig, IndexerConfig};
