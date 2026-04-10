@@ -20,6 +20,9 @@ use crate::document::ReasoningIndex;
 use crate::error::Result;
 use crate::retrieval::pilot::{Pilot, SearchState};
 // FailurePolicy is re-exported for stages
+use crate::retrieval::stream::{
+    RetrieveEvent, RetrieveEventReceiver, RetrieveEventSender, DEFAULT_STREAM_BOUND,
+};
 use crate::retrieval::types::{RetrieveOptions, RetrieveResponse};
 
 use super::context::{CandidateNode, PipelineContext};
@@ -817,6 +820,343 @@ impl RetrievalOrchestrator {
         );
 
         Ok(ctx.finalize())
+    }
+
+    /// Execute the retrieval pipeline with streaming events.
+    ///
+    /// Consumes the orchestrator and spawns a background task that runs the
+    /// pipeline. The caller receives a channel of [`RetrieveEvent`]s that
+    /// fire at each stage boundary. The stream always terminates with either
+    /// [`Completed`](RetrieveEvent::Completed) or
+    /// [`Error`](RetrieveEvent::Error).
+    ///
+    /// The existing [`execute()`](Self::execute) method is **not** affected.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// let (handle, mut rx) = orchestrator.execute_streaming(tree, query, options);
+    ///
+    /// while let Some(event) = rx.recv().await {
+    ///     match event {
+    ///         RetrieveEvent::StageCompleted { stage, .. } => println!("{stage} done"),
+    ///         RetrieveEvent::Completed { response } => break,
+    ///         RetrieveEvent::Error { message } => { eprintln!("{message}"); break; }
+    ///         _ => {}
+    ///     }
+    /// }
+    /// let _ = handle.await;
+    /// ```
+    pub fn execute_streaming(
+        mut self,
+        tree: Arc<DocumentTree>,
+        query: &str,
+        options: RetrieveOptions,
+    ) -> (
+        tokio::task::JoinHandle<()>,
+        RetrieveEventReceiver,
+    ) {
+        let (tx, rx) = tokio::sync::mpsc::channel(DEFAULT_STREAM_BOUND);
+        let query_owned = query.to_string();
+
+        let handle = tokio::spawn(async move {
+            if let Err(e) = self.run_streaming(tree, &query_owned, options, &tx).await {
+                let _ = tx
+                    .send(RetrieveEvent::Error {
+                        message: e.to_string(),
+                    })
+                    .await;
+            }
+        });
+
+        (handle, rx)
+    }
+
+    /// Internal streaming pipeline execution.
+    async fn run_streaming(
+        &mut self,
+        tree: Arc<DocumentTree>,
+        query: &str,
+        options: RetrieveOptions,
+        tx: &RetrieveEventSender,
+    ) -> Result<()> {
+        let total_start = Instant::now();
+
+        let _ = tx
+            .send(RetrieveEvent::Started {
+                query: query.to_string(),
+                strategy: format!("{:?}", options.strategy),
+            })
+            .await;
+
+        info!(
+            "Starting streaming retrieval pipeline for query: '{}' ({} stages)",
+            query,
+            self.stages.len()
+        );
+
+        let order = self.resolve_order()?;
+        let groups = self.compute_execution_groups(&order);
+        let mut ctx = PipelineContext::with_pilot(tree, query, options, self.pilot.clone());
+
+        let mut backtrack_count = 0;
+        let mut total_iterations = 0;
+        let mut group_idx = 0;
+
+        while group_idx < groups.len() {
+            if backtrack_count >= self.max_backtracks {
+                warn!("Max backtracks reached, completing with current results");
+                break;
+            }
+            if total_iterations >= self.max_total_iterations {
+                warn!("Max total iterations reached, completing");
+                break;
+            }
+
+            let group = &groups[group_idx];
+
+            for &stage_idx in &group.stage_indices {
+                let entry = &self.stages[stage_idx];
+                let stage_name = entry.stage.name();
+                let policy = entry.stage.failure_policy();
+
+                let stage_start = Instant::now();
+                ctx.start_stage();
+                info!("Executing stage: {}", stage_name);
+
+                match entry.stage.execute(&mut ctx).await {
+                    Ok(outcome) => {
+                        let elapsed = stage_start.elapsed().as_millis() as u64;
+                        ctx.end_stage(stage_name, true, None);
+                        total_iterations += 1;
+
+                        let _ = tx
+                            .send(RetrieveEvent::StageCompleted {
+                                stage: stage_name.to_string(),
+                                elapsed_ms: elapsed,
+                            })
+                            .await;
+
+                        match outcome {
+                            StageOutcome::Continue => {}
+                            StageOutcome::Complete => {
+                                ctx.metrics.total_time_ms =
+                                    total_start.elapsed().as_millis() as u64;
+                                info!("Retrieval completed by stage: {}", stage_name);
+                                let response = ctx.finalize();
+                                let _ = tx
+                                    .send(RetrieveEvent::Completed { response })
+                                    .await;
+                                return Ok(());
+                            }
+                            StageOutcome::NeedMoreData {
+                                additional_beam,
+                                go_deeper,
+                            } => {
+                                if let Some(search_idx) =
+                                    self.stages.iter().position(|e| e.stage.name() == "search")
+                                {
+                                    info!(
+                                        "Need more data, backtracking to search (beam +{}, deeper: {})",
+                                        additional_beam, go_deeper
+                                    );
+
+                                    let _ = tx
+                                        .send(RetrieveEvent::Backtracking {
+                                            from: stage_name.to_string(),
+                                            to: "search".to_string(),
+                                            reason: format!(
+                                                "NeedMoreData: beam +{}, deeper: {}",
+                                                additional_beam, go_deeper
+                                            ),
+                                        })
+                                        .await;
+
+                                    // Consult Pilot
+                                    if let Some(ref pilot) = self.pilot {
+                                        if pilot.config().guide_at_backtrack {
+                                            let visited: std::collections::HashSet<_> = ctx
+                                                .search_paths
+                                                .iter()
+                                                .flat_map(|p| p.nodes.iter().copied())
+                                                .collect();
+                                            let candidates: Vec<_> =
+                                                ctx.candidates.iter().map(|c| c.node_id).collect();
+
+                                            let state = SearchState::new(
+                                                &ctx.tree,
+                                                &ctx.query,
+                                                &[],
+                                                &candidates,
+                                                &visited,
+                                            );
+
+                                            match pilot.guide_backtrack(&state).await {
+                                                Some(guidance) => {
+                                                    debug!(
+                                                        "Pilot backtrack guidance: confidence={}, candidates={}",
+                                                        guidance.confidence,
+                                                        guidance.ranked_candidates.len()
+                                                    );
+                                                    if guidance.has_candidates() {
+                                                        ctx.candidates = guidance
+                                                            .ranked_candidates
+                                                            .iter()
+                                                            .map(|rc| CandidateNode {
+                                                                node_id: rc.node_id,
+                                                                score: rc.score,
+                                                                depth: 0,
+                                                                is_leaf: false,
+                                                            })
+                                                            .collect();
+                                                    }
+                                                }
+                                                None => {
+                                                    debug!("Pilot provided no backtrack guidance");
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    if let Some(ref mut config) = ctx.search_config {
+                                        config.beam_width += additional_beam;
+                                        if go_deeper {
+                                            config.max_depth += 1;
+                                        }
+                                    }
+
+                                    ctx.increment_backtrack();
+                                    backtrack_count += 1;
+
+                                    if let Some(target_group) =
+                                        self.find_group_for_stage(&groups, search_idx)
+                                    {
+                                        group_idx = target_group;
+                                        continue;
+                                    }
+                                }
+                            }
+                            StageOutcome::Backtrack {
+                                target_stage,
+                                reason,
+                            } => {
+                                info!("Backtracking to {}: {}", target_stage, reason);
+
+                                let _ = tx
+                                    .send(RetrieveEvent::Backtracking {
+                                        from: stage_name.to_string(),
+                                        to: target_stage.clone(),
+                                        reason: reason.clone(),
+                                    })
+                                    .await;
+
+                                if let Some(target_idx) = self
+                                    .stages
+                                    .iter()
+                                    .position(|e| e.stage.name() == target_stage)
+                                {
+                                    if target_stage == "search" {
+                                        if let Some(ref pilot) = self.pilot {
+                                            if pilot.config().guide_at_backtrack {
+                                                let visited: std::collections::HashSet<_> = ctx
+                                                    .search_paths
+                                                    .iter()
+                                                    .flat_map(|p| p.nodes.iter().copied())
+                                                    .collect();
+                                                let candidates: Vec<_> = ctx
+                                                    .candidates
+                                                    .iter()
+                                                    .map(|c| c.node_id)
+                                                    .collect();
+
+                                                let state = SearchState::new(
+                                                    &ctx.tree,
+                                                    &ctx.query,
+                                                    &[],
+                                                    &candidates,
+                                                    &visited,
+                                                );
+
+                                                if let Some(guidance) =
+                                                    pilot.guide_backtrack(&state).await
+                                                {
+                                                    debug!(
+                                                        "Pilot backtrack guidance for explicit backtrack: confidence={}",
+                                                        guidance.confidence
+                                                    );
+                                                    if guidance.has_candidates() {
+                                                        ctx.candidates = guidance
+                                                            .ranked_candidates
+                                                            .iter()
+                                                            .map(|rc| CandidateNode {
+                                                                node_id: rc.node_id,
+                                                                score: rc.score,
+                                                                depth: 0,
+                                                                is_leaf: false,
+                                                            })
+                                                            .collect();
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    ctx.increment_backtrack();
+                                    backtrack_count += 1;
+
+                                    if let Some(target_group) =
+                                        self.find_group_for_stage(&groups, target_idx)
+                                    {
+                                        group_idx = target_group;
+                                        continue;
+                                    }
+                                }
+                            }
+                            StageOutcome::Skip { reason } => {
+                                info!("Skipping remaining stages: {}", reason);
+                                ctx.metrics.total_time_ms =
+                                    total_start.elapsed().as_millis() as u64;
+                                let response = ctx.finalize();
+                                let _ = tx
+                                    .send(RetrieveEvent::Completed { response })
+                                    .await;
+                                return Ok(());
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        ctx.end_stage(stage_name, false, Some(e.to_string()));
+
+                        if policy.allows_continuation() {
+                            warn!(
+                                "Stage {} failed but policy allows continuation: {}",
+                                stage_name, e
+                            );
+                        } else {
+                            error!("Stage {} failed: {}", stage_name, e);
+                            let _ = tx
+                                .send(RetrieveEvent::Error {
+                                    message: e.to_string(),
+                                })
+                                .await;
+                            return Err(e);
+                        }
+                    }
+                }
+            }
+
+            group_idx += 1;
+        }
+
+        ctx.metrics.total_time_ms = total_start.elapsed().as_millis() as u64;
+        info!(
+            "Streaming retrieval completed in {}ms ({} iterations, {} backtracks)",
+            ctx.metrics.total_time_ms, total_iterations, backtrack_count
+        );
+
+        let response = ctx.finalize();
+        let _ = tx.send(RetrieveEvent::Completed { response }).await;
+        Ok(())
     }
 
     /// Get list of stage names in execution order.

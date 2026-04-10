@@ -118,6 +118,13 @@ pub struct RetrieveOptions {
 
     /// Whether to use async context building for large documents.
     pub use_async_context: bool,
+
+    /// Enable streaming retrieval results.
+    ///
+    /// When enabled, use `query_stream()` to receive incremental
+    /// `RetrieveEvent`s as each pipeline stage completes. When disabled
+    /// (default), the standard `query()` returns a single final result.
+    pub streaming: bool,
 }
 
 impl Default for RetrieveOptions {
@@ -136,6 +143,7 @@ impl Default for RetrieveOptions {
             pruning_strategy: super::PruningStrategy::default(),
             token_estimation: super::TokenEstimation::default(),
             use_async_context: false,
+            streaming: false,
         }
     }
 }
@@ -235,6 +243,13 @@ impl RetrieveOptions {
     #[must_use]
     pub fn with_async_context(mut self, enable: bool) -> Self {
         self.use_async_context = enable;
+        self
+    }
+
+    /// Enable streaming retrieval results.
+    #[must_use]
+    pub fn with_streaming(mut self, enable: bool) -> Self {
+        self.streaming = enable;
         self
     }
 }

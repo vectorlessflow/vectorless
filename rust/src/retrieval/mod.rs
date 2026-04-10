@@ -52,6 +52,7 @@ mod decompose;
 mod pipeline_retriever;
 mod reference;
 mod retriever;
+pub mod stream;
 mod types;
 
 pub mod cache;
@@ -135,3 +136,6 @@ pub use reference::{
     expand_with_references, FollowedReference, ReferenceConfig, ReferenceExpansion,
     ReferenceFollower,
 };
+
+// Streaming exports
+pub use stream::{RetrieveEvent, RetrieveEventReceiver, DEFAULT_STREAM_BOUND};

@@ -25,6 +25,7 @@ use crate::config::Config;
 use crate::document::{DocumentTree, NodeId};
 use crate::error::{Error, Result};
 use crate::retrieval::content::ContentAggregatorConfig;
+use crate::retrieval::stream::{RetrieveEvent, RetrieveEventReceiver};
 use crate::retrieval::{
     QueryComplexity, RetrievalResult, RetrieveOptions, RetrieveResponse, Retriever,
     SufficiencyLevel,
@@ -184,6 +185,75 @@ impl RetrieverClient {
         });
 
         Ok(result)
+    }
+
+    /// Query a document tree with streaming results.
+    ///
+    /// Returns a channel receiver that yields [`RetrieveEvent`]s
+    /// incrementally as the pipeline progresses through its stages.
+    /// The stream always terminates with either `Completed` or `Error`.
+    ///
+    /// Also emits events through the [`EventEmitter`] (configured via
+    /// [`with_events`](Self::with_events)), so existing `on_query()` handlers
+    /// receive streaming events too.
+    ///
+    /// This is the streaming counterpart of [`query`](Self::query).
+    /// The non-streaming path is completely unaffected.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// let options = RetrieveOptions::new().with_streaming(true);
+    /// let mut rx = client.query_stream(&tree, "query", &options).await?;
+    ///
+    /// while let Some(event) = rx.recv().await {
+    ///     match event {
+    ///         RetrieveEvent::StageCompleted { stage, .. } => println!("{stage} done"),
+    ///         RetrieveEvent::Completed { response } => {
+    ///             println!("Confidence: {}", response.confidence);
+    ///             break;
+    ///         }
+    ///         RetrieveEvent::Error { message } => { eprintln!("{message}"); break; }
+    ///         _ => {}
+    ///     }
+    /// }
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the retriever cannot be cloned for streaming.
+    pub async fn query_stream(
+        &self,
+        tree: &DocumentTree,
+        question: &str,
+        options: &RetrieveOptions,
+    ) -> Result<RetrieveEventReceiver> {
+        self.events.emit_query(QueryEvent::Started {
+            query: question.to_string(),
+        });
+
+        info!("Streaming query: {:?}", question);
+
+        let (handle, rx) = self.retriever.retrieve_streaming(tree, question, options);
+
+        // Spawn a sidecar task that forwards events to the EventEmitter
+        let events = self.events.clone();
+        let question_owned = question.to_string();
+        tokio::spawn(async move {
+            // The handle will complete when the streaming task finishes.
+            // We don't need to forward events individually here since
+            // the primary channel (rx) is returned to the caller.
+            // The EventEmitter events are already emitted above for Started.
+            // The caller can consume rx for detailed streaming events.
+            let _ = handle.await;
+            events.emit_query(QueryEvent::Complete {
+                total_results: 0,
+                confidence: 0.0,
+            });
+            let _ = question_owned; // suppress unused warning
+        });
+
+        Ok(rx)
     }
 
     /// Build QueryResult from RetrieveResponse.

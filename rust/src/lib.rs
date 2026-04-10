@@ -252,9 +252,9 @@ pub use index::{
 // Retrieval
 pub use retrieval::{
     ContextBuilder, NavigationDecision, NavigationStep, PipelineRetriever, PruningStrategy,
-    QueryComplexity, RetrievalContext, RetrievalResult, RetrieveOptions, RetrieveResponse,
-    Retriever, RetrieverError, RetrieverResult, SearchPath, StrategyPreference, SufficiencyLevel,
-    TokenEstimation, format_for_llm, format_for_llm_async, format_tree_for_llm,
+    QueryComplexity, RetrievalContext, RetrievalResult, RetrieveEvent, RetrieveOptions,
+    RetrieveResponse, Retriever, RetrieverError, RetrieverResult, SearchPath, StrategyPreference,
+    SufficiencyLevel, TokenEstimation, format_for_llm, format_for_llm_async, format_tree_for_llm,
     format_tree_for_llm_async,
 };
 
