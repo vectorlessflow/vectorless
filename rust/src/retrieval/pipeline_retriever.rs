@@ -13,6 +13,7 @@ use super::content::ContentAggregatorConfig;
 use super::pipeline::RetrievalOrchestrator;
 use super::retriever::{CostEstimate, Retriever, RetrieverError, RetrieverResult};
 use super::stages::{AnalyzeStage, EvaluateStage, PlanStage, SearchStage};
+use super::stream::{RetrieveEvent, RetrieveEventReceiver};
 use super::strategy::LlmStrategy;
 use super::types::{RetrieveOptions, RetrieveResponse};
 use crate::document::DocumentTree;
@@ -150,6 +151,27 @@ impl PipelineRetriever {
     /// Convert pipeline options to retriever options format.
     fn options_to_retrieve_options(&self, options: &RetrieveOptions) -> RetrieveOptions {
         options.clone()
+    }
+
+    /// Execute streaming retrieval.
+    ///
+    /// Returns a channel receiver that yields [`RetrieveEvent`]s as the
+    /// pipeline progresses. The stream always terminates with either
+    /// `Completed` or `Error`.
+    ///
+    /// This is the streaming counterpart of [`retrieve`](Retriever::retrieve).
+    /// The non-streaming path is not affected.
+    pub fn retrieve_streaming(
+        &self,
+        tree: &DocumentTree,
+        query: &str,
+        options: &RetrieveOptions,
+    ) -> (tokio::task::JoinHandle<()>, RetrieveEventReceiver) {
+        let orchestrator = self.build_orchestrator();
+        let tree_arc = Arc::new(tree.clone());
+        let opts = self.options_to_retrieve_options(options);
+
+        orchestrator.execute_streaming(tree_arc, query, opts)
     }
 }
 

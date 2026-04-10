@@ -10,11 +10,13 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
-use crate::document::{DocumentTree, NodeId, RetrievalIndex};
+use crate::document::{DocumentGraph, DocumentTree, NodeId, ReasoningIndex, RetrievalIndex};
+use crate::retrieval::cache::{HotNodeTracker, ReasoningCache};
+use crate::retrieval::pipeline::budget::RetrievalBudgetController;
 use crate::retrieval::pilot::Pilot;
 use crate::retrieval::types::{
-    NavigationStep, QueryComplexity, RetrieveOptions, RetrieveResponse, SearchPath,
-    StrategyPreference, SufficiencyLevel,
+    NavigationDecision, QueryComplexity, ReasoningChain, ReasoningStep, RetrieveOptions,
+    RetrieveResponse, SearchPath, StageName, StrategyPreference, SufficiencyLevel,
 };
 
 /// Search algorithm type.
@@ -201,6 +203,19 @@ pub struct PipelineContext {
     pub options: RetrieveOptions,
     /// Optional Pilot for navigation guidance.
     pub pilot: Option<Arc<dyn Pilot>>,
+    /// Adaptive token budget controller for the entire pipeline.
+    pub budget_controller: RetrievalBudgetController,
+    /// Tiered reasoning cache (L1 exact, L2 path pattern, L3 strategy score).
+    pub reasoning_cache: Arc<ReasoningCache>,
+
+    /// Pre-computed reasoning index for fast path resolution.
+    pub reasoning_index: Option<Arc<ReasoningIndex>>,
+
+    /// Hot node tracker for recording retrieval frequency (session-scoped).
+    pub hot_tracker: Option<Arc<HotNodeTracker>>,
+
+    /// Cross-document relationship graph for graph-aware retrieval.
+    pub document_graph: Option<Arc<DocumentGraph>>,
 
     // ============ Analyze Stage Output ============
     /// Detected query complexity.
@@ -209,6 +224,9 @@ pub struct PipelineContext {
     pub keywords: Vec<String>,
     /// Target sections from ToC matching.
     pub target_sections: Vec<String>,
+    /// Resolved structural path hints — node IDs extracted from the query
+    /// (e.g. "第3章" → NodeId of Chapter 3). Search should start from these nodes.
+    pub resolved_path_hints: Vec<(String, NodeId)>,
     /// Decomposed sub-queries (if query was decomposed).
     pub decomposition: Option<crate::retrieval::decompose::DecompositionResult>,
 
@@ -225,8 +243,8 @@ pub struct PipelineContext {
     pub candidates: Vec<CandidateNode>,
     /// Search paths explored.
     pub search_paths: Vec<SearchPath>,
-    /// Navigation trace for debugging.
-    pub navigation_trace: Vec<NavigationStep>,
+    /// Reasoning chain — ordered steps explaining every retrieval decision.
+    pub reasoning_chain: ReasoningChain,
     /// Number of search iterations performed.
     pub search_iterations: usize,
 
@@ -260,6 +278,7 @@ impl PipelineContext {
     ) -> Self {
         // Build retrieval index for efficient operations
         let retrieval_index = Some(tree.build_retrieval_index());
+        let budget_controller = RetrievalBudgetController::new(options.max_tokens);
 
         Self {
             query: query.into(),
@@ -267,16 +286,22 @@ impl PipelineContext {
             retrieval_index,
             options,
             pilot: None,
+            budget_controller,
+            reasoning_cache: Arc::new(ReasoningCache::new()),
+            reasoning_index: None,
+            hot_tracker: None,
+            document_graph: None,
             complexity: None,
             keywords: Vec::new(),
             target_sections: Vec::new(),
+            resolved_path_hints: Vec::new(),
             decomposition: None,
             selected_strategy: None,
             selected_algorithm: None,
             search_config: None,
             candidates: Vec::new(),
             search_paths: Vec::new(),
-            navigation_trace: Vec::new(),
+            reasoning_chain: ReasoningChain::new(),
             search_iterations: 0,
             sufficiency: SufficiencyLevel::default(),
             accumulated_content: String::new(),
@@ -303,6 +328,24 @@ impl PipelineContext {
     /// Set the Pilot for this context.
     pub fn set_pilot(&mut self, pilot: Option<Arc<dyn Pilot>>) {
         self.pilot = pilot;
+    }
+
+    /// Set the reasoning index for this retrieval context.
+    pub fn with_reasoning_index(mut self, index: ReasoningIndex) -> Self {
+        self.reasoning_index = Some(Arc::new(index));
+        self
+    }
+
+    /// Set the hot node tracker for this retrieval context.
+    pub fn with_hot_tracker(mut self, tracker: HotNodeTracker) -> Self {
+        self.hot_tracker = Some(Arc::new(tracker));
+        self
+    }
+
+    /// Set the document graph for graph-aware retrieval.
+    pub fn with_document_graph(mut self, graph: DocumentGraph) -> Self {
+        self.document_graph = Some(Arc::new(graph));
+        self
     }
 
     /// Get the Pilot reference, if available.
@@ -372,6 +415,33 @@ impl PipelineContext {
         }
     }
 
+    /// Append a reasoning step to the chain.
+    pub fn push_reasoning_step(&mut self, step: ReasoningStep) {
+        self.reasoning_chain.push(step);
+    }
+
+    /// Convenience: push a simple reasoning step with no node association.
+    pub fn record_reasoning(
+        &mut self,
+        stage: StageName,
+        reasoning: impl Into<String>,
+        decision: NavigationDecision,
+    ) {
+        self.push_reasoning_step(ReasoningStep {
+            stage,
+            node_id: None,
+            title: None,
+            score: 0.0,
+            decision,
+            depth: 0,
+            reasoning: reasoning.into(),
+            candidates: Vec::new(),
+            strategy_used: None,
+            llm_call: None,
+            references_followed: Vec::new(),
+        });
+    }
+
     /// Finalize the context into a response.
     pub fn finalize(self) -> RetrieveResponse {
         self.result.unwrap_or_else(|| RetrieveResponse {
@@ -384,7 +454,7 @@ impl PipelineContext {
                 .map(|s| format!("{:?}", s))
                 .unwrap_or_else(|| "unknown".to_string()),
             complexity: self.complexity.unwrap_or_default(),
-            trace: self.navigation_trace,
+            reasoning_chain: self.reasoning_chain,
             tokens_used: self.token_count,
         })
     }

@@ -12,10 +12,11 @@
 use async_trait::async_trait;
 use tracing::info;
 
-use crate::document::{DocumentTree, TocView};
+use crate::document::{DocumentTree, NodeId, TocView};
 use crate::retrieval::complexity::ComplexityDetector;
 use crate::retrieval::decompose::{DecompositionConfig, QueryDecomposer};
 use crate::retrieval::pipeline::{FailurePolicy, PipelineContext, RetrievalStage, StageOutcome};
+use crate::retrieval::types::{NavigationDecision, StageName};
 use crate::llm::LlmClient;
 
 /// Analyze Stage - analyzes queries for retrieval planning.
@@ -25,6 +26,56 @@ use crate::llm::LlmClient;
 /// 2. Extracts keywords for matching
 /// 3. Matches target sections from ToC
 /// 4. Decomposes complex queries into sub-queries (if enabled)
+///
+/// # Example
+///
+/// Convert Chinese number string to integer (e.g. "三" → 3, "二十一" → 21).
+fn chinese_num_to_int(s: &str) -> Option<usize> {
+    let chars: Vec<char> = s.chars().collect();
+    if chars.is_empty() {
+        return None;
+    }
+    // If purely digits, parse directly
+    if chars.iter().all(|c| c.is_ascii_digit()) {
+        return s.parse().ok();
+    }
+    let map = |c: char| -> usize {
+        match c {
+            '一' => 1, '二' => 2, '三' => 3, '四' => 4, '五' => 5,
+            '六' => 6, '七' => 7, '八' => 8, '九' => 9, '十' => 10,
+            '百' => 100,
+            _ => 0,
+        }
+    };
+    // Simple two-pass: handle 十/百 as positional
+    let mut total: usize = 0;
+    let mut current: usize = 0;
+    for &c in &chars {
+        let v = map(c);
+        if v == 0 {
+            continue;
+        }
+        if v >= 10 {
+            // Positional multiplier
+            let base = if current == 0 { 1 } else { current };
+            total += base * v;
+            current = 0;
+        } else {
+            current = v;
+        }
+    }
+    total += current;
+    if total > 0 { Some(total) } else { None }
+}
+
+/// Analyze Stage - analyzes queries for retrieval planning.
+///
+/// This stage:
+/// 1. Detects query complexity (Simple/Medium/Complex)
+/// 2. Extracts keywords for matching
+/// 3. Matches target sections from ToC
+/// 4. Extracts structural path hints (Section 3.2, 第3章, etc.)
+/// 5. Decomposes complex queries into sub-queries (if enabled)
 ///
 /// # Example
 ///
@@ -144,6 +195,88 @@ impl AnalyzeStage {
             .collect()
     }
 
+    /// Extract structural path hints from the query.
+    ///
+    /// Recognizes patterns like:
+    /// - "第3章", "第2节", "第一章" (Chinese chapter/section)
+    /// - "Section 3.2", "section 4.1.2" (English section numbers)
+    /// - "Chapter 5", "chapter 10" (English chapter)
+    /// - "3.2.1", "2.1" (bare section numbers)
+    /// - "表3", "Table 5", "图2", "Figure 4" (table/figure references)
+    ///
+    /// Maps them to tree NodeIds via `find_by_structure()`.
+    fn extract_structure_hints(&self, query: &str, tree: &DocumentTree) -> Vec<(String, NodeId)> {
+        let mut hints = Vec::new();
+
+        // Chinese patterns: 第X章, 第X节, 第X部分
+        for cap in regex::Regex::new(r"第([一二三四五六七八九十百\d]+)[章节部分]")
+            .unwrap()
+            .captures_iter(query)
+        {
+            let num = chinese_num_to_int(&cap[1]).unwrap_or(0);
+            if num > 0 {
+                if let Some(node_id) = tree.find_by_structure(&num.to_string()) {
+                    hints.push((cap[0].to_string(), node_id));
+                }
+            }
+        }
+
+        // "Section X.Y.Z" or "section X.Y"
+        for cap in regex::Regex::new(r"(?i)section\s+(\d+(?:\.\d+)*)")
+            .unwrap()
+            .captures_iter(query)
+        {
+            if let Some(node_id) = tree.find_by_structure(&cap[1]) {
+                hints.push((cap[0].to_string(), node_id));
+            }
+        }
+
+        // "Chapter X"
+        for cap in regex::Regex::new(r"(?i)chapter\s+(\d+)")
+            .unwrap()
+            .captures_iter(query)
+        {
+            if let Some(node_id) = tree.find_by_structure(&cap[1]) {
+                hints.push((cap[0].to_string(), node_id));
+            }
+        }
+
+        // Bare section numbers: "3.2.1", "2.1"
+        // Use word boundary instead of lookbehind (Rust regex doesn't support lookaround)
+        for cap in regex::Regex::new(r"\b(\d+\.\d+(?:\.\d+)*)")
+            .unwrap()
+            .captures_iter(query)
+        {
+            if let Some(node_id) = tree.find_by_structure(&cap[1]) {
+                hints.push((cap[0].to_string(), node_id));
+            }
+        }
+
+        // Table/Figure references
+        for cap in regex::Regex::new(r"(?:表|(?i)table)\s*(\d+)")
+            .unwrap()
+            .captures_iter(query)
+        {
+            if let Some(node_id) = tree.find_by_structure(&format!("table {}", &cap[1])) {
+                hints.push((cap[0].to_string(), node_id));
+            }
+        }
+        for cap in regex::Regex::new(r"(?:图|(?i)figure)\s*(\d+)")
+            .unwrap()
+            .captures_iter(query)
+        {
+            if let Some(node_id) = tree.find_by_structure(&format!("figure {}", &cap[1])) {
+                hints.push((cap[0].to_string(), node_id));
+            }
+        }
+
+        // Deduplicate by NodeId
+        let mut seen = std::collections::HashSet::new();
+        hints.retain(|(_, nid)| seen.insert(*nid));
+
+        hints
+    }
+
     /// Match target sections from ToC.
     fn match_toc_sections(&self, query: &str, tree: &DocumentTree) -> Vec<String> {
         if !self.enable_toc_matching {
@@ -231,6 +364,16 @@ impl RetrievalStage for AnalyzeStage {
             info!("Target sections: {:?}", ctx.target_sections);
         }
 
+        // 3.5 Extract structural path hints
+        ctx.resolved_path_hints = self.extract_structure_hints(&ctx.query, &ctx.tree);
+        if !ctx.resolved_path_hints.is_empty() {
+            info!(
+                "Resolved {} structure hints: {:?}",
+                ctx.resolved_path_hints.len(),
+                ctx.resolved_path_hints.iter().map(|(s, _)| s).collect::<Vec<_>>()
+            );
+        }
+
         // 4. Decompose query if enabled and complex enough
         if self.enable_decomposition {
             if let Some(ref decomposer) = self.query_decomposer {
@@ -268,6 +411,35 @@ impl RetrievalStage for AnalyzeStage {
 
         // 5. Update metrics
         ctx.metrics.llm_calls += 0; // No LLM calls in this stage
+
+        // 6. Record reasoning
+        let complexity_str = format!("{:?}", ctx.complexity.unwrap_or_default());
+        let mut reasoning_parts = vec![
+            format!("Query complexity: {}", complexity_str),
+            format!("Keywords: {:?}", ctx.keywords),
+        ];
+        if !ctx.target_sections.is_empty() {
+            reasoning_parts.push(format!("Target sections: {:?}", ctx.target_sections));
+        }
+        if !ctx.resolved_path_hints.is_empty() {
+            reasoning_parts.push(format!(
+                "Structure hints: {:?}",
+                ctx.resolved_path_hints.iter().map(|(s, _)| s).collect::<Vec<_>>()
+            ));
+        }
+        if let Some(ref decomp) = ctx.decomposition {
+            if decomp.was_decomposed {
+                reasoning_parts.push(format!(
+                    "Decomposed into {} sub-queries",
+                    decomp.sub_queries.len()
+                ));
+            }
+        }
+        ctx.record_reasoning(
+            StageName::Analyze,
+            reasoning_parts.join("; "),
+            NavigationDecision::ExploreMore,
+        );
 
         Ok(StageOutcome::cont())
     }

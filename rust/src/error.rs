@@ -41,6 +41,10 @@ pub enum Error {
     #[error("Index corrupted: {0}")]
     IndexCorrupted(String),
 
+    /// Document graph build error.
+    #[error("Document graph build error: {0}")]
+    GraphBuild(String),
+
     // =========================================================================
     // Retrieval Errors
     // =========================================================================

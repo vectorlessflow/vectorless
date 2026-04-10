@@ -36,6 +36,7 @@
 //! ```
 
 pub mod config;
+pub mod graph_builder;
 pub mod incremental;
 pub mod pipeline;
 pub mod stages;

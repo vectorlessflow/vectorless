@@ -110,6 +110,8 @@ struct WorkspaceInner {
     meta_index: HashMap<String, DocumentMetaEntry>,
     /// LRU cache for loaded documents.
     cache: DocumentCache,
+    /// Cross-document relationship graph (cached).
+    document_graph: Option<crate::document::DocumentGraph>,
 }
 
 /// An async workspace for managing indexed documents.
@@ -148,6 +150,7 @@ impl Workspace {
             root: None,
             meta_index: HashMap::new(),
             cache: DocumentCache::with_capacity(options.cache_size),
+            document_graph: None,
         };
 
         Self::load_meta_index(&mut inner)?;
@@ -184,6 +187,7 @@ impl Workspace {
             root: Some(root),
             meta_index: HashMap::new(),
             cache: DocumentCache::with_capacity(options.cache_size),
+            document_graph: None,
         };
 
         Self::load_meta_index(&mut inner)?;
@@ -254,6 +258,10 @@ impl Workspace {
         let _ = inner.cache.remove(&doc_id);
 
         info!("Saved document {} to async workspace", doc_id);
+
+        // Invalidate document graph since documents changed
+        inner.document_graph = None;
+
         Ok(())
     }
 
@@ -354,6 +362,10 @@ impl Workspace {
         Self::save_meta_index(&inner)?;
 
         info!("Removed document {} from async workspace", id);
+
+        // Invalidate document graph since documents changed
+        inner.document_graph = None;
+
         Ok(true)
     }
 
@@ -392,6 +404,60 @@ impl Workspace {
         let inner = self.inner.write().await;
         inner.cache.clear()?;
         debug!("Cleared async document cache");
+        Ok(())
+    }
+
+    // =========================================================================
+    // Document Graph Methods
+    // =========================================================================
+
+    /// Storage key for the document graph.
+    const GRAPH_KEY: &'static str = "_graph";
+
+    /// Get the document graph, loading from backend if not cached.
+    pub async fn get_graph(&self) -> Result<Option<crate::document::DocumentGraph>> {
+        // Check cache first
+        {
+            let inner = self.inner.read().await;
+            if inner.document_graph.is_some() {
+                return Ok(inner.document_graph.clone());
+            }
+        }
+
+        // Load from backend
+        let inner = self.inner.read().await;
+        match inner.backend.get(Self::GRAPH_KEY)? {
+            Some(bytes) => {
+                let graph: crate::document::DocumentGraph =
+                    serde_json::from_slice(&bytes).map_err(|e| {
+                        crate::Error::Serialization(format!("Failed to deserialize graph: {}", e))
+                    })?;
+                debug!("Loaded document graph from backend");
+                Ok(Some(graph))
+            }
+            None => Ok(None),
+        }
+    }
+
+    /// Persist the document graph to the backend.
+    pub async fn set_graph(&self, graph: &crate::document::DocumentGraph) -> Result<()> {
+        let mut inner = self.inner.write().await;
+        let bytes = serde_json::to_vec(graph).map_err(|e| {
+            crate::Error::Serialization(format!("Failed to serialize graph: {}", e))
+        })?;
+        inner.backend.put(Self::GRAPH_KEY, &bytes)?;
+        inner.document_graph = Some(graph.clone());
+        info!("Persisted document graph ({} nodes, {} edges)", graph.node_count(), graph.edge_count());
+        Ok(())
+    }
+
+    /// Invalidate the cached document graph (e.g. after add/remove).
+    pub async fn invalidate_graph(&self) -> Result<()> {
+        let mut inner = self.inner.write().await;
+        inner.document_graph = None;
+        // Also remove from backend so stale graphs don't persist
+        let _ = inner.backend.delete(Self::GRAPH_KEY);
+        debug!("Invalidated document graph cache");
         Ok(())
     }
 

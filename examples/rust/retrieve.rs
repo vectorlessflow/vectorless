@@ -163,12 +163,16 @@ async fn demo_orchestrator(tree: &DocumentTree) -> vectorless::Result<()> {
     println!("  - Is sufficient: {}", response.is_sufficient);
     println!("  - Confidence: {:.2}", response.confidence);
     println!("  - Complexity: {:?}", response.complexity);
-    println!("  - Navigation steps: {}", response.trace.len());
+    println!("  - Reasoning steps: {}", response.reasoning_chain.len());
 
-    if !response.trace.is_empty() {
-        println!("\n  Navigation trace:");
-        for (i, step) in response.trace.iter().take(5).enumerate() {
-            println!("    {}. {} (score: {:.2})", i + 1, step.title, step.score);
+    if !response.reasoning_chain.is_empty() {
+        println!("\n  Reasoning chain:");
+        for (i, step) in response.reasoning_chain.steps.iter().take(5).enumerate() {
+            let title = step.title.as_deref().unwrap_or("(no node)");
+            println!(
+                "    {}. [{}] {} (score: {:.2}): {}",
+                i + 1, step.stage, title, step.score, step.reasoning
+            );
         }
     }
 

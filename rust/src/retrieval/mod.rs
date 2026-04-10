@@ -52,6 +52,7 @@ mod decompose;
 mod pipeline_retriever;
 mod reference;
 mod retriever;
+pub mod stream;
 mod types;
 
 pub mod cache;
@@ -71,14 +72,16 @@ pub use context::{
 pub use pipeline_retriever::PipelineRetriever;
 pub use retriever::{RetrievalContext, Retriever, RetrieverError, RetrieverResult};
 pub use types::*;
+pub use types::{LlmCallSummary, ReasoningCandidate, ReasoningChain, ReasoningStep, StageName};
 
 // Re-export StrategyPreference as Strategy for convenience
 pub use types::StrategyPreference as Strategy;
 
 // Pipeline exports
 pub use pipeline::{
-    CandidateNode, ExecutionGroup, FailurePolicy, PipelineContext, RetrievalMetrics,
-    RetrievalOrchestrator, RetrievalStage, SearchAlgorithm, SearchConfig, StageOutcome,
+    CandidateNode, ExecutionGroup, FailurePolicy, PipelineContext, RetrievalBudgetController,
+    RetrievalMetrics, RetrievalOrchestrator, RetrievalStage, SearchAlgorithm, SearchConfig,
+    StageOutcome, BudgetStatus,
 };
 
 // Re-export PipelineContext as RetrievalContext for stages (alias for clarity)
@@ -106,6 +109,7 @@ pub use complexity::ComplexityDetector;
 
 // Cache exports
 pub use cache::PathCache;
+pub use cache::{CachedCandidate, ReasoningCache, ReasoningCacheConfig, ReasoningCacheStats};
 
 // Content aggregation exports
 pub use content::{
@@ -132,3 +136,6 @@ pub use reference::{
     expand_with_references, FollowedReference, ReferenceConfig, ReferenceExpansion,
     ReferenceFollower,
 };
+
+// Streaming exports
+pub use stream::{RetrieveEvent, RetrieveEventReceiver, DEFAULT_STREAM_BOUND};

@@ -44,11 +44,13 @@
 //! let response = orchestrator.execute(tree, query, options).await?;
 //! ```
 
+mod budget;
 mod context;
 mod orchestrator;
 mod outcome;
 mod stage;
 
+pub use budget::{BudgetStatus, RetrievalBudgetController};
 pub use context::{
     CandidateNode, PipelineContext, RetrievalMetrics, SearchAlgorithm, SearchConfig, StageResult,
 };

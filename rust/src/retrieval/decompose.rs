@@ -64,6 +64,10 @@ pub struct SubQuery {
     pub depends_on: Vec<usize>,
     /// Type of sub-query.
     pub query_type: SubQueryType,
+    /// Optional structural path constraint extracted from the query
+    /// (e.g. "3.2", "Chapter 5"). When set, the search should start
+    /// from the corresponding tree node instead of searching broadly.
+    pub path_constraint: Option<String>,
 }
 
 /// Complexity level for a sub-query.
@@ -130,6 +134,7 @@ impl DecompositionResult {
                 priority: 0,
                 depends_on: vec![],
                 query_type: SubQueryType::Fact,
+                path_constraint: None,
             }],
             was_decomposed: false,
             reason: reason.to_string(),
@@ -338,6 +343,7 @@ impl QueryDecomposer {
                     priority: i as u8,
                     depends_on: vec![],
                     query_type: self.detect_query_type(part),
+                    path_constraint: None,
                 });
             }
         }
@@ -359,6 +365,7 @@ impl QueryDecomposer {
                                     vec![]
                                 },
                                 query_type: self.detect_query_type(part),
+                                path_constraint: None,
                             });
                         }
                         break;
@@ -666,6 +673,7 @@ mod tests {
                 depends_on: vec![],
                 query_type: SubQueryType::Fact,
                 complexity: SubQueryComplexity::Simple,
+                path_constraint: None,
             },
             SubQuery {
                 text: "Second".to_string(),
@@ -673,6 +681,7 @@ mod tests {
                 depends_on: vec![0],
                 query_type: SubQueryType::Fact,
                 complexity: SubQueryComplexity::Simple,
+                path_constraint: None,
             },
         ];
         result.was_decomposed = true;
@@ -711,6 +720,7 @@ mod tests {
                     depends_on: vec![],
                     query_type: SubQueryType::Fact,
                     complexity: SubQueryComplexity::Simple,
+                    path_constraint: None,
                 },
                 content: "Answer 1".to_string(),
                 score: 0.9,
@@ -723,6 +733,7 @@ mod tests {
                     depends_on: vec![0],
                     query_type: SubQueryType::Fact,
                     complexity: SubQueryComplexity::Simple,
+                    path_constraint: None,
                 },
                 content: "Answer 2".to_string(),
                 score: 0.8,

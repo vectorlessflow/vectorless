@@ -118,6 +118,13 @@ pub struct RetrieveOptions {
 
     /// Whether to use async context building for large documents.
     pub use_async_context: bool,
+
+    /// Enable streaming retrieval results.
+    ///
+    /// When enabled, use `query_stream()` to receive incremental
+    /// `RetrieveEvent`s as each pipeline stage completes. When disabled
+    /// (default), the standard `query()` returns a single final result.
+    pub streaming: bool,
 }
 
 impl Default for RetrieveOptions {
@@ -136,6 +143,7 @@ impl Default for RetrieveOptions {
             pruning_strategy: super::PruningStrategy::default(),
             token_estimation: super::TokenEstimation::default(),
             use_async_context: false,
+            streaming: false,
         }
     }
 }
@@ -235,6 +243,13 @@ impl RetrieveOptions {
     #[must_use]
     pub fn with_async_context(mut self, enable: bool) -> Self {
         self.use_async_context = enable;
+        self
+    }
+
+    /// Enable streaming retrieval results.
+    #[must_use]
+    pub fn with_streaming(mut self, enable: bool) -> Self {
+        self.streaming = enable;
         self
     }
 }
@@ -343,8 +358,8 @@ pub struct RetrieveResponse {
     /// Detected query complexity.
     pub complexity: QueryComplexity,
 
-    /// Search trace for debugging.
-    pub trace: Vec<NavigationStep>,
+    /// Reasoning chain explaining how results were found.
+    pub reasoning_chain: ReasoningChain,
 
     /// Total tokens used.
     pub tokens_used: usize,
@@ -359,7 +374,7 @@ impl Default for RetrieveResponse {
             is_sufficient: false,
             strategy_used: String::new(),
             complexity: QueryComplexity::Medium,
-            trace: Vec::new(),
+            reasoning_chain: ReasoningChain::default(),
             tokens_used: 0,
         }
     }
@@ -418,6 +433,135 @@ pub enum NavigationDecision {
 
     /// Skip this branch.
     Skip,
+}
+
+/// Pipeline stage name for reasoning chain provenance.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum StageName {
+    /// Query analysis stage.
+    Analyze,
+    /// Strategy planning stage.
+    Plan,
+    /// Tree search stage.
+    Search,
+    /// Sufficiency evaluation stage.
+    Evaluate,
+}
+
+impl std::fmt::Display for StageName {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Analyze => write!(f, "analyze"),
+            Self::Plan => write!(f, "plan"),
+            Self::Search => write!(f, "search"),
+            Self::Evaluate => write!(f, "evaluate"),
+        }
+    }
+}
+
+/// Summary of an LLM call made during a reasoning step.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LlmCallSummary {
+    /// Truncated prompt summary for display.
+    pub prompt_summary: String,
+    /// Tokens consumed by this call.
+    pub tokens_used: usize,
+    /// Model identifier.
+    pub model: String,
+}
+
+/// A candidate node considered but not selected during reasoning.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReasoningCandidate {
+    /// Node ID.
+    pub node_id: String,
+    /// Node title.
+    pub title: String,
+    /// Relevance score of this candidate.
+    pub score: f32,
+}
+
+/// A single step in the reasoning chain.
+///
+/// Unlike `NavigationStep` which only records "where" the search went,
+/// `ReasoningStep` also records "why" — the decision rationale,
+/// candidates considered, strategy used, and any LLM calls made.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReasoningStep {
+    /// Which pipeline stage produced this step.
+    pub stage: StageName,
+    /// Node ID visited (if applicable).
+    pub node_id: Option<String>,
+    /// Node title (if applicable).
+    pub title: Option<String>,
+    /// Relevance score at this step.
+    pub score: f32,
+    /// Decision made at this step.
+    pub decision: NavigationDecision,
+    /// Depth in tree.
+    pub depth: usize,
+    /// Human-readable explanation of why this decision was made.
+    pub reasoning: String,
+    /// Candidates considered but not selected at this step.
+    pub candidates: Vec<ReasoningCandidate>,
+    /// Strategy used at this step (e.g. "keyword", "hybrid").
+    pub strategy_used: Option<String>,
+    /// LLM call summary, if an LLM was consulted.
+    pub llm_call: Option<LlmCallSummary>,
+    /// Reference identifiers followed from this step (cross-reference tracking).
+    pub references_followed: Vec<String>,
+}
+
+/// Complete reasoning chain for a retrieval operation.
+///
+/// Provides an ordered, auditable trace of every decision the engine made
+/// from query analysis through final evaluation. This is the core
+/// differentiator — not just results, but *why* these results.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ReasoningChain {
+    /// Ordered reasoning steps.
+    pub steps: Vec<ReasoningStep>,
+}
+
+impl ReasoningChain {
+    /// Create an empty reasoning chain.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Append a reasoning step.
+    pub fn push(&mut self, step: ReasoningStep) {
+        self.steps.push(step);
+    }
+
+    /// Number of reasoning steps.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.steps.len()
+    }
+
+    /// Whether the chain is empty.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.steps.is_empty()
+    }
+
+    /// Build a human-readable summary of the full chain.
+    #[must_use]
+    pub fn summary(&self) -> String {
+        self.steps
+            .iter()
+            .map(|s| {
+                let node_info = s
+                    .title
+                    .as_deref()
+                    .unwrap_or("(no node)");
+                format!("[{}] {} (score={:.2}): {}", s.stage, node_info, s.score, s.reasoning)
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
 }
 
 /// Search path for multi-path algorithms.

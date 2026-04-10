@@ -15,9 +15,10 @@ use tracing::info;
 // DocumentTree is accessed via context
 use crate::llm::LlmClient;
 use crate::retrieval::pipeline::{
-    FailurePolicy, PipelineContext, RetrievalStage, SearchAlgorithm, SearchConfig, StageOutcome,
+    BudgetStatus, FailurePolicy, PipelineContext, RetrievalStage, SearchAlgorithm, SearchConfig,
+    StageOutcome,
 };
-use crate::retrieval::types::{QueryComplexity, StrategyPreference};
+use crate::retrieval::types::{NavigationDecision, QueryComplexity, StageName, StrategyPreference};
 
 /// Plan Stage - plans the retrieval strategy.
 ///
@@ -54,12 +55,19 @@ impl PlanStage {
         self
     }
 
-    /// Select retrieval strategy based on complexity and preferences.
+    /// Select retrieval strategy based on complexity, preferences, and budget.
     fn select_strategy(&self, ctx: &PipelineContext) -> StrategyPreference {
         // Respect explicit strategy preference
         if ctx.options.strategy != StrategyPreference::Auto {
             info!("Using explicit strategy: {:?}", ctx.options.strategy);
             return ctx.options.strategy;
+        }
+
+        // Budget-aware strategy selection
+        let budget_status = ctx.budget_controller.status();
+        if budget_status.should_stop() {
+            info!("Budget exhausted, forcing Keyword strategy");
+            return StrategyPreference::ForceKeyword;
         }
 
         // Auto-select based on complexity
@@ -71,8 +79,10 @@ impl PlanStage {
                 StrategyPreference::ForceKeyword
             }
             QueryComplexity::Medium => {
-                // Use semantic if available, otherwise keyword with LLM fallback
-                if self.llm_client.is_some() {
+                if budget_status == BudgetStatus::Constrained {
+                    info!("Complexity is Medium but budget constrained, selecting Keyword strategy");
+                    StrategyPreference::ForceKeyword
+                } else if self.llm_client.is_some() {
                     info!("Complexity is Medium, selecting LLM strategy");
                     StrategyPreference::ForceLlm
                 } else {
@@ -81,7 +91,14 @@ impl PlanStage {
                 }
             }
             QueryComplexity::Complex => {
-                if self.llm_client.is_some() {
+                if budget_status == BudgetStatus::Constrained {
+                    info!("Complexity is Complex but budget constrained, selecting Hybrid strategy");
+                    if self.llm_client.is_some() {
+                        StrategyPreference::ForceHybrid
+                    } else {
+                        StrategyPreference::ForceKeyword
+                    }
+                } else if self.llm_client.is_some() {
                     info!("Complexity is Complex, selecting LLM strategy");
                     StrategyPreference::ForceLlm
                 } else {
@@ -175,6 +192,34 @@ impl RetrievalStage for PlanStage {
                 .as_ref()
                 .map(|c| c.beam_width)
                 .unwrap_or(0)
+        );
+
+        // Record reasoning
+        let strategy_str = ctx
+            .selected_strategy
+            .map(|s| format!("{:?}", s))
+            .unwrap_or_else(|| "auto".to_string());
+        let algorithm_str = ctx
+            .selected_algorithm
+            .map(|a| a.name().to_string())
+            .unwrap_or_else(|| "unknown".to_string());
+        let beam_width = ctx
+            .search_config
+            .as_ref()
+            .map(|c| c.beam_width)
+            .unwrap_or(3);
+        ctx.record_reasoning(
+            StageName::Plan,
+            format!(
+                "Selected strategy={}, algorithm={}, beam_width={}; budget: {}/{} ({:.0}%)",
+                strategy_str,
+                algorithm_str,
+                beam_width,
+                ctx.budget_controller.consumed(),
+                ctx.budget_controller.total_budget(),
+                ctx.budget_controller.utilization() * 100.0
+            ),
+            NavigationDecision::ExploreMore,
         );
 
         Ok(StageOutcome::cont())

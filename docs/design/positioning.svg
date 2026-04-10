@@ -1,0 +1,71 @@
+<svg viewBox="0 0 600 520" xmlns="http://www.w3.org/2000/svg" font-family="'Inter', 'SF Pro Display', system-ui, sans-serif">
+  <defs>
+    <radialGradient id="g-docs" cx="50%" cy="40%">
+      <stop offset="0%" stop-color="#60a5fa" stop-opacity="0.22"/>
+      <stop offset="100%" stop-color="#3b82f6" stop-opacity="0.06"/>
+    </radialGradient>
+    <radialGradient id="g-ai" cx="50%" cy="40%">
+      <stop offset="0%" stop-color="#fbbf24" stop-opacity="0.22"/>
+      <stop offset="100%" stop-color="#f59e0b" stop-opacity="0.06"/>
+    </radialGradient>
+    <radialGradient id="g-engine" cx="50%" cy="40%">
+      <stop offset="0%" stop-color="#818cf8" stop-opacity="0.22"/>
+      <stop offset="100%" stop-color="#6366f1" stop-opacity="0.06"/>
+    </radialGradient>
+    <filter id="center-glow">
+      <feGaussianBlur stdDeviation="6" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="ts">
+      <feDropShadow dx="0" dy="1" stdDeviation="1" flood-color="#000" flood-opacity="0.12"/>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="600" height="520" fill="#fafafa" rx="20"/>
+
+  <!-- ===== Three circles ===== -->
+  <!-- Documents (top-left) -->
+  <circle cx="225" cy="200" r="148" fill="url(#g-docs)" stroke="#93c5fd" stroke-width="1.5"/>
+  <!-- AI (top-right) -->
+  <circle cx="375" cy="200" r="148" fill="url(#g-ai)" stroke="#fcd34d" stroke-width="1.5"/>
+  <!-- Vectorless (bottom-center) -->
+  <circle cx="300" cy="345" r="148" fill="url(#g-engine)" stroke="#a5b4fc" stroke-width="1.5"/>
+
+  <!-- ===== Circle labels (in non-overlapping area) ===== -->
+  <!-- Documents -->
+  <text x="128" y="138" font-size="20" font-weight="700" fill="#1e40af" text-anchor="middle" filter="url(#ts)">Documents</text>
+  <text x="128" y="160" font-size="11" fill="#3b82f6" text-anchor="middle">PDF · Markdown · DOCX · HTML</text>
+
+  <!-- AI -->
+  <text x="472" y="138" font-size="20" font-weight="700" fill="#92400e" text-anchor="middle" filter="url(#ts)">AI</text>
+  <text x="472" y="160" font-size="11" fill="#d97706" text-anchor="middle">GPT · Claude · Gemini · ...</text>
+
+  <!-- Vectorless -->
+  <text x="300" y="440" font-size="20" font-weight="700" fill="#4338ca" text-anchor="middle" filter="url(#ts)">Vectorless</text>
+  <text x="300" y="462" font-size="11" fill="#6366f1" text-anchor="middle">Reasoning-native Engine</text>
+
+  <!-- ===== Pairwise intersections ===== -->
+  <!-- Documents ∩ AI (top center) — what you get without Vectorless -->
+  <rect x="262" y="142" width="76" height="24" rx="12" fill="white" fill-opacity="0.8" stroke="#e2e8f0" stroke-width="0.5"/>
+  <text x="300" y="159" font-size="10" fill="#64748b" text-anchor="middle" font-weight="600">Prompting</text>
+
+  <!-- Documents ∩ Vectorless (left bottom) -->
+  <rect x="148" y="280" width="76" height="40" rx="12" fill="white" fill-opacity="0.8" stroke="#e2e8f0" stroke-width="0.5"/>
+  <text x="186" y="297" font-size="13" fill="#4338ca" text-anchor="middle" font-weight="700">Index</text>
+  <text x="186" y="313" font-size="9" fill="#6366f1" text-anchor="middle">Parse → Tree</text>
+
+  <!-- AI ∩ Vectorless (right bottom) -->
+  <rect x="376" y="280" width="76" height="40" rx="12" fill="white" fill-opacity="0.8" stroke="#e2e8f0" stroke-width="0.5"/>
+  <text x="414" y="297" font-size="13" fill="#4338ca" text-anchor="middle" font-weight="700">Reason</text>
+  <text x="414" y="313" font-size="9" fill="#6366f1" text-anchor="middle">LLM Traverse</text>
+
+  <!-- ===== Center: all three ===== -->
+  <circle cx="300" cy="272" r="36" fill="#0f172a" filter="url(#center-glow)"/>
+  <circle cx="300" cy="272" r="34" fill="none" stroke="#6366f1" stroke-width="1" stroke-opacity="0.4"/>
+  <text x="300" y="268" font-size="16" font-weight="800" fill="white" text-anchor="middle">Retrieve</text>
+  <text x="300" y="286" font-size="8" fill="#a5b4fc" text-anchor="middle">with reasoning chain</text>
+
+  <!-- Bottom tagline -->
+  <text x="300" y="506" font-size="11" fill="#94a3b8" text-anchor="middle">Index documents, reason with AI, retrieve with full context</text>
+</svg>

@@ -13,20 +13,24 @@ use std::sync::Arc;
 use tracing::{debug, info, warn};
 
 use crate::document::DocumentTree;
+use crate::document::ReasoningIndex;
 use crate::llm::LlmClient;
 use crate::retrieval::RetrievalContext;
 use crate::retrieval::pilot::Pilot;
+use crate::retrieval::cache::CachedCandidate;
 use crate::retrieval::pipeline::{
-    CandidateNode, FailurePolicy, PipelineContext, RetrievalStage, SearchAlgorithm, StageOutcome,
+    BudgetStatus, CandidateNode, FailurePolicy, PipelineContext, RetrievalStage, SearchAlgorithm,
+    StageOutcome,
 };
 use crate::retrieval::search::{
     BeamSearch, GreedySearch, SearchConfig as SearchAlgConfig, SearchCue, SearchTree,
     ToCNavigator,
 };
+use crate::retrieval::search::extract_keywords;
 use crate::retrieval::strategy::{
     HybridConfig, HybridStrategy, KeywordStrategy, LlmStrategy, RetrievalStrategy,
 };
-use crate::retrieval::types::StrategyPreference;
+use crate::retrieval::types::{NavigationDecision, ReasoningCandidate, ReasoningStep, StageName, StrategyPreference};
 
 /// Search Stage - executes tree search with optional Pilot guidance.
 ///
@@ -301,6 +305,115 @@ impl SearchStage {
 
         (all_paths, all_candidates)
     }
+
+    /// Check if a query is asking for a document summary/overview.
+    fn is_summary_query(query: &str) -> bool {
+        let lower = query.to_lowercase();
+        let patterns = [
+            "what is this document",
+            "what is this about",
+            "summarize",
+            "summary",
+            "overview",
+            "give me an overview",
+            "describe this document",
+            "main topics",
+            "table of contents",
+            "这篇文档讲了什么",
+            "总结",
+            "概述",
+            "概要",
+            "主要内容",
+            "文档简介",
+            "介绍一下",
+        ];
+        patterns.iter().any(|p| lower.contains(p))
+    }
+
+    /// Try to match the query against pre-computed reasoning index entries.
+    ///
+    /// Returns candidates if a high-confidence match is found, None otherwise.
+    fn try_reasoning_shortcut(
+        ridx: &ReasoningIndex,
+        ctx: &PipelineContext,
+    ) -> Option<Vec<CandidateNode>> {
+        // Check 1: Summary shortcut — handle "overview" style queries
+        if let Some(ref shortcut) = ridx.summary_shortcut() {
+            if Self::is_summary_query(&ctx.query) {
+                let mut candidates = vec![CandidateNode::new(
+                    shortcut.root_node,
+                    1.0,
+                    0,
+                    ctx.tree.is_leaf(shortcut.root_node),
+                )];
+                for section in &shortcut.section_summaries {
+                    candidates.push(CandidateNode::new(
+                        section.node_id,
+                        0.9,
+                        section.depth,
+                        ctx.tree.is_leaf(section.node_id),
+                    ));
+                }
+                return Some(candidates);
+            }
+        }
+
+        // Check 2: Keyword → Topic path matching
+        let keywords = extract_keywords(&ctx.query);
+        if keywords.is_empty() {
+            return None;
+        }
+
+        let mut scored_nodes: std::collections::HashMap<crate::document::NodeId, f32> =
+            std::collections::HashMap::new();
+        for keyword in &keywords {
+            if let Some(entries) = ridx.topic_entries(keyword) {
+                for entry in entries {
+                    let score = scored_nodes.entry(entry.node_id).or_insert(0.0);
+                    *score += entry.weight;
+                }
+            }
+        }
+
+        if scored_nodes.is_empty() {
+            return None;
+        }
+
+        // Boost hot nodes by 20%
+        for (node_id, score) in scored_nodes.iter_mut() {
+            if ridx.is_hot(*node_id) {
+                *score *= 1.2;
+            }
+        }
+
+        // Convert to candidates, only return if best match is high-confidence
+        let mut candidates: Vec<CandidateNode> = scored_nodes
+            .into_iter()
+            .filter_map(|(node_id, score)| {
+                let depth = ctx.tree.get(node_id).map(|n| n.depth)?;
+                Some(CandidateNode::new(
+                    node_id,
+                    score,
+                    depth,
+                    ctx.tree.is_leaf(node_id),
+                ))
+            })
+            .collect();
+
+        candidates.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+
+        // Only return shortcut results if we have a high-confidence match
+        let best_score = candidates.first().map(|c| c.score).unwrap_or(0.0);
+        if best_score > 0.5 {
+            Some(candidates)
+        } else {
+            None
+        }
+    }
 }
 
 #[async_trait]
@@ -331,20 +444,90 @@ impl RetrievalStage for SearchStage {
         let algorithm = ctx.selected_algorithm.unwrap_or(SearchAlgorithm::Beam);
         let config = ctx.search_config.clone().unwrap_or_default();
 
+        // Budget check: skip search iteration if exhausted
+        let budget_status = ctx.budget_controller.status();
+        if budget_status.should_stop() && ctx.search_iterations > 0 {
+            info!(
+                "Budget exhausted ({}/{}), skipping search iteration",
+                ctx.budget_controller.consumed(),
+                ctx.budget_controller.total_budget(),
+            );
+            ctx.record_reasoning(
+                StageName::Search,
+                format!(
+                    "Budget exhausted ({}/{}), returning current candidates",
+                    ctx.budget_controller.consumed(),
+                    ctx.budget_controller.total_budget(),
+                ),
+                NavigationDecision::Skip,
+            );
+            return Ok(StageOutcome::complete());
+        }
+
         // Reset Pilot state for new query
         if let Some(ref pilot) = self.pilot {
             pilot.reset();
             debug!("SearchStage: Pilot is available, is_active={}", pilot.is_active());
         }
 
+        // Apply budget-aware beam width adjustment
+        let effective_beam = ctx
+            .budget_controller
+            .suggested_beam_width(config.beam_width, ctx.search_iterations);
+
         info!(
-            "Executing search: algorithm={:?}, beam_width={}, pilot={}",
+            "Executing search: algorithm={:?}, beam_width={} (budget: {:?}), pilot={}",
             algorithm,
-            config.beam_width,
+            effective_beam,
+            budget_status,
             if self.has_pilot() { "enabled" } else { "disabled" }
         );
 
         ctx.increment_search_iteration();
+
+        // === L1 Cache check: return cached results if available ===
+        if ctx.options.enable_cache && ctx.search_iterations <= 1 {
+            let scope_fp = crate::utils::fingerprint::Fingerprint::from_str(
+                &format!("{:?}", ctx.tree.root()),
+            );
+            if let Some(cached) = ctx.reasoning_cache.l1_get(&ctx.query, &scope_fp) {
+                info!("L1 cache hit for query, returning {} cached candidates", cached.len());
+                ctx.candidates = cached
+                    .into_iter()
+                    .map(|c| CandidateNode::new(c.node_id, c.score, c.depth, ctx.tree.is_leaf(c.node_id)))
+                    .collect();
+                ctx.metrics.cache_hits += 1;
+                ctx.record_reasoning(
+                    StageName::Search,
+                    format!(
+                        "L1 cache hit: {} candidates returned from cache",
+                        ctx.candidates.len()
+                    ),
+                    NavigationDecision::ThisIsTheAnswer,
+                );
+                return Ok(StageOutcome::cont());
+            }
+            ctx.metrics.cache_misses += 1;
+        }
+
+        // === Reasoning Index Quick Match ===
+        // Check pre-computed index before running expensive ToC navigation.
+        if let Some(ref ridx) = ctx.reasoning_index {
+            if let Some(shortcut_candidates) = Self::try_reasoning_shortcut(ridx, ctx) {
+                info!(
+                    "Reasoning index shortcut match, returning {} candidates",
+                    shortcut_candidates.len()
+                );
+                ctx.candidates = shortcut_candidates;
+                ctx.metrics.cache_hits += 1;
+                ctx.record_reasoning(
+                    StageName::Search,
+                    "Reasoning index shortcut: direct path match".to_string(),
+                    NavigationDecision::ThisIsTheAnswer,
+                );
+                return Ok(StageOutcome::cont());
+            }
+        }
 
         // === Phase Locate: find relevant subtrees via ToC ===
         // Use depth-1 nodes (root's direct children = top-level sections).
@@ -356,12 +539,25 @@ impl RetrievalStage for SearchStage {
             .map(|nodes| nodes.to_vec())
             .unwrap_or_else(|| ctx.tree.children(ctx.tree.root()));
 
-        let cues = self
+        let mut cues = self
             .toc_navigator
             .locate(&ctx.query, &ctx.tree, &top_level_nodes)
             .await;
 
         debug!("ToCNavigator returned {} cues", cues.len());
+
+        // Inject structure hints from Analyze stage as high-priority cues
+        if !ctx.resolved_path_hints.is_empty() {
+            for (hint_text, node_id) in &ctx.resolved_path_hints {
+                if ctx.tree.get(*node_id).is_some() {
+                    info!("Injecting structure hint '{}' as search cue", hint_text);
+                    cues.push(SearchCue {
+                        root: *node_id,
+                        confidence: 1.0, // Direct match from query structure
+                    });
+                }
+            }
+        }
 
         // === Resolve queries (decomposed or original) ===
         let queries = Self::resolve_queries(ctx);
@@ -407,15 +603,118 @@ impl RetrievalStage for SearchStage {
             }
         }
 
-        // Update metrics
+        // Update metrics and budget
         ctx.metrics.search_time_ms += start.elapsed().as_millis() as u64;
         ctx.metrics.nodes_visited += ctx.candidates.len();
+
+        // Update hot node tracker with retrieval results
+        if let Some(ref tracker) = ctx.hot_tracker {
+            let hits: Vec<(crate::document::NodeId, f32)> = ctx
+                .candidates
+                .iter()
+                .map(|c| (c.node_id, c.score))
+                .collect();
+            tracker.record_hits(&hits);
+        }
+        // Estimate tokens consumed by this search iteration (content-based heuristic)
+        let search_tokens: usize = ctx
+            .candidates
+            .iter()
+            .filter_map(|c| ctx.tree.get(c.node_id).map(|n| n.content.len()))
+            .sum::<usize>()
+            / 4; // rough: 4 chars ≈ 1 token
+        ctx.budget_controller.record_tokens(search_tokens);
+
+        // Store results in L1 cache
+        if ctx.options.enable_cache && ctx.search_iterations <= 1 && !ctx.candidates.is_empty() {
+            let scope_fp = crate::utils::fingerprint::Fingerprint::from_str(
+                &format!("{:?}", ctx.tree.root()),
+            );
+            let cached: Vec<CachedCandidate> = ctx
+                .candidates
+                .iter()
+                .map(|c| CachedCandidate {
+                    node_id: c.node_id,
+                    score: c.score,
+                    depth: c.depth,
+                })
+                .collect();
+            ctx.reasoning_cache.l1_store(
+                &ctx.query,
+                scope_fp,
+                cached,
+                ctx.selected_strategy
+                    .map(|s| format!("{:?}", s))
+                    .unwrap_or_else(|| "auto".to_string()),
+            );
+        }
 
         info!(
             "Search complete: {} candidates (iteration {})",
             ctx.candidates.len(),
             ctx.search_iterations
         );
+
+        // Record reasoning — collect data first to avoid borrow conflicts
+        let strategy_str = ctx
+            .selected_strategy
+            .map(|s| format!("{:?}", s))
+            .unwrap_or_else(|| "auto".to_string());
+        let search_iterations = ctx.search_iterations;
+
+        let reasoning_data: Vec<(String, Option<String>, f32, usize, String, Vec<ReasoningCandidate>)> = ctx
+            .candidates
+            .iter()
+            .take(5)
+            .map(|candidate| {
+                let (title, depth) = ctx
+                    .tree
+                    .get(candidate.node_id)
+                    .map(|n| (n.title.clone(), n.depth))
+                    .unwrap_or_else(|| ("(unknown)".to_string(), 0));
+
+                let considered: Vec<ReasoningCandidate> = ctx
+                    .candidates
+                    .iter()
+                    .filter(|c| c.node_id != candidate.node_id)
+                    .take(5)
+                    .filter_map(|c| {
+                        ctx.tree.get(c.node_id).map(|n| ReasoningCandidate {
+                            node_id: format!("{:?}", c.node_id),
+                            title: n.title.clone(),
+                            score: c.score,
+                        })
+                    })
+                    .collect();
+
+                let reasoning = format!(
+                    "Candidate '{}' (score={:.3}) found via {} search, iteration {}",
+                    title, candidate.score, algorithm.name(), search_iterations
+                );
+
+                (format!("{:?}", candidate.node_id), Some(title), candidate.score, depth, reasoning, considered)
+            })
+            .collect();
+
+        for (node_id, title, score, depth, reasoning, considered) in reasoning_data {
+            ctx.push_reasoning_step(ReasoningStep {
+                stage: StageName::Search,
+                node_id: Some(node_id),
+                title,
+                score,
+                decision: if score > 0.7 {
+                    NavigationDecision::ThisIsTheAnswer
+                } else {
+                    NavigationDecision::ExploreMore
+                },
+                depth,
+                reasoning,
+                candidates: considered,
+                strategy_used: Some(strategy_str.clone()),
+                llm_call: None,
+                references_followed: Vec::new(),
+            });
+        }
 
         Ok(StageOutcome::cont())
     }
