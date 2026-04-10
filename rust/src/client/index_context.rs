@@ -357,6 +357,18 @@ impl From<&std::path::Path> for IndexContext {
     }
 }
 
+impl From<&str> for IndexContext {
+    fn from(path: &str) -> Self {
+        Self::from_path(path)
+    }
+}
+
+impl From<String> for IndexContext {
+    fn from(path: String) -> Self {
+        Self::from_path(path)
+    }
+}
+
 impl std::fmt::Display for IndexSource {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
