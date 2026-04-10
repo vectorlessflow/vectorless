@@ -83,9 +83,6 @@ use crate::storage::Workspace;
 use super::engine::Engine;
 use super::events::EventEmitter;
 
-/// Default configuration file names to search for.
-const CONFIG_FILE_NAMES: &[&str] = &["vectorless.toml", "config.toml", ".vectorless.toml"];
-
 /// Builder for creating a [`Engine`] client.
 ///
 /// The builder uses sensible defaults and automatically loads
@@ -453,37 +450,6 @@ impl EngineBuilder {
         }
     }
 
-    /// Search for config file in current directory and parent directories.
-    fn find_config_file() -> Option<PathBuf> {
-        let current_dir = std::env::current_dir().ok()?;
-
-        // Search in current directory first
-        for name in CONFIG_FILE_NAMES {
-            let path = current_dir.join(name);
-            if path.exists() {
-                return Some(path);
-            }
-        }
-
-        // Search in parent directories (up to 3 levels)
-        let mut dir = current_dir.as_path();
-        for _ in 0..3 {
-            if let Some(parent) = dir.parent() {
-                for name in CONFIG_FILE_NAMES {
-                    let path = parent.join(name);
-                    if path.exists() {
-                        return Some(path);
-                    }
-                }
-                dir = parent;
-            } else {
-                break;
-            }
-        }
-
-        None
-    }
-
     /// Build the Engine client.
     ///
     /// # Errors
@@ -502,7 +468,7 @@ impl EngineBuilder {
     /// # async fn main() -> Result<(), vectorless::BuildError> {
     /// let engine = EngineBuilder::new()
     ///     .with_workspace("./data")
-    ///     .with_openai(std::env::var("OPENAI_API_KEY").unwrap())
+    ///     .with_key(std::env::var("OPENAI_API_KEY").unwrap())
     ///     .build()
     ///     .await?;
     /// # Ok(())
@@ -521,10 +487,6 @@ impl EngineBuilder {
                 .file(&path)
                 .load()
                 .map_err(|e| BuildError::Config(e.to_string()))?
-        } else if let Some(config_path) = Self::find_config_file() {
-            ConfigLoader::new().file(&config_path).load().map_err(|e| {
-                BuildError::Config(format!("Failed to load {}: {}", config_path.display(), e))
-            })?
         } else {
             // No config file - use defaults with env var overrides
             let mut cfg = Config::default();
