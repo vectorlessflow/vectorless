@@ -170,26 +170,26 @@ pub enum WorkspaceEvent {
 }
 
 /// Sync event handler trait.
-pub trait EventHandler: Send + Sync {
+pub(crate) trait EventHandler: Send + Sync {
     /// Handle an event.
     fn handle(&self, event: &Event);
 }
 
 /// Async event handler trait.
 #[async_trait]
-pub trait AsyncEventHandler: Send + Sync {
+pub(crate) trait AsyncEventHandler: Send + Sync {
     /// Handle an event asynchronously.
     async fn handle(&self, event: &Event);
 }
 
 /// Type alias for sync index handler.
-pub type IndexHandler = Box<dyn Fn(&IndexEvent) + Send + Sync>;
+pub(crate) type IndexHandler = Box<dyn Fn(&IndexEvent) + Send + Sync>;
 
 /// Type alias for sync query handler.
-pub type QueryHandler = Box<dyn Fn(&QueryEvent) + Send + Sync>;
+pub(crate) type QueryHandler = Box<dyn Fn(&QueryEvent) + Send + Sync>;
 
 /// Type alias for sync workspace handler.
-pub type WorkspaceHandler = Box<dyn Fn(&WorkspaceEvent) + Send + Sync>;
+pub(crate) type WorkspaceHandler = Box<dyn Fn(&WorkspaceEvent) + Send + Sync>;
 
 /// Event emitter for client operations.
 ///

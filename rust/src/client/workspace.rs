@@ -43,7 +43,7 @@ use super::types::DocumentInfo;
 /// The client is fully thread-safe and can be cloned cheaply
 /// (it uses `Arc` internally).
 #[derive(Clone)]
-pub struct WorkspaceClient {
+pub(crate) struct WorkspaceClient {
     /// Workspace storage.
     workspace: Arc<Workspace>,
 
@@ -56,7 +56,7 @@ pub struct WorkspaceClient {
 
 /// Workspace client configuration.
 #[derive(Debug, Clone)]
-pub struct WorkspaceClientConfig {
+pub(crate) struct WorkspaceClientConfig {
     /// Auto-save interval in seconds (None = disabled).
     pub auto_save_interval: Option<u64>,
 
@@ -296,7 +296,7 @@ impl WorkspaceClient {
 
 /// Workspace statistics.
 #[derive(Debug, Clone)]
-pub struct WorkspaceStats {
+pub(crate) struct WorkspaceStats {
     /// Number of documents in the workspace.
     pub document_count: usize,
 }

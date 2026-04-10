@@ -36,7 +36,7 @@ use super::types::QueryResult;
 /// Document retrieval client.
 ///
 /// Provides operations for querying document content.
-pub struct RetrieverClient {
+pub(crate) struct RetrieverClient {
     /// Pipeline retriever.
     retriever: Arc<crate::retrieval::PipelineRetriever>,
 
@@ -52,7 +52,7 @@ pub struct RetrieverClient {
 
 /// Retriever configuration.
 #[derive(Debug, Clone)]
-pub struct RetrieverClientConfig {
+pub(crate) struct RetrieverClientConfig {
     /// Default top_k for retrieval.
     pub default_top_k: usize,
 
@@ -430,7 +430,7 @@ impl Clone for RetrieverClient {
 
 /// Node context information.
 #[derive(Debug, Clone)]
-pub struct NodeContext {
+pub(crate) struct NodeContext {
     /// The target node.
     pub target: Option<RetrievalResult>,
 

@@ -38,7 +38,7 @@ use super::types::{IndexOptions, IndexedDocument};
 /// Document indexing client.
 ///
 /// Provides operations for parsing and indexing documents.
-pub struct IndexerClient {
+pub(crate) struct IndexerClient {
     /// Pipeline executor.
     executor: Arc<Mutex<PipelineExecutor>>,
 
@@ -423,7 +423,7 @@ impl Clone for IndexerClient {
 
 /// Document validation result.
 #[derive(Debug, Clone)]
-pub struct ValidationResult {
+pub(crate) struct ValidationResult {
     /// Whether the document is valid for indexing.
     pub valid: bool,
 

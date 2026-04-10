@@ -68,7 +68,7 @@ use super::types::{IndexMode, IndexOptions};
 /// This enum represents the different ways a document can be provided
 /// to the indexing pipeline.
 #[derive(Debug, Clone)]
-pub enum IndexSource {
+pub(crate) enum IndexSource {
     /// Load document from a file path.
     ///
     /// The format is detected from the file extension.
