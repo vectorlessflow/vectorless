@@ -69,7 +69,6 @@ mod index_context;
 mod indexer;
 mod query_context;
 mod retriever;
-mod session;
 mod types;
 mod workspace;
 

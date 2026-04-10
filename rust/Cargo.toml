@@ -23,10 +23,6 @@ name = "advanced"
 path = "../examples/rust/advanced.rs"
 
 [[example]]
-name = "batch_processing"
-path = "../examples/rust/batch_processing.rs"
-
-[[example]]
 name = "cli_tool"
 path = "../examples/rust/cli_tool.rs"
 
@@ -73,10 +69,6 @@ path = "../examples/rust/reference_following.rs"
 [[example]]
 name = "retrieve"
 path = "../examples/rust/retrieve.rs"
-
-[[example]]
-name = "session"
-path = "../examples/rust/session.rs"
 
 [[example]]
 name = "storage_backend"
