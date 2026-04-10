@@ -105,3 +105,9 @@ pub use types::{
     IndexResult,
     QueryResult,
 };
+
+// ============================================================
+// Parser Types (needed for IndexContext::from_content)
+// ============================================================
+
+pub use crate::parser::DocumentFormat;

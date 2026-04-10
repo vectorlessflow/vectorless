@@ -50,12 +50,7 @@
 //! |--------|-------------|
 //! | [`client`] | High-level API (`Engine`, `EngineBuilder`, `IndexContext`, `QueryContext`) |
 //! | [`document`] | Core domain types (`DocumentTree`, `TreeNode`, `NodeId`) |
-//! | [`parser`] | Document parsers (Markdown, PDF, DOCX) |
 //! | [`error`] | Error types |
-
-// =============================================================================
-// Modules
-// =============================================================================
 
 pub mod client;
 mod config;
@@ -65,20 +60,16 @@ mod index;
 mod llm;
 mod memo;
 mod metrics;
-pub mod parser;
+mod parser;
 mod retrieval;
 mod storage;
 mod throttle;
 mod utils;
 
-// =============================================================================
-// Re-exports (Convenience API)
-// =============================================================================
-
-// Client API (most common entry point)
+// Client API
 pub use client::{
-    BuildError, ClientError, DocumentInfo, Engine, EngineBuilder, EventEmitter, IndexContext,
-    IndexItem, IndexMode, IndexOptions, IndexResult, QueryContext, QueryResult,
+    BuildError, ClientError, DocumentFormat, DocumentInfo, Engine, EngineBuilder, EventEmitter,
+    IndexContext, IndexItem, IndexMode, IndexOptions, IndexResult, QueryContext, QueryResult,
 };
 
 // Error types
@@ -90,7 +81,3 @@ pub use document::{
     TreeNode,
 };
 
-// Document parsing
-pub use parser::{
-    DocumentFormat, DocumentParser, DocxParser, MarkdownParser, ParseResult, PdfParser, RawNode,
-};

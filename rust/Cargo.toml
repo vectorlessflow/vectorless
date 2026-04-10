@@ -35,16 +35,8 @@ name = "events"
 path = "../examples/rust/events.rs"
 
 [[example]]
-name = "html_parser"
-path = "../examples/rust/html_parser.rs"
-
-[[example]]
 name = "markdownflow"
 path = "../examples/rust/markdownflow.rs"
-
-[[example]]
-name = "multi_format"
-path = "../examples/rust/multi_format.rs"
 
 [dependencies]
 # Async runtime

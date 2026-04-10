@@ -12,7 +12,7 @@ use tokio::runtime::Runtime;
 
 // Use ::vectorless to avoid conflict with the #[pymodule] named vectorless
 use ::vectorless::client::{Engine, EngineBuilder, IndexContext, IndexItem, IndexResult, QueryContext, QueryResult, DocumentInfo};
-use ::vectorless::parser::DocumentFormat;
+use ::vectorless::client::DocumentFormat;
 use ::vectorless::error::Error as RustError;
 
 // ============================================================
@@ -355,10 +355,9 @@ impl PyDocumentInfo {
 ///
 /// Configuration priority (later overrides earlier):
 /// 1. Default configuration
-/// 2. Auto-detected config file (vectorless.toml, config.toml, .vectorless.toml)
-/// 3. Explicit config file (config_path parameter)
-/// 4. Environment variables (OPENAI_API_KEY, VECTORLESS_MODEL, etc.)
-/// 5. Constructor parameters (api_key, model, endpoint) - highest priority
+/// 2. Explicit config file (config_path parameter)
+/// 3. Environment variables (OPENAI_API_KEY, VECTORLESS_MODEL, etc.)
+/// 4. Constructor parameters (api_key, model, endpoint) - highest priority
 ///
 /// # Zero Configuration (Recommended)
 ///
@@ -376,10 +375,10 @@ impl PyDocumentInfo {
 /// engine = Engine(workspace="./data", model="gpt-4o-mini")
 /// ```
 ///
-/// # With Full Config File (Advanced)
+/// # With Config File (Advanced)
 ///
 /// ```python
-/// engine = Engine(config_path="./vectorless.toml")
+/// engine = Engine(workspace="./data", config_path="./vectorless.toml")
 /// ```
 #[pyclass(name = "Engine")]
 pub struct PyEngine {
@@ -400,10 +399,9 @@ impl PyEngine {
     ///
     /// Configuration priority (later overrides earlier):
     ///     1. Default configuration
-    ///     2. Auto-detected config file
-    ///     3. config_path parameter
-    ///     4. Environment variables (OPENAI_API_KEY, VECTORLESS_MODEL, etc.)
-    ///     5. Constructor parameters (api_key, model, endpoint)
+    ///     2. config_path parameter (if provided)
+    ///     3. Environment variables (OPENAI_API_KEY, VECTORLESS_MODEL, etc.)
+    ///     4. Constructor parameters (api_key, model, endpoint)
     ///
     /// Raises:
     ///     VectorlessError: If engine creation fails.
@@ -584,10 +582,7 @@ impl PyEngine {
 // Module Definition
 // ============================================================
 
-/// Vectorless - Hierarchical document intelligence without vectors.
-///
-/// A document intelligence engine that uses tree-based understanding
-/// instead of vector databases.
+/// Vectorless - Reasoning-native document intelligence engine.
 ///
 /// Quick Start:
 ///
@@ -599,11 +594,11 @@ impl PyEngine {
 ///
 /// # Index a document
 /// ctx = IndexContext.from_file("./report.pdf")
-/// doc_id = engine.index(ctx)
+/// result = engine.index(ctx)
 ///
 /// # Query
-/// result = engine.query(doc_id, "What is the revenue?")
-/// print(result.content)
+/// answer = engine.query(result.doc_id, "What is the revenue?")
+/// print(answer.content)
 /// ```
 #[pymodule]
 fn vectorless(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
