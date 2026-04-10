@@ -6,7 +6,6 @@
 //! Users configure vectorless via [`EngineBuilder`](crate::client::EngineBuilder) methods,
 //! not by directly interacting with this module.
 
-mod docs;
 mod loader;
 mod merge;
 mod types;
