@@ -245,6 +245,10 @@ pub struct IndexContext {
     /// Pre-computed reasoning index (built by ReasoningIndexStage).
     pub reasoning_index: Option<ReasoningIndex>,
 
+    /// Existing tree from previous indexing (for incremental updates).
+    /// When set, the enhance and reasoning stages can reuse data from unchanged nodes.
+    pub existing_tree: Option<DocumentTree>,
+
     /// Stage execution results.
     pub stage_results: HashMap<String, StageResult>,
 
@@ -276,6 +280,7 @@ impl IndexContext {
             llm_client: None,
             summary_cache: SummaryCache::default(),
             reasoning_index: None,
+            existing_tree: None,
             stage_results: HashMap::new(),
             metrics: IndexMetrics::default(),
             description: None,
@@ -311,6 +316,12 @@ impl IndexContext {
     /// Set the source path.
     pub fn with_source_path(mut self, path: impl Into<PathBuf>) -> Self {
         self.source_path = Some(path.into());
+        self
+    }
+
+    /// Set the existing tree for incremental updates.
+    pub fn with_existing_tree(mut self, tree: DocumentTree) -> Self {
+        self.existing_tree = Some(tree);
         self
     }
 

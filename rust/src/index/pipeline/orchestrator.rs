@@ -419,7 +419,12 @@ impl PipelineOrchestrator {
         );
 
         // Create context
-        let mut ctx = IndexContext::new(input, options);
+        let mut opts = options;
+        let existing_tree = opts.existing_tree.take();
+        let mut ctx = IndexContext::new(input, opts);
+        if let Some(tree) = existing_tree {
+            ctx = ctx.with_existing_tree(tree);
+        }
 
         // Execute each group
         for (group_idx, group) in groups.iter().enumerate() {

@@ -10,6 +10,7 @@ use tracing::{debug, info, warn};
 
 use crate::document::{DocumentTree, NodeId, TreeNode};
 use crate::error::Result;
+use crate::index::incremental;
 use crate::utils::fingerprint::Fingerprint;
 use crate::llm::LlmClient;
 use crate::memo::{MemoKey, MemoStore, MemoValue};
@@ -145,6 +146,20 @@ impl IndexStage for EnhanceStage {
         let node_ids: Vec<NodeId> = tree.traverse();
         let total_nodes = node_ids.len();
 
+        // === Incremental: reuse summaries from existing tree for unchanged nodes ===
+        if let Some(ref old_tree) = ctx.existing_tree {
+            let reusable = incremental::compute_reusable_summaries(old_tree, tree);
+            let applied = incremental::apply_reusable_summaries(tree, &reusable);
+            for _ in 0..applied {
+                ctx.metrics.increment_summaries();
+            }
+            info!(
+                "Incremental: {} of {} nodes unchanged, reusing summaries",
+                applied,
+                total_nodes,
+            );
+        }
+
         println!("[DEBUG] Processing {} nodes for summary generation", total_nodes);
         info!("Processing {} nodes for summary generation", total_nodes);
 
@@ -166,6 +181,11 @@ impl IndexStage for EnhanceStage {
             // Skip if no content
             if node.content.is_empty() {
                 skipped_no_content += 1;
+                continue;
+            }
+
+            // Skip if summary already set (incremental: reused from old tree)
+            if !node.summary.is_empty() {
                 continue;
             }
 

@@ -41,9 +41,11 @@ use tracing::info;
 
 use crate::config::Config;
 use crate::error::Result;
-use crate::index::PipelineExecutor;
+use crate::index::{PipelineExecutor, PipelineOptions};
+use crate::index::incremental::{self, IndexAction};
 use crate::retrieval::{PipelineRetriever, RetrieveEventReceiver};
 use crate::storage::Workspace;
+use crate::utils::fingerprint::Fingerprint;
 use crate::{DocumentTree, Error};
 
 use super::events::EventEmitter;
@@ -159,45 +161,90 @@ impl Engine {
         for source in &ctx.sources {
             let source_label = source.to_string();
 
-            // Check if we should skip this source (Default or Incremental mode)
-            if let Some(skipped_item) = self
-                .check_skip_source(source, &ctx.options)
-                .await?
-            {
-                info!("Skipped (already indexed): {}", source_label);
-                items.push(skipped_item);
-                continue;
-            }
+            match self.resolve_index_action(source, &ctx.options).await? {
+                IndexAction::Skip(skip_info) => {
+                    info!("Skipped (unchanged): {}", source_label);
+                    items.push(IndexItem::new(
+                        skip_info.doc_id,
+                        skip_info.name,
+                        skip_info.format,
+                        skip_info.description,
+                        skip_info.page_count,
+                    ));
+                }
+                IndexAction::FullIndex => {
+                    match self
+                        .indexer
+                        .index(source, ctx.name.as_deref(), &ctx.options)
+                        .await
+                    {
+                        Ok(doc) => {
+                            let pipeline_options = self.build_pipeline_options(&ctx.options, doc.format);
+                            let item = IndexItem::new(
+                                doc.id.clone(),
+                                doc.name.clone(),
+                                doc.format.clone(),
+                                doc.description.clone(),
+                                doc.page_count,
+                            );
 
-            match self
-                .indexer
-                .index(source, ctx.name.as_deref(), &ctx.options)
-                .await
-            {
-                Ok(doc) => {
-                    let item = IndexItem::new(
-                        doc.id.clone(),
-                        doc.name.clone(),
-                        doc.format.clone(),
-                        doc.description.clone(),
-                        doc.page_count,
-                    );
+                            let persisted = self.indexer.to_persisted_with_options(doc, &pipeline_options);
 
-                    let persisted = self.indexer.to_persisted(doc);
+                            if let Some(ref workspace) = self.workspace {
+                                if let Err(e) = workspace.save(&persisted).await {
+                                    failed.push(FailedItem::new(&source_label, e.to_string()));
+                                    continue;
+                                }
+                            }
 
-                    if let Some(ref workspace) = self.workspace {
-                        if let Err(e) = workspace.save(&persisted).await {
+                            info!("Indexed document: {}", item.doc_id);
+                            items.push(item);
+                        }
+                        Err(e) => {
+                            tracing::warn!("Failed to index {}: {}", source_label, e);
                             failed.push(FailedItem::new(&source_label, e.to_string()));
-                            continue;
                         }
                     }
-
-                    info!("Indexed document: {}", item.doc_id);
-                    items.push(item);
                 }
-                Err(e) => {
-                    tracing::warn!("Failed to index {}: {}", source_label, e);
-                    failed.push(FailedItem::new(&source_label, e.to_string()));
+                IndexAction::IncrementalUpdate { old_tree, existing_id } => {
+                    let existing_tree = old_tree;
+                    info!("Incremental update for: {}", source_label);
+                    match self
+                        .indexer
+                        .index_with_existing(source, ctx.name.as_deref(), &ctx.options, Some(&existing_tree))
+                        .await
+                    {
+                        Ok(mut doc) => {
+                            // Reuse the same doc_id for incremental updates
+                            doc.id = existing_id.clone();
+                            let pipeline_options = self.build_pipeline_options(&ctx.options, doc.format);
+                            let item = IndexItem::new(
+                                doc.id.clone(),
+                                doc.name.clone(),
+                                doc.format.clone(),
+                                doc.description.clone(),
+                                doc.page_count,
+                            );
+
+                            let persisted = self.indexer.to_persisted_with_options(doc, &pipeline_options);
+
+                            if let Some(ref workspace) = self.workspace {
+                                // Remove old version first
+                                let _ = workspace.remove(&existing_id).await;
+                                if let Err(e) = workspace.save(&persisted).await {
+                                    failed.push(FailedItem::new(&source_label, e.to_string()));
+                                    continue;
+                                }
+                            }
+
+                            info!("Incrementally updated: {}", item.doc_id);
+                            items.push(item);
+                        }
+                        Err(e) => {
+                            tracing::warn!("Incremental update failed for {}: {}", source_label, e);
+                            failed.push(FailedItem::new(&source_label, e.to_string()));
+                        }
+                    }
                 }
             }
         }
@@ -394,100 +441,104 @@ impl Engine {
         }
     }
 
-    /// Check if a source should be skipped based on IndexMode.
-    ///
-    /// Returns `Some(IndexItem)` if the source should be skipped (already indexed),
-    /// or `None` if indexing should proceed.
-    async fn check_skip_source(
+    /// Build pipeline options from client IndexOptions and detected format.
+    fn build_pipeline_options(
+        &self,
+        options: &super::types::IndexOptions,
+        format: crate::parser::DocumentFormat,
+    ) -> PipelineOptions {
+        use crate::index::SummaryStrategy;
+        PipelineOptions {
+            mode: match format {
+                crate::parser::DocumentFormat::Markdown => crate::index::IndexMode::Markdown,
+                crate::parser::DocumentFormat::Pdf => crate::index::IndexMode::Pdf,
+                crate::parser::DocumentFormat::Html => crate::index::IndexMode::Html,
+                crate::parser::DocumentFormat::Docx => crate::index::IndexMode::Docx,
+            },
+            generate_ids: options.generate_ids,
+            summary_strategy: if options.generate_summaries {
+                SummaryStrategy::full()
+            } else {
+                SummaryStrategy::none()
+            },
+            generate_description: options.generate_description,
+            ..Default::default()
+        }
+    }
+
+    /// Resolve what action to take for a source.
+    async fn resolve_index_action(
         &self,
         source: &IndexSource,
         options: &super::types::IndexOptions,
-    ) -> Result<Option<IndexItem>> {
+    ) -> Result<IndexAction> {
         let workspace = match self.workspace {
             Some(ref ws) => ws,
-            None => return Ok(None),
+            None => return Ok(IndexAction::FullIndex),
         };
 
-        // Force mode always re-indexes
+        // Force mode always re-indexes from scratch
         if options.mode == IndexMode::Force {
-            return Ok(None);
+            return Ok(IndexAction::FullIndex);
         }
 
-        // Only path sources can be checked for incremental indexing
+        // Only path sources support incremental indexing
         let path = match source {
             IndexSource::Path(p) => p,
-            _ => return Ok(None),
+            _ => return Ok(IndexAction::FullIndex),
         };
 
-        // Check if this file has already been indexed
+        // Find if this file has already been indexed
         let existing_id = match workspace.find_by_source_path(path).await {
             Some(id) => id,
-            None => return Ok(None), // Not indexed yet
+            None => return Ok(IndexAction::FullIndex), // New file
         };
 
-        match options.mode {
-            IndexMode::Default => {
-                // Default: skip if already indexed
-                let info = workspace.get_document_info(&existing_id).await?;
-                let (name, format_str, desc, pages) = match info {
-                    Some(i) => (i.name, i.format, i.description, i.page_count),
-                    None => (String::new(), String::new(), None, None),
-                };
-
-                Ok(Some(IndexItem::new(
-                    existing_id,
-                    name,
-                    crate::parser::DocumentFormat::from_extension(&format_str)
-                        .unwrap_or(crate::parser::DocumentFormat::Markdown),
-                    desc,
-                    pages,
-                )))
-            }
-            IndexMode::Incremental => {
-                // Incremental: skip only if file hasn't been modified
-                let file_mtime = std::fs::metadata(path)
-                    .ok()
-                    .and_then(|m| m.modified().ok())
-                    .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-                    .map(|d| d.as_secs());
-
-                let doc = workspace.load(&existing_id).await?;
-                let stored_mtime = doc.as_ref().and_then(|d| {
-                    d.meta.modified_at
-                        .timestamp()
-                        .try_into()
-                        .ok()
-                });
-
-                match (file_mtime, stored_mtime) {
-                    (Some(file_ts), Some(stored_ts)) if file_ts <= stored_ts => {
-                        // File unchanged — skip
-                        let info = workspace.get_document_info(&existing_id).await?;
-                        let (name, format_str, desc, pages) = match info {
-                            Some(i) => (i.name, i.format, i.description, i.page_count),
-                            None => (String::new(), String::new(), None, None),
-                        };
-
-                        Ok(Some(IndexItem::new(
-                            existing_id,
-                            name,
-                            crate::parser::DocumentFormat::from_extension(&format_str)
-                                .unwrap_or(crate::parser::DocumentFormat::Markdown),
-                            desc,
-                            pages,
-                        )))
-                    }
-                    _ => {
-                        // File modified or mtime unavailable — re-index
-                        info!("File modified, re-indexing: {}", path.display());
-                        // Remove old document so we don't have duplicates
-                        let _ = workspace.remove(&existing_id).await;
-                        Ok(None)
-                    }
-                }
-            }
-            IndexMode::Force => Ok(None), // Already handled above
+        // Default mode: skip if already indexed (no content check)
+        if options.mode == IndexMode::Default {
+            let info = workspace.get_document_info(&existing_id).await?;
+            let (name, format_str, desc, pages) = match info {
+                Some(i) => (i.name, i.format, i.description, i.page_count),
+                None => (String::new(), String::new(), None, None),
+            };
+            return Ok(IndexAction::Skip(incremental::SkipInfo {
+                doc_id: existing_id,
+                name,
+                format: crate::parser::DocumentFormat::from_extension(&format_str)
+                    .unwrap_or(crate::parser::DocumentFormat::Markdown),
+                description: desc,
+                page_count: pages,
+            }));
         }
+
+        // Incremental mode: load stored document and delegate to resolver
+        let current_bytes = match std::fs::read(path) {
+            Ok(b) => b,
+            Err(_) => return Ok(IndexAction::FullIndex),
+        };
+
+        let stored_doc = match workspace.load(&existing_id).await? {
+            Some(d) => d,
+            None => return Ok(IndexAction::FullIndex),
+        };
+
+        let format = crate::parser::DocumentFormat::from_extension(&stored_doc.meta.format)
+            .unwrap_or(crate::parser::DocumentFormat::Markdown);
+        let pipeline_options = self.build_pipeline_options(options, format);
+
+        // If logic fingerprint changed, remove old doc before full reprocess
+        let action = incremental::resolve_action(
+            &current_bytes,
+            &stored_doc,
+            &pipeline_options,
+            format,
+        );
+
+        if matches!(action, IndexAction::FullIndex) {
+            let _ = workspace.remove(&existing_id).await;
+        }
+
+        Ok(action)
     }
 }
 

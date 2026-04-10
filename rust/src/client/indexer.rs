@@ -108,47 +108,31 @@ impl IndexerClient {
     }
 
     /// Index a document from an index context.
-    ///
-    /// This is the main entry point for indexing documents. The context
-    /// specifies the source (path, content, or bytes) and options.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if:
-    /// - The file does not exist (for path sources)
-    /// - The file format is not supported
-    /// - The pipeline execution fails
-    ///
-    /// # Example
-    ///
-    /// ```rust,ignore
-    /// use vectorless::client::{IndexerClient, IndexContext};
-    /// use vectorless::parser::DocumentFormat;
-    ///
-    /// // From file path
-    /// let doc = indexer.index(IndexContext::from_path("./doc.md")).await?;
-    ///
-    /// // From HTML content
-    /// let html = "<html><body><h1>Title</h1></body></html>";
-    /// let doc = indexer.index(
-    ///     IndexContext::from_content(html, DocumentFormat::Html)
-    ///         .with_name("webpage")
-    /// ).await?;
-    /// ```
     pub async fn index(&self, source: &IndexSource, name: Option<&str>, options: &IndexOptions) -> Result<IndexedDocument> {
+        self.index_with_existing(source, name, options, None).await
+    }
+
+    /// Index a document, optionally reusing an existing tree for incremental updates.
+    pub async fn index_with_existing(
+        &self,
+        source: &IndexSource,
+        name: Option<&str>,
+        options: &IndexOptions,
+        existing_tree: Option<&crate::DocumentTree>,
+    ) -> Result<IndexedDocument> {
         match source {
-            IndexSource::Path(path) => self.index_from_path(path, name, options).await,
+            IndexSource::Path(path) => self.index_from_path(path, name, options, existing_tree).await,
             IndexSource::Content { data, format } => {
-                self.index_from_content(data, *format, name, options).await
+                self.index_from_content(data, *format, name, options, existing_tree).await
             }
             IndexSource::Bytes { data, format } => {
-                self.index_from_bytes(data, *format, name, options).await
+                self.index_from_bytes(data, *format, name, options, existing_tree).await
             }
         }
     }
 
     /// Index from a file path.
-    async fn index_from_path(&self, path: &Path, name: Option<&str>, options: &IndexOptions) -> Result<IndexedDocument> {
+    async fn index_from_path(&self, path: &Path, name: Option<&str>, options: &IndexOptions, existing_tree: Option<&crate::DocumentTree>) -> Result<IndexedDocument> {
         let path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
 
         if !path.exists() {
@@ -171,7 +155,11 @@ impl IndexerClient {
         info!("Indexing {:?} document: {}", format, path.display());
 
         // Build pipeline options
-        let pipeline_options = self.build_pipeline_options(options, format);
+        let pipeline_options = self.build_pipeline_options_with_existing(
+            options,
+            format,
+            existing_tree.cloned(),
+        );
 
         // Create pipeline input and execute
         let input = IndexInput::file(&path);
@@ -193,6 +181,7 @@ impl IndexerClient {
         format: DocumentFormat,
         name: Option<&str>,
         options: &IndexOptions,
+        existing_tree: Option<&crate::DocumentTree>,
     ) -> Result<IndexedDocument> {
         self.events.emit_index(IndexEvent::Started {
             path: name.unwrap_or("content").to_string(),
@@ -204,7 +193,11 @@ impl IndexerClient {
 
         info!("Indexing {:?} document from content", format);
 
-        let pipeline_options = self.build_pipeline_options(options, format);
+        let pipeline_options = self.build_pipeline_options_with_existing(
+            options,
+            format,
+            existing_tree.cloned(),
+        );
 
         let input = IndexInput::content(content);
         let result = {
@@ -225,6 +218,7 @@ impl IndexerClient {
         format: DocumentFormat,
         name: Option<&str>,
         options: &IndexOptions,
+        existing_tree: Option<&crate::DocumentTree>,
     ) -> Result<IndexedDocument> {
         self.events.emit_index(IndexEvent::Started {
             path: name.unwrap_or("bytes").to_string(),
@@ -240,7 +234,11 @@ impl IndexerClient {
             bytes.len()
         );
 
-        let pipeline_options = self.build_pipeline_options(options, format);
+        let pipeline_options = self.build_pipeline_options_with_existing(
+            options,
+            format,
+            existing_tree.cloned(),
+        );
 
         let input = IndexInput::bytes(bytes);
         let result = {
@@ -260,8 +258,16 @@ impl IndexerClient {
         options: &IndexOptions,
         format: DocumentFormat,
     ) -> PipelineOptions {
-        println!("[DEBUG] Building pipeline options for format: {:?} with options: {:?}", format, options);
+        self.build_pipeline_options_with_existing(options, format, None)
+    }
 
+    /// Build pipeline options with optional existing tree for incremental updates.
+    fn build_pipeline_options_with_existing(
+        &self,
+        options: &IndexOptions,
+        format: DocumentFormat,
+        existing_tree: Option<crate::DocumentTree>,
+    ) -> PipelineOptions {
         PipelineOptions {
             mode: match format {
                 DocumentFormat::Markdown => IndexMode::Markdown,
@@ -271,12 +277,12 @@ impl IndexerClient {
             },
             generate_ids: options.generate_ids,
             summary_strategy: if options.generate_summaries {
-                // SummaryStrategy::selective(self.config.min_summary_tokens, false)
                 SummaryStrategy::full()
             } else {
                 SummaryStrategy::none()
             },
             generate_description: options.generate_description,
+            existing_tree,
             ..Default::default()
         }
     }
@@ -388,7 +394,12 @@ impl IndexerClient {
 
     /// Convert IndexedDocument to PersistedDocument for storage.
     pub fn to_persisted(&self, doc: IndexedDocument) -> PersistedDocument {
-        let meta = DocumentMeta::new(&doc.id, &doc.name, doc.format.extension())
+        self.to_persisted_with_options(doc, &PipelineOptions::default())
+    }
+
+    /// Convert IndexedDocument to PersistedDocument, storing fingerprints from pipeline options.
+    pub fn to_persisted_with_options(&self, doc: IndexedDocument, pipeline_options: &PipelineOptions) -> PersistedDocument {
+        let mut meta = DocumentMeta::new(&doc.id, &doc.name, doc.format.extension())
             .with_source_path(
                 doc.source_path
                     .as_ref()
@@ -396,6 +407,18 @@ impl IndexerClient {
                     .unwrap_or_default(),
             )
             .with_description(doc.description.clone().unwrap_or_default());
+
+        // Compute content fingerprint for incremental indexing
+        if let Some(ref path) = doc.source_path {
+            if let Ok(bytes) = std::fs::read(path) {
+                let fp = crate::utils::fingerprint::Fingerprint::from_bytes(&bytes);
+                meta = meta.with_fingerprint(fp);
+            }
+        }
+
+        // Store logic fingerprint (pipeline configuration hash)
+        let logic_fp = pipeline_options.logic_fingerprint();
+        meta = meta.with_logic_fingerprint(logic_fp);
 
         let mut persisted =
             PersistedDocument::new(meta, doc.tree.expect("IndexedDocument must have a tree"));
