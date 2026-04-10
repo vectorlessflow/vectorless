@@ -3,44 +3,46 @@
 
 //! Basic usage example for Vectorless.
 //!
-//! This example demonstrates the core API in ~30 lines.
-//!
 //! # Usage
 //!
 //! ```bash
 //! cargo run --example basic
 //! ```
 
-use vectorless::{Engine, IndexContext};
+use vectorless::{EngineBuilder, IndexContext, QueryContext};
 
 #[tokio::main]
 async fn main() -> vectorless::Result<()> {
     println!("=== Vectorless Basic Example ===\n");
 
-    // 1. Create a client
-    let client = Engine::builder()
+    // 1. Create an engine
+    let engine = EngineBuilder::new()
         .with_workspace("./workspace")
         .build()
         .await
         .map_err(|e: vectorless::BuildError| vectorless::Error::Config(e.to_string()))?;
 
-    println!("✓ Client created\n");
+    println!("Engine created\n");
 
     // 2. Index a document
-    let doc_id = client.index(IndexContext::from_path("./README.md")).await?;
-    println!("✓ Indexed: {}\n", doc_id);
+    let result = engine.index(IndexContext::from_path("./README.md")).await?;
+    let doc_id = result.doc_id().unwrap().to_string();
+    println!("Indexed: {}\n", doc_id);
 
     // 3. List documents
     println!("Documents:");
-    for doc in client.list_documents().await? {
+    for doc in engine.list().await? {
         println!("  - {} ({})", doc.name, doc.id);
     }
     println!();
 
     // 4. Query
-    match client.query(&doc_id, "What is vectorless?").await {
+    match engine
+        .query(QueryContext::new("What is vectorless?").with_doc_id(&doc_id))
+        .await
+    {
         Ok(result) => {
-            println!("Query score: {:.2}", result.score);
+            println!("Score: {:.2}", result.score);
             if !result.content.is_empty() {
                 let preview: String = result.content.chars().take(150).collect();
                 println!("Result: {}...", preview);
@@ -50,14 +52,9 @@ async fn main() -> vectorless::Result<()> {
     }
     println!();
 
-    // 5. Clone for concurrent use (client is Clone + Send + Sync)
-    let _client1 = client.clone();
-    let _client2 = client.clone();
-    println!("✓ Client cloned for concurrent use\n");
-
-    // 6. Cleanup
-    client.remove(&doc_id).await?;
-    println!("✓ Removed: {}", doc_id);
+    // 5. Cleanup
+    engine.remove(&doc_id).await?;
+    println!("Removed: {}", doc_id);
 
     println!("\n=== Done ===");
     Ok(())

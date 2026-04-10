@@ -68,7 +68,7 @@ use super::types::{IndexMode, IndexOptions};
 /// This enum represents the different ways a document can be provided
 /// to the indexing pipeline.
 #[derive(Debug, Clone)]
-pub enum IndexSource {
+pub(crate) enum IndexSource {
     /// Load document from a file path.
     ///
     /// The format is detected from the file extension.
@@ -149,7 +149,7 @@ impl IndexSource {
 /// # Examples
 ///
 /// ```rust,no_run
-/// use vectorless::client::{Engine, EngineBuilder, IndexContext, IndexMode};
+/// use vectorless::client::{EngineBuilder, IndexContext, IndexMode};
 /// use vectorless::parser::DocumentFormat;
 ///
 /// # #[tokio::main]
@@ -334,11 +334,6 @@ impl IndexContext {
         self
     }
 
-    /// Get the source of this context.
-    pub fn source(&self) -> &IndexSource {
-        &self.source
-    }
-
     /// Get the document name, if set.
     pub fn name(&self) -> Option<&str> {
         self.name.as_deref()
@@ -359,6 +354,18 @@ impl From<PathBuf> for IndexContext {
 impl From<&std::path::Path> for IndexContext {
     fn from(path: &std::path::Path) -> Self {
         Self::from_path(path.to_path_buf())
+    }
+}
+
+impl From<&str> for IndexContext {
+    fn from(path: &str) -> Self {
+        Self::from_path(path)
+    }
+}
+
+impl From<String> for IndexContext {
+    fn from(path: String) -> Self {
+        Self::from_path(path)
     }
 }
 

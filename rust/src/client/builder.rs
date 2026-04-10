@@ -83,9 +83,6 @@ use crate::storage::Workspace;
 use super::engine::Engine;
 use super::events::EventEmitter;
 
-/// Default configuration file names to search for.
-const CONFIG_FILE_NAMES: &[&str] = &["vectorless.toml", "config.toml", ".vectorless.toml"];
-
 /// Builder for creating a [`Engine`] client.
 ///
 /// The builder uses sensible defaults and automatically loads
@@ -283,10 +280,9 @@ impl EngineBuilder {
     // LLM Configuration
     // ============================================================
 
-    /// Configure for OpenAI API.
+    /// Set the LLM API key.
     ///
-    /// Sets the API key and optionally the model to "gpt-4o" if not already set.
-    /// Use [`with_model`](EngineBuilder::with_model) before this to specify a different model.
+    /// If not set, reads from `OPENAI_API_KEY` environment variable.
     ///
     /// # Example
     ///
@@ -297,29 +293,21 @@ impl EngineBuilder {
     /// # async fn main() -> Result<(), vectorless::BuildError> {
     /// let engine = EngineBuilder::new()
     ///     .with_workspace("./data")
-    ///     .with_openai(std::env::var("OPENAI_API_KEY").unwrap())
+    ///     .with_key("sk-...")
     ///     .build()
     ///     .await?;
     /// # Ok(())
     /// # }
     /// ```
     #[must_use]
-    pub fn with_openai(self, api_key: impl Into<String>) -> Self {
-        let mut builder = self;
-        builder.api_key = Some(api_key.into());
-        // Only set default model if not already set
-        if builder.model.is_none() {
-            builder.model = Some("gpt-4o".to_string());
-        }
-        builder
+    pub fn with_key(mut self, key: impl Into<String>) -> Self {
+        self.api_key = Some(key.into());
+        self
     }
 
-    /// Set the LLM model and optional API key.
+    /// Set the LLM model name.
     ///
-    /// # Arguments
-    ///
-    /// * `model` - Model name (e.g., "gpt-4o", "gpt-4o-mini", "claude-3-5-sonnet")
-    /// * `api_key` - Optional API key (uses environment variable if not provided)
+    /// Default: "gpt-4o".
     ///
     /// # Example
     ///
@@ -330,18 +318,15 @@ impl EngineBuilder {
     /// # async fn main() -> Result<(), vectorless::BuildError> {
     /// let engine = EngineBuilder::new()
     ///     .with_workspace("./data")
-    ///     .with_model("gpt-4o-mini", Some("sk-...".to_string()))
+    ///     .with_model("gpt-4o-mini")
     ///     .build()
     ///     .await?;
     /// # Ok(())
     /// # }
     /// ```
     #[must_use]
-    pub fn with_model(mut self, model: impl Into<String>, api_key: Option<String>) -> Self {
+    pub fn with_model(mut self, model: impl Into<String>) -> Self {
         self.model = Some(model.into());
-        if api_key.is_some() {
-            self.api_key = api_key;
-        }
         self
     }
 
@@ -358,7 +343,7 @@ impl EngineBuilder {
     /// # async fn main() -> Result<(), vectorless::BuildError> {
     /// let engine = EngineBuilder::new()
     ///     .with_workspace("./data")
-    ///     .with_model("deepseek-chat", Some("sk-...".to_string()))
+    ///     .with_model("deepseek-chat")
     ///     .with_endpoint("https://api.deepseek.com/v1")
     ///     .build()
     ///     .await?;
@@ -465,37 +450,6 @@ impl EngineBuilder {
         }
     }
 
-    /// Search for config file in current directory and parent directories.
-    fn find_config_file() -> Option<PathBuf> {
-        let current_dir = std::env::current_dir().ok()?;
-
-        // Search in current directory first
-        for name in CONFIG_FILE_NAMES {
-            let path = current_dir.join(name);
-            if path.exists() {
-                return Some(path);
-            }
-        }
-
-        // Search in parent directories (up to 3 levels)
-        let mut dir = current_dir.as_path();
-        for _ in 0..3 {
-            if let Some(parent) = dir.parent() {
-                for name in CONFIG_FILE_NAMES {
-                    let path = parent.join(name);
-                    if path.exists() {
-                        return Some(path);
-                    }
-                }
-                dir = parent;
-            } else {
-                break;
-            }
-        }
-
-        None
-    }
-
     /// Build the Engine client.
     ///
     /// # Errors
@@ -514,7 +468,7 @@ impl EngineBuilder {
     /// # async fn main() -> Result<(), vectorless::BuildError> {
     /// let engine = EngineBuilder::new()
     ///     .with_workspace("./data")
-    ///     .with_openai(std::env::var("OPENAI_API_KEY").unwrap())
+    ///     .with_key(std::env::var("OPENAI_API_KEY").unwrap())
     ///     .build()
     ///     .await?;
     /// # Ok(())
@@ -533,10 +487,6 @@ impl EngineBuilder {
                 .file(&path)
                 .load()
                 .map_err(|e| BuildError::Config(e.to_string()))?
-        } else if let Some(config_path) = Self::find_config_file() {
-            ConfigLoader::new().file(&config_path).load().map_err(|e| {
-                BuildError::Config(format!("Failed to load {}: {}", config_path.display(), e))
-            })?
         } else {
             // No config file - use defaults with env var overrides
             let mut cfg = Config::default();
@@ -699,18 +649,27 @@ mod tests {
     }
 
     #[test]
-    fn test_builder_with_openai() {
-        let builder = EngineBuilder::new().with_openai("sk-test-key");
+    fn test_builder_with_key() {
+        let builder = EngineBuilder::new().with_key("sk-test-key");
 
-        assert_eq!(builder.model, Some("gpt-4o".to_string()));
         assert_eq!(builder.api_key, Some("sk-test-key".to_string()));
     }
 
     #[test]
     fn test_builder_with_model() {
-        let builder = EngineBuilder::new().with_model("gpt-4o-mini", Some("sk-test".to_string()));
+        let builder = EngineBuilder::new().with_model("gpt-4o-mini");
 
         assert_eq!(builder.model, Some("gpt-4o-mini".to_string()));
+    }
+
+    #[test]
+    fn test_builder_with_key_and_model() {
+        let builder = EngineBuilder::new()
+            .with_model("gpt-4o-mini")
+            .with_key("sk-test");
+
+        assert_eq!(builder.model, Some("gpt-4o-mini".to_string()));
+        assert_eq!(builder.api_key, Some("sk-test".to_string()));
     }
 
     #[test]

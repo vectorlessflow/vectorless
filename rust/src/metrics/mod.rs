@@ -59,5 +59,4 @@ pub use llm::{LlmMetrics, LlmMetricsReport};
 pub use pilot::{InterventionPoint, PilotMetrics, PilotMetricsReport};
 pub use retrieval::{RetrievalMetrics, RetrievalMetricsReport};
 
-// Re-export config from config module
-pub use crate::config::MetricsConfig;
+pub(crate) use crate::config::MetricsConfig;

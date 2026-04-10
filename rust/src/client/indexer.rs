@@ -31,7 +31,6 @@ use crate::index::{IndexInput, IndexMode, PipelineExecutor, PipelineOptions, Sum
 use crate::parser::DocumentFormat;
 use crate::storage::{DocumentMeta, PersistedDocument};
 
-use super::context::ClientContext;
 use super::events::{EventEmitter, IndexEvent};
 use super::index_context::{IndexContext, IndexSource};
 use super::types::{IndexOptions, IndexedDocument};
@@ -39,7 +38,7 @@ use super::types::{IndexOptions, IndexedDocument};
 /// Document indexing client.
 ///
 /// Provides operations for parsing and indexing documents.
-pub struct IndexerClient {
+pub(crate) struct IndexerClient {
     /// Pipeline executor.
     executor: Arc<Mutex<PipelineExecutor>>,
 
@@ -424,7 +423,7 @@ impl Clone for IndexerClient {
 
 /// Document validation result.
 #[derive(Debug, Clone)]
-pub struct ValidationResult {
+pub(crate) struct ValidationResult {
     /// Whether the document is valid for indexing.
     pub valid: bool,
 

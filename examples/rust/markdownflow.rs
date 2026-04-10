@@ -19,8 +19,8 @@
 //! OPENAI_API_KEY=sk-... cargo run --example markdown_flow
 //! ```
 
-use vectorless::Engine;
-use vectorless::client::{IndexContext, IndexOptions};
+use vectorless::EngineBuilder;
+use vectorless::client::{IndexContext, IndexOptions, QueryContext};
 
 /// Sample markdown content for demonstration.
 const SAMPLE_MARKDOWN: &str = r#"
@@ -43,7 +43,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Step 1: Create a Vectorless client (no API key needed - LLM config is automatic)
     println!("Step 1: Creating Vectorless client...");
 
-    let client = Engine::builder()
+    let client = EngineBuilder::new()
         .with_workspace("./workspace")
         .build()
         .await
@@ -62,29 +62,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Check if we should generate summaries (requires API key)
     println!("  - API key detected, generating summaries...");
-    let doc_id = client
+    let index_result = client
         .index(IndexContext::from_path(&md_path).with_options(IndexOptions::new().with_summaries()))
         .await?;
+    let doc_id = index_result.doc_id().unwrap().to_string();
 
     println!("  - Document indexed successfully");
     println!("  - Document ID: {}", doc_id);
     println!();
 
-    // Step 3: Show document structure in JSON format
-    println!("Step 3: Document structure (JSON):");
-    println!();
-
-    match client.get_structure(&doc_id).await {
-        Ok(tree) => {
-            // Export to JSON format (PageIndex compatible)
-            let structure = tree.to_structure_json("sample.md");
-            let json = serde_json::to_string_pretty(&structure)
-                .unwrap_or_else(|_| "Failed to serialize".to_string());
-            println!("{}", json);
-        }
-        Err(e) => {
-            println!("  - Error getting structure: {}", e);
-        }
+    // Step 3: List indexed documents
+    println!("Step 3: Indexed documents:");
+    for doc in client.list().await? {
+        println!("  - {} ({})", doc.name, doc.id);
     }
     println!();
 
@@ -96,7 +86,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     for query in queries {
         println!("  Query: \"{}\"", query);
 
-        match client.query(&doc_id, query).await {
+        match client.query(QueryContext::new(query).with_doc_id(&doc_id)).await {
             Ok(result) => {
                 if result.content.is_empty() {
                     println!("    - No relevant content found");

@@ -30,15 +30,13 @@ use crate::retrieval::{
     QueryComplexity, RetrievalResult, RetrieveOptions, RetrieveResponse, Retriever,
     SufficiencyLevel,
 };
-
-use super::context::ClientContext;
 use super::events::{EventEmitter, QueryEvent};
 use super::types::QueryResult;
 
 /// Document retrieval client.
 ///
 /// Provides operations for querying document content.
-pub struct RetrieverClient {
+pub(crate) struct RetrieverClient {
     /// Pipeline retriever.
     retriever: Arc<crate::retrieval::PipelineRetriever>,
 
@@ -54,7 +52,7 @@ pub struct RetrieverClient {
 
 /// Retriever configuration.
 #[derive(Debug, Clone)]
-pub struct RetrieverClientConfig {
+pub(crate) struct RetrieverClientConfig {
     /// Default top_k for retrieval.
     pub default_top_k: usize,
 
@@ -123,56 +121,23 @@ impl RetrieverClient {
     ///
     /// # Errors
     ///
-    /// Returns an error if:
-    /// - The retrieval pipeline fails
+    /// Returns an error if the retrieval pipeline fails.
     pub async fn query(
         &self,
         tree: &DocumentTree,
         question: &str,
         options: &RetrieveOptions,
     ) -> Result<QueryResult> {
-        self.query_with_context(tree, question, options, &ClientContext::new())
-            .await
-    }
-
-    /// Query with request context.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if:
-    /// - The retrieval pipeline fails
-    /// - The request has timed out
-    pub async fn query_with_context(
-        &self,
-        tree: &DocumentTree,
-        question: &str,
-        options: &RetrieveOptions,
-        ctx: &ClientContext,
-    ) -> Result<QueryResult> {
-        // Check timeout
-        if ctx.is_timed_out() {
-            return Err(Error::Other("Request timed out".to_string()));
-        }
-
         self.events.emit_query(QueryEvent::Started {
             query: question.to_string(),
         });
 
         info!("Querying: {:?}", question);
 
-        // Apply context overrides
-        let mut options = options.clone();
-        if let Some(top_k) = ctx.config.top_k {
-            options.top_k = top_k;
-        }
-        if let Some(token_budget) = ctx.config.token_budget {
-            options.max_tokens = token_budget;
-        }
-
         // Execute retrieval
         let response = self
             .retriever
-            .retrieve(tree, question, &options)
+            .retrieve(tree, question, options)
             .await
             .map_err(|e| Error::Retrieval(e.to_string()))?;
 
@@ -465,7 +430,7 @@ impl Clone for RetrieverClient {
 
 /// Node context information.
 #[derive(Debug, Clone)]
-pub struct NodeContext {
+pub(crate) struct NodeContext {
     /// The target node.
     pub target: Option<RetrievalResult>,
 

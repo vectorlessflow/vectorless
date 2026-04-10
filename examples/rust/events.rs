@@ -17,7 +17,8 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use vectorless::client::{EngineBuilder, EventEmitter, IndexContext, IndexEvent, QueryEvent};
+use vectorless::client::{EngineBuilder, EventEmitter, IndexContext, QueryContext};
+use vectorless::client::events::{IndexEvent, QueryEvent};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -123,14 +124,15 @@ The event system uses handlers that can be attached to the engine builder.
     let doc_path = temp_dir.path().join("example.md");
     tokio::fs::write(&doc_path, doc_content).await?;
 
-    let doc_id = engine.index(IndexContext::from_path(&doc_path)).await?;
+    let index_result = engine.index(IndexContext::from_path(&doc_path)).await?;
+    let doc_id = index_result.doc_id().unwrap().to_string();
     println!();
 
     // 4. Query the document (events will fire)
     println!("Step 4: Querying document (watch events)...\n");
 
     let result = engine
-        .query(&doc_id, "What features are available?")
+        .query(QueryContext::new("What features are available?").with_doc_id(&doc_id))
         .await?;
     println!();
 

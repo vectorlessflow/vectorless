@@ -7,31 +7,12 @@
 //! - [`Engine`] — The main client for indexing and querying documents
 //! - [`EngineBuilder`] — Builder pattern for client configuration
 //! - [`IndexContext`] — Unified input for document indexing
-//! - [`Session`] — Multi-document session management
-//!
-//! # Architecture
-//!
-//! The client module is organized into specialized sub-modules:
-//!
-//! ```text
-//! client/
-//! ├── mod.rs           → Re-exports and documentation
-//! ├── engine.rs        → Main orchestrator
-//! ├── builder.rs       → Builder pattern
-//! ├── index_context.rs → Index input types
-//! ├── types.rs         → Public API types
-//! ├── context.rs       → Request context and configuration
-//! ├── session.rs       → Session management
-//! ├── indexer.rs       → Document indexing operations
-//! ├── retriever.rs     → Query and retrieval operations
-//! ├── workspace.rs     → Workspace CRUD operations
-//! └── events.rs        → Event system and callbacks
-//! ```
+//! - [`QueryContext`] — Unified input for document queries
 //!
 //! # Quick Start
 //!
 //! ```rust,no_run
-//! use vectorless::client::{Engine, EngineBuilder, IndexContext};
+//! use vectorless::client::{EngineBuilder, IndexContext, QueryContext};
 //!
 //! # #[tokio::main]
 //! # async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -41,49 +22,20 @@
 //!     .build()
 //!     .await?;
 //!
-//! // Index a document from file
-//! let doc_id = client.index(IndexContext::from_path("./document.md")).await?;
-//!
-//! // Index HTML content directly
-//! let html = "<html><body><h1>Title</h1><p>Content</p></body></html>";
-//! let doc_id2 = client.index(
-//!     IndexContext::from_content(html, vectorless::parser::DocumentFormat::Html)
-//!         .with_name("webpage")
-//! ).await?;
+//! // Index a document
+//! let result = client.index(IndexContext::from_path("./document.md")).await?;
+//! let doc_id = result.doc_id().unwrap();
 //!
 //! // Query the document
-//! let result = client.query(&doc_id, "What is this?").await?;
+//! let result = client.query(
+//!     QueryContext::new("What is this?").with_doc_id(doc_id)
+//! ).await?;
 //! println!("{}", result.content);
 //!
 //! // List all documents
-//! for doc in client.list_documents().await? {
+//! for doc in client.list().await? {
 //!     println!("{}: {}", doc.id, doc.name);
 //! }
-//! # Ok(())
-//! # }
-//! ```
-//!
-//! # Session-Based Operations
-//!
-//! For multi-document operations, use sessions:
-//!
-//! ```rust,no_run
-//! # use vectorless::client::{Engine, EngineBuilder, IndexContext};
-//! # #[tokio::main]
-//! # async fn main() -> Result<(), Box<dyn std::error::Error>> {
-//! let client = EngineBuilder::new()
-//!     .with_workspace("./workspace")
-//!     .build()
-//!     .await?;
-//!
-//! let session = client.session().await;
-//!
-//! // Index multiple documents
-//! let doc1 = session.index(IndexContext::from_path("./doc1.md")).await?;
-//! let doc2 = session.index(IndexContext::from_path("./doc2.md")).await?;
-//!
-//! // Query across all documents
-//! let results = session.query_all("What is the architecture?").await?;
 //! # Ok(())
 //! # }
 //! ```
@@ -93,7 +45,7 @@
 //! Monitor operation progress with events:
 //!
 //! ```rust,no_run
-//! # use vectorless::client::{Engine, EngineBuilder, EventEmitter, IndexEvent};
+//! # use vectorless::client::{EngineBuilder, EventEmitter, IndexEvent};
 //! # #[tokio::main]
 //! # async fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! let events = EventEmitter::new()
@@ -109,23 +61,14 @@
 //! # Ok(())
 //! # }
 //! ```
-//!
-//! # Features
-//!
-//! - **Document Indexing** — Parse and index Markdown, PDF, and text files
-//! - **Tree-Based Structure** — Documents organized as hierarchical trees
-//! - **Workspace Persistence** — Save and load indexed documents
-//! - **Session Management** — Multi-document operations with caching
-//! - **Event System** — Progress callbacks and monitoring
 
 mod builder;
-mod context;
 mod engine;
 pub mod events;
 mod index_context;
 mod indexer;
+mod query_context;
 mod retriever;
-mod session;
 mod types;
 mod workspace;
 
@@ -137,53 +80,34 @@ pub use builder::{BuildError, EngineBuilder};
 pub use engine::Engine;
 
 // ============================================================
-// Index Context
+// Context Types
 // ============================================================
 
-pub use index_context::{IndexContext, IndexSource};
+pub use index_context::IndexContext;
+pub use query_context::QueryContext;
 
 // ============================================================
-// Sub-Clients
+// Events
 // ============================================================
 
-pub use indexer::IndexerClient;
-pub use retriever::RetrieverClient;
-pub use session::Session;
-pub use workspace::WorkspaceClient;
+pub use events::EventEmitter;
 
 // ============================================================
-// Context and Events
-// ============================================================
-
-pub use context::{ClientContext, FeatureFlags, RequestContextConfig};
-pub use events::{
-    AsyncEventHandler, Event, EventEmitter, EventHandler, IndexEvent, QueryEvent, WorkspaceEvent,
-};
-
-// ============================================================
-// Types
+// Result & Info Types
 // ============================================================
 
 pub use types::{
-    // Error types
     ClientError,
-    // Document info
     DocumentInfo,
-    // Index types
+    IndexItem,
     IndexMode,
     IndexOptions,
-    // Document types
-    IndexedDocument,
-    PageContent,
-    // Query types
+    IndexResult,
     QueryResult,
 };
 
 // ============================================================
-// Sub-Client Types
+// Parser Types (needed for IndexContext::from_content)
 // ============================================================
 
-pub use indexer::{IndexerConfig, ValidationResult};
-pub use retriever::{NodeContext, RetrieverClientConfig};
-pub use session::{EvictionPolicy, PreloadStrategy, SessionConfig, SessionStats};
-pub use workspace::{WorkspaceClientConfig, WorkspaceStats};
+pub use crate::parser::DocumentFormat;
