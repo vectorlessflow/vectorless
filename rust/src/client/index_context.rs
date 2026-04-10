@@ -334,11 +334,6 @@ impl IndexContext {
         self
     }
 
-    /// Get the source of this context.
-    pub fn source(&self) -> &IndexSource {
-        &self.source
-    }
-
     /// Get the document name, if set.
     pub fn name(&self) -> Option<&str> {
         self.name.as_deref()

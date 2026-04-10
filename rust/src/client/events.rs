@@ -243,7 +243,7 @@ impl EventEmitter {
     }
 
     /// Add an async event handler.
-    pub fn with_async_handler<H>(mut self, handler: Arc<H>) -> Self
+    pub(crate) fn with_async_handler<H>(mut self, handler: Arc<H>) -> Self
     where
         H: AsyncEventHandler + 'static,
     {
