@@ -242,7 +242,8 @@ impl AnalyzeStage {
         }
 
         // Bare section numbers: "3.2.1", "2.1"
-        for cap in regex::Regex::new(r"(?<!\w)(\d+\.\d+(?:\.\d+)*)")
+        // Use word boundary instead of lookbehind (Rust regex doesn't support lookaround)
+        for cap in regex::Regex::new(r"\b(\d+\.\d+(?:\.\d+)*)")
             .unwrap()
             .captures_iter(query)
         {

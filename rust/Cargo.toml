@@ -110,6 +110,10 @@ path = "../examples/rust/strategy_page_range.rs"
 name = "streaming"
 path = "../examples/rust/streaming.rs"
 
+[[example]]
+name = "document_graph"
+path = "../examples/rust/document_graph.rs"
+
 [dependencies]
 # Async runtime
 tokio = { workspace = true }
