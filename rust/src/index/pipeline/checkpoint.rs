@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use tracing::{info, warn};
 
 use crate::document::DocumentTree;
-use crate::parser::RawNode;
+use crate::index::parse::RawNode;
 
 use super::metrics::IndexMetrics;
 use super::context::SummaryCache;

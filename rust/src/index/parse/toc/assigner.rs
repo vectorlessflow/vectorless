@@ -8,7 +8,7 @@ use tracing::{debug, info};
 
 use crate::config::LlmConfig;
 use crate::error::Result;
-use crate::parser::pdf::PdfPage;
+use crate::index::parse::pdf::PdfPage;
 
 use super::types::{PageOffset, TocEntry};
 use crate::llm::LlmClient;

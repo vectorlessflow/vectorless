@@ -14,7 +14,7 @@ use crate::document::DocumentTree;
 use crate::storage::PersistedDocument;
 use crate::utils::fingerprint::Fingerprint;
 use crate::index::config::PipelineOptions;
-use crate::parser::DocumentFormat;
+use crate::index::parse::DocumentFormat;
 
 /// Action to take for a source during indexing.
 pub enum IndexAction {

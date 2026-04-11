@@ -54,6 +54,7 @@
 
 pub mod config;
 pub mod incremental;
+pub mod parse;
 pub mod pipeline;
 pub mod stages;
 pub mod summary;

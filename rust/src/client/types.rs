@@ -10,7 +10,7 @@ use std::path::PathBuf;
 
 use crate::document::DocumentTree;
 use crate::metrics::IndexMetrics;
-use crate::parser::DocumentFormat;
+use crate::index::parse::DocumentFormat;
 
 // ============================================================
 // Document Types

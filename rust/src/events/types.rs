@@ -6,7 +6,7 @@
 //! Provides enums for indexing, query, and workspace events
 //! that can be observed via [`EventEmitter`](super::EventEmitter).
 
-use crate::parser::DocumentFormat;
+use crate::index::parse::DocumentFormat;
 use crate::retrieval::SufficiencyLevel;
 
 /// Top-level event types for client operations.

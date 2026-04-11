@@ -114,4 +114,4 @@ pub use types::{
 // Parser Types (needed for IndexContext::from_content)
 // ============================================================
 
-pub use crate::parser::DocumentFormat;
+pub use crate::index::parse::DocumentFormat;

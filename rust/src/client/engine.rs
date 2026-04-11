@@ -524,13 +524,13 @@ impl Engine {
     fn build_pipeline_options(
         &self,
         options: &super::types::IndexOptions,
-        format: crate::parser::DocumentFormat,
+        format: crate::index::parse::DocumentFormat,
     ) -> PipelineOptions {
         use crate::index::SummaryStrategy;
         PipelineOptions {
             mode: match format {
-                crate::parser::DocumentFormat::Markdown => crate::index::IndexMode::Markdown,
-                crate::parser::DocumentFormat::Pdf => crate::index::IndexMode::Pdf,
+                crate::index::parse::DocumentFormat::Markdown => crate::index::IndexMode::Markdown,
+                crate::index::parse::DocumentFormat::Pdf => crate::index::IndexMode::Pdf,
             },
             generate_ids: options.generate_ids,
             summary_strategy: if options.generate_summaries {
@@ -626,8 +626,8 @@ impl Engine {
             return Ok(IndexAction::Skip(incremental::SkipInfo {
                 doc_id: existing_id,
                 name,
-                format: crate::parser::DocumentFormat::from_extension(&format_str)
-                    .unwrap_or(crate::parser::DocumentFormat::Markdown),
+                format: crate::index::parse::DocumentFormat::from_extension(&format_str)
+                    .unwrap_or(crate::index::parse::DocumentFormat::Markdown),
                 description: desc,
                 page_count: pages,
             }));
@@ -644,8 +644,8 @@ impl Engine {
             None => return Ok(IndexAction::FullIndex { existing_id: None }),
         };
 
-        let format = crate::parser::DocumentFormat::from_extension(&stored_doc.meta.format)
-            .unwrap_or(crate::parser::DocumentFormat::Markdown);
+        let format = crate::index::parse::DocumentFormat::from_extension(&stored_doc.meta.format)
+            .unwrap_or(crate::index::parse::DocumentFormat::Markdown);
         let pipeline_options = self.build_pipeline_options(options, format);
 
         // If logic fingerprint changed, remove old doc before full reprocess

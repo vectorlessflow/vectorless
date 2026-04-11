@@ -29,7 +29,7 @@ use uuid::Uuid;
 use crate::error::{Error, Result};
 use crate::index::{IndexInput, IndexMode, PipelineExecutor, PipelineOptions, SummaryStrategy};
 use crate::llm::LlmClient;
-use crate::parser::DocumentFormat;
+use crate::index::parse::DocumentFormat;
 use crate::storage::{DocumentMeta, PersistedDocument};
 
 use super::events::{EventEmitter, IndexEvent};

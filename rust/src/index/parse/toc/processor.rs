@@ -6,7 +6,7 @@
 use tracing::{debug, info, warn};
 
 use crate::error::Result;
-use crate::parser::pdf::PdfPage;
+use crate::index::parse::pdf::PdfPage;
 
 use super::assigner::{PageAssigner, PageAssignerConfig};
 use super::detector::{TocDetector, TocDetectorConfig};

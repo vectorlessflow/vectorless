@@ -8,24 +8,19 @@ use std::time::Instant;
 use tracing::info;
 
 use crate::error::Result;
-use crate::parser::DocumentFormat;
-use crate::parser::ParserRegistry;
+use crate::index::parse::DocumentFormat;
 
 use super::{IndexStage, StageResult};
 use crate::index::IndexMode;
 use crate::index::pipeline::{IndexContext, IndexInput};
 
 /// Parse stage - extracts raw nodes from documents.
-pub struct ParseStage {
-    parser_registry: ParserRegistry,
-}
+pub struct ParseStage;
 
 impl ParseStage {
     /// Create a new parse stage.
     pub fn new() -> Self {
-        Self {
-            parser_registry: ParserRegistry::with_defaults(),
-        }
+        Self
     }
 
     /// Detect document format from path and options.
@@ -81,8 +76,8 @@ impl IndexStage for ParseStage {
                     .unwrap_or("document")
                     .to_string();
 
-                // Parse using registry
-                self.parser_registry.parse_file(&path).await?
+                // Parse directly
+                crate::index::parse::parse_file(&path, format).await?
             }
             IndexInput::Content {
                 content,
@@ -93,14 +88,14 @@ impl IndexStage for ParseStage {
                 ctx.name = name.clone();
 
                 // Parse content directly
-                self.parser_registry.parse(content, *format).await?
+                crate::index::parse::parse_content(content, *format).await?
             }
             IndexInput::Bytes { data, name, format } => {
                 // Set name
                 ctx.name = name.clone();
 
                 // Parse bytes
-                self.parser_registry.parse_bytes(data, *format).await?
+                crate::index::parse::parse_bytes(data, *format).await?
             }
         };
 
