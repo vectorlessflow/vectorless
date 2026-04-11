@@ -36,9 +36,9 @@
   --docusaurus-highlighted-code-line-bg: rgba(175, 120, 139, 0.2);
 }
 
-/* Header: match homepage bg, no border */
+/* Navbar: no border, no shadow, match homepage bg */
 .navbar {
-  background-color: var(--bg-secondary) !important;
+  background-color: #fdf8f9 !important;
   border-bottom: none !important;
   box-shadow: none !important;
 }
@@ -47,7 +47,7 @@
   background-color: var(--ifm-background-color) !important;
 }
 
-/* Footer: match homepage bg, no border */
+/* Footer: transparent */
 .footer {
   background-color: transparent !important;
 }
