@@ -13,7 +13,8 @@
 
 </div>
 
-**Vectorless** is a reasoning-native document intelligence engine written in Rust — **no vector database, no embeddings, no similarity search**. It transforms documents into hierarchical semantic trees and uses LLMs to navigate the structure, retrieving the most relevant content through reasoning instead of vector math.
+**Vectorless** is a reasoning-native document intelligence engine written in Rust — **no vector database, no embeddings, no similarity search**. It transforms documents into hierarchical semantic trees and uses LLMs to navigate the structure, retrieving the most relevant content through deep contextual understanding instead of vector math.
+
 
 ## Quick Start
 
