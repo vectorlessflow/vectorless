@@ -37,6 +37,7 @@
 
 use std::sync::Arc;
 
+use futures::StreamExt;
 use tracing::info;
 
 use crate::config::Config;
@@ -155,101 +156,43 @@ impl Engine {
             return Err(Error::Config("No document sources provided".to_string()));
         }
 
-        let mut items = Vec::with_capacity(ctx.len());
-        let mut failed = Vec::new();
-
-        for source in &ctx.sources {
-            let source_label = source.to_string();
-
-            match self.resolve_index_action(source, &ctx.options).await? {
-                IndexAction::Skip(skip_info) => {
-                    info!("Skipped (unchanged): {}", source_label);
-                    items.push(IndexItem::new(
-                        skip_info.doc_id,
-                        skip_info.name,
-                        skip_info.format,
-                        skip_info.description,
-                        skip_info.page_count,
-                    ));
-                }
-                IndexAction::FullIndex => {
-                    match self
-                        .indexer
-                        .index(source, ctx.name.as_deref(), &ctx.options)
-                        .await
-                    {
-                        Ok(doc) => {
-                            let pipeline_options = self.build_pipeline_options(&ctx.options, doc.format);
-                            let item = IndexItem::new(
-                                doc.id.clone(),
-                                doc.name.clone(),
-                                doc.format.clone(),
-                                doc.description.clone(),
-                                doc.page_count,
-                            );
-
-                            let persisted = self.indexer.to_persisted_with_options(doc, &pipeline_options);
-
-                            if let Some(ref workspace) = self.workspace {
-                                if let Err(e) = workspace.save(&persisted).await {
-                                    failed.push(FailedItem::new(&source_label, e.to_string()));
-                                    continue;
-                                }
-                            }
-
-                            info!("Indexed document: {}", item.doc_id);
-                            items.push(item);
-                        }
-                        Err(e) => {
-                            tracing::warn!("Failed to index {}: {}", source_label, e);
-                            failed.push(FailedItem::new(&source_label, e.to_string()));
-                        }
-                    }
-                }
-                IndexAction::IncrementalUpdate { old_tree, existing_id } => {
-                    let existing_tree = old_tree;
-                    info!("Incremental update for: {}", source_label);
-                    match self
-                        .indexer
-                        .index_with_existing(source, ctx.name.as_deref(), &ctx.options, Some(&existing_tree))
-                        .await
-                    {
-                        Ok(mut doc) => {
-                            // Reuse the same doc_id for incremental updates
-                            doc.id = existing_id.clone();
-                            let pipeline_options = self.build_pipeline_options(&ctx.options, doc.format);
-                            let item = IndexItem::new(
-                                doc.id.clone(),
-                                doc.name.clone(),
-                                doc.format.clone(),
-                                doc.description.clone(),
-                                doc.page_count,
-                            );
-
-                            let persisted = self.indexer.to_persisted_with_options(doc, &pipeline_options);
-
-                            if let Some(ref workspace) = self.workspace {
-                                // Remove old version first
-                                let _ = workspace.remove(&existing_id).await;
-                                if let Err(e) = workspace.save(&persisted).await {
-                                    failed.push(FailedItem::new(&source_label, e.to_string()));
-                                    continue;
-                                }
-                            }
-
-                            info!("Incrementally updated: {}", item.doc_id);
-                            items.push(item);
-                        }
-                        Err(e) => {
-                            tracing::warn!("Incremental update failed for {}: {}", source_label, e);
-                            failed.push(FailedItem::new(&source_label, e.to_string()));
-                        }
-                    }
-                }
+        // Single source: no need for concurrency overhead
+        if ctx.sources.len() == 1 {
+            let source = &ctx.sources[0];
+            let (items, failed) = self.process_source(source, &ctx.options, ctx.name.as_deref()).await;
+            if items.is_empty() && !failed.is_empty() {
+                return Err(Error::Config(format!(
+                    "All {} source(s) failed to index",
+                    failed.len()
+                )));
             }
+            return Ok(IndexResult::with_partial(items, failed));
         }
 
-        // If everything failed, return error
+        // Multiple sources: parallel indexing
+        let concurrency = self.config.concurrency.max_concurrent_requests.min(ctx.sources.len());
+
+        let results: Vec<(Vec<IndexItem>, Vec<FailedItem>)> =
+            futures::stream::iter(&ctx.sources)
+                .map(|source| {
+                    let options = ctx.options.clone();
+                    let name = ctx.name.clone();
+                    let engine = self.clone();
+                    async move {
+                        engine.process_source(source, &options, name.as_deref()).await
+                    }
+                })
+                .buffer_unordered(concurrency)
+                .collect()
+                .await;
+
+        let mut items = Vec::new();
+        let mut failed = Vec::new();
+        for (ok, err) in results {
+            items.extend(ok);
+            failed.extend(err);
+        }
+
         if items.is_empty() && !failed.is_empty() {
             return Err(Error::Config(format!(
                 "All {} source(s) failed to index",
@@ -258,6 +201,101 @@ impl Engine {
         }
 
         Ok(IndexResult::with_partial(items, failed))
+    }
+
+    /// Process a single source — resolve action and index.
+    ///
+    /// Returns `(items, failed)`.
+    async fn process_source(
+        &self,
+        source: &IndexSource,
+        options: &super::types::IndexOptions,
+        name: Option<&str>,
+    ) -> (Vec<IndexItem>, Vec<FailedItem>) {
+        let source_label = source.to_string();
+
+        match self.resolve_index_action(source, options).await {
+            Ok(IndexAction::Skip(skip_info)) => {
+                info!("Skipped (unchanged): {}", source_label);
+                (
+                    vec![IndexItem::new(
+                        skip_info.doc_id,
+                        skip_info.name,
+                        skip_info.format,
+                        skip_info.description,
+                        skip_info.page_count,
+                    )],
+                    Vec::new(),
+                )
+            }
+            Ok(IndexAction::FullIndex) => {
+                match self.indexer.index(source, name, options).await {
+                    Ok(doc) => {
+                        let pipeline_options = self.build_pipeline_options(options, doc.format);
+                        let item = IndexItem::new(
+                            doc.id.clone(),
+                            doc.name.clone(),
+                            doc.format.clone(),
+                            doc.description.clone(),
+                            doc.page_count,
+                        );
+                        let persisted = self.indexer.to_persisted_with_options(doc, &pipeline_options);
+
+                        if let Some(ref workspace) = self.workspace {
+                            if let Err(e) = workspace.save(&persisted).await {
+                                return (Vec::new(), vec![FailedItem::new(&source_label, e.to_string())]);
+                            }
+                        }
+
+                        info!("Indexed document: {}", item.doc_id);
+                        (vec![item], Vec::new())
+                    }
+                    Err(e) => {
+                        tracing::warn!("Failed to index {}: {}", source_label, e);
+                        (Vec::new(), vec![FailedItem::new(&source_label, e.to_string())])
+                    }
+                }
+            }
+            Ok(IndexAction::IncrementalUpdate { old_tree, existing_id }) => {
+                info!("Incremental update for: {}", source_label);
+                match self
+                    .indexer
+                    .index_with_existing(source, name, options, Some(&old_tree))
+                    .await
+                {
+                    Ok(mut doc) => {
+                        doc.id = existing_id.clone();
+                        let pipeline_options = self.build_pipeline_options(options, doc.format);
+                        let item = IndexItem::new(
+                            doc.id.clone(),
+                            doc.name.clone(),
+                            doc.format.clone(),
+                            doc.description.clone(),
+                            doc.page_count,
+                        );
+                        let persisted = self.indexer.to_persisted_with_options(doc, &pipeline_options);
+
+                        if let Some(ref workspace) = self.workspace {
+                            let _ = workspace.remove(&existing_id).await;
+                            if let Err(e) = workspace.save(&persisted).await {
+                                return (Vec::new(), vec![FailedItem::new(&source_label, e.to_string())]);
+                            }
+                        }
+
+                        info!("Incrementally updated: {}", item.doc_id);
+                        (vec![item], Vec::new())
+                    }
+                    Err(e) => {
+                        tracing::warn!("Incremental update failed for {}: {}", source_label, e);
+                        (Vec::new(), vec![FailedItem::new(&source_label, e.to_string())])
+                    }
+                }
+            }
+            Err(e) => {
+                tracing::warn!("Failed to resolve action for {}: {}", source_label, e);
+                (Vec::new(), vec![FailedItem::new(&source_label, e.to_string())])
+            }
+        }
     }
 
     // ============================================================

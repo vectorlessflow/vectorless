@@ -390,6 +390,37 @@ impl PipelineOrchestrator {
         }
     }
 
+    /// Handle the result of a stage execution (shared between sequential and parallel paths).
+    fn handle_stage_result(
+        result: Result<StageResult>,
+        stage_name: &str,
+        policy: &FailurePolicy,
+        ctx: &mut IndexContext,
+    ) -> Result<()> {
+        match result {
+            Ok(result) => {
+                ctx.stage_results.insert(stage_name.to_string(), result);
+                Ok(())
+            }
+            Err(e) => {
+                if policy.allows_continuation() {
+                    warn!(
+                        "Stage {} failed but policy allows continuation: {}",
+                        stage_name, e
+                    );
+                    ctx.stage_results.insert(
+                        stage_name.to_string(),
+                        StageResult::failure(stage_name, &e.to_string()),
+                    );
+                    Ok(())
+                } else {
+                    error!("Stage {} failed, stopping pipeline: {}", stage_name, e);
+                    Err(e)
+                }
+            }
+        }
+    }
+
     /// Execute the pipeline.
     ///
     /// Stages are executed in dependency-resolved order.
@@ -441,37 +472,120 @@ impl PipelineOrchestrator {
                 );
             }
 
-            // Execute stages in this group
-            // Note: For true parallel execution, stages would need to declare
-            // that they don't modify shared context. Currently executed sequentially
-            // for safety, but grouped for future optimization.
-            for &idx in &group.stage_indices {
-                let entry = &mut self.stages[idx];
-                let stage_name = entry.stage.name().to_string();
-                let policy = entry.stage.failure_policy();
+            if group.parallel && group.stage_indices.len() == 2 {
+                // === Parallel execution for 2-stage groups ===
+                // One stage gets the main ctx (mutates tree), the other
+                // gets a cloned snapshot (read-only). Results are merged back.
+                let idx_a = group.stage_indices[0];
+                let idx_b = group.stage_indices[1];
 
-                info!(
-                    "Executing stage: {} (priority {})",
-                    stage_name, entry.priority
+                // Determine which stage reads tree (gets snapshot) vs writes tree (gets ctx)
+                let (writer_idx, reader_idx) = {
+                    let name_a = self.stages[idx_a].stage.name();
+                    let name_b = self.stages[idx_b].stage.name();
+                    // reasoning_index is read-only; optimize writes tree
+                    if name_a.contains("reasoning") {
+                        (idx_b, idx_a)
+                    } else {
+                        (idx_a, idx_b)
+                    }
+                };
+
+                // Clone tree snapshot for the reader stage
+                let tree_snapshot = ctx.tree.clone();
+                let options_snapshot = ctx.options.clone();
+                let existing_tree_snapshot = ctx.existing_tree.clone();
+
+                // Take both stages out to avoid double &mut self
+                let mut stage_writer = std::mem::replace(
+                    &mut self.stages[writer_idx].stage,
+                    Box::new(NopStage),
+                );
+                let mut stage_reader = std::mem::replace(
+                    &mut self.stages[reader_idx].stage,
+                    Box::new(NopStage),
                 );
 
-                match Self::execute_stage_with_policy(&mut entry.stage, &mut ctx).await {
-                    Ok(result) => {
-                        ctx.stage_results.insert(stage_name.clone(), result);
-                    }
-                    Err(e) => {
-                        if policy.allows_continuation() {
-                            warn!(
-                                "Stage {} failed but policy allows continuation: {}",
-                                stage_name, e
-                            );
-                            ctx.stage_results.insert(
-                                stage_name.clone(),
-                                StageResult::failure(&stage_name, &e.to_string()),
-                            );
-                        } else {
-                            error!("Stage {} failed, stopping pipeline: {}", stage_name, e);
-                            return Err(e);
+                let writer_name = stage_writer.name().to_string();
+                let reader_name = stage_reader.name().to_string();
+                let writer_policy = stage_writer.failure_policy();
+                let reader_policy = stage_reader.failure_policy();
+
+                info!("Parallel: executing {} ∥ {}", writer_name, reader_name);
+
+                // Build a minimal context clone for the reader stage
+                let mut reader_ctx = IndexContext::new(IndexInput::content(""), options_snapshot);
+                reader_ctx.tree = tree_snapshot;
+                reader_ctx.existing_tree = existing_tree_snapshot;
+                reader_ctx.doc_id = ctx.doc_id.clone();
+                reader_ctx.name = ctx.name.clone();
+                reader_ctx.format = ctx.format;
+                reader_ctx.source_path = ctx.source_path.clone();
+
+                // Execute both stages concurrently
+                let (writer_result, reader_result) = tokio::join!(
+                    Self::execute_stage_with_policy(&mut stage_writer, &mut ctx),
+                    Self::execute_stage_with_policy(&mut stage_reader, &mut reader_ctx),
+                );
+
+                // Put stages back
+                self.stages[writer_idx].stage = stage_writer;
+                self.stages[reader_idx].stage = stage_reader;
+
+                // Handle writer result
+                Self::handle_stage_result(writer_result, &writer_name, &writer_policy, &mut ctx)?;
+
+                // Handle reader result
+                Self::handle_stage_result(reader_result, &reader_name, &reader_policy, &mut ctx)?;
+
+                // Merge reader's outputs back into main context
+                if reader_ctx.reasoning_index.is_some() {
+                    ctx.reasoning_index = reader_ctx.reasoning_index;
+                }
+                if reader_ctx.description.is_some() {
+                    ctx.description = reader_ctx.description;
+                }
+                // Merge metrics (additive counters)
+                ctx.metrics.llm_calls += reader_ctx.metrics.llm_calls;
+                ctx.metrics.summaries_generated += reader_ctx.metrics.summaries_generated;
+                ctx.metrics.total_tokens_generated += reader_ctx.metrics.total_tokens_generated;
+                if reader_ctx.metrics.reasoning_index_time_ms > 0 {
+                    ctx.metrics.record_reasoning_index(
+                        reader_ctx.metrics.reasoning_index_time_ms,
+                        reader_ctx.metrics.topics_indexed,
+                        reader_ctx.metrics.keywords_indexed,
+                    );
+                }
+            } else {
+                // === Sequential execution (single stage or non-parallel group) ===
+                for &idx in &group.stage_indices {
+                    let entry = &mut self.stages[idx];
+                    let stage_name = entry.stage.name().to_string();
+                    let policy = entry.stage.failure_policy();
+
+                    info!(
+                        "Executing stage: {} (priority {})",
+                        stage_name, entry.priority
+                    );
+
+                    match Self::execute_stage_with_policy(&mut entry.stage, &mut ctx).await {
+                        Ok(result) => {
+                            ctx.stage_results.insert(stage_name.clone(), result);
+                        }
+                        Err(e) => {
+                            if policy.allows_continuation() {
+                                warn!(
+                                    "Stage {} failed but policy allows continuation: {}",
+                                    stage_name, e
+                                );
+                                ctx.stage_results.insert(
+                                    stage_name.clone(),
+                                    StageResult::failure(&stage_name, &e.to_string()),
+                                );
+                            } else {
+                                error!("Stage {} failed, stopping pipeline: {}", stage_name, e);
+                                return Err(e);
+                            }
                         }
                     }
                 }
@@ -500,6 +614,21 @@ impl PipelineOrchestrator {
     pub fn get_execution_groups(&self) -> Result<Vec<ExecutionGroup>> {
         let order = self.resolve_order()?;
         Ok(self.compute_execution_groups(&order))
+    }
+}
+
+/// Placeholder stage used during parallel execution when the real stage
+/// is temporarily swapped out via `std::mem::replace`.
+struct NopStage;
+
+#[async_trait::async_trait]
+impl IndexStage for NopStage {
+    fn name(&self) -> &'static str {
+        "_nop"
+    }
+
+    async fn execute(&mut self, _ctx: &mut IndexContext) -> Result<StageResult> {
+        Ok(StageResult::success("_nop"))
     }
 }
 
