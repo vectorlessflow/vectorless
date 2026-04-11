@@ -56,8 +56,6 @@ fn deserialize_confidence<'de, D>(deserializer: D) -> Result<f32, D::Error>
 where
     D: serde::Deserializer<'de>,
 {
-    use serde::de::Error;
-
     let value = serde_json::Value::deserialize(deserializer)?;
     match value {
         serde_json::Value::Number(n) => {

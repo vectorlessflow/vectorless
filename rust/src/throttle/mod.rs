@@ -9,26 +9,6 @@
 //! - **Rate Limiter** — Token bucket algorithm to limit requests per time period
 //! - **Concurrency Controller** — Combined semaphore + rate limiter
 //!
-//! # Architecture
-//!
-//! ```text
-//! ┌─────────────────────────────────────────────────────────────────┐
-//! │                        LlmClient                                 │
-//! │                                                                  │
-//! │   complete() ──▶ [Rate Limiter] ──▶ [Semaphore] ──▶ API Call   │
-//! │                         │                │                       │
-//! │                    令牌桶限制        并发数限制                   │
-//! │                                                                  │
-//! │   ┌─────────────────────────────────────────────────────────┐  │
-//! │   │              ConcurrencyController                       │  │
-//! │   │                                                          │  │
-//! │   │  ┌─────────────┐  ┌─────────────┐                        │  │
-//! │   │  │RateLimiter  │  │ Semaphore   │                        │  │
-//! │   │  │(governor)   │  │(tokio)      │                        │  │
-//! │   │  └─────────────┘  └─────────────┘                        │  │
-//! │   └─────────────────────────────────────────────────────────┘  │
-//! └─────────────────────────────────────────────────────────────────┘
-//! ```
 //!
 //! # Example
 //!
@@ -60,4 +40,3 @@ mod rate_limiter;
 
 pub use config::ConcurrencyConfig;
 pub use controller::ConcurrencyController;
-pub use rate_limiter::RateLimiter;

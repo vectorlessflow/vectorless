@@ -12,15 +12,14 @@ use tracing::{debug, info, warn};
 
 use crate::document::DocumentTree;
 use crate::llm::{LlmClient, LlmExecutor};
-use crate::memo::{MemoKey, MemoOpType, MemoStore, MemoValue};
-use crate::throttle::ConcurrencyController;
+use crate::memo::{MemoKey, MemoStore, MemoValue};
 use crate::utils::fingerprint::Fingerprint;
 
 use super::budget::BudgetController;
 use super::builder::ContextBuilder;
 use super::config::PilotConfig;
 use super::decision::{InterventionPoint, PilotDecision};
-use super::feedback::{DecisionAdjustment, FeedbackRecord, FeedbackStore, PilotLearner};
+use super::feedback::{FeedbackRecord, FeedbackStore, PilotLearner};
 use super::parser::ResponseParser;
 use super::prompts::PromptBuilder;
 use super::r#trait::{Pilot, SearchState};

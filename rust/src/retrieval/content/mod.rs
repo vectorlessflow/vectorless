@@ -37,10 +37,5 @@ mod builder;
 mod config;
 mod scorer;
 
-pub use aggregator::{AggregationResult, CandidateNode, ContentAggregator};
-pub use budget::{AllocationResult, AllocationStrategy, BudgetAllocator, SelectedContent};
-pub use builder::{ContentTree, OutputFormat, StructureBuilder, StructuredContent};
+pub use aggregator::{CandidateNode, ContentAggregator};
 pub use config::{ContentAggregatorConfig, OutputFormatConfig, ScoringStrategyConfig};
-pub use scorer::{
-    ContentChunk, ContentRelevance, RelevanceScorer, ScoreComponents, ScoringContext,
-};

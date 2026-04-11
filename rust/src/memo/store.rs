@@ -7,17 +7,16 @@
 
 use std::collections::HashMap;
 use std::future::Future;
-use std::num::NonZeroUsize;
 use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
-use chrono::{Duration, Utc};
+use chrono::Duration;
 use lru::LruCache;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock as AsyncRwLock;
-use tracing::{debug, info, warn};
+use tracing::{debug, info};
 
 use super::types::{MemoEntry, MemoKey, MemoOpType, MemoStats, MemoValue};
 use crate::error::Result;

@@ -15,27 +15,6 @@
 //! 3. Intervention at key decision points - not every step, only when needed
 //! 4. Layered fallback - algorithm takes over when LLM fails, Pilot rescues when algorithm fails
 //!
-//! # Architecture
-//!
-//! ```text
-//! ┌─────────────────────────────────────────────────────────────────────────┐
-//! │                              Pilot Architecture                          │
-//! ├─────────────────────────────────────────────────────────────────────────┤
-//! │                                                                         │
-//! │   ┌─────────────┐   ┌─────────────┐   ┌─────────────┐                  │
-//! │   │   Query     │   │  Context    │   │  Decision   │                  │
-//! │   │  Analyzer   │──▶│   Builder   │──▶│   Engine    │                  │
-//! │   └─────────────┘   └─────────────┘   └──────┬──────┘                  │
-//! │                                              │                          │
-//! │                                              ▼                          │
-//! │   ┌─────────────┐   ┌─────────────┐   ┌─────────────┐                  │
-//! │   │   Response  │◀──│     LLM     │◀──│   Prompt    │                  │
-//! │   │   Parser    │   │   Client    │   │   Builder   │                  │
-//! │   └─────────────┘   └─────────────┘   └─────────────┘                  │
-//! │                                                                         │
-//! │   Supporting: BudgetController, FallbackManager, MetricsCollector      │
-//! └─────────────────────────────────────────────────────────────────────────┘
-//! ```
 //!
 //! # Quick Start
 //!
@@ -64,18 +43,8 @@ mod parser;
 mod prompts;
 mod r#trait;
 
-pub use budget::{BudgetController, BudgetUsage};
-pub use builder::{ContextBuilder, ContextMode, PilotContext, TokenBudget};
-pub use config::{BudgetConfig, InterventionConfig, PilotConfig, PilotMode};
-pub use decision::{InterventionPoint, PilotDecision, RankedCandidate, SearchDirection};
-pub use fallback::{FallbackAction, FallbackConfig, FallbackError, FallbackLevel, FallbackManager};
-pub use feedback::{
-    ContextStats, DecisionAdjustment, DecisionId, FeedbackId, FeedbackRecord, FeedbackStore,
-    FeedbackStoreConfig, InterventionStats, LearnerConfig, PilotLearner,
-};
+pub use config::PilotConfig;
+pub use decision::{InterventionPoint, PilotDecision};
+
 pub use llm_pilot::LlmPilot;
-pub use metrics::{CallRecord, MetricsCollector, PilotMetrics};
-pub use noop::NoopPilot;
-pub use parser::ResponseParser;
-pub use prompts::PromptBuilder;
-pub use r#trait::{Pilot, PilotExt, SearchState};
+pub use r#trait::{Pilot, SearchState};

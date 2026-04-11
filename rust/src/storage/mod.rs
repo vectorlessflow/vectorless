@@ -42,15 +42,7 @@ mod persistence;
 pub mod workspace;
 
 // Re-export main types
-pub use backend::{FileBackend, MemoryBackend, StorageBackend};
-pub use cache::DocumentCache;
-pub use codec::{Codec, GzipCodec, IdentityCodec, codec_from_config};
-pub use lock::{FileLock, ScopedLock};
-pub use migration::{CURRENT_VERSION, Migration, MigrationContext, Migrator};
 pub use persistence::{
-    DocumentMeta, PageContent, PersistedDocument, PersistenceOptions, load_document,
-    load_document_from_bytes, load_document_with_options, load_index, load_index_from_bytes,
-    load_index_with_options, save_document, save_document_to_bytes, save_document_with_options,
-    save_index, save_index_to_bytes, save_index_with_options,
+    DocumentMeta, PersistedDocument,
 };
-pub use workspace::{DocumentMetaEntry, Workspace, WorkspaceOptions};
+pub use workspace::Workspace;

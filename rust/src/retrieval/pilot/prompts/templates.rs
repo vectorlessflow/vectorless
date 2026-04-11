@@ -245,8 +245,6 @@ impl PromptTemplate for EvaluatePrompt {
 
 /// Fallback templates when file loading fails.
 pub mod fallback {
-    use super::*;
-
     pub fn system_start() -> String {
         r#"You are a document navigation assistant. Help identify the best entry points for searching a hierarchical document.
 

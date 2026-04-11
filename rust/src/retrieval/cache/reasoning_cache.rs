@@ -21,7 +21,6 @@ use std::sync::RwLock;
 use std::time::Instant;
 
 use crate::document::NodeId;
-use crate::retrieval::pipeline::CandidateNode;
 use crate::utils::fingerprint::Fingerprint;
 
 /// A tiered reasoning cache for the retrieval pipeline.

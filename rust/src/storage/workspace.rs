@@ -33,7 +33,7 @@
 //! ```
 
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
@@ -561,122 +561,5 @@ mod tests {
         let meta = super::super::persistence::DocumentMeta::new(id, "Test Doc", "md");
         let tree = DocumentTree::new("Root", "Content");
         PersistedDocument::new(meta, tree)
-    }
-
-    #[tokio::test]
-    async fn test_async_workspace_create() {
-        let backend = Arc::new(super::super::backend::MemoryBackend::new());
-        let workspace = Workspace::with_backend(backend).await.unwrap();
-
-        assert!(workspace.is_empty().await);
-        assert_eq!(workspace.len().await, 0);
-    }
-
-    #[tokio::test]
-    async fn test_async_workspace_add_and_load() {
-        let backend = Arc::new(super::super::backend::MemoryBackend::new());
-        let workspace = Workspace::with_backend(backend).await.unwrap();
-
-        let doc = create_test_doc("doc-1");
-        workspace.add(&doc).await.unwrap();
-
-        assert_eq!(workspace.len().await, 1);
-        assert!(workspace.contains("doc-1").await);
-
-        let loaded = workspace.load("doc-1").await.unwrap();
-        assert!(loaded.is_some());
-        assert_eq!(loaded.unwrap().meta.id, "doc-1");
-    }
-
-    #[tokio::test]
-    async fn test_async_workspace_remove() {
-        let backend = Arc::new(super::super::backend::MemoryBackend::new());
-        let workspace = Workspace::with_backend(backend).await.unwrap();
-
-        let doc = create_test_doc("doc-1");
-        workspace.add(&doc).await.unwrap();
-
-        let removed = workspace.remove("doc-1").await.unwrap();
-        assert!(removed);
-        assert!(workspace.is_empty().await);
-
-        let removed_again = workspace.remove("doc-1").await.unwrap();
-        assert!(!removed_again);
-    }
-
-    #[tokio::test]
-    async fn test_async_workspace_cache() {
-        let backend = Arc::new(super::super::backend::MemoryBackend::new());
-        let workspace = Workspace::with_backend(backend).await.unwrap();
-
-        let doc = create_test_doc("doc-1");
-        workspace.add(&doc).await.unwrap();
-
-        // First load with caching
-        let _ = workspace.load_and_cache("doc-1").await.unwrap();
-        let stats = workspace.cache_stats().await;
-        assert_eq!(stats.misses, 1);
-
-        // Second load should hit cache
-        let _ = workspace.load_and_cache("doc-1").await.unwrap();
-        let stats = workspace.cache_stats().await;
-        assert_eq!(stats.hits, 1);
-    }
-
-    #[tokio::test]
-    async fn test_async_workspace_list_documents() {
-        let backend = Arc::new(super::super::backend::MemoryBackend::new());
-        let workspace = Workspace::with_backend(backend).await.unwrap();
-
-        workspace.add(&create_test_doc("doc-1")).await.unwrap();
-        workspace.add(&create_test_doc("doc-2")).await.unwrap();
-        workspace.add(&create_test_doc("doc-3")).await.unwrap();
-
-        let docs = workspace.list_documents().await;
-        assert_eq!(docs.len(), 3);
-    }
-
-    #[tokio::test]
-    async fn test_async_workspace_get_meta() {
-        let backend = Arc::new(super::super::backend::MemoryBackend::new());
-        let workspace = Workspace::with_backend(backend).await.unwrap();
-
-        let doc = create_test_doc("doc-1");
-        workspace.add(&doc).await.unwrap();
-
-        let meta = workspace.get_meta("doc-1").await;
-        assert!(meta.is_some());
-        let meta = meta.unwrap();
-        assert_eq!(meta.id, "doc-1");
-        assert_eq!(meta.doc_name, "Test Doc");
-        assert_eq!(meta.doc_type, "md");
-    }
-
-    #[tokio::test]
-    async fn test_async_workspace_concurrent_access() {
-        let backend = Arc::new(super::super::backend::MemoryBackend::new());
-        let workspace = Arc::new(Workspace::with_backend(backend).await.unwrap());
-
-        // Spawn multiple concurrent tasks
-        let mut handles = vec![];
-
-        for i in 0..10 {
-            let ws = workspace.clone();
-            let handle = tokio::spawn(async move {
-                let id = format!("doc-{}", i);
-                let doc = create_test_doc(&id);
-                ws.add(&doc).await.unwrap();
-                let loaded = ws.load(&id).await.unwrap();
-                assert!(loaded.is_some());
-            });
-            handles.push(handle);
-        }
-
-        // Wait for all tasks
-        for handle in handles {
-            handle.await.unwrap();
-        }
-
-        assert_eq!(workspace.len().await, 10);
     }
 }

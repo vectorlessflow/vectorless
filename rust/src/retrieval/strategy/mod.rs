@@ -20,13 +20,7 @@ mod page_range;
 mod semantic;
 mod r#trait;
 
-pub use cross_document::{
-    CrossDocumentConfig, CrossDocumentStrategy, DocumentEntry, DocumentId, DocumentResult,
-    MergeStrategy,
-};
 pub use hybrid::{HybridConfig, HybridStrategy};
 pub use keyword::KeywordStrategy;
 pub use llm::LlmStrategy;
-pub use page_range::{PageRange, PageRangeConfig, PageRangeStrategy};
-pub use semantic::SemanticStrategy;
-pub use r#trait::{NodeEvaluation, RetrievalStrategy, StrategyCapabilities, StrategyCost};
+pub use r#trait::RetrievalStrategy;

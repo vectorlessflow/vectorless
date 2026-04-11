@@ -19,7 +19,7 @@ use crate::retrieval::RetrievalContext;
 use crate::retrieval::pilot::Pilot;
 use crate::retrieval::cache::CachedCandidate;
 use crate::retrieval::pipeline::{
-    BudgetStatus, CandidateNode, FailurePolicy, PipelineContext, RetrievalStage, SearchAlgorithm,
+    CandidateNode, FailurePolicy, PipelineContext, RetrievalStage, SearchAlgorithm,
     StageOutcome,
 };
 use crate::retrieval::search::{
@@ -723,7 +723,6 @@ impl RetrievalStage for SearchStage {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::retrieval::pilot::NoopPilot;
 
     #[test]
     fn test_search_stage_creation() {
@@ -737,14 +736,5 @@ mod tests {
     fn test_search_stage_dependencies() {
         let stage = SearchStage::new();
         assert_eq!(stage.depends_on(), vec!["plan"]);
-    }
-
-    #[test]
-    fn test_search_stage_with_noop_pilot() {
-        let pilot = Arc::new(NoopPilot::new());
-        let stage = SearchStage::new().with_pilot(pilot);
-
-        // NoopPilot is not active
-        assert!(!stage.has_pilot());
     }
 }

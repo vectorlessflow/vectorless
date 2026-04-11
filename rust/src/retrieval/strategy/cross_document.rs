@@ -7,13 +7,12 @@
 //! results into a unified response.
 
 use async_trait::async_trait;
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use super::r#trait::{NodeEvaluation, RetrievalStrategy, StrategyCapabilities};
 use crate::document::{DocumentTree, NodeId};
 use crate::graph::DocumentGraph;
-use crate::retrieval::types::{NavigationDecision, QueryComplexity};
+use crate::retrieval::types::QueryComplexity;
 use crate::retrieval::RetrievalContext;
 
 /// Document identifier for cross-document retrieval.

@@ -24,7 +24,6 @@
 //! ```
 
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::Arc;
 
 /// Status of the budget for stage-level decision making.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

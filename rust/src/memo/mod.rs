@@ -32,4 +32,4 @@ mod store;
 mod types;
 
 pub use store::MemoStore;
-pub use types::{MemoEntry, MemoKey, MemoOpType, MemoStats, MemoValue, PilotDecisionValue};
+pub use types::{MemoKey, MemoValue, PilotDecisionValue};

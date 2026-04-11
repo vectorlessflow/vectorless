@@ -17,7 +17,6 @@ use crate::retrieval::complexity::ComplexityDetector;
 use crate::retrieval::decompose::{DecompositionConfig, QueryDecomposer};
 use crate::retrieval::pipeline::{FailurePolicy, PipelineContext, RetrievalStage, StageOutcome};
 use crate::retrieval::types::{NavigationDecision, StageName};
-use crate::llm::LlmClient;
 
 /// Analyze Stage - analyzes queries for retrieval planning.
 ///

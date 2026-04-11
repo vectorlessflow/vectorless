@@ -13,11 +13,11 @@ use tracing::{debug, info};
 use crate::document::{DocumentTree, NodeId};
 use crate::utils::estimate_tokens;
 
-use super::budget::{AllocationResult, AllocationStrategy, BudgetAllocator, SelectedContent};
-use super::builder::{ContentMetadata, StructureBuilder, StructuredContent};
-use super::config::{ContentAggregatorConfig, OutputFormatConfig, ScoringStrategyConfig};
+use super::budget::{AllocationStrategy, BudgetAllocator};
+use super::builder::{ContentMetadata, StructureBuilder};
+use super::config::ContentAggregatorConfig;
 use super::scorer::{
-    ContentChunk, ContentRelevance, RelevanceScorer, ScoreComponents, ScoringContext,
+    ContentChunk, RelevanceScorer, ScoringContext,
 };
 
 /// Candidate node from retrieval.

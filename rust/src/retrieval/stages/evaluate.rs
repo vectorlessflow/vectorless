@@ -12,9 +12,9 @@ use tracing::{info, warn};
 
 use crate::llm::LlmClient;
 use crate::retrieval::content::{ContentAggregator, ContentAggregatorConfig};
-use crate::retrieval::pipeline::{BudgetStatus, FailurePolicy, PipelineContext, RetrievalStage, StageOutcome};
+use crate::retrieval::pipeline::{FailurePolicy, PipelineContext, RetrievalStage, StageOutcome};
 use crate::retrieval::sufficiency::{LlmJudge, SufficiencyChecker, ThresholdChecker};
-use crate::retrieval::types::{NavigationDecision, ReasoningChain, RetrievalResult, RetrieveResponse, StageName, SufficiencyLevel};
+use crate::retrieval::types::{NavigationDecision, RetrievalResult, RetrieveResponse, StageName, SufficiencyLevel};
 use crate::utils::estimate_tokens;
 
 /// Evaluate Stage - evaluates retrieval sufficiency.

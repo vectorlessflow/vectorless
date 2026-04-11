@@ -9,10 +9,8 @@
 //! - IDF caching for efficient scoring
 //! - Query expansion support
 
-use std::collections::HashMap;
-
 use bm25::{
-    Embedder, EmbedderBuilder, Embedding, Language, Scorer, ScoredDocument,
+    Embedder, EmbedderBuilder, Language, Scorer, ScoredDocument,
     DefaultTokenizer, Tokenizer,
 };
 

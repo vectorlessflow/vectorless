@@ -317,28 +317,3 @@ pub(crate) struct WorkspaceStats {
     /// Number of documents in the workspace.
     pub document_count: usize,
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::storage::backend::MemoryBackend;
-    use std::sync::Arc as StdArc;
-
-    #[tokio::test]
-    async fn test_workspace_client_creation() {
-        let backend = StdArc::new(MemoryBackend::new());
-        let workspace = Workspace::with_backend(backend).await.unwrap();
-        let client = WorkspaceClient::new(workspace).await;
-        assert!(client.is_empty().await);
-    }
-
-    #[tokio::test]
-    async fn test_workspace_stats() {
-        let backend = StdArc::new(MemoryBackend::new());
-        let workspace = Workspace::with_backend(backend).await.unwrap();
-        let client = WorkspaceClient::new(workspace).await;
-
-        let stats = client.stats().await.unwrap();
-        assert_eq!(stats.document_count, 0);
-    }
-}

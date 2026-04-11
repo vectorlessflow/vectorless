@@ -18,12 +18,8 @@ mod detector;
 mod resolver;
 mod updater;
 
-pub use detector::{
-    ChangeDetector, ChangeSet,
-};
+pub use detector::ChangeDetector;
 pub use resolver::{IndexAction, SkipInfo, resolve_action};
-pub use updater::PartialUpdater;
-
 use std::collections::HashMap;
 use crate::document::DocumentTree;
 
