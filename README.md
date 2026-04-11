@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="https://raw.githubusercontent.com/vectorlessflow/vectorless/main/docs/design/with-title.png" alt="Vectorless" width="400" style="vertical-align:middle;">
+<img src="https://vectorless.dev/img/with-title.png" alt="Vectorless" width="400" style="vertical-align:middle;">
 
 <h1>Reasoning-native Document Intelligence Engine</h1>
 
