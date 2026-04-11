@@ -1,0 +1,120 @@
+.navbarContainer {
+  width: 100%;
+  margin: 0 auto;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  height: 100%;
+  gap: 2.25rem;
+}
+
+.navbarBrand {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.navbarLogoLink {
+  display: flex;
+  align-items: center;
+  text-decoration: none;
+  color: inherit;
+  transition: opacity 0.2s;
+}
+
+.navbarLogoLink:hover {
+  opacity: 0.8;
+}
+
+.navbarLogo {
+  height: 32px;
+  width: auto;
+}
+
+.navbarItemsLeft {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5rem;
+  flex: 1;
+  font-size: 0.875rem;
+}
+
+.navbarItemsLeft :global(.navbar__link) {
+  font-size: 0.875rem;
+  font-weight: 400;
+  padding: 0;
+  text-decoration: none;
+  transition: opacity 0.15s ease;
+}
+
+.navbarItemsLeft :global(.navbar__link:hover) {
+  opacity: 0.7;
+  text-decoration: none;
+}
+
+.navbarItemsLeft :global(.navbar__link--active) {
+  font-weight: 600;
+}
+
+.navbarItemsRight {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.githubStarWrapper {
+  display: flex;
+  align-items: center;
+}
+
+.navbarMobileMenuButton {
+  display: none;
+  padding: 8px;
+  border-radius: 8px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  z-index: 999;
+  transition: background-color 0.2s;
+  margin-right: 12px;
+  align-items: center;
+  justify-content: center;
+  color: inherit;
+}
+
+.navbarMobileMenuButton:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+.navbarMobileMenuIcon {
+  width: 20px;
+  height: 20px;
+}
+
+.navbarMobileMenuButtonHidden {
+  display: none !important;
+}
+
+/* Mobile */
+@media (max-width: 996px) {
+  .navbarContainer {
+    gap: 0;
+  }
+
+  .navbarItemsLeft {
+    display: none;
+  }
+
+  .navbarMobileMenuButton {
+    display: flex;
+    order: -1;
+    margin-right: 12px;
+  }
+
+  .navbarItemsRight {
+    gap: 0.75rem;
+  }
+}

@@ -75,21 +75,6 @@ const config: Config = {
           label: 'Docs',
         },
         {to: '/blog', label: 'Blog', position: 'left'},
-        {
-          href: 'https://crates.io/crates/vectorless',
-          label: 'Crates.io',
-          position: 'right',
-        },
-        {
-          href: 'https://pypi.org/project/vectorless/',
-          label: 'PyPI',
-          position: 'right',
-        },
-        {
-          href: 'https://github.com/vectorlessflow/vectorless',
-          label: 'GitHub',
-          position: 'right',
-        },
       ],
     },
     footer: {
