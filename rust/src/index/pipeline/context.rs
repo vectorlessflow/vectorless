@@ -417,6 +417,8 @@ impl PipelineResult {
     pub fn total_time_ms(&self) -> u64 {
         self.metrics.parse_time_ms
             + self.metrics.build_time_ms
+            + self.metrics.validate_time_ms
+            + self.metrics.split_time_ms
             + self.metrics.enhance_time_ms
             + self.metrics.enrich_time_ms
             + self.metrics.reasoning_index_time_ms

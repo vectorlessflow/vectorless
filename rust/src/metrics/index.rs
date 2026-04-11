@@ -28,6 +28,14 @@ pub struct IndexMetrics {
     #[serde(default)]
     pub optimize_time_ms: u64,
 
+    /// Validate stage duration (ms).
+    #[serde(default)]
+    pub validate_time_ms: u64,
+
+    /// Split stage duration (ms).
+    #[serde(default)]
+    pub split_time_ms: u64,
+
     /// Reasoning index build duration (ms).
     #[serde(default)]
     pub reasoning_index_time_ms: u64,
@@ -96,6 +104,16 @@ impl IndexMetrics {
         self.optimize_time_ms = duration_ms;
     }
 
+    /// Record validate stage time.
+    pub fn record_validate(&mut self, duration_ms: u64) {
+        self.validate_time_ms = duration_ms;
+    }
+
+    /// Record split stage time.
+    pub fn record_split(&mut self, duration_ms: u64) {
+        self.split_time_ms = duration_ms;
+    }
+
     /// Record reasoning index build time.
     pub fn record_reasoning_index(&mut self, duration_ms: u64, topics: usize, keywords: usize) {
         self.reasoning_index_time_ms = duration_ms;
@@ -137,6 +155,8 @@ impl IndexMetrics {
     pub fn total_time_ms(&self) -> u64 {
         self.parse_time_ms
             + self.build_time_ms
+            + self.validate_time_ms
+            + self.split_time_ms
             + self.enhance_time_ms
             + self.enrich_time_ms
             + self.reasoning_index_time_ms

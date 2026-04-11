@@ -9,6 +9,8 @@ mod enrich;
 mod optimize;
 mod parse;
 mod reasoning;
+mod split;
+mod validate;
 
 pub use build::BuildStage;
 pub use enhance::EnhanceStage;
@@ -16,6 +18,8 @@ pub use enrich::EnrichStage;
 pub use optimize::OptimizeStage;
 pub use parse::ParseStage;
 pub use reasoning::ReasoningIndexStage;
+pub use split::SplitStage;
+pub use validate::ValidateStage;
 
 use super::pipeline::{FailurePolicy, IndexContext, StageResult};
 use crate::error::Result;

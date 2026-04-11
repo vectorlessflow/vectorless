@@ -14,6 +14,8 @@ use crate::config::{ConcurrencyConfig, IndexerConfig};
 use crate::document::{DocumentTree, ReasoningIndexConfig};
 use crate::utils::fingerprint::{Fingerprint, Fingerprinter};
 
+use std::path::PathBuf;
+
 /// Index mode for document processing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IndexMode {
@@ -93,6 +95,11 @@ pub struct ThinningConfig {
 
     /// Token threshold for merging.
     pub threshold: usize,
+
+    /// Whether to merge child content into the parent when removing children.
+    /// When true, nodes below threshold absorb their children's text before removal.
+    /// When false, small nodes are simply discarded.
+    pub merge_content: bool,
 }
 
 impl Default for ThinningConfig {
@@ -100,6 +107,7 @@ impl Default for ThinningConfig {
         Self {
             enabled: false,
             threshold: 500,
+            merge_content: true,
         }
     }
 }
@@ -115,12 +123,65 @@ impl ThinningConfig {
         Self {
             enabled: true,
             threshold,
+            merge_content: true,
         }
     }
 
     /// Set the token threshold.
     pub fn with_threshold(mut self, threshold: usize) -> Self {
         self.threshold = threshold;
+        self
+    }
+
+    /// Set whether to merge content.
+    pub fn with_merge_content(mut self, merge: bool) -> Self {
+        self.merge_content = merge;
+        self
+    }
+}
+
+/// Configuration for large node splitting.
+#[derive(Debug, Clone)]
+pub struct SplitConfig {
+    /// Whether splitting is enabled.
+    pub enabled: bool,
+
+    /// Maximum tokens per leaf node. Nodes exceeding this are split.
+    pub max_tokens_per_node: usize,
+
+    /// Whether to use pattern-based splitting (headings, paragraphs).
+    /// When false, splits at approximate byte boundaries.
+    pub pattern_split: bool,
+}
+
+impl Default for SplitConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            max_tokens_per_node: 8000,
+            pattern_split: true,
+        }
+    }
+}
+
+impl SplitConfig {
+    /// Create disabled config.
+    pub fn disabled() -> Self {
+        Self {
+            enabled: false,
+            ..Self::default()
+        }
+    }
+
+    /// Create enabled config with custom token limit.
+    pub fn with_max_tokens(mut self, max: usize) -> Self {
+        self.max_tokens_per_node = max;
+        self
+    }
+
+    /// Set whether to use pattern-based splitting.
+    pub fn with_pattern_split(mut self, pattern: bool) -> Self {
+        self.pattern_split = pattern;
         self
     }
 }
@@ -143,6 +204,9 @@ pub struct PipelineOptions {
     /// Optimization configuration.
     pub optimization: OptimizationConfig,
 
+    /// Split configuration.
+    pub split: SplitConfig,
+
     /// Whether to generate document description.
     pub generate_description: bool,
 
@@ -162,6 +226,12 @@ pub struct PipelineOptions {
     /// Current processing version. Bumped when indexing algorithm changes
     /// to force reprocessing of existing documents.
     pub processing_version: u32,
+
+    /// Directory for pipeline checkpoints.
+    /// When set, the pipeline saves state after each stage group
+    /// and can resume from the last completed stage on restart.
+    /// When `None`, checkpointing is disabled.
+    pub checkpoint_dir: Option<PathBuf>,
 }
 
 impl Default for PipelineOptions {
@@ -172,12 +242,14 @@ impl Default for PipelineOptions {
             summary_strategy: SummaryStrategy::full(),
             thinning: ThinningConfig::default(),
             optimization: OptimizationConfig::default(),
+            split: SplitConfig::default(),
             generate_description: true,
             concurrency: ConcurrencyConfig::default(),
             indexer: IndexerConfig::default(),
             reasoning_index: ReasoningIndexConfig::default(),
             existing_tree: None,
             processing_version: 1,
+            checkpoint_dir: None,
         }
     }
 }
@@ -218,6 +290,12 @@ impl PipelineOptions {
         self
     }
 
+    /// Set the split configuration.
+    pub fn with_split(mut self, split: SplitConfig) -> Self {
+        self.split = split;
+        self
+    }
+
     /// Set whether to generate document description.
     pub fn with_generate_description(mut self, generate: bool) -> Self {
         self.generate_description = generate;
@@ -239,6 +317,15 @@ impl PipelineOptions {
     /// Set the reasoning index configuration.
     pub fn with_reasoning_index(mut self, config: ReasoningIndexConfig) -> Self {
         self.reasoning_index = config;
+        self
+    }
+
+    /// Set the checkpoint directory.
+    ///
+    /// When set, the pipeline saves state after each stage group
+    /// and can resume from the last completed stage on restart.
+    pub fn with_checkpoint_dir(mut self, dir: impl Into<PathBuf>) -> Self {
+        self.checkpoint_dir = Some(dir.into());
         self
     }
 
