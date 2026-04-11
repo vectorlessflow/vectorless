@@ -35,8 +35,10 @@ workspace/
 test_output/
 temp/
 
-# Documentation
-docs/_build/
+# Documentation (Docusaurus)
+docs/node_modules/
+docs/build/
+docs/.docusaurus/
 
 # Benchmarks
 .criterion/
