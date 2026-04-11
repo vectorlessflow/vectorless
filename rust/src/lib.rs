@@ -56,6 +56,7 @@ pub mod client;
 mod config;
 pub mod document;
 pub mod error;
+pub mod events;
 mod graph;
 mod index;
 mod llm;
@@ -69,7 +70,7 @@ mod utils;
 
 // Client API
 pub use client::{
-    BuildError, ClientError, DocumentFormat, DocumentInfo, Engine, EngineBuilder, EventEmitter,
+    BuildError, ClientError, DocumentFormat, DocumentInfo, Engine, EngineBuilder,
     IndexContext, IndexItem, IndexMode, IndexOptions, IndexResult, QueryContext, QueryResult,
 };
 
@@ -84,6 +85,9 @@ pub use document::{
 
 // Graph types
 pub use graph::DocumentGraph;
+
+// Event types
+pub use events::{EventEmitter, IndexEvent, QueryEvent, WorkspaceEvent};
 
 // Index metrics
 pub use metrics::IndexMetrics;

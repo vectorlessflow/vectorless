@@ -99,9 +99,9 @@ impl Engine {
         workspace: Workspace,
         retriever: PipelineRetriever,
         indexer: IndexerClient,
+        events: EventEmitter,
     ) -> Result<Self> {
         let config = Arc::new(config);
-        let events = EventEmitter::new();
 
         // Attach event emitter to indexer
         let indexer = indexer.with_events(events.clone());

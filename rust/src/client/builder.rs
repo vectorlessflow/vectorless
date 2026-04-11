@@ -596,7 +596,8 @@ impl EngineBuilder {
         }
 
         // Build engine
-        Engine::with_components(config, workspace, retriever, indexer)
+        let events = self.events.unwrap_or_default();
+        Engine::with_components(config, workspace, retriever, indexer, events)
             .await
             .map_err(|e| BuildError::Other(e.to_string()))
     }
