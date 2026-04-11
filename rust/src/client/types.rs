@@ -9,8 +9,8 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 use crate::document::DocumentTree;
-use crate::metrics::IndexMetrics;
 use crate::index::parse::DocumentFormat;
+use crate::metrics::IndexMetrics;
 
 // ============================================================
 // Document Types
@@ -592,7 +592,13 @@ mod tests {
 
     #[test]
     fn test_partial_success() {
-        let items = vec![IndexItem::new("doc-1", "A", DocumentFormat::Markdown, None, None)];
+        let items = vec![IndexItem::new(
+            "doc-1",
+            "A",
+            DocumentFormat::Markdown,
+            None,
+            None,
+        )];
         let failed = vec![FailedItem::new("missing.pdf", "File not found")];
         let result = IndexResult::with_partial(items, failed);
 

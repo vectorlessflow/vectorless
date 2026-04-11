@@ -12,9 +12,9 @@ use tracing::{debug, info, warn};
 use crate::document::NodeId;
 use crate::error::Result;
 use crate::index::incremental;
-use crate::utils::fingerprint::Fingerprint;
 use crate::llm::LlmClient;
 use crate::memo::{MemoKey, MemoStore};
+use crate::utils::fingerprint::Fingerprint;
 
 use super::{IndexStage, StageResult};
 use crate::index::pipeline::{FailurePolicy, IndexContext, StageRetryConfig};
@@ -204,13 +204,19 @@ impl IndexStage for EnhanceStage {
 
             // Check memo store (fast path — apply immediately)
             if let Some(store) = self.memo_store.as_deref() {
-                let content_fp =
-                    Fingerprint::from_str(&format!("{}|{}", node.title, node.content));
+                let content_fp = Fingerprint::from_str(&format!("{}|{}", node.title, node.content));
                 let memo_key = MemoKey::summary(&content_fp);
-                if let Some(cached) = store.get(&memo_key).and_then(|c| c.as_summary().map(|s| s.to_string())) {
+                if let Some(cached) = store
+                    .get(&memo_key)
+                    .and_then(|c| c.as_summary().map(|s| s.to_string()))
+                {
                     if !cached.is_empty() {
                         tree.set_summary(node_id, &cached);
-                        debug!("Using cached summary for node: {} ({} chars)", node.title, cached.len());
+                        debug!(
+                            "Using cached summary for node: {} ({} chars)",
+                            node.title,
+                            cached.len()
+                        );
                         ctx.metrics.increment_summaries();
                         generated += 1;
                         continue;
@@ -219,7 +225,9 @@ impl IndexStage for EnhanceStage {
             }
 
             // Shortcut: use original content as summary for short nodes (Borrow A)
-            let token_count = node.token_count.unwrap_or_else(|| crate::utils::estimate_tokens(&node.content));
+            let token_count = node
+                .token_count
+                .unwrap_or_else(|| crate::utils::estimate_tokens(&node.content));
             if shortcut_threshold > 0 && token_count > 0 && token_count <= shortcut_threshold {
                 tree.set_summary(node_id, &node.content);
                 debug!(
@@ -249,7 +257,8 @@ impl IndexStage for EnhanceStage {
         if !pending_llm.is_empty() {
             info!(
                 "Generating summaries for {} nodes (concurrency: {})",
-                pending_llm.len(), concurrency
+                pending_llm.len(),
+                concurrency
             );
 
             // Collect results: (NodeId, Result<String>)
@@ -258,11 +267,13 @@ impl IndexStage for EnhanceStage {
                     .map(|pending| {
                         let generator = Arc::clone(&generator);
                         async move {
-                            let result = generator.generate_for_node(
-                                &pending.title,
-                                &pending.content,
-                                pending.is_leaf,
-                            ).await;
+                            let result = generator
+                                .generate_for_node(
+                                    &pending.title,
+                                    &pending.content,
+                                    pending.is_leaf,
+                                )
+                                .await;
                             (pending.node_id, result.map_err(|e| e.to_string()))
                         }
                     })

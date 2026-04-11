@@ -44,7 +44,10 @@ pub struct LlmResponse {
     #[serde(default)]
     pub direction: DirectionResponse,
     /// Confidence level (0.0 - 1.0 or "high"/"medium"/"low").
-    #[serde(default = "default_confidence", deserialize_with = "deserialize_confidence")]
+    #[serde(
+        default = "default_confidence",
+        deserialize_with = "deserialize_confidence"
+    )]
     pub confidence: f32,
     /// Reasoning for the decision.
     #[serde(default)]
@@ -225,18 +228,27 @@ impl ResponseParser {
         candidates: &[CandidateInfo],
         point: InterventionPoint,
     ) -> PilotDecision {
-        println!("[DEBUG] ResponseParser::parse() - candidates.len()={}", candidates.len());
+        println!(
+            "[DEBUG] ResponseParser::parse() - candidates.len()={}",
+            candidates.len()
+        );
 
         // Try JSON parse first
         if let Some(decision) = self.try_json_parse(response, candidates, point) {
-            println!("[DEBUG] ResponseParser::parse() - JSON parse succeeded, ranked={}", decision.ranked_candidates.len());
+            println!(
+                "[DEBUG] ResponseParser::parse() - JSON parse succeeded, ranked={}",
+                decision.ranked_candidates.len()
+            );
             return decision;
         }
         println!("[DEBUG] ResponseParser::parse() - JSON parse failed, trying regex...");
 
         // Try regex extraction
         if let Some(decision) = self.try_regex_parse(response, candidates, point) {
-            println!("[DEBUG] ResponseParser::parse() - Regex parse succeeded, ranked={}", decision.ranked_candidates.len());
+            println!(
+                "[DEBUG] ResponseParser::parse() - Regex parse succeeded, ranked={}",
+                decision.ranked_candidates.len()
+            );
             return decision;
         }
         println!("[DEBUG] ResponseParser::parse() - Regex parse failed, using default decision");
@@ -266,17 +278,26 @@ impl ResponseParser {
             extracted
         };
 
-        println!("[DEBUG] ResponseParser::try_json_parse() - Extracted JSON:\n{}", json_str);
+        println!(
+            "[DEBUG] ResponseParser::try_json_parse() - Extracted JSON:\n{}",
+            json_str
+        );
 
         // Parse JSON
         let llm_response: LlmResponse = match serde_json::from_str::<LlmResponse>(&json_str) {
             Ok(r) => {
                 println!("[DEBUG] ResponseParser::try_json_parse() - JSON parsed successfully");
-                println!("[DEBUG] ResponseParser::try_json_parse() - ranked_candidates count: {}", r.ranked_candidates.len());
+                println!(
+                    "[DEBUG] ResponseParser::try_json_parse() - ranked_candidates count: {}",
+                    r.ranked_candidates.len()
+                );
                 r
-            },
+            }
             Err(e) => {
-                println!("[DEBUG] ResponseParser::try_json_parse() - JSON parse FAILED: {}", e);
+                println!(
+                    "[DEBUG] ResponseParser::try_json_parse() - JSON parse FAILED: {}",
+                    e
+                );
                 warn!("Failed to parse LLM response as JSON: {}", e);
                 return None;
             }
@@ -414,13 +435,37 @@ impl ResponseParser {
         candidates: &[CandidateInfo],
         point: InterventionPoint,
     ) -> PilotDecision {
-        println!("[DEBUG] ResponseParser::llm_response_to_decision() - point={:?}", point);
-        println!("[DEBUG] ResponseParser::llm_response_to_decision() - ranked_candidates.len()={}", llm_response.ranked_candidates.len());
-        println!("[DEBUG] ResponseParser::llm_response_to_decision() - best_entry_points.len()={}", llm_response.best_entry_points.len());
-        println!("[DEBUG] ResponseParser::llm_response_to_decision() - entry_points.len()={}", llm_response.entry_points.len());
-        println!("[DEBUG] ResponseParser::llm_response_to_decision() - selected_nodes.len()={}", llm_response.selected_nodes.len());
-        println!("[DEBUG] ResponseParser::llm_response_to_decision() - selected_node={:?}", llm_response.selected_node);
-        println!("[DEBUG] ResponseParser::llm_response_to_decision() - analysis={:?}", llm_response.analysis.as_ref().map(|a| (&a.selected_node, &a.selected_nodes)));
+        println!(
+            "[DEBUG] ResponseParser::llm_response_to_decision() - point={:?}",
+            point
+        );
+        println!(
+            "[DEBUG] ResponseParser::llm_response_to_decision() - ranked_candidates.len()={}",
+            llm_response.ranked_candidates.len()
+        );
+        println!(
+            "[DEBUG] ResponseParser::llm_response_to_decision() - best_entry_points.len()={}",
+            llm_response.best_entry_points.len()
+        );
+        println!(
+            "[DEBUG] ResponseParser::llm_response_to_decision() - entry_points.len()={}",
+            llm_response.entry_points.len()
+        );
+        println!(
+            "[DEBUG] ResponseParser::llm_response_to_decision() - selected_nodes.len()={}",
+            llm_response.selected_nodes.len()
+        );
+        println!(
+            "[DEBUG] ResponseParser::llm_response_to_decision() - selected_node={:?}",
+            llm_response.selected_node
+        );
+        println!(
+            "[DEBUG] ResponseParser::llm_response_to_decision() - analysis={:?}",
+            llm_response
+                .analysis
+                .as_ref()
+                .map(|a| (&a.selected_node, &a.selected_nodes))
+        );
 
         // Convert candidate scores to RankedCandidate
         let mut ranked_candidates: Vec<RankedCandidate> = llm_response
@@ -454,17 +499,16 @@ impl ResponseParser {
                 };
 
                 if idx < candidates.len() {
-                    let score = entry.relevance_score
-                        .or(entry.score)
-                        .unwrap_or(0.5)
-                        / 5.0; // Normalize 1-5 scale to 0.0-1.0
+                    let score = entry.relevance_score.or(entry.score).unwrap_or(0.5) / 5.0; // Normalize 1-5 scale to 0.0-1.0
                     ranked_candidates.push(RankedCandidate {
                         node_id: candidates[idx].node_id,
                         score: score.clamp(0.0, 1.0),
                         reason: entry.title.clone(),
                     });
-                    println!("[DEBUG] ResponseParser - converted best_entry_point[{}] to ranked_candidate (idx={}, score={:.2})",
-                        idx, idx, score);
+                    println!(
+                        "[DEBUG] ResponseParser - converted best_entry_point[{}] to ranked_candidate (idx={}, score={:.2})",
+                        idx, idx, score
+                    );
                 }
             }
 
@@ -478,8 +522,10 @@ impl ResponseParser {
                             score: 0.9, // High score for title match
                             reason: Some(format!("Title match: {}", selected_title)),
                         });
-                        println!("[DEBUG] ResponseParser - matched selected_node '{}' to candidate '{}' (index={})",
-                            selected_title, candidate.title, candidate.index);
+                        println!(
+                            "[DEBUG] ResponseParser - matched selected_node '{}' to candidate '{}' (index={})",
+                            selected_title, candidate.title, candidate.index
+                        );
                         break; // Only match once per selected_node
                     }
                 }
@@ -489,14 +535,19 @@ impl ResponseParser {
             if let Some(ref single_node) = llm_response.selected_node {
                 for candidate in candidates {
                     if Self::titles_match(single_node, &candidate.title) {
-                        if !ranked_candidates.iter().any(|rc| rc.node_id == candidate.node_id) {
+                        if !ranked_candidates
+                            .iter()
+                            .any(|rc| rc.node_id == candidate.node_id)
+                        {
                             ranked_candidates.push(RankedCandidate {
                                 node_id: candidate.node_id,
                                 score: 0.9,
                                 reason: Some(format!("Title match (singular): {}", single_node)),
                             });
-                            println!("[DEBUG] ResponseParser - matched selected_node (singular) '{}' to candidate '{}' (index={})",
-                                single_node, candidate.title, candidate.index);
+                            println!(
+                                "[DEBUG] ResponseParser - matched selected_node (singular) '{}' to candidate '{}' (index={})",
+                                single_node, candidate.title, candidate.index
+                            );
                         }
                         break;
                     }
@@ -507,14 +558,19 @@ impl ResponseParser {
             if let Some(ref recommended) = llm_response.recommended_node {
                 for candidate in candidates {
                     if Self::titles_match(recommended, &candidate.title) {
-                        if !ranked_candidates.iter().any(|rc| rc.node_id == candidate.node_id) {
+                        if !ranked_candidates
+                            .iter()
+                            .any(|rc| rc.node_id == candidate.node_id)
+                        {
                             ranked_candidates.push(RankedCandidate {
                                 node_id: candidate.node_id,
                                 score: 0.85,
                                 reason: Some(format!("Recommended node: {}", recommended)),
                             });
-                            println!("[DEBUG] ResponseParser - matched recommended_node '{}' to candidate '{}' (index={})",
-                                recommended, candidate.title, candidate.index);
+                            println!(
+                                "[DEBUG] ResponseParser - matched recommended_node '{}' to candidate '{}' (index={})",
+                                recommended, candidate.title, candidate.index
+                            );
                         }
                         break;
                     }
@@ -527,14 +583,22 @@ impl ResponseParser {
                 for selected_title in &analysis.selected_nodes {
                     for candidate in candidates {
                         if Self::titles_match(selected_title, &candidate.title) {
-                            if !ranked_candidates.iter().any(|rc| rc.node_id == candidate.node_id) {
+                            if !ranked_candidates
+                                .iter()
+                                .any(|rc| rc.node_id == candidate.node_id)
+                            {
                                 ranked_candidates.push(RankedCandidate {
                                     node_id: candidate.node_id,
                                     score: 0.85,
-                                    reason: Some(format!("Analysis selected_nodes: {}", selected_title)),
+                                    reason: Some(format!(
+                                        "Analysis selected_nodes: {}",
+                                        selected_title
+                                    )),
                                 });
-                                println!("[DEBUG] ResponseParser - matched analysis.selected_nodes '{}' to candidate '{}' (index={})",
-                                    selected_title, candidate.title, candidate.index);
+                                println!(
+                                    "[DEBUG] ResponseParser - matched analysis.selected_nodes '{}' to candidate '{}' (index={})",
+                                    selected_title, candidate.title, candidate.index
+                                );
                             }
                             break;
                         }
@@ -545,14 +609,22 @@ impl ResponseParser {
                 if let Some(ref single_node) = analysis.selected_node {
                     for candidate in candidates {
                         if Self::titles_match(single_node, &candidate.title) {
-                            if !ranked_candidates.iter().any(|rc| rc.node_id == candidate.node_id) {
+                            if !ranked_candidates
+                                .iter()
+                                .any(|rc| rc.node_id == candidate.node_id)
+                            {
                                 ranked_candidates.push(RankedCandidate {
                                     node_id: candidate.node_id,
                                     score: 0.85,
-                                    reason: Some(format!("Analysis selected_node: {}", single_node)),
+                                    reason: Some(format!(
+                                        "Analysis selected_node: {}",
+                                        single_node
+                                    )),
                                 });
-                                println!("[DEBUG] ResponseParser - matched analysis.selected_node (singular) '{}' to candidate '{}' (index={})",
-                                    single_node, candidate.title, candidate.index);
+                                println!(
+                                    "[DEBUG] ResponseParser - matched analysis.selected_node (singular) '{}' to candidate '{}' (index={})",
+                                    single_node, candidate.title, candidate.index
+                                );
                             }
                             break;
                         }
@@ -572,14 +644,19 @@ impl ResponseParser {
                 for candidate in candidates {
                     if Self::titles_match(entry_title, &candidate.title) {
                         // Check if already added
-                        if !ranked_candidates.iter().any(|rc| rc.node_id == candidate.node_id) {
+                        if !ranked_candidates
+                            .iter()
+                            .any(|rc| rc.node_id == candidate.node_id)
+                        {
                             ranked_candidates.push(RankedCandidate {
                                 node_id: candidate.node_id,
                                 score: 0.8, // Slightly lower score for entry_points
                                 reason: Some(format!("Entry point: {}", entry_title)),
                             });
-                            println!("[DEBUG] ResponseParser - matched entry_point '{}' to candidate '{}' (index={})",
-                                entry_title, candidate.title, candidate.index);
+                            println!(
+                                "[DEBUG] ResponseParser - matched entry_point '{}' to candidate '{}' (index={})",
+                                entry_title, candidate.title, candidate.index
+                            );
                         }
                         break;
                     }
@@ -612,7 +689,10 @@ impl ResponseParser {
             },
         };
 
-        println!("[DEBUG] ResponseParser::llm_response_to_decision() - final ranked_candidates.len()={}", ranked_candidates.len());
+        println!(
+            "[DEBUG] ResponseParser::llm_response_to_decision() - final ranked_candidates.len()={}",
+            ranked_candidates.len()
+        );
 
         PilotDecision {
             ranked_candidates,
@@ -640,7 +720,8 @@ impl ResponseParser {
 
         // Word overlap match (at least 50% of words match)
         let llm_words: std::collections::HashSet<&str> = llm_lower.split_whitespace().collect();
-        let candidate_words: std::collections::HashSet<&str> = candidate_lower.split_whitespace().collect();
+        let candidate_words: std::collections::HashSet<&str> =
+            candidate_lower.split_whitespace().collect();
         let overlap = llm_words.intersection(&candidate_words).count();
         let min_words = llm_words.len().min(candidate_words.len());
         if min_words > 0 && overlap as f32 / min_words as f32 >= 0.5 {
@@ -651,7 +732,11 @@ impl ResponseParser {
     }
 
     /// Create a default decision when parsing fails.
-    fn default_decision(&self, candidates: &[CandidateInfo], point: InterventionPoint) -> PilotDecision {
+    fn default_decision(
+        &self,
+        candidates: &[CandidateInfo],
+        point: InterventionPoint,
+    ) -> PilotDecision {
         // Score candidates uniformly
         let ranked: Vec<RankedCandidate> = candidates
             .iter()

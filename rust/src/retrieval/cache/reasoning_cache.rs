@@ -154,11 +154,7 @@ impl ReasoningCache {
     ///
     /// Returns cached candidates if the same query was executed before
     /// on the same document scope.
-    pub fn l1_get(
-        &self,
-        query: &str,
-        scope_fp: &Fingerprint,
-    ) -> Option<Vec<CachedCandidate>> {
+    pub fn l1_get(&self, query: &str, scope_fp: &Fingerprint) -> Option<Vec<CachedCandidate>> {
         let query_fp = Fingerprint::from_str(query);
         let l1 = self.l1.read().ok()?;
         let entry = l1.entries.get(&query_fp)?;
@@ -270,12 +266,7 @@ impl ReasoningCache {
     }
 
     /// Store a strategy score for a node.
-    pub fn l3_store(
-        &self,
-        node_content_fp: Fingerprint,
-        score: f32,
-        strategy: String,
-    ) {
+    pub fn l3_store(&self, node_content_fp: Fingerprint, score: f32, strategy: String) {
         if let Ok(mut l3) = self.l3.write() {
             if l3.entries.len() >= self.config.l3_max {
                 Self::evict_lru_fingerprint_l3(&mut l3);

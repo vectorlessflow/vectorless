@@ -251,7 +251,10 @@ impl QueryDecomposer {
             match self.llm_decompose(query).await {
                 Ok(result) => return Ok(result),
                 Err(e) => {
-                    debug!("LLM decomposition failed, falling back to rule-based: {}", e);
+                    debug!(
+                        "LLM decomposition failed, falling back to rule-based: {}",
+                        e
+                    );
                 }
             }
         }
@@ -350,7 +353,10 @@ impl QueryDecomposer {
         if sub_queries.is_empty() {
             for (pattern, _) in &patterns {
                 if query_lower.contains(pattern) {
-                    let parts: Vec<&str> = query.split(pattern).filter(|s| !s.trim().is_empty()).collect();
+                    let parts: Vec<&str> = query
+                        .split(pattern)
+                        .filter(|s| !s.trim().is_empty())
+                        .collect();
                     if parts.len() > 1 {
                         for (i, part) in parts.iter().enumerate() {
                             sub_queries.push(SubQuery {
@@ -404,13 +410,15 @@ If the query is simple enough, return just one sub-query."#;
         let user = format!("Decompose this query: {}", query);
 
         let response = if let Some(ref executor) = self.llm_executor {
-            executor.complete(system, &user).await.map_err(|e| {
-                crate::error::Error::Llm(format!("LLM executor error: {}", e))
-            })?
+            executor
+                .complete(system, &user)
+                .await
+                .map_err(|e| crate::error::Error::Llm(format!("LLM executor error: {}", e)))?
         } else if let Some(ref client) = self.llm_client {
-            client.complete(system, &user).await.map_err(|e| {
-                crate::error::Error::Llm(format!("LLM client error: {}", e))
-            })?
+            client
+                .complete(system, &user)
+                .await
+                .map_err(|e| crate::error::Error::Llm(format!("LLM client error: {}", e)))?
         } else {
             return Err(crate::error::Error::Config(
                 "No LLM client or executor configured".to_string(),
@@ -424,8 +432,8 @@ If the query is simple enough, return just one sub-query."#;
             reason: String,
         }
 
-        let parsed: DecompositionResponse =
-            serde_json::from_str(&extract_json(&response)).map_err(|e| {
+        let parsed: DecompositionResponse = serde_json::from_str(&extract_json(&response))
+            .map_err(|e| {
                 crate::error::Error::Llm(format!("Failed to parse decomposition: {}", e))
             })?;
 
@@ -582,7 +590,11 @@ impl ResultAggregator {
         let order = decomposition.execution_order();
         let sorted_results: Vec<_> = order
             .iter()
-            .filter_map(|&i| results.iter().find(|r| r.query.text == decomposition.sub_queries[i].text))
+            .filter_map(|&i| {
+                results
+                    .iter()
+                    .find(|r| r.query.text == decomposition.sub_queries[i].text)
+            })
             .collect();
 
         // Combine results with section headers
@@ -590,11 +602,7 @@ impl ResultAggregator {
         let mut total_tokens = 0;
 
         for result in sorted_results {
-            let section = format!(
-                "\n### {}\n\n{}\n",
-                result.query.text,
-                result.content
-            );
+            let section = format!("\n### {}\n\n{}\n", result.query.text, result.content);
 
             let section_tokens = section.len() / 4; // Rough estimate
             if total_tokens + section_tokens > self.max_tokens {
@@ -642,9 +650,9 @@ mod tests {
     fn test_rule_based_decomposition() {
         let decomposer = QueryDecomposer::default();
 
-        let result = decomposer.rule_based_decompose(
-            "What is the architecture? How does caching work?",
-        ).unwrap();
+        let result = decomposer
+            .rule_based_decompose("What is the architecture? How does caching work?")
+            .unwrap();
 
         assert!(result.was_decomposed);
         assert_eq!(result.sub_queries.len(), 2);
@@ -652,10 +660,7 @@ mod tests {
 
     #[test]
     fn test_no_decomposition() {
-        let result = DecompositionResult::no_decomposition(
-            "What is this?",
-            "Query is simple",
-        );
+        let result = DecompositionResult::no_decomposition("What is this?", "Query is simple");
 
         assert!(!result.was_decomposed);
         assert!(!result.is_multi_turn());

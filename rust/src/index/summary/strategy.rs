@@ -6,9 +6,9 @@
 use async_trait::async_trait;
 
 use crate::document::{DocumentTree, NodeId};
-use crate::utils::fingerprint::Fingerprint;
 use crate::llm::{LlmClient, LlmResult};
 use crate::memo::{MemoKey, MemoStore, MemoValue};
+use crate::utils::fingerprint::Fingerprint;
 
 /// Configuration for summary strategies.
 #[derive(Debug, Clone)]
@@ -238,7 +238,8 @@ impl SummaryGenerator for LlmSummaryGenerator {
 
         let user_prompt = format!("Title: {}\n\nContent:\n{}", title, content);
 
-        let summary = self.client
+        let summary = self
+            .client
             .complete_with_max_tokens(&system_prompt, &user_prompt, self.max_tokens as u16)
             .await?;
 
@@ -294,7 +295,8 @@ impl SummaryGenerator for LlmSummaryGenerator {
 
         let user_prompt = format!("Title: {}\n\nContent:\n{}", title, content);
 
-        let summary = self.client
+        let summary = self
+            .client
             .complete_with_max_tokens(&system_prompt, &user_prompt, self.max_tokens as u16)
             .await?;
 

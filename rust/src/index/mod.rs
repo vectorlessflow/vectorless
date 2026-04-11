@@ -60,9 +60,7 @@ pub mod stages;
 pub mod summary;
 
 // Re-export main types from pipeline
-pub use pipeline::{
-    IndexInput, IndexMetrics, PipelineResult, PipelineExecutor,
-};
+pub use pipeline::{IndexInput, IndexMetrics, PipelineExecutor, PipelineResult};
 
 // Re-export config types
 pub use config::{IndexMode, PipelineOptions, ThinningConfig};

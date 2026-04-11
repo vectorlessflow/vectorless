@@ -114,7 +114,7 @@ impl IndexStage for EnrichStage {
     fn access_pattern(&self) -> AccessPattern {
         AccessPattern {
             reads_tree: true,
-            writes_tree: true,    // sets page_boundaries
+            writes_tree: true, // sets page_boundaries
             writes_description: true,
             ..Default::default()
         }

@@ -9,9 +9,9 @@
 //! - **Timing** — Performance measurement utilities
 //! - **Format** — Text and number formatting utilities
 
+pub mod fingerprint;
 mod format;
 mod timing;
 mod token;
-pub mod fingerprint;
 
 pub use token::estimate_tokens;

@@ -86,7 +86,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     for query in queries {
         println!("  Query: \"{}\"", query);
 
-        match client.query(QueryContext::new(query).with_doc_id(&doc_id)).await {
+        match client
+            .query(QueryContext::new(query).with_doc_id(&doc_id))
+            .await
+        {
             Ok(result) => {
                 if let Some(item) = result.single() {
                     if item.content.is_empty() {

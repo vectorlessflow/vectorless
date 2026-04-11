@@ -159,7 +159,9 @@ impl Engine {
         // Single source: no need for concurrency overhead
         if ctx.sources.len() == 1 {
             let source = &ctx.sources[0];
-            let (items, failed) = self.process_source(source, &ctx.options, ctx.name.as_deref()).await;
+            let (items, failed) = self
+                .process_source(source, &ctx.options, ctx.name.as_deref())
+                .await;
             if items.is_empty() && !failed.is_empty() {
                 return Err(Error::Config(format!(
                     "All {} source(s) failed to index",
@@ -175,21 +177,26 @@ impl Engine {
         }
 
         // Multiple sources: parallel indexing
-        let concurrency = self.config.concurrency.max_concurrent_requests.min(ctx.sources.len());
+        let concurrency = self
+            .config
+            .concurrency
+            .max_concurrent_requests
+            .min(ctx.sources.len());
 
-        let results: Vec<(Vec<IndexItem>, Vec<FailedItem>)> =
-            futures::stream::iter(&ctx.sources)
-                .map(|source| {
-                    let options = ctx.options.clone();
-                    let name = ctx.name.clone();
-                    let engine = self.clone();
-                    async move {
-                        engine.process_source(source, &options, name.as_deref()).await
-                    }
-                })
-                .buffer_unordered(concurrency)
-                .collect()
-                .await;
+        let results: Vec<(Vec<IndexItem>, Vec<FailedItem>)> = futures::stream::iter(&ctx.sources)
+            .map(|source| {
+                let options = ctx.options.clone();
+                let name = ctx.name.clone();
+                let engine = self.clone();
+                async move {
+                    engine
+                        .process_source(source, &options, name.as_deref())
+                        .await
+                }
+            })
+            .buffer_unordered(concurrency)
+            .collect()
+            .await;
 
         let mut items = Vec::new();
         let mut failed = Vec::new();
@@ -251,12 +258,18 @@ impl Engine {
                             doc.format.clone(),
                             doc.description.clone(),
                             doc.page_count,
-                        ).with_metrics_opt(metrics);
-                        let persisted = self.indexer.to_persisted_with_options(doc, &pipeline_options);
+                        )
+                        .with_metrics_opt(metrics);
+                        let persisted = self
+                            .indexer
+                            .to_persisted_with_options(doc, &pipeline_options);
 
                         if let Some(ref workspace) = self.workspace {
                             if let Err(e) = workspace.save(&persisted).await {
-                                return (Vec::new(), vec![FailedItem::new(&source_label, e.to_string())]);
+                                return (
+                                    Vec::new(),
+                                    vec![FailedItem::new(&source_label, e.to_string())],
+                                );
                             }
                             // Clean up old document after successful save (atomic: save-first, then remove old)
                             if let Some(old_id) = &existing_id {
@@ -269,11 +282,17 @@ impl Engine {
                     }
                     Err(e) => {
                         tracing::warn!("Failed to index {}: {}", source_label, e);
-                        (Vec::new(), vec![FailedItem::new(&source_label, e.to_string())])
+                        (
+                            Vec::new(),
+                            vec![FailedItem::new(&source_label, e.to_string())],
+                        )
                     }
                 }
             }
-            Ok(IndexAction::IncrementalUpdate { old_tree, existing_id }) => {
+            Ok(IndexAction::IncrementalUpdate {
+                old_tree,
+                existing_id,
+            }) => {
                 info!("Incremental update for: {}", source_label);
                 match self
                     .indexer
@@ -290,13 +309,19 @@ impl Engine {
                             doc.format.clone(),
                             doc.description.clone(),
                             doc.page_count,
-                        ).with_metrics_opt(metrics);
-                        let persisted = self.indexer.to_persisted_with_options(doc, &pipeline_options);
+                        )
+                        .with_metrics_opt(metrics);
+                        let persisted = self
+                            .indexer
+                            .to_persisted_with_options(doc, &pipeline_options);
 
                         if let Some(ref workspace) = self.workspace {
                             // save() is atomic (write-lock + put), no need to remove first
                             if let Err(e) = workspace.save(&persisted).await {
-                                return (Vec::new(), vec![FailedItem::new(&source_label, e.to_string())]);
+                                return (
+                                    Vec::new(),
+                                    vec![FailedItem::new(&source_label, e.to_string())],
+                                );
                             }
                         }
 
@@ -305,13 +330,19 @@ impl Engine {
                     }
                     Err(e) => {
                         tracing::warn!("Incremental update failed for {}: {}", source_label, e);
-                        (Vec::new(), vec![FailedItem::new(&source_label, e.to_string())])
+                        (
+                            Vec::new(),
+                            vec![FailedItem::new(&source_label, e.to_string())],
+                        )
                     }
                 }
             }
             Err(e) => {
                 tracing::warn!("Failed to resolve action for {}: {}", source_label, e);
-                (Vec::new(), vec![FailedItem::new(&source_label, e.to_string())])
+                (
+                    Vec::new(),
+                    vec![FailedItem::new(&source_label, e.to_string())],
+                )
             }
         }
     }
@@ -415,13 +446,20 @@ impl Engine {
     pub async fn query_stream(&self, ctx: QueryContext) -> Result<RetrieveEventReceiver> {
         let doc_id = match &ctx.scope {
             QueryScope::Single(id) => id.clone(),
-            _ => return Err(Error::Config("query_stream requires a single doc_id".to_string())),
+            _ => {
+                return Err(Error::Config(
+                    "query_stream requires a single doc_id".to_string(),
+                ));
+            }
         };
 
         let tree = self.get_structure(&doc_id).await?;
         let options = ctx.to_retrieve_options(&self.config);
 
-        let rx = self.retriever.query_stream(&tree, &ctx.query, &options).await?;
+        let rx = self
+            .retriever
+            .query_stream(&tree, &ctx.query, &options)
+            .await?;
 
         Ok(rx)
     }
@@ -648,12 +686,8 @@ impl Engine {
         let pipeline_options = self.build_pipeline_options(options, format);
 
         // If logic fingerprint changed, remove old doc before full reprocess
-        let action = incremental::resolve_action(
-            &current_bytes,
-            &stored_doc,
-            &pipeline_options,
-            format,
-        );
+        let action =
+            incremental::resolve_action(&current_bytes, &stored_doc, &pipeline_options, format);
 
         // Note: if FullIndex, old doc cleanup happens in process_source()
         // after successful save (save-first, then remove old).

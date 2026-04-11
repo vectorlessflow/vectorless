@@ -65,9 +65,7 @@ pub mod stages;
 pub mod strategy;
 pub mod sufficiency;
 
-pub use context::{
-    PruningStrategy, TokenEstimation,
-};
+pub use context::{PruningStrategy, TokenEstimation};
 pub use pipeline_retriever::PipelineRetriever;
 pub use retriever::{RetrievalContext, Retriever};
 pub use types::*;

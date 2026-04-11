@@ -81,10 +81,7 @@ impl DocumentGraph {
 
     /// Add a directed edge from `source` to `target`.
     pub fn add_edge(&mut self, source: &str, edge: GraphEdge) {
-        self.edges
-            .entry(source.to_string())
-            .or_default()
-            .push(edge);
+        self.edges.entry(source.to_string()).or_default().push(edge);
         self.metadata.edge_count = self.edges.values().map(|v| v.len()).sum();
     }
 
@@ -100,9 +97,7 @@ impl DocumentGraph {
 
     /// Find documents containing a keyword.
     pub fn find_by_keyword(&self, keyword: &str) -> &[KeywordDocEntry] {
-        self.keyword_index
-            .get(keyword)
-            .map_or(&[], Vec::as_slice)
+        self.keyword_index.get(keyword).map_or(&[], Vec::as_slice)
     }
 
     /// Get the number of documents in the graph.
@@ -233,8 +228,14 @@ mod tests {
             title: "Test Doc".to_string(),
             format: "md".to_string(),
             top_keywords: vec![
-                WeightedKeyword { keyword: "rust".to_string(), weight: 0.9 },
-                WeightedKeyword { keyword: "async".to_string(), weight: 0.7 },
+                WeightedKeyword {
+                    keyword: "rust".to_string(),
+                    weight: 0.9,
+                },
+                WeightedKeyword {
+                    keyword: "async".to_string(),
+                    weight: 0.7,
+                },
             ],
             node_count: 10,
         });
@@ -264,19 +265,22 @@ mod tests {
             node_count: 8,
         });
 
-        graph.add_edge("doc1", GraphEdge {
-            target_doc_id: "doc2".to_string(),
-            weight: 0.5,
-            evidence: EdgeEvidence {
-                shared_keywords: vec![SharedKeyword {
-                    keyword: "rust".to_string(),
-                    source_weight: 0.9,
-                    target_weight: 0.8,
-                }],
-                shared_keyword_count: 1,
-                keyword_jaccard: 0.3,
+        graph.add_edge(
+            "doc1",
+            GraphEdge {
+                target_doc_id: "doc2".to_string(),
+                weight: 0.5,
+                evidence: EdgeEvidence {
+                    shared_keywords: vec![SharedKeyword {
+                        keyword: "rust".to_string(),
+                        source_weight: 0.9,
+                        target_weight: 0.8,
+                    }],
+                    shared_keyword_count: 1,
+                    keyword_jaccard: 0.3,
+                },
             },
-        });
+        );
 
         assert_eq!(graph.edge_count(), 1);
         assert_eq!(graph.get_neighbors("doc1").len(), 1);
@@ -291,7 +295,10 @@ mod tests {
             doc_id: "doc1".to_string(),
             title: "Test".to_string(),
             format: "md".to_string(),
-            top_keywords: vec![WeightedKeyword { keyword: "test".to_string(), weight: 1.0 }],
+            top_keywords: vec![WeightedKeyword {
+                keyword: "test".to_string(),
+                weight: 1.0,
+            }],
             node_count: 3,
         });
 

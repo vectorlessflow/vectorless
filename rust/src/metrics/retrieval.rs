@@ -49,11 +49,18 @@ impl RetrievalMetrics {
     }
 
     /// Record a query.
-    pub fn record_query(&self, iterations: u64, nodes: u64, latency_ms: u64, config: &RetrievalMetricsConfig) {
+    pub fn record_query(
+        &self,
+        iterations: u64,
+        nodes: u64,
+        latency_ms: u64,
+        config: &RetrievalMetricsConfig,
+    ) {
         self.total_queries.fetch_add(1, Ordering::Relaxed);
 
         if config.track_iterations {
-            self.total_iterations.fetch_add(iterations, Ordering::Relaxed);
+            self.total_iterations
+                .fetch_add(iterations, Ordering::Relaxed);
             self.iterations_sum.fetch_add(iterations, Ordering::Relaxed);
         }
 
@@ -61,7 +68,8 @@ impl RetrievalMetrics {
             self.nodes_visited.fetch_add(nodes, Ordering::Relaxed);
         }
 
-        self.total_latency_ms.fetch_add(latency_ms, Ordering::Relaxed);
+        self.total_latency_ms
+            .fetch_add(latency_ms, Ordering::Relaxed);
     }
 
     /// Record a found path.
@@ -75,7 +83,8 @@ impl RetrievalMetrics {
 
         if config.track_scores {
             let scaled_score = (score * 1_000_000.0) as u64;
-            self.path_score_sum_scaled.fetch_add(scaled_score, Ordering::Relaxed);
+            self.path_score_sum_scaled
+                .fetch_add(scaled_score, Ordering::Relaxed);
 
             if score >= 0.5 {
                 self.high_score_paths.fetch_add(1, Ordering::Relaxed);
@@ -156,7 +165,8 @@ impl RetrievalMetrics {
                 0.0
             },
             avg_path_score: if paths_found > 0 {
-                (self.path_score_sum_scaled.load(Ordering::Relaxed) as f64 / 1_000_000.0) / paths_found as f64
+                (self.path_score_sum_scaled.load(Ordering::Relaxed) as f64 / 1_000_000.0)
+                    / paths_found as f64
             } else {
                 0.0
             },

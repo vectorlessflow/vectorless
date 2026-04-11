@@ -12,10 +12,7 @@ mod toc_navigator;
 mod r#trait;
 
 pub use beam::BeamSearch;
-pub use bm25::{
-    extract_keywords, Bm25Engine, Bm25Params, FieldDocument,
-    STOPWORDS,
-};
+pub use bm25::{Bm25Engine, Bm25Params, FieldDocument, STOPWORDS, extract_keywords};
 pub use greedy::GreedySearch;
 pub use toc_navigator::{SearchCue, ToCNavigator};
 pub use r#trait::{SearchConfig, SearchResult, SearchTree};

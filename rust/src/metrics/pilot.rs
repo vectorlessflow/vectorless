@@ -71,7 +71,12 @@ impl PilotMetrics {
     }
 
     /// Record a Pilot decision.
-    pub fn record_decision(&self, confidence: f64, point: InterventionPoint, config: &PilotMetricsConfig) {
+    pub fn record_decision(
+        &self,
+        confidence: f64,
+        point: InterventionPoint,
+        config: &PilotMetricsConfig,
+    ) {
         if !config.track_decisions {
             return;
         }
@@ -95,7 +100,8 @@ impl PilotMetrics {
 
         // Update average confidence (store as scaled integer for atomic operations)
         let scaled_confidence = (confidence * 1_000_000.0) as u64;
-        self.confidence_sum_scaled.fetch_add(scaled_confidence, Ordering::Relaxed);
+        self.confidence_sum_scaled
+            .fetch_add(scaled_confidence, Ordering::Relaxed);
         self.confidence_count.fetch_add(1, Ordering::Relaxed);
     }
 

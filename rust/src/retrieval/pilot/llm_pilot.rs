@@ -243,7 +243,11 @@ impl LlmPilot {
     }
 
     /// Compute a cache key for a pilot decision.
-    fn compute_cache_key(&self, context: &super::builder::PilotContext, point: InterventionPoint) -> Option<MemoKey> {
+    fn compute_cache_key(
+        &self,
+        context: &super::builder::PilotContext,
+        point: InterventionPoint,
+    ) -> Option<MemoKey> {
         let store = self.memo_store.as_ref()?;
 
         // Build a fingerprint from the context using available methods
@@ -294,7 +298,8 @@ impl LlmPilot {
                     if let MemoValue::PilotDecision(decision_value) = cached {
                         debug!("Memo cache hit for pilot decision at {:?}", point);
                         // Convert cached value back to PilotDecision
-                        let decision = self.cached_value_to_decision(decision_value, candidates, point);
+                        let decision =
+                            self.cached_value_to_decision(decision_value, candidates, point);
                         return decision;
                     }
                 }
@@ -330,10 +335,22 @@ impl LlmPilot {
             }
         }
 
-        println!("[DEBUG] LlmPilot::call_llm() - point={:?}, estimated_tokens={}", point, prompt.estimated_tokens);
-        println!("[DEBUG] LlmPilot::call_llm() - SYSTEM PROMPT:\n{}", prompt.system);
-        println!("[DEBUG] LlmPilot::call_llm() - USER PROMPT:\n{}", prompt.user);
-        println!("[DEBUG] LlmPilot::call_llm() - candidates count: {}", candidates.len());
+        println!(
+            "[DEBUG] LlmPilot::call_llm() - point={:?}, estimated_tokens={}",
+            point, prompt.estimated_tokens
+        );
+        println!(
+            "[DEBUG] LlmPilot::call_llm() - SYSTEM PROMPT:\n{}",
+            prompt.system
+        );
+        println!(
+            "[DEBUG] LlmPilot::call_llm() - USER PROMPT:\n{}",
+            prompt.user
+        );
+        println!(
+            "[DEBUG] LlmPilot::call_llm() - candidates count: {}",
+            candidates.len()
+        );
         debug!(
             "Calling LLM for {:?} point (estimated: {} tokens)",
             point, prompt.estimated_tokens
@@ -352,7 +369,10 @@ impl LlmPilot {
 
         match result {
             Ok(response) => {
-                println!("[DEBUG] LlmPilot::call_llm() - RAW LLM RESPONSE:\n{}", response);
+                println!(
+                    "[DEBUG] LlmPilot::call_llm() - RAW LLM RESPONSE:\n{}",
+                    response
+                );
                 // Record usage (estimate output tokens)
                 let output_tokens = self.estimate_tokens(&response);
                 self.budget
@@ -360,10 +380,13 @@ impl LlmPilot {
 
                 // Parse response
                 let mut decision = self.response_parser.parse(&response, candidates, point);
-                println!("[DEBUG] LlmPilot::call_llm() - PARSED DECISION: confidence={:.2}, ranked={}, direction={:?}, reasoning={}",
-                    decision.confidence, decision.ranked_candidates.len(),
+                println!(
+                    "[DEBUG] LlmPilot::call_llm() - PARSED DECISION: confidence={:.2}, ranked={}, direction={:?}, reasoning={}",
+                    decision.confidence,
+                    decision.ranked_candidates.len(),
                     std::mem::discriminant(&decision.direction),
-                    decision.reasoning.chars().take(100).collect::<String>());
+                    decision.reasoning.chars().take(100).collect::<String>()
+                );
 
                 // Apply learner adjustment if available
                 if let Some(ref adj) = adjustment {
@@ -387,7 +410,11 @@ impl LlmPilot {
                     if let Some(cache_key) = self.compute_cache_key(context, point) {
                         let decision_value = self.decision_to_cached_value(&decision);
                         let tokens_saved = prompt.estimated_tokens as u64 + output_tokens as u64;
-                        store.put_with_tokens(cache_key, MemoValue::PilotDecision(decision_value), tokens_saved);
+                        store.put_with_tokens(
+                            cache_key,
+                            MemoValue::PilotDecision(decision_value),
+                            tokens_saved,
+                        );
                         debug!("Memo cache stored for pilot decision at {:?}", point);
                     }
                 }
@@ -402,9 +429,14 @@ impl LlmPilot {
     }
 
     /// Convert a PilotDecision to a cacheable value.
-    fn decision_to_cached_value(&self, decision: &PilotDecision) -> crate::memo::PilotDecisionValue {
+    fn decision_to_cached_value(
+        &self,
+        decision: &PilotDecision,
+    ) -> crate::memo::PilotDecisionValue {
         crate::memo::PilotDecisionValue {
-            selected_idx: decision.ranked_candidates.first()
+            selected_idx: decision
+                .ranked_candidates
+                .first()
                 .map(|c| c.node_id.0.into())
                 .unwrap_or(0),
             confidence: decision.confidence,
@@ -424,7 +456,11 @@ impl LlmPilot {
             .enumerate()
             .map(|(i, c)| super::decision::RankedCandidate {
                 node_id: c.node_id,
-                score: if i == value.selected_idx { 1.0 } else { 0.5 / (i + 1) as f32 },
+                score: if i == value.selected_idx {
+                    1.0
+                } else {
+                    0.5 / (i + 1) as f32
+                },
                 reason: None,
             })
             .collect();
@@ -504,8 +540,11 @@ impl Pilot for LlmPilot {
 
         // Condition 1: Fork point with enough candidates
         if state.candidates.len() > intervention.fork_threshold {
-            println!("[DEBUG] LlmPilot::should_intervene() - YES: fork point with {} candidates (threshold={})",
-                state.candidates.len(), intervention.fork_threshold);
+            println!(
+                "[DEBUG] LlmPilot::should_intervene() - YES: fork point with {} candidates (threshold={})",
+                state.candidates.len(),
+                intervention.fork_threshold
+            );
             debug!(
                 "Intervening: fork point with {} candidates",
                 state.candidates.len()
@@ -515,15 +554,20 @@ impl Pilot for LlmPilot {
 
         // Condition 2: Scores are too close (algorithm uncertain)
         if self.scores_are_close(state) {
-            println!("[DEBUG] LlmPilot::should_intervene() - YES: scores are close (best={:.2})", state.best_score);
+            println!(
+                "[DEBUG] LlmPilot::should_intervene() - YES: scores are close (best={:.2})",
+                state.best_score
+            );
             debug!("Intervening: scores are close");
             return true;
         }
 
         // Condition 3: Low confidence (best score too low)
         if intervention.is_low_confidence(state.best_score) {
-            println!("[DEBUG] LlmPilot::should_intervene() - YES: low confidence (best_score={:.2}, threshold={:.2})",
-                state.best_score, intervention.low_score_threshold);
+            println!(
+                "[DEBUG] LlmPilot::should_intervene() - YES: low confidence (best_score={:.2}, threshold={:.2})",
+                state.best_score, intervention.low_score_threshold
+            );
             debug!(
                 "Intervening: low confidence (best_score={:.2})",
                 state.best_score
@@ -538,37 +582,51 @@ impl Pilot for LlmPilot {
             return true;
         }
 
-        println!("[DEBUG] LlmPilot::should_intervene() - NO: candidates={}, best_score={:.2}",
-            state.candidates.len(), state.best_score);
+        println!(
+            "[DEBUG] LlmPilot::should_intervene() - NO: candidates={}, best_score={:.2}",
+            state.candidates.len(),
+            state.best_score
+        );
         false
     }
 
     async fn decide(&self, state: &SearchState<'_>) -> PilotDecision {
         let point = self.get_intervention_point(state);
-        println!("[DEBUG] LlmPilot::decide() - intervention_point={:?}, candidates={}",
-            point, state.candidates.len());
+        println!(
+            "[DEBUG] LlmPilot::decide() - intervention_point={:?}, candidates={}",
+            point,
+            state.candidates.len()
+        );
 
         // Build context
         let context = self.context_builder.build(state);
 
         // Build candidate info with titles
-        let candidate_info: Vec<super::parser::CandidateInfo> = state.candidates
+        let candidate_info: Vec<super::parser::CandidateInfo> = state
+            .candidates
             .iter()
             .enumerate()
             .filter_map(|(i, &node_id)| {
-                state.tree.get(node_id).map(|node| super::parser::CandidateInfo {
-                    node_id,
-                    title: node.title.clone(),
-                    index: i,
-                })
+                state
+                    .tree
+                    .get(node_id)
+                    .map(|node| super::parser::CandidateInfo {
+                        node_id,
+                        title: node.title.clone(),
+                        index: i,
+                    })
             })
             .collect();
 
         // Make LLM call
         let decision = self.call_llm(point, &context, &candidate_info).await;
 
-        println!("[DEBUG] LlmPilot::decide() - result: confidence={:.2}, direction={:?}, ranked={}",
-            decision.confidence, std::mem::discriminant(&decision.direction), decision.ranked_candidates.len());
+        println!(
+            "[DEBUG] LlmPilot::decide() - result: confidence={:.2}, direction={:?}, ranked={}",
+            decision.confidence,
+            std::mem::discriminant(&decision.direction),
+            decision.ranked_candidates.len()
+        );
 
         decision
     }
@@ -594,7 +652,10 @@ impl Pilot for LlmPilot {
 
         // Get root's children as candidates
         let node_ids = tree.children(tree.root());
-        println!("[DEBUG] LlmPilot::guide_start() - {} root children candidates", node_ids.len());
+        println!(
+            "[DEBUG] LlmPilot::guide_start() - {} root children candidates",
+            node_ids.len()
+        );
 
         // Build CandidateInfo with titles
         let candidates: Vec<super::parser::CandidateInfo> = node_ids
@@ -615,16 +676,20 @@ impl Pilot for LlmPilot {
             .call_llm(InterventionPoint::Start, &context, &candidates)
             .await;
 
-        println!("[DEBUG] LlmPilot::guide_start() - LLM returned: confidence={:.2}, ranked_candidates={}, reasoning='{}'",
+        println!(
+            "[DEBUG] LlmPilot::guide_start() - LLM returned: confidence={:.2}, ranked_candidates={}, reasoning='{}'",
             decision.confidence,
             decision.ranked_candidates.len(),
-            decision.reasoning.chars().take(100).collect::<String>());
+            decision.reasoning.chars().take(100).collect::<String>()
+        );
 
         // Debug: show top ranked candidates
         for (i, rc) in decision.ranked_candidates.iter().enumerate().take(3) {
             if let Some(node) = tree.get(rc.node_id) {
-                println!("[DEBUG]   Ranked {}: node_id={:?}, score={:.3}, title='{}'",
-                    i, rc.node_id, rc.score, node.title);
+                println!(
+                    "[DEBUG]   Ranked {}: node_id={:?}, score={:.3}, title='{}'",
+                    i, rc.node_id, rc.score, node.title
+                );
             }
         }
 
@@ -654,15 +719,19 @@ impl Pilot for LlmPilot {
             .build_backtrack_context(state, state.path);
 
         // Build CandidateInfo
-        let candidates: Vec<super::parser::CandidateInfo> = state.candidates
+        let candidates: Vec<super::parser::CandidateInfo> = state
+            .candidates
             .iter()
             .enumerate()
             .filter_map(|(i, &node_id)| {
-                state.tree.get(node_id).map(|node| super::parser::CandidateInfo {
-                    node_id,
-                    title: node.title.clone(),
-                    index: i,
-                })
+                state
+                    .tree
+                    .get(node_id)
+                    .map(|node| super::parser::CandidateInfo {
+                        node_id,
+                        title: node.title.clone(),
+                        index: i,
+                    })
             })
             .collect();
 

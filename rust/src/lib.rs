@@ -43,7 +43,6 @@
 //! }
 //! ```
 
-
 pub mod client;
 mod config;
 pub mod document;
@@ -61,8 +60,8 @@ mod utils;
 
 // Client API
 pub use client::{
-    BuildError, ClientError, DocumentFormat, DocumentInfo, Engine, EngineBuilder,
-    IndexContext, IndexItem, IndexMode, IndexOptions, IndexResult, QueryContext, QueryResult,
+    BuildError, ClientError, DocumentFormat, DocumentInfo, Engine, EngineBuilder, IndexContext,
+    IndexItem, IndexMode, IndexOptions, IndexResult, QueryContext, QueryResult,
 };
 
 // Error types
@@ -82,4 +81,3 @@ pub use events::{EventEmitter, IndexEvent, QueryEvent, WorkspaceEvent};
 
 // Index metrics
 pub use metrics::IndexMetrics;
-

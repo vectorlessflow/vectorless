@@ -60,7 +60,11 @@ impl PdfParser {
     }
 
     /// Parse PDF from bytes and return raw pages.
-    pub async fn parse_bytes_raw(&self, bytes: &[u8], filename: Option<&str>) -> Result<PdfParseResult> {
+    pub async fn parse_bytes_raw(
+        &self,
+        bytes: &[u8],
+        filename: Option<&str>,
+    ) -> Result<PdfParseResult> {
         let doc = LopdfDocument::load_mem(bytes)
             .map_err(|e| Error::Parse(format!("Failed to parse PDF: {}", e)))?;
 
@@ -392,11 +396,16 @@ impl PdfParser {
             .await
             .map_err(|e| Error::Parse(format!("Failed to read PDF file: {}", e)))?;
         let filename = path.file_stem().and_then(|s| s.to_str());
-        self.parse_bytes_to_result(&bytes, filename, Some(path)).await
+        self.parse_bytes_to_result(&bytes, filename, Some(path))
+            .await
     }
 
     /// Parse PDF bytes into raw nodes for the index pipeline.
-    pub async fn parse_bytes_async(&self, bytes: &[u8], filename: Option<&str>) -> Result<ParseResult> {
+    pub async fn parse_bytes_async(
+        &self,
+        bytes: &[u8],
+        filename: Option<&str>,
+    ) -> Result<ParseResult> {
         self.parse_bytes_to_result(bytes, filename, None).await
     }
 

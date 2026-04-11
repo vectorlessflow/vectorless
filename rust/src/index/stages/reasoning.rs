@@ -11,8 +11,8 @@ use std::time::Instant;
 use tracing::info;
 
 use crate::document::{
-    NodeId, ReasoningIndexBuilder, ReasoningIndexConfig, SectionSummary,
-    SummaryShortcut, TopicEntry,
+    NodeId, ReasoningIndexBuilder, ReasoningIndexConfig, SectionSummary, SummaryShortcut,
+    TopicEntry,
 };
 use crate::error::Result;
 use crate::retrieval::search::extract_keywords;
@@ -63,8 +63,10 @@ impl ReasoningIndexStage {
         // Walk all nodes and extract keywords from title + summary
         for node_id in tree.traverse() {
             if let Some(node) = tree.get(node_id) {
-                let title_keywords = Self::extract_node_keywords(&node.title, config.min_keyword_length);
-                let summary_keywords = Self::extract_node_keywords(&node.summary, config.min_keyword_length);
+                let title_keywords =
+                    Self::extract_node_keywords(&node.title, config.min_keyword_length);
+                let summary_keywords =
+                    Self::extract_node_keywords(&node.summary, config.min_keyword_length);
                 let content_keywords = if node.summary.is_empty() {
                     // Fallback: extract from content if no summary
                     let content_sample: String = node.content.chars().take(500).collect();
@@ -117,7 +119,11 @@ impl ReasoningIndexStage {
 
             // Normalize weights to 0.0-1.0 range
             let max_weight = merged.values().map(|(w, _)| *w).fold(0.0_f32, f32::max);
-            let scale = if max_weight > 0.0 { 1.0 / max_weight } else { 1.0 };
+            let scale = if max_weight > 0.0 {
+                1.0 / max_weight
+            } else {
+                1.0
+            };
 
             let mut topic_entries: Vec<TopicEntry> = merged
                 .into_iter()
@@ -142,7 +148,9 @@ impl ReasoningIndexStage {
     }
 
     /// Build section map from depth-1 nodes.
-    fn build_section_map(tree: &crate::document::DocumentTree) -> std::collections::HashMap<String, NodeId> {
+    fn build_section_map(
+        tree: &crate::document::DocumentTree,
+    ) -> std::collections::HashMap<String, NodeId> {
         let mut section_map = std::collections::HashMap::new();
         let root = tree.root();
         for child_id in tree.children(root) {
@@ -158,9 +166,7 @@ impl ReasoningIndexStage {
     }
 
     /// Build summary shortcut from root and depth-1 nodes.
-    fn build_summary_shortcut(
-        tree: &crate::document::DocumentTree,
-    ) -> Option<SummaryShortcut> {
+    fn build_summary_shortcut(tree: &crate::document::DocumentTree) -> Option<SummaryShortcut> {
         let root = tree.root();
         let root_node = tree.get(root)?;
 
@@ -244,10 +250,7 @@ impl IndexStage for ReasoningIndexStage {
         let tree = match ctx.tree.as_ref() {
             Some(t) => t,
             None => {
-                return Ok(StageResult::failure(
-                    "reasoning_index",
-                    "Tree not built",
-                ));
+                return Ok(StageResult::failure("reasoning_index", "Tree not built"));
             }
         };
 
@@ -313,10 +316,9 @@ impl IndexStage for ReasoningIndexStage {
             "keywords_indexed".to_string(),
             serde_json::json!(keyword_count),
         );
-        stage_result.metadata.insert(
-            "topics_indexed".to_string(),
-            serde_json::json!(topic_count),
-        );
+        stage_result
+            .metadata
+            .insert("topics_indexed".to_string(), serde_json::json!(topic_count));
 
         Ok(stage_result)
     }
@@ -328,7 +330,8 @@ mod tests {
 
     #[test]
     fn test_extract_node_keywords() {
-        let keywords = ReasoningIndexStage::extract_node_keywords("Introduction to Machine Learning", 2);
+        let keywords =
+            ReasoningIndexStage::extract_node_keywords("Introduction to Machine Learning", 2);
         assert!(keywords.contains(&"introduction".to_string()));
         assert!(keywords.contains(&"machine".to_string()));
         assert!(keywords.contains(&"learning".to_string()));

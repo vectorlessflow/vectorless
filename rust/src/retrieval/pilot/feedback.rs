@@ -42,8 +42,8 @@
 
 use std::collections::HashMap;
 use std::path::Path;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use serde::{Deserialize, Serialize};
 use tracing::{debug, info};
@@ -147,16 +147,14 @@ impl ContextStats {
         if was_correct {
             self.correct += 1;
             // Running average
-            self.avg_confidence_correct = (self.avg_confidence_correct
-                * (self.correct - 1) as f64
+            self.avg_confidence_correct = (self.avg_confidence_correct * (self.correct - 1) as f64
                 + confidence)
                 / self.correct as f64;
         } else {
             let incorrect = self.total - self.correct;
-            self.avg_confidence_incorrect = (self.avg_confidence_incorrect
-                * (incorrect - 1) as f64
-                + confidence)
-                / incorrect as f64;
+            self.avg_confidence_incorrect =
+                (self.avg_confidence_incorrect * (incorrect - 1) as f64 + confidence)
+                    / incorrect as f64;
         }
     }
 }
@@ -332,10 +330,8 @@ impl FeedbackStore {
     /// Get overall accuracy across all feedback.
     pub fn overall_accuracy(&self) -> f64 {
         let stats = self.intervention_stats.read().unwrap();
-        let total = stats.start.total
-            + stats.fork.total
-            + stats.backtrack.total
-            + stats.evaluate.total;
+        let total =
+            stats.start.total + stats.fork.total + stats.backtrack.total + stats.evaluate.total;
         let correct = stats.start.correct
             + stats.fork.correct
             + stats.backtrack.correct
@@ -554,9 +550,10 @@ impl PilotLearner {
         }
 
         // Clamp confidence delta
-        adjustment.confidence_delta = adjustment
-            .confidence_delta
-            .clamp(-self.config.max_confidence_delta, self.config.max_confidence_delta);
+        adjustment.confidence_delta = adjustment.confidence_delta.clamp(
+            -self.config.max_confidence_delta,
+            self.config.max_confidence_delta,
+        );
 
         adjustment
     }
@@ -574,10 +571,8 @@ impl PilotLearner {
     /// Check if enough feedback has been collected.
     pub fn has_sufficient_data(&self) -> bool {
         let stats = self.store.intervention_stats();
-        let total = stats.start.total
-            + stats.fork.total
-            + stats.backtrack.total
-            + stats.evaluate.total;
+        let total =
+            stats.start.total + stats.fork.total + stats.backtrack.total + stats.evaluate.total;
         total >= self.config.min_samples
     }
 }

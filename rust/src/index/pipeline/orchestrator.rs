@@ -498,14 +498,10 @@ impl PipelineOrchestrator {
                 let existing_tree_snapshot = ctx.existing_tree.clone();
 
                 // Take both stages out to avoid double &mut self
-                let mut stage_writer = std::mem::replace(
-                    &mut self.stages[writer_idx].stage,
-                    Box::new(NopStage),
-                );
-                let mut stage_reader = std::mem::replace(
-                    &mut self.stages[reader_idx].stage,
-                    Box::new(NopStage),
-                );
+                let mut stage_writer =
+                    std::mem::replace(&mut self.stages[writer_idx].stage, Box::new(NopStage));
+                let mut stage_reader =
+                    std::mem::replace(&mut self.stages[reader_idx].stage, Box::new(NopStage));
 
                 let writer_name = stage_writer.name().to_string();
                 let reader_name = stage_reader.name().to_string();
@@ -560,7 +556,8 @@ impl PipelineOrchestrator {
                     );
                 }
                 if reader_ctx.metrics.optimize_time_ms > 0 {
-                    ctx.metrics.record_optimize(reader_ctx.metrics.optimize_time_ms);
+                    ctx.metrics
+                        .record_optimize(reader_ctx.metrics.optimize_time_ms);
                 }
                 ctx.metrics.nodes_merged += reader_ctx.metrics.nodes_merged;
                 ctx.metrics.nodes_skipped += reader_ctx.metrics.nodes_skipped;

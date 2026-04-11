@@ -171,12 +171,18 @@ impl EventEmitter {
     pub fn merge(self, other: EventEmitter) -> Self {
         let mut other_inner = other.inner.write();
         let mut inner = self.inner.write();
-        inner.index_handlers.extend(other_inner.index_handlers.drain(..));
-        inner.query_handlers.extend(other_inner.query_handlers.drain(..));
+        inner
+            .index_handlers
+            .extend(other_inner.index_handlers.drain(..));
+        inner
+            .query_handlers
+            .extend(other_inner.query_handlers.drain(..));
         inner
             .workspace_handlers
             .extend(other_inner.workspace_handlers.drain(..));
-        inner.async_handlers.extend(other_inner.async_handlers.drain(..));
+        inner
+            .async_handlers
+            .extend(other_inner.async_handlers.drain(..));
         drop(inner);
         drop(other_inner);
         self

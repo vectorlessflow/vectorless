@@ -29,8 +29,7 @@ pub(crate) use metrics::{
 };
 pub(crate) use retrieval::{RetrievalConfig, SearchConfig};
 pub(crate) use storage::{
-    CacheConfig, CompressionAlgorithm, StorageConfig, StrategyConfig,
-    SufficiencyConfig,
+    CacheConfig, CompressionAlgorithm, StorageConfig, StrategyConfig, SufficiencyConfig,
 };
 
 /// Main configuration for vectorless.

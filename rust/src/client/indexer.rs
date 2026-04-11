@@ -27,9 +27,9 @@ use tracing::info;
 use uuid::Uuid;
 
 use crate::error::{Error, Result};
+use crate::index::parse::DocumentFormat;
 use crate::index::{IndexInput, IndexMode, PipelineExecutor, PipelineOptions, SummaryStrategy};
 use crate::llm::LlmClient;
-use crate::index::parse::DocumentFormat;
 use crate::storage::{DocumentMeta, PersistedDocument};
 
 use super::events::{EventEmitter, IndexEvent};
@@ -121,7 +121,12 @@ impl IndexerClient {
     }
 
     /// Index a document from an index context.
-    pub async fn index(&self, source: &IndexSource, name: Option<&str>, options: &IndexOptions) -> Result<IndexedDocument> {
+    pub async fn index(
+        &self,
+        source: &IndexSource,
+        name: Option<&str>,
+        options: &IndexOptions,
+    ) -> Result<IndexedDocument> {
         self.index_with_existing(source, name, options, None).await
     }
 
@@ -134,18 +139,29 @@ impl IndexerClient {
         existing_tree: Option<&crate::DocumentTree>,
     ) -> Result<IndexedDocument> {
         match source {
-            IndexSource::Path(path) => self.index_from_path(path, name, options, existing_tree).await,
+            IndexSource::Path(path) => {
+                self.index_from_path(path, name, options, existing_tree)
+                    .await
+            }
             IndexSource::Content { data, format } => {
-                self.index_from_content(data, *format, name, options, existing_tree).await
+                self.index_from_content(data, *format, name, options, existing_tree)
+                    .await
             }
             IndexSource::Bytes { data, format } => {
-                self.index_from_bytes(data, *format, name, options, existing_tree).await
+                self.index_from_bytes(data, *format, name, options, existing_tree)
+                    .await
             }
         }
     }
 
     /// Index from a file path.
-    async fn index_from_path(&self, path: &Path, name: Option<&str>, options: &IndexOptions, existing_tree: Option<&crate::DocumentTree>) -> Result<IndexedDocument> {
+    async fn index_from_path(
+        &self,
+        path: &Path,
+        name: Option<&str>,
+        options: &IndexOptions,
+        existing_tree: Option<&crate::DocumentTree>,
+    ) -> Result<IndexedDocument> {
         let path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
 
         if !path.exists() {
@@ -168,11 +184,8 @@ impl IndexerClient {
         info!("Indexing {:?} document: {}", format, path.display());
 
         // Build pipeline options
-        let pipeline_options = self.build_pipeline_options_with_existing(
-            options,
-            format,
-            existing_tree.cloned(),
-        );
+        let pipeline_options =
+            self.build_pipeline_options_with_existing(options, format, existing_tree.cloned());
 
         // Create pipeline input and execute
         let input = IndexInput::file(&path);
@@ -201,11 +214,8 @@ impl IndexerClient {
 
         info!("Indexing {:?} document from content", format);
 
-        let pipeline_options = self.build_pipeline_options_with_existing(
-            options,
-            format,
-            existing_tree.cloned(),
-        );
+        let pipeline_options =
+            self.build_pipeline_options_with_existing(options, format, existing_tree.cloned());
 
         let input = IndexInput::content(content);
         let mut executor = (self.executor_factory)();
@@ -237,11 +247,8 @@ impl IndexerClient {
             bytes.len()
         );
 
-        let pipeline_options = self.build_pipeline_options_with_existing(
-            options,
-            format,
-            existing_tree.cloned(),
-        );
+        let pipeline_options =
+            self.build_pipeline_options_with_existing(options, format, existing_tree.cloned());
 
         let input = IndexInput::bytes(bytes);
         let mut executor = (self.executor_factory)();
@@ -395,7 +402,11 @@ impl IndexerClient {
     }
 
     /// Convert IndexedDocument to PersistedDocument, storing fingerprints from pipeline options.
-    pub fn to_persisted_with_options(&self, doc: IndexedDocument, pipeline_options: &PipelineOptions) -> PersistedDocument {
+    pub fn to_persisted_with_options(
+        &self,
+        doc: IndexedDocument,
+        pipeline_options: &PipelineOptions,
+    ) -> PersistedDocument {
         let mut meta = DocumentMeta::new(&doc.id, &doc.name, doc.format.extension())
             .with_source_path(
                 doc.source_path

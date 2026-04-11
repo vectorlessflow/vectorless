@@ -14,7 +14,9 @@ use crate::llm::LlmClient;
 use crate::retrieval::content::{ContentAggregator, ContentAggregatorConfig};
 use crate::retrieval::pipeline::{FailurePolicy, PipelineContext, RetrievalStage, StageOutcome};
 use crate::retrieval::sufficiency::{LlmJudge, SufficiencyChecker, ThresholdChecker};
-use crate::retrieval::types::{NavigationDecision, RetrievalResult, RetrieveResponse, StageName, SufficiencyLevel};
+use crate::retrieval::types::{
+    NavigationDecision, RetrievalResult, RetrieveResponse, StageName, SufficiencyLevel,
+};
 use crate::utils::estimate_tokens;
 
 /// Evaluate Stage - evaluates retrieval sufficiency.
@@ -298,8 +300,10 @@ impl EvaluateStage {
         };
 
         let confidence = avg_score * sufficiency_factor;
-        println!("[DEBUG] calculate_confidence: avg_score={:.3}, sufficiency={:?}, factor={:.1}, confidence={:.3}",
-            avg_score, ctx.sufficiency, sufficiency_factor, confidence);
+        println!(
+            "[DEBUG] calculate_confidence: avg_score={:.3}, sufficiency={:?}, factor={:.1}, confidence={:.3}",
+            avg_score, ctx.sufficiency, sufficiency_factor, confidence
+        );
         confidence
     }
 }
@@ -329,9 +333,12 @@ impl RetrievalStage for EvaluateStage {
     async fn execute(&self, ctx: &mut PipelineContext) -> crate::error::Result<StageOutcome> {
         let start = std::time::Instant::now();
 
-        println!("[DEBUG] EvaluateStage: {} candidates, iteration {}",
-            ctx.candidates.len(), ctx.search_iterations);
-        
+        println!(
+            "[DEBUG] EvaluateStage: {} candidates, iteration {}",
+            ctx.candidates.len(),
+            ctx.search_iterations
+        );
+
         info!(
             "Judging sufficiency: {} candidates, iteration {}",
             ctx.candidates.len(),
@@ -388,7 +395,8 @@ impl RetrievalStage for EvaluateStage {
                 if let Some(node) = ctx.tree.get(candidate.node_id) {
                     let path = format!("{}", node.depth);
                     // Use the node title as path identifier for L2
-                    ctx.reasoning_cache.l2_record(&doc_key, &node.title, candidate.score);
+                    ctx.reasoning_cache
+                        .l2_record(&doc_key, &node.title, candidate.score);
                 }
             }
         }

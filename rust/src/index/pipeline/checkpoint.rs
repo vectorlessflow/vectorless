@@ -135,9 +135,9 @@ impl CheckpointManager {
     /// Get the checkpoint file path for a document.
     fn checkpoint_path(&self, doc_id: &str) -> PathBuf {
         // Use a sanitized version of doc_id for the filename
-        let safe_name = doc_id
-            .replace(['/', '\\', ':', '*', '?', '"', '<', '>', '|'], "_");
-        self.checkpoint_dir.join(format!("{}.checkpoint.json", safe_name))
+        let safe_name = doc_id.replace(['/', '\\', ':', '*', '?', '"', '<', '>', '|'], "_");
+        self.checkpoint_dir
+            .join(format!("{}.checkpoint.json", safe_name))
     }
 
     /// Check if a checkpoint is valid for resuming.
@@ -242,22 +242,34 @@ mod tests {
 
         // Matching — valid
         assert!(CheckpointManager::is_valid_for_resume(
-            &checkpoint, "abc123", 1, "cfg-fp"
+            &checkpoint,
+            "abc123",
+            1,
+            "cfg-fp"
         ));
 
         // Different source hash — invalid
         assert!(!CheckpointManager::is_valid_for_resume(
-            &checkpoint, "different", 1, "cfg-fp"
+            &checkpoint,
+            "different",
+            1,
+            "cfg-fp"
         ));
 
         // Different processing version — invalid
         assert!(!CheckpointManager::is_valid_for_resume(
-            &checkpoint, "abc123", 2, "cfg-fp"
+            &checkpoint,
+            "abc123",
+            2,
+            "cfg-fp"
         ));
 
         // Different config fingerprint — invalid
         assert!(!CheckpointManager::is_valid_for_resume(
-            &checkpoint, "abc123", 1, "different"
+            &checkpoint,
+            "abc123",
+            1,
+            "different"
         ));
     }
 

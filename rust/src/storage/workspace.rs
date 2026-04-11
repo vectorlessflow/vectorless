@@ -462,7 +462,11 @@ impl Workspace {
         })?;
         inner.backend.put(Self::GRAPH_KEY, &bytes)?;
         inner.document_graph = Some(graph.clone());
-        info!("Persisted document graph ({} nodes, {} edges)", graph.node_count(), graph.edge_count());
+        info!(
+            "Persisted document graph ({} nodes, {} edges)",
+            graph.node_count(),
+            graph.edge_count()
+        );
         Ok(())
     }
 

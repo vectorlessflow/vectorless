@@ -10,7 +10,7 @@ use crate::document::{DocumentTree, NodeId};
 use crate::error::Result;
 use crate::utils::estimate_tokens;
 
-use super::{async_trait, AccessPattern, IndexStage, StageResult};
+use super::{AccessPattern, IndexStage, StageResult, async_trait};
 use crate::index::config::SplitConfig;
 use crate::index::pipeline::IndexContext;
 
@@ -72,7 +72,8 @@ impl SplitStage {
         for paragraph in content.split("\n\n") {
             let para_end = pos + paragraph.len();
             if para_end > 0 && pos > 0 {
-                let chunk_tokens = estimate_tokens(&content[points.last().copied().unwrap_or(0)..pos]);
+                let chunk_tokens =
+                    estimate_tokens(&content[points.last().copied().unwrap_or(0)..pos]);
                 if chunk_tokens >= max_tokens / 2 {
                     points.push(pos);
                 }
@@ -115,7 +116,10 @@ impl SplitStage {
         }
 
         // Extract title for child naming
-        let parent_title = tree.get(leaf_id).map(|n| n.title.clone()).unwrap_or_default();
+        let parent_title = tree
+            .get(leaf_id)
+            .map(|n| n.title.clone())
+            .unwrap_or_default();
 
         // Create chunks from split points
         let mut chunks: Vec<&str> = Vec::new();
@@ -174,10 +178,7 @@ impl SplitStage {
 
         for leaf_id in leaves {
             // Check if this leaf exceeds the token limit
-            let token_count = tree
-                .get(leaf_id)
-                .and_then(|n| n.token_count)
-                .unwrap_or(0);
+            let token_count = tree.get(leaf_id).and_then(|n| n.token_count).unwrap_or(0);
 
             // Use estimated tokens if no count set
             let tokens = if token_count > 0 {
@@ -254,18 +255,14 @@ impl IndexStage for SplitStage {
 
         info!(
             "Split {} oversized nodes ({} → {} total nodes) in {}ms",
-            split_count,
-            node_count_before,
-            node_count_after,
-            duration
+            split_count, node_count_before, node_count_after, duration
         );
 
         let mut stage_result = StageResult::success("split");
         stage_result.duration_ms = duration;
-        stage_result.metadata.insert(
-            "nodes_split".to_string(),
-            serde_json::json!(split_count),
-        );
+        stage_result
+            .metadata
+            .insert("nodes_split".to_string(), serde_json::json!(split_count));
         stage_result.metadata.insert(
             "node_count_before".to_string(),
             serde_json::json!(node_count_before),

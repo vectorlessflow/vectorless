@@ -8,8 +8,8 @@
 use std::collections::HashMap;
 use std::future::Future;
 use std::path::Path;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use chrono::Duration;
 use lru::LruCache;
@@ -149,7 +149,8 @@ impl MemoStore {
     pub fn with_capacity(capacity: usize) -> Self {
         Self {
             cache: Arc::new(RwLock::new(LruCache::new(
-                std::num::NonZeroUsize::new(capacity).unwrap_or(std::num::NonZeroUsize::new(1000).unwrap()),
+                std::num::NonZeroUsize::new(capacity)
+                    .unwrap_or(std::num::NonZeroUsize::new(1000).unwrap()),
             ))),
             stats: Arc::new(AsyncRwLock::new(MemoStats::default())),
             ttl: DEFAULT_TTL,
@@ -218,11 +219,7 @@ impl MemoStore {
     /// This is the primary method for using the memo store.
     /// It will return the cached value if present, or call the
     /// provided compute function and cache the result.
-    pub async fn get_or_compute<F, Fut>(
-        &self,
-        key: MemoKey,
-        compute: F,
-    ) -> Result<MemoValue>
+    pub async fn get_or_compute<F, Fut>(&self, key: MemoKey, compute: F) -> Result<MemoValue>
     where
         F: FnOnce() -> Fut,
         Fut: Future<Output = Result<(MemoValue, u64)>>, // (value, tokens)
@@ -375,14 +372,19 @@ impl MemoStore {
         // Since the key is a fingerprint, we need to check model_id from entries
         // For now, we'll clear all entries if prefix matches our model_id
         // A better approach would be to store model_id in entry metadata
-        let should_clear = self.model_id.as_ref()
+        let should_clear = self
+            .model_id
+            .as_ref()
             .map(|m| m.starts_with(prefix))
             .unwrap_or(false);
 
         if should_clear {
             cache.clear();
             let removed = before;
-            debug!("Invalidated all {} entries (model prefix '{}')", removed, prefix);
+            debug!(
+                "Invalidated all {} entries (model prefix '{}')",
+                removed, prefix
+            );
             return removed;
         }
 
@@ -418,10 +420,8 @@ impl MemoStore {
         let cache = self.cache.read();
         let stats = self.stats.read().await;
 
-        let entries: HashMap<String, MemoEntry> = cache
-            .iter()
-            .map(|(k, v)| (k.clone(), v.clone()))
-            .collect();
+        let entries: HashMap<String, MemoEntry> =
+            cache.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
 
         let data = MemoStoreData {
             version: 1,
@@ -429,9 +429,9 @@ impl MemoStore {
             stats: stats.clone(),
         };
 
-        let parent = path.parent().ok_or_else(|| {
-            crate::Error::Parse("Invalid path for memo store".to_string())
-        })?;
+        let parent = path
+            .parent()
+            .ok_or_else(|| crate::Error::Parse("Invalid path for memo store".to_string()))?;
         tokio::fs::create_dir_all(parent).await?;
 
         let temp_path = path.with_extension("tmp");
@@ -440,7 +440,11 @@ impl MemoStore {
         tokio::fs::write(&temp_path, &json).await?;
         tokio::fs::rename(&temp_path, path).await?;
 
-        info!("Saved memo store with {} entries to {:?}", data.entries.len(), path);
+        info!(
+            "Saved memo store with {} entries to {:?}",
+            data.entries.len(),
+            path
+        );
         Ok(())
     }
 
@@ -470,7 +474,11 @@ impl MemoStore {
         stats.tokens_saved = data.stats.tokens_saved;
         stats.cost_saved = data.stats.cost_saved;
 
-        info!("Loaded memo store with {} entries from {:?}", cache.len(), path);
+        info!(
+            "Loaded memo store with {} entries from {:?}",
+            cache.len(),
+            path
+        );
         Ok(())
     }
 
@@ -659,7 +667,11 @@ mod tests {
         let store = MemoStore::new();
         let key = make_test_key();
 
-        store.put_with_tokens(key.clone(), MemoValue::Summary("Test summary".to_string()), 100);
+        store.put_with_tokens(
+            key.clone(),
+            MemoValue::Summary("Test summary".to_string()),
+            100,
+        );
 
         // Save
         store.save(&path).await.unwrap();

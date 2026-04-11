@@ -9,7 +9,7 @@ use tracing::{info, warn};
 
 use crate::error::Result;
 
-use super::{async_trait, AccessPattern, IndexStage, StageResult};
+use super::{AccessPattern, IndexStage, StageResult, async_trait};
 use crate::index::pipeline::IndexContext;
 
 /// Maximum allowed tree depth.
@@ -115,10 +115,7 @@ impl ValidateStage {
         if empty_count > 0 {
             issues.push(ValidationIssue {
                 severity: Severity::Warning,
-                message: format!(
-                    "Found {} leaf nodes with empty titles",
-                    empty_count
-                ),
+                message: format!("Found {} leaf nodes with empty titles", empty_count),
             });
         }
     }
@@ -137,10 +134,7 @@ impl ValidateStage {
                 continue;
             }
 
-            let parent_tokens = tree
-                .get(node_id)
-                .and_then(|n| n.token_count)
-                .unwrap_or(0);
+            let parent_tokens = tree.get(node_id).and_then(|n| n.token_count).unwrap_or(0);
 
             let children_sum: usize = children
                 .iter()
@@ -279,10 +273,9 @@ impl IndexStage for ValidateStage {
 
         let mut stage_result = StageResult::success("validate");
         stage_result.duration_ms = duration;
-        stage_result.metadata.insert(
-            "warnings".to_string(),
-            serde_json::json!(warnings),
-        );
+        stage_result
+            .metadata
+            .insert("warnings".to_string(), serde_json::json!(warnings));
         stage_result
             .metadata
             .insert("errors".to_string(), serde_json::json!(errors));

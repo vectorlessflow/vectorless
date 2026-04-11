@@ -253,7 +253,14 @@ impl ReferenceFollower {
             if let Some(target_id) = r#ref.target_node {
                 if !visited.contains(&target_id) {
                     visited.insert(target_id);
-                    self.follow_from_node_inner(tree, index, target_id, depth + 1, visited, results);
+                    self.follow_from_node_inner(
+                        tree,
+                        index,
+                        target_id,
+                        depth + 1,
+                        visited,
+                        results,
+                    );
                 }
             }
         }

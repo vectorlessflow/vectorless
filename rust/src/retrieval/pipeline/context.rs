@@ -13,8 +13,8 @@ use std::time::Instant;
 use crate::document::{DocumentTree, NodeId, ReasoningIndex, RetrievalIndex};
 use crate::graph::DocumentGraph;
 use crate::retrieval::cache::{HotNodeTracker, ReasoningCache};
-use crate::retrieval::pipeline::budget::RetrievalBudgetController;
 use crate::retrieval::pilot::Pilot;
+use crate::retrieval::pipeline::budget::RetrievalBudgetController;
 use crate::retrieval::types::{
     NavigationDecision, QueryComplexity, ReasoningChain, ReasoningStep, RetrieveOptions,
     RetrieveResponse, SearchPath, StageName, StrategyPreference, SufficiencyLevel,

@@ -10,8 +10,8 @@ use async_trait::async_trait;
 
 use super::r#trait::{NodeEvaluation, RetrievalStrategy, StrategyCapabilities};
 use crate::document::{DocumentTree, NodeId};
-use crate::retrieval::types::{NavigationDecision, QueryComplexity};
 use crate::retrieval::RetrievalContext;
+use crate::retrieval::types::{NavigationDecision, QueryComplexity};
 
 /// A page range for filtering.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -30,12 +30,18 @@ impl PageRange {
 
     /// Create a range from a single page.
     pub fn single(page: usize) -> Self {
-        Self { start: page, end: page }
+        Self {
+            start: page,
+            end: page,
+        }
     }
 
     /// Create a range starting from a page to the end.
     pub fn from(start: usize) -> Self {
-        Self { start, end: usize::MAX }
+        Self {
+            start,
+            end: usize::MAX,
+        }
     }
 
     /// Create a range from the beginning to a page.
@@ -70,7 +76,10 @@ impl PageRange {
 
 impl Default for PageRange {
     fn default() -> Self {
-        Self { start: 1, end: usize::MAX }
+        Self {
+            start: 1,
+            end: usize::MAX,
+        }
     }
 }
 
@@ -196,8 +205,16 @@ impl PageRangeStrategy {
         }
 
         PageRange {
-            start: self.config.range.start.saturating_sub(self.config.expand_context_pages),
-            end: self.config.range.end.saturating_add(self.config.expand_context_pages),
+            start: self
+                .config
+                .range
+                .start
+                .saturating_sub(self.config.expand_context_pages),
+            end: self
+                .config
+                .range
+                .end
+                .saturating_add(self.config.expand_context_pages),
         }
     }
 
@@ -307,7 +324,10 @@ impl RetrievalStrategy for PageRangeStrategy {
         // Evaluate included nodes with inner strategy
         if !included.is_empty() {
             let included_ids: Vec<NodeId> = included.iter().map(|(_, id)| *id).collect();
-            let inner_results = self.inner.evaluate_nodes(tree, &included_ids, context).await;
+            let inner_results = self
+                .inner
+                .evaluate_nodes(tree, &included_ids, context)
+                .await;
 
             // Map results back to original positions
             for ((orig_idx, _), eval) in included.into_iter().zip(inner_results.into_iter()) {

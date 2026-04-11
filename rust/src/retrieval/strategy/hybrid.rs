@@ -11,9 +11,9 @@ use async_trait::async_trait;
 
 use super::r#trait::{NodeEvaluation, RetrievalStrategy, StrategyCapabilities};
 use crate::document::{DocumentTree, NodeId};
+use crate::retrieval::RetrievalContext;
 use crate::retrieval::search::{Bm25Engine, FieldDocument};
 use crate::retrieval::types::{NavigationDecision, QueryComplexity};
-use crate::retrieval::RetrievalContext;
 
 /// Configuration for hybrid retrieval.
 #[derive(Debug, Clone)]
@@ -39,7 +39,7 @@ pub struct HybridConfig {
 impl Default for HybridConfig {
     fn default() -> Self {
         Self {
-            pre_filter_ratio: 0.3,   // Keep top 30%
+            pre_filter_ratio: 0.3, // Keep top 30%
             min_candidates: 2,
             max_candidates: 5,
             auto_accept_threshold: 0.85,
@@ -257,7 +257,9 @@ impl RetrievalStrategy for HybridStrategy {
         context: &RetrievalContext,
     ) -> NodeEvaluation {
         // Delegate to LLM strategy for single node
-        self.llm_strategy.evaluate_node(tree, node_id, context).await
+        self.llm_strategy
+            .evaluate_node(tree, node_id, context)
+            .await
     }
 
     async fn evaluate_nodes(
@@ -275,7 +277,10 @@ impl RetrievalStrategy for HybridStrategy {
 
         // If no BM25 scores available, fall back to LLM only
         if bm25_scores.is_empty() {
-            return self.llm_strategy.evaluate_nodes(tree, node_ids, context).await;
+            return self
+                .llm_strategy
+                .evaluate_nodes(tree, node_ids, context)
+                .await;
         }
 
         // Create a score map for quick lookup
@@ -341,7 +346,10 @@ impl RetrievalStrategy for HybridStrategy {
 
         // Call LLM for filtered candidates
         if !llm_nodes.is_empty() {
-            let llm_results = self.llm_strategy.evaluate_nodes(tree, &llm_nodes, context).await;
+            let llm_results = self
+                .llm_strategy
+                .evaluate_nodes(tree, &llm_nodes, context)
+                .await;
 
             // Map LLM results back with combined scores
             let mut llm_iter = llm_results.into_iter();
@@ -453,7 +461,8 @@ mod tests {
 
     #[test]
     fn test_combine_scores() {
-        let strategy = HybridStrategy::new(Box::new(crate::retrieval::strategy::KeywordStrategy::new()));
+        let strategy =
+            HybridStrategy::new(Box::new(crate::retrieval::strategy::KeywordStrategy::new()));
         let combined = strategy.combine_scores(0.8, 0.6);
 
         // 0.8 * 0.4 + 0.6 * 0.6 = 0.32 + 0.36 = 0.68

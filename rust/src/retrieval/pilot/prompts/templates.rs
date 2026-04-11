@@ -271,7 +271,8 @@ Respond with ONLY the JSON object (no markdown, no explanation):
   "entry_points": ["list of node titles as strings"],
   "reasoning": "your reasoning here",
   "confidence": 0.85
-}"#.to_string()
+}"#
+        .to_string()
     }
 
     pub fn system_fork() -> String {
@@ -307,7 +308,7 @@ Respond with ONLY the JSON object:
   "confidence": 0.85,
   "reasoning": "overall explanation"
 }"#
-            .to_string()
+        .to_string()
     }
 
     pub fn system_backtrack() -> String {
@@ -337,7 +338,8 @@ Respond with ONLY the JSON object:
   "direction": "backtrack",
   "confidence": 0.85,
   "reasoning": "why original path failed"
-}"#.to_string()
+}"#
+        .to_string()
     }
 
     pub fn system_evaluate() -> String {
@@ -366,7 +368,7 @@ Respond with ONLY the JSON object:
   "confidence": 0.85,
   "reasoning": "explanation"
 }"#
-            .to_string()
+        .to_string()
     }
 
     pub fn system_locate_top3() -> String {
@@ -410,7 +412,7 @@ Respond with ONLY the JSON object:
     {"node_id": 3, "relevance_score": 0.65, "reason": "explanation"}
   ]
 }"#
-            .to_string()
+        .to_string()
     }
 }
 

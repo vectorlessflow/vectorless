@@ -10,8 +10,8 @@
 use std::collections::HashMap;
 use std::sync::RwLock;
 
-use crate::document::NodeId;
 use crate::document::HotNodeEntry;
+use crate::document::NodeId;
 
 /// Thread-safe tracker for hot (frequently retrieved) nodes.
 pub struct HotNodeTracker {
@@ -60,9 +60,7 @@ impl HotNodeTracker {
     pub fn is_hot(&self, node_id: NodeId) -> bool {
         self.inner
             .read()
-            .map(|inner| {
-                inner.hits.get(&node_id).copied().unwrap_or(0) >= self.hot_threshold
-            })
+            .map(|inner| inner.hits.get(&node_id).copied().unwrap_or(0) >= self.hot_threshold)
             .unwrap_or(false)
     }
 
@@ -174,11 +172,7 @@ mod tests {
 
         let (node_a, node_b, node_c) = make_node_ids();
 
-        let hits = vec![
-            (node_a, 0.9),
-            (node_b, 0.8),
-            (node_c, 0.7),
-        ];
+        let hits = vec![(node_a, 0.9), (node_b, 0.8), (node_c, 0.7)];
         tracker.record_hits(&hits);
 
         assert!(tracker.is_hot(node_a));

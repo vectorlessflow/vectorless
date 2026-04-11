@@ -21,16 +21,14 @@ use std::sync::Arc;
 
 use tracing::info;
 
+use super::events::{EventEmitter, QueryEvent};
+use super::types::QueryResultItem;
 use crate::config::Config;
 use crate::document::{DocumentTree, NodeId};
 use crate::error::{Error, Result};
 use crate::retrieval::content::ContentAggregatorConfig;
 use crate::retrieval::stream::RetrieveEventReceiver;
-use crate::retrieval::{
-    RetrievalResult, RetrieveOptions, RetrieveResponse, Retriever,
-};
-use super::events::{EventEmitter, QueryEvent};
-use super::types::QueryResultItem;
+use crate::retrieval::{RetrievalResult, RetrieveOptions, RetrieveResponse, Retriever};
 
 /// Document retrieval client.
 ///

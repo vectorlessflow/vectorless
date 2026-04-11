@@ -16,9 +16,7 @@ use crate::utils::estimate_tokens;
 use super::budget::{AllocationStrategy, BudgetAllocator};
 use super::builder::{ContentMetadata, StructureBuilder};
 use super::config::ContentAggregatorConfig;
-use super::scorer::{
-    ContentChunk, RelevanceScorer, ScoringContext,
-};
+use super::scorer::{ContentChunk, RelevanceScorer, ScoringContext};
 
 /// Candidate node from retrieval.
 #[derive(Debug, Clone)]

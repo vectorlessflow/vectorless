@@ -9,7 +9,7 @@
 use std::collections::HashMap;
 
 use crate::document::NodeId;
-use crate::retrieval::search::{extract_keywords, Bm25Params, STOPWORDS};
+use crate::retrieval::search::{Bm25Params, STOPWORDS, extract_keywords};
 use crate::utils::estimate_tokens;
 
 use super::config::ScoringStrategyConfig;

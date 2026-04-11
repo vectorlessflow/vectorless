@@ -12,8 +12,8 @@ use std::sync::Arc;
 use super::r#trait::{NodeEvaluation, RetrievalStrategy, StrategyCapabilities};
 use crate::document::{DocumentTree, NodeId};
 use crate::graph::DocumentGraph;
-use crate::retrieval::types::QueryComplexity;
 use crate::retrieval::RetrievalContext;
+use crate::retrieval::types::QueryComplexity;
 
 /// Document identifier for cross-document retrieval.
 pub type DocumentId = String;
@@ -155,7 +155,10 @@ impl CrossDocumentStrategy {
 
     /// Set documents to search.
     pub fn with_documents(mut self, documents: Vec<DocumentEntry>) -> Self {
-        self.documents = documents.into_iter().take(self.config.max_documents).collect();
+        self.documents = documents
+            .into_iter()
+            .take(self.config.max_documents)
+            .collect();
         self
     }
 
@@ -227,7 +230,10 @@ impl CrossDocumentStrategy {
         let children = doc.tree.children(root_id);
 
         // Evaluate top-level nodes to find entry points
-        let evaluations = self.inner.evaluate_nodes(&doc.tree, &children, context).await;
+        let evaluations = self
+            .inner
+            .evaluate_nodes(&doc.tree, &children, context)
+            .await;
 
         // Collect results with scores above threshold
         let mut scored_nodes: Vec<(NodeId, NodeEvaluation)> = children
@@ -237,7 +243,11 @@ impl CrossDocumentStrategy {
             .collect();
 
         // Sort by score descending
-        scored_nodes.sort_by(|a, b| b.1.score.partial_cmp(&a.1.score).unwrap_or(std::cmp::Ordering::Equal));
+        scored_nodes.sort_by(|a, b| {
+            b.1.score
+                .partial_cmp(&a.1.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
 
         // Limit results per document
         scored_nodes.truncate(self.config.max_results_per_doc);
@@ -253,20 +263,27 @@ impl CrossDocumentStrategy {
     }
 
     /// Merge results from all documents.
-    fn merge_results(&self, doc_results: Vec<DocumentResult>) -> Vec<(DocumentId, NodeId, NodeEvaluation)> {
+    fn merge_results(
+        &self,
+        doc_results: Vec<DocumentResult>,
+    ) -> Vec<(DocumentId, NodeId, NodeEvaluation)> {
         match self.config.merge_strategy {
             MergeStrategy::TopK => {
                 // Collect all results and sort by score
                 let mut all_results: Vec<_> = doc_results
                     .into_iter()
                     .flat_map(|doc| {
-                        doc.evaluations.into_iter().map(move |(node_id, eval)| {
-                            (doc.doc_id.clone(), node_id, eval)
-                        })
+                        doc.evaluations
+                            .into_iter()
+                            .map(move |(node_id, eval)| (doc.doc_id.clone(), node_id, eval))
                     })
                     .collect();
 
-                all_results.sort_by(|a, b| b.2.score.partial_cmp(&a.2.score).unwrap_or(std::cmp::Ordering::Equal));
+                all_results.sort_by(|a, b| {
+                    b.2.score
+                        .partial_cmp(&a.2.score)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                });
                 all_results.truncate(self.config.max_total_results);
                 all_results
             }
@@ -276,9 +293,10 @@ impl CrossDocumentStrategy {
                 doc_results
                     .into_iter()
                     .filter_map(|doc| {
-                        doc.evaluations.into_iter().next().map(|(node_id, eval)| {
-                            (doc.doc_id, node_id, eval)
-                        })
+                        doc.evaluations
+                            .into_iter()
+                            .next()
+                            .map(|(node_id, eval)| (doc.doc_id, node_id, eval))
                     })
                     .take(self.config.max_total_results)
                     .collect()
@@ -306,7 +324,11 @@ impl CrossDocumentStrategy {
                     })
                     .collect();
 
-                all_results.sort_by(|a, b| b.2.score.partial_cmp(&a.2.score).unwrap_or(std::cmp::Ordering::Equal));
+                all_results.sort_by(|a, b| {
+                    b.2.score
+                        .partial_cmp(&a.2.score)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                });
                 all_results.truncate(self.config.max_total_results);
                 all_results
             }
@@ -316,13 +338,17 @@ impl CrossDocumentStrategy {
                 let mut all_results: Vec<_> = doc_results
                     .into_iter()
                     .flat_map(|doc| {
-                        doc.evaluations.into_iter().map(move |(node_id, eval)| {
-                            (doc.doc_id.clone(), node_id, eval)
-                        })
+                        doc.evaluations
+                            .into_iter()
+                            .map(move |(node_id, eval)| (doc.doc_id.clone(), node_id, eval))
                     })
                     .collect();
 
-                all_results.sort_by(|a, b| b.2.score.partial_cmp(&a.2.score).unwrap_or(std::cmp::Ordering::Equal));
+                all_results.sort_by(|a, b| {
+                    b.2.score
+                        .partial_cmp(&a.2.score)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                });
 
                 // Apply graph-based boosting
                 self.apply_graph_boost(&mut all_results, 0.15);

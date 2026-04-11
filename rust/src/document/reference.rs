@@ -339,7 +339,8 @@ impl ReferenceExtractor {
                 for node_id in tree.traverse() {
                     if let Some(node) = tree.get(node_id) {
                         let title_lower = node.title.to_lowercase();
-                        if title_lower.starts_with(&format!("appendix {}", r#ref.target_id.to_lowercase()))
+                        if title_lower
+                            .starts_with(&format!("appendix {}", r#ref.target_id.to_lowercase()))
                             || title_lower == format!("appendix {}", r#ref.target_id.to_lowercase())
                         {
                             return Some(node_id);
@@ -438,10 +439,16 @@ mod tests {
 
         // Debug: print what was extracted
         for r in &refs {
-            eprintln!("Extracted: {:?} '{}' -> '{}'", r.ref_type, r.ref_text, r.target_id);
+            eprintln!(
+                "Extracted: {:?} '{}' -> '{}'",
+                r.ref_type, r.ref_text, r.target_id
+            );
         }
 
-        assert!(refs.iter().any(|r| r.ref_type == RefType::Section && r.target_id == "2.1"));
+        assert!(
+            refs.iter()
+                .any(|r| r.ref_type == RefType::Section && r.target_id == "2.1")
+        );
         // Note: The regex may not capture all multi-level section numbers correctly
         // in a single pass, so we check for the presence of section references
         assert!(refs.iter().any(|r| r.ref_type == RefType::Section));
@@ -452,7 +459,10 @@ mod tests {
         let text = "See Appendix G for more information.";
         let refs = ReferenceExtractor::extract(text);
 
-        assert!(refs.iter().any(|r| r.ref_type == RefType::Appendix && r.target_id == "G"));
+        assert!(
+            refs.iter()
+                .any(|r| r.ref_type == RefType::Appendix && r.target_id == "G")
+        );
     }
 
     #[test]
@@ -462,12 +472,22 @@ mod tests {
 
         // Debug output
         for r in &refs {
-            eprintln!("Extracted: {:?} '{}' -> '{}'", r.ref_type, r.ref_text, r.target_id);
+            eprintln!(
+                "Extracted: {:?} '{}' -> '{}'",
+                r.ref_type, r.ref_text, r.target_id
+            );
         }
 
-        assert!(refs.iter().any(|r| r.ref_type == RefType::Table && r.target_id == "5.3"));
+        assert!(
+            refs.iter()
+                .any(|r| r.ref_type == RefType::Table && r.target_id == "5.3")
+        );
         // The trailing period may be included, so check for either "1" or "1."
-        assert!(refs.iter().any(|r| r.ref_type == RefType::Table && (r.target_id == "1" || r.target_id == "1.")));
+        assert!(
+            refs.iter().any(
+                |r| r.ref_type == RefType::Table && (r.target_id == "1" || r.target_id == "1.")
+            )
+        );
     }
 
     #[test]
@@ -477,12 +497,22 @@ mod tests {
 
         // Debug output
         for r in &refs {
-            eprintln!("Extracted: {:?} '{}' -> '{}'", r.ref_type, r.ref_text, r.target_id);
+            eprintln!(
+                "Extracted: {:?} '{}' -> '{}'",
+                r.ref_type, r.ref_text, r.target_id
+            );
         }
 
-        assert!(refs.iter().any(|r| r.ref_type == RefType::Figure && r.target_id == "2.1"));
+        assert!(
+            refs.iter()
+                .any(|r| r.ref_type == RefType::Figure && r.target_id == "2.1")
+        );
         // The trailing period may be included, so check for either "3" or "3."
-        assert!(refs.iter().any(|r| r.ref_type == RefType::Figure && (r.target_id == "3" || r.target_id == "3.")));
+        assert!(
+            refs.iter()
+                .any(|r| r.ref_type == RefType::Figure
+                    && (r.target_id == "3" || r.target_id == "3."))
+        );
     }
 
     #[test]
@@ -490,7 +520,10 @@ mod tests {
         let text = "See page 42 for details.";
         let refs = ReferenceExtractor::extract(text);
 
-        assert!(refs.iter().any(|r| r.ref_type == RefType::Page && r.target_id == "42"));
+        assert!(
+            refs.iter()
+                .any(|r| r.ref_type == RefType::Page && r.target_id == "42")
+        );
     }
 
     #[test]
