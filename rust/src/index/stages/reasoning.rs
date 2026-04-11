@@ -11,7 +11,7 @@ use std::time::Instant;
 use tracing::info;
 
 use crate::document::{
-    NodeId, ReasoningIndex, ReasoningIndexBuilder, ReasoningIndexConfig, SectionSummary,
+    NodeId, ReasoningIndexBuilder, ReasoningIndexConfig, SectionSummary,
     SummaryShortcut, TopicEntry,
 };
 use crate::error::Result;

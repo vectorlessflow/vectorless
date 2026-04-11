@@ -30,7 +30,7 @@ use tracing::{error, info, warn};
 use crate::error::Result;
 
 use super::super::PipelineOptions;
-use super::super::stages::{AccessPattern, IndexStage};
+use super::super::stages::IndexStage;
 use super::context::{IndexContext, IndexInput, PipelineResult, StageResult};
 use super::policy::FailurePolicy;
 

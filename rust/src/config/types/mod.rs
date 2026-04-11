@@ -23,17 +23,13 @@ pub(crate) use content::ContentAggregatorConfig;
 pub(crate) use fallback::{FallbackBehavior, FallbackConfig, OnAllFailedBehavior};
 pub(crate) use indexer::IndexerConfig;
 pub(crate) use llm::{LlmConfig, SummaryConfig};
-pub(crate) use llm_pool::{
-    FallbackBehavior as LlmFallbackBehavior, FallbackConfig as LlmFallbackConfig,
-    LlmClientConfig, LlmPoolConfig, OnAllFailedBehavior as LlmOnAllFailedBehavior, RetryConfig,
-    ThrottleConfig,
-};
+pub(crate) use llm_pool::LlmPoolConfig;
 pub(crate) use metrics::{
     LlmMetricsConfig, MetricsConfig, PilotMetricsConfig, RetrievalMetricsConfig,
 };
 pub(crate) use retrieval::{RetrievalConfig, SearchConfig};
 pub(crate) use storage::{
-    CacheConfig, CompressionAlgorithm, CompressionConfig, StorageConfig, StrategyConfig,
+    CacheConfig, CompressionAlgorithm, StorageConfig, StrategyConfig,
     SufficiencyConfig,
 };
 

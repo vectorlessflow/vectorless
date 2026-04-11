@@ -9,12 +9,12 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tracing::{debug, info, warn};
 
-use crate::document::{DocumentTree, NodeId, TreeNode};
+use crate::document::NodeId;
 use crate::error::Result;
 use crate::index::incremental;
 use crate::utils::fingerprint::Fingerprint;
 use crate::llm::LlmClient;
-use crate::memo::{MemoKey, MemoStore, MemoValue};
+use crate::memo::{MemoKey, MemoStore};
 
 use super::{IndexStage, StageResult};
 use crate::index::pipeline::{FailurePolicy, IndexContext, StageRetryConfig};

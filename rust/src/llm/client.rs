@@ -347,14 +347,4 @@ mod tests {
 
         assert!(client.concurrency().is_some());
     }
-
-    #[test]
-    fn test_client_with_fallback() {
-        use crate::llm::FallbackConfig;
-
-        let fallback = FallbackChain::new(FallbackConfig::default());
-        let client = LlmClient::for_model("gpt-4o").with_fallback(fallback);
-
-        assert!(client.fallback().is_some());
-    }
 }

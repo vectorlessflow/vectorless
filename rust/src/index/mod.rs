@@ -61,24 +61,11 @@ pub mod summary;
 
 // Re-export main types from pipeline
 pub use pipeline::{
-    CheckpointContextData, CheckpointManager, ExecutionGroup, FailurePolicy, IndexContext,
-    IndexInput, IndexMetrics, PipelineCheckpoint, PipelineResult, PipelineExecutor,
-    PipelineOrchestrator, StageResult, StageRetryConfig,
+    IndexInput, IndexMetrics, PipelineResult, PipelineExecutor,
 };
 
 // Re-export config types
-pub use config::{IndexMode, OptimizationConfig, PipelineOptions, SplitConfig, ThinningConfig};
-
-// Re-export stages
-pub use stages::IndexStage;
+pub use config::{IndexMode, PipelineOptions, ThinningConfig};
 
 // Re-export summary
-pub use summary::{
-    FullStrategy, LazyStrategy, LlmSummaryGenerator, SelectiveStrategy, SummaryGenerator,
-    SummaryStrategy, SummaryStrategyConfig,
-};
-
-// Re-export incremental
-pub use incremental::{ChangeDetector, ChangeSet, PartialUpdater};
-
-pub(crate) use crate::config::{ConcurrencyConfig, IndexerConfig};
+pub use summary::SummaryStrategy;

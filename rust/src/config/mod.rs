@@ -11,12 +11,11 @@ mod merge;
 mod types;
 mod validator;
 
-pub(crate) use loader::{ConfigError, ConfigLoader};
+pub(crate) use loader::ConfigLoader;
 pub(crate) use types::{
-    CacheConfig, CompressionAlgorithm, CompressionConfig, ConcurrencyConfig, Config,
-    ConfigValidationError, ContentAggregatorConfig, FallbackBehavior, FallbackConfig,
-    IndexerConfig, LlmClientConfig, LlmConfig, LlmFallbackBehavior, LlmFallbackConfig,
-    LlmMetricsConfig, LlmPoolConfig, MetricsConfig, OnAllFailedBehavior, PilotMetricsConfig,
-    RetrievalConfig, RetrievalMetricsConfig, RetryConfig, SearchConfig, Severity, StorageConfig,
-    StrategyConfig, SufficiencyConfig, SummaryConfig, ThrottleConfig, ValidationError,
+    CacheConfig, CompressionAlgorithm, ConcurrencyConfig, Config, FallbackBehavior, FallbackConfig,
+    IndexerConfig, LlmConfig,
+    LlmMetricsConfig, MetricsConfig, OnAllFailedBehavior, PilotMetricsConfig,
+    RetrievalConfig, RetrievalMetricsConfig,
+    StrategyConfig, SufficiencyConfig, SummaryConfig,
 };

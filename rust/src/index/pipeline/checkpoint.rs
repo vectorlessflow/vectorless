@@ -7,7 +7,7 @@
 //! On restart, completed stages are skipped and the pipeline resumes
 //! from the first incomplete stage.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -17,7 +17,6 @@ use crate::document::DocumentTree;
 use crate::index::parse::RawNode;
 
 use super::metrics::IndexMetrics;
-use super::context::SummaryCache;
 
 /// Serializable checkpoint capturing pipeline state at a point in time.
 #[derive(Debug, Clone, Serialize, Deserialize)]

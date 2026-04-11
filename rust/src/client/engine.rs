@@ -47,7 +47,6 @@ use crate::index::PipelineOptions;
 use crate::index::incremental::{self, IndexAction};
 use crate::retrieval::{PipelineRetriever, RetrieveEventReceiver};
 use crate::storage::{PersistedDocument, Workspace};
-use crate::utils::fingerprint::Fingerprint;
 use crate::{DocumentTree, Error};
 
 use super::events::EventEmitter;
@@ -55,7 +54,7 @@ use super::index_context::{IndexContext, IndexSource};
 use super::indexer::IndexerClient;
 use super::query_context::{QueryContext, QueryScope};
 use super::retriever::RetrieverClient;
-use super::types::{DocumentInfo, FailedItem, IndexItem, IndexMode, IndexResult, QueryResult, QueryResultItem};
+use super::types::{DocumentInfo, FailedItem, IndexItem, IndexMode, IndexResult, QueryResult};
 use super::workspace::WorkspaceClient;
 
 /// The main Engine client.

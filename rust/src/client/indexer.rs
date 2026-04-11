@@ -20,7 +20,7 @@
 //! println!("Indexed: {} ({} nodes)", result.id, result.tree.as_ref().map(|t| t.node_count()).unwrap_or(0));
 //! ```
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Arc;
 
 use tracing::info;
@@ -33,7 +33,7 @@ use crate::index::parse::DocumentFormat;
 use crate::storage::{DocumentMeta, PersistedDocument};
 
 use super::events::{EventEmitter, IndexEvent};
-use super::index_context::{IndexContext, IndexSource};
+use super::index_context::IndexSource;
 use super::types::{IndexOptions, IndexedDocument};
 
 /// Document indexing client.

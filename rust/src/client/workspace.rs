@@ -25,7 +25,7 @@
 
 use std::sync::Arc;
 
-use tracing::{debug, info, warn};
+use tracing::{debug, info};
 
 use crate::error::Result;
 use crate::storage::{PersistedDocument, Workspace};

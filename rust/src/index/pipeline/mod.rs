@@ -22,5 +22,5 @@ pub use checkpoint::{CheckpointContextData, CheckpointManager, PipelineCheckpoin
 pub use context::{IndexContext, IndexInput, PipelineResult, StageResult};
 pub use executor::PipelineExecutor;
 pub use metrics::IndexMetrics;
-pub use orchestrator::{CustomStageBuilder, ExecutionGroup, PipelineOrchestrator};
+pub use orchestrator::{ExecutionGroup, PipelineOrchestrator};
 pub use policy::{FailurePolicy, StageRetryConfig};

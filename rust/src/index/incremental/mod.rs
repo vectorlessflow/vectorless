@@ -19,8 +19,7 @@ mod resolver;
 mod updater;
 
 pub use detector::{
-    ChangeDetector, ChangeDetectorState, ChangeSet, ChangeType, DocumentChangeInfo, NodeChange,
-    compute_all_node_fingerprints, compute_tree_fingerprint,
+    ChangeDetector, ChangeSet,
 };
 pub use resolver::{IndexAction, SkipInfo, resolve_action};
 pub use updater::PartialUpdater;

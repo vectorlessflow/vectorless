@@ -11,58 +11,6 @@
 //! - **Assignment** — Map TOC pages to physical pages
 //! - **Verification** — Sample verification of page assignments
 //! - **Repair** — Fix incorrect assignments
-//!
-//! # Architecture
-//!
-//! ```text
-//! PDF Pages
-//!     │
-//!     ▼
-//! ┌─────────────────────────────────────────────────┐
-//! │              TocProcessor                        │
-//! │                                                  │
-//! │  ┌─────────┐  ┌─────────┐  ┌─────────┐         │
-//! │  │Detector │─▶│ Parser  │─▶│Assigner │         │
-//! │  └─────────┘  └─────────┘  └────┬────┘         │
-//! │                                │                │
-//! │                                ▼                │
-//! │                         ┌─────────────┐         │
-//! │                         │  Verifier   │         │
-//! │                         └──────┬──────┘         │
-//! │                                │                │
-//! │                                ▼                │
-//! │                         ┌─────────────┐         │
-//! │                         │  Repairer   │         │
-//! │                         └─────────────┘         │
-//! └─────────────────────────────────────────────────┘
-//!     │
-//!     ▼
-//! Vec<TocEntry>
-//! ```
-//!
-//! # Example
-//!
-//! ```rust,no_run
-//! use vectorless::parser::toc::TocProcessor;
-//! use vectorless::parser::pdf::{PdfParser, PdfPage};
-//!
-//! # #[tokio::main]
-//! # async fn main() -> vectorless::Result<()> {
-//! // Parse PDF
-//! let pdf_parser = PdfParser::new();
-//! let result = pdf_parser.parse_file("document.pdf".as_ref())?;
-//!
-//! // Extract TOC
-//! let processor = TocProcessor::new();
-//! let entries = processor.process(&result.pages).await?;
-//!
-//! // Use entries
-//! for entry in &entries {
-//!     println!("{} - Page {:?}", entry.title, entry.physical_page);
-//! }
-//! # Ok(())
-//! # }
-//! ```
 
 mod assigner;
 mod detector;
@@ -73,14 +21,7 @@ mod types;
 mod verifier;
 
 // Re-export main types
-pub use types::{
-    ErrorType, PageOffset, TocDetection, TocEntry, VerificationError, VerificationReport,
-};
+pub use types::TocEntry;
 
 // Re-export components
-pub use assigner::{PageAssigner, PageAssignerConfig};
-pub use detector::{TocDetector, TocDetectorConfig};
-pub use parser::{TocParser, TocParserConfig};
-pub use processor::{TocProcessor, TocProcessorConfig};
-pub use repairer::{IndexRepairer, RepairerConfig};
-pub use verifier::{IndexVerifier, VerifierConfig};
+pub use processor::TocProcessor;
