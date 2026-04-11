@@ -55,7 +55,7 @@ const config: Config = {
   ],
 
   themeConfig: {
-    image: 'img/docusaurus-social-card.jpg',
+    image: 'img/theme-logo.png',
     colorMode: {
       respectPrefersColorScheme: true,
     },
@@ -68,12 +68,13 @@ const config: Config = {
         target: '_self' // This makes the logo click follow the link in the same window
       },
       items: [
-        {
-          type: 'docSidebar',
-          sidebarId: 'tutorialSidebar',
-          position: 'left',
-          label: 'Docs',
-        },
+        {to: '/docs/intro', label: 'Documentation', position: 'left'},
+        // {
+        //   href: 'https://github.com/vectorlessflow/vectorless/tree/main/examples',
+        //   label: 'Examples',
+        //   position: 'left',
+        //   target: '_self',
+        // },
         {to: '/blog', label: 'Blog', position: 'left'},
       ],
     },

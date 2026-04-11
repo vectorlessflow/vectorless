@@ -5,19 +5,13 @@
   display: flex;
   align-items: center;
   height: 100%;
-  gap: 2.25rem;
-}
-
-.navbarLeft {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
 }
 
 .navbarBrand {
   display: flex;
   align-items: center;
   flex-shrink: 0;
+  margin-right: 24rem;
 }
 
 .navbarLogoLink {
@@ -37,15 +31,16 @@
   width: auto;
 }
 
-.navbarItemsLeft {
+/* Center: navigation links */
+.navbarCenter {
+  flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 1.5rem;
-  flex: 1;
+  gap: 2rem;
 }
 
-.navbarItemsLeft :global(.navbar__link) {
+.navbarCenter :global(.navbar__link) {
   font-size: 0.875rem;
   font-weight: 400;
   padding: 0;
@@ -53,24 +48,26 @@
   transition: opacity 0.15s ease;
 }
 
-.navbarItemsLeft :global(.navbar__link:hover) {
+.navbarCenter :global(.navbar__link:hover) {
   opacity: 0.7;
   text-decoration: none;
 }
 
-.navbarItemsLeft :global(.navbar__link--active) {
+.navbarCenter :global(.navbar__link--active) {
   font-weight: 600;
 }
 
-.navbarItemsLeft :global(.navbar__link--active:hover) {
+.navbarCenter :global(.navbar__link--active:hover) {
   opacity: 1;
 }
 
-.navbarItemsRight {
+/* Right: github star */
+.navbarRight {
   display: flex;
   align-items: center;
   gap: 1rem;
   flex-shrink: 0;
+  margin-left: 24rem;
 }
 
 .githubStarWrapper {
@@ -83,7 +80,7 @@
     padding: 0 16px;
   }
 
-  .navbarItemsLeft {
+  .navbarCenter {
     display: none;
   }
 }
