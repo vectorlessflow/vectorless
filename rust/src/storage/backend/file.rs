@@ -24,7 +24,7 @@ use crate::error::Result;
 /// workspace/
 /// ├── doc-1.bin           # Document 1
 /// ├── doc-2.bin           # Document 2
-/// ├── _meta.json          # Metadata index
+/// ├── meta.bin            # Metadata index
 /// └── .workspace.lock     # Lock file
 /// ```
 ///

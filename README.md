@@ -24,19 +24,17 @@
 pip install vectorless
 ```
 
-### Set your API key
-
-```bash
-export OPENAI_API_KEY="sk-..."
-```
-
 ### Index and Query
 
 ```python
 from vectorless import Engine, IndexContext
 
-# Create engine with a workspace directory
-engine = Engine(workspace="./data")
+# Create engine — api_key and model are required
+engine = Engine(
+    workspace="./data",
+    api_key="sk-...",
+    model="gpt-4o",
+)
 
 # Index a document (PDF or Markdown)
 result = engine.index(IndexContext.from_file("./report.pdf"))
@@ -63,6 +61,8 @@ use vectorless::client::{EngineBuilder, IndexContext, QueryContext};
 async fn main() -> vectorless::Result<()> {
     let engine = EngineBuilder::new()
         .with_workspace("./data")
+        .with_key("sk-...")
+        .with_model("gpt-4o")
         .build()
         .await?;
 

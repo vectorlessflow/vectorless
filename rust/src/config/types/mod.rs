@@ -4,7 +4,7 @@
 //! Configuration type definitions.
 //!
 //! All configuration values are defined inline in `Default` trait implementations.
-//! Configuration is loaded from TOML files only - no environment variable magic.
+//! Configuration is loaded from TOML files only — no environment variables, no auto-detection.
 
 mod concurrency;
 mod content;

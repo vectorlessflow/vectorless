@@ -760,7 +760,7 @@ mod tests {
     #[test]
     fn test_save_and_load_index() {
         let temp = TempDir::new().unwrap();
-        let path = temp.path().join("_meta.json");
+        let path = temp.path().join("meta.bin");
 
         let mut entries = Vec::new();
         entries.push(DocumentMeta::new("doc-1", "Doc 1", "md"));

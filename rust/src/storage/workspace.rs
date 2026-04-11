@@ -46,7 +46,7 @@ use super::persistence::{PersistedDocument, load_document_from_bytes, save_docum
 use crate::Error;
 use crate::error::Result;
 
-const META_KEY: &str = "_meta";
+const META_KEY: &str = "meta";
 const DEFAULT_CACHE_SIZE: usize = 100;
 
 /// Lightweight metadata entry for the async workspace index.
