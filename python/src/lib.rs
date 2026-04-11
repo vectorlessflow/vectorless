@@ -2,17 +2,20 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! Python bindings for vectorless.
-//!
-//! This module provides Python bindings using PyO3.
+
+// PyO3 macro expansions trigger unsafe_op_in_unsafe_fn under Rust 2024 edition.
+#![allow(unsafe_op_in_unsafe_fn)]
 
 use pyo3::prelude::*;
 use pyo3::exceptions::PyException;
+use pyo3_async_runtimes::tokio::future_into_py;
 use std::sync::Arc;
 use tokio::runtime::Runtime;
 
-// Use ::vectorless to avoid conflict with the #[pymodule] named vectorless
-use ::vectorless::client::{Engine, EngineBuilder, IndexContext, IndexItem, IndexResult, QueryContext, QueryResult, QueryResultItem, DocumentInfo, FailedItem};
-use ::vectorless::client::DocumentFormat;
+use ::vectorless::client::{
+    DocumentFormat, DocumentInfo, Engine, EngineBuilder, FailedItem, IndexContext, IndexItem,
+    IndexMode, IndexOptions, IndexResult, QueryContext, QueryResult, QueryResultItem,
+};
 use ::vectorless::error::Error as RustError;
 
 // ============================================================
@@ -61,7 +64,7 @@ impl VectorlessError {
     }
 }
 
-impl std::convert::From<VectorlessError> for PyErr {
+impl From<VectorlessError> for PyErr {
     fn from(err: VectorlessError) -> PyErr {
         PyErr::new::<VectorlessError, _>((err.message, err.kind))
     }
@@ -81,6 +84,65 @@ fn to_py_err(e: RustError) -> PyErr {
     VectorlessError::new(message, kind).into()
 }
 
+/// Parse format string to DocumentFormat.
+fn parse_format(format: &str) -> PyResult<DocumentFormat> {
+    match format.to_lowercase().as_str() {
+        "markdown" | "md" => Ok(DocumentFormat::Markdown),
+        "pdf" => Ok(DocumentFormat::Pdf),
+        _ => Err(PyErr::from(VectorlessError::new(
+            format!("Unknown format: {}. Supported: markdown, pdf", format),
+            "config",
+        ))),
+    }
+}
+
+// ============================================================
+// IndexOptions
+// ============================================================
+
+/// Options for controlling indexing behavior.
+///
+/// Args:
+///     mode: Indexing mode - "default", "force", or "incremental".
+///     summaries: Whether to generate summaries. Default: False.
+///     description: Whether to generate document description. Default: False.
+#[pyclass(name = "IndexOptions", skip_from_py_object)]
+#[derive(Clone)]
+pub struct PyIndexOptions {
+    inner: IndexOptions,
+}
+
+#[pymethods]
+impl PyIndexOptions {
+    #[new]
+    #[pyo3(signature = (mode="default", summaries=false, description=false))]
+    fn new(mode: &str, summaries: bool, description: bool) -> PyResult<Self> {
+        let mut opts = IndexOptions::new();
+        match mode {
+            "default" => {}
+            "force" => opts = opts.with_mode(IndexMode::Force),
+            "incremental" => opts = opts.with_mode(IndexMode::Incremental),
+            _ => {
+                return Err(PyErr::from(VectorlessError::new(
+                    format!("Unknown mode: {}. Supported: default, force, incremental", mode),
+                    "config",
+                )))
+            }
+        }
+        if summaries {
+            opts = opts.with_summaries();
+        }
+        if description {
+            opts = opts.with_description();
+        }
+        Ok(Self { inner: opts })
+    }
+
+    fn __repr__(&self) -> String {
+        "IndexOptions(...)".to_string()
+    }
+}
+
 // ============================================================
 // IndexContext
 // ============================================================
@@ -92,8 +154,14 @@ fn to_py_err(e: RustError) -> PyErr {
 /// ```python
 /// from vectorless import IndexContext
 ///
-/// # From file
+/// # Single file
 /// ctx = IndexContext.from_file("./document.pdf")
+///
+/// # Multiple files
+/// ctx = IndexContext.from_files(["./a.pdf", "./b.md"])
+///
+/// # Directory
+/// ctx = IndexContext.from_dir("./docs/")
 ///
 /// # From text
 /// ctx = IndexContext.from_text("# Title\\nContent...", name="doc")
@@ -108,16 +176,7 @@ pub struct PyIndexContext {
 
 #[pymethods]
 impl PyIndexContext {
-    /// Create an IndexContext from a file path.
-    ///
-    /// The format is detected from the file extension.
-    ///
-    /// Args:
-    ///     path: Path to the file.
-    ///     name: Optional document name.
-    ///
-    /// Returns:
-    ///     IndexContext for the file.
+    /// Create an IndexContext from a single file path.
     #[staticmethod]
     #[pyo3(signature = (path, name=None))]
     fn from_file(path: String, name: Option<String>) -> Self {
@@ -128,15 +187,23 @@ impl PyIndexContext {
         Self { inner: ctx }
     }
 
+    /// Create an IndexContext from multiple file paths.
+    #[staticmethod]
+    fn from_files(paths: Vec<String>) -> Self {
+        Self {
+            inner: IndexContext::from_paths(&paths),
+        }
+    }
+
+    /// Create an IndexContext from all supported files in a directory.
+    #[staticmethod]
+    fn from_dir(path: String) -> Self {
+        Self {
+            inner: IndexContext::from_dir(&path),
+        }
+    }
+
     /// Create an IndexContext from text content.
-    ///
-    /// Args:
-    ///     content: The text content.
-    ///     name: Optional document name.
-    ///     format: Content format ("markdown", "html", "text"). Default: "markdown".
-    ///
-    /// Returns:
-    ///     IndexContext for the content.
     #[staticmethod]
     #[pyo3(signature = (content, name=None, format="markdown"))]
     fn from_content(content: String, name: Option<String>, format: &str) -> PyResult<Self> {
@@ -149,14 +216,6 @@ impl PyIndexContext {
     }
 
     /// Create an IndexContext from binary data.
-    ///
-    /// Args:
-    ///     data: The binary data.
-    ///     name: Document name (required).
-    ///     format: Content format ("pdf", "docx").
-    ///
-    /// Returns:
-    ///     IndexContext for the bytes.
     #[staticmethod]
     #[pyo3(signature = (data, name, format))]
     fn from_bytes(data: Vec<u8>, name: String, format: &str) -> PyResult<Self> {
@@ -164,17 +223,33 @@ impl PyIndexContext {
         let ctx = IndexContext::from_bytes(data, doc_format).with_name(&name);
         Ok(Self { inner: ctx })
     }
-}
 
-/// Parse format string to DocumentFormat.
-fn parse_format(format: &str) -> PyResult<DocumentFormat> {
-    match format.to_lowercase().as_str() {
-        "markdown" | "md" => Ok(DocumentFormat::Markdown),
-        "pdf" => Ok(DocumentFormat::Pdf),
-        _ => Err(PyErr::from(VectorlessError::new(
-            format!("Unknown format: {}. Supported: markdown, pdf", format),
-            "config",
-        ))),
+    /// Apply indexing options.
+    fn with_options(&self, options: &PyIndexOptions) -> Self {
+        let mut ctx = self.inner.clone();
+        ctx = ctx.with_options(options.inner.clone());
+        Self { inner: ctx }
+    }
+
+    /// Set indexing mode.
+    fn with_mode(&self, mode: &str) -> PyResult<Self> {
+        let m = match mode {
+            "default" => IndexMode::Default,
+            "force" => IndexMode::Force,
+            "incremental" => IndexMode::Incremental,
+            _ => {
+                return Err(PyErr::from(VectorlessError::new(
+                    format!("Unknown mode: {}. Supported: default, force, incremental", mode),
+                    "config",
+                )))
+            }
+        };
+        let ctx = self.inner.clone().with_mode(m);
+        Ok(Self { inner: ctx })
+    }
+
+    fn __repr__(&self) -> String {
+        "IndexContext(...)".to_string()
     }
 }
 
@@ -249,7 +324,10 @@ impl PyFailedItem {
     }
 
     fn __repr__(&self) -> String {
-        format!("FailedItem(source='{}', error='{}')", self.inner.source, self.inner.error)
+        format!(
+            "FailedItem(source='{}', error='{}')",
+            self.inner.source, self.inner.error
+        )
     }
 }
 
@@ -257,7 +335,7 @@ impl PyFailedItem {
 // QueryResult
 // ============================================================
 
-/// Result of a document query (may contain results from multiple documents).
+/// Result of a document query.
 #[pyclass(name = "QueryResult")]
 pub struct PyQueryResult {
     inner: QueryResult,
@@ -285,7 +363,7 @@ impl PyQueryResult {
     }
 
     /// Number of result items.
-    fn len(&self) -> usize {
+    fn __len__(&self) -> usize {
         self.inner.len()
     }
 
@@ -305,13 +383,58 @@ impl PyQueryResult {
     }
 
     fn __repr__(&self) -> String {
-        format!("QueryResult(items={}, failed={})", self.inner.len(), self.inner.failed.len())
+        format!(
+            "QueryResult(items={}, failed={})",
+            self.inner.len(),
+            self.inner.failed.len()
+        )
     }
 }
 
 // ============================================================
-// IndexResult
+// IndexItem / IndexResult
 // ============================================================
+
+/// A single indexed document item.
+#[pyclass(name = "IndexItem")]
+pub struct PyIndexItem {
+    inner: IndexItem,
+}
+
+#[pymethods]
+impl PyIndexItem {
+    #[getter]
+    fn doc_id(&self) -> &str {
+        &self.inner.doc_id
+    }
+
+    #[getter]
+    fn name(&self) -> &str {
+        &self.inner.name
+    }
+
+    #[getter]
+    fn format(&self) -> String {
+        format!("{:?}", self.inner.format).to_lowercase()
+    }
+
+    #[getter]
+    fn description(&self) -> Option<&str> {
+        self.inner.description.as_deref()
+    }
+
+    #[getter]
+    fn page_count(&self) -> Option<usize> {
+        self.inner.page_count
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "IndexItem(doc_id='{}', name='{}')",
+            self.inner.doc_id, self.inner.name
+        )
+    }
+}
 
 /// Result of a document indexing operation.
 #[pyclass(name = "IndexResult")]
@@ -352,6 +475,15 @@ impl PyIndexResult {
         self.inner.has_failures()
     }
 
+    /// Total number of items (successful + failed).
+    fn total(&self) -> usize {
+        self.inner.total()
+    }
+
+    fn __len__(&self) -> usize {
+        self.inner.len()
+    }
+
     fn __repr__(&self) -> String {
         format!(
             "IndexResult(doc_id={:?}, count={}, failed={})",
@@ -359,34 +491,6 @@ impl PyIndexResult {
             self.inner.items.len(),
             self.inner.failed.len()
         )
-    }
-}
-
-/// A single indexed document item.
-#[pyclass(name = "IndexItem")]
-pub struct PyIndexItem {
-    inner: IndexItem,
-}
-
-#[pymethods]
-impl PyIndexItem {
-    #[getter]
-    fn doc_id(&self) -> &str {
-        &self.inner.doc_id
-    }
-
-    #[getter]
-    fn name(&self) -> &str {
-        &self.inner.name
-    }
-
-    #[getter]
-    fn format(&self) -> String {
-        format!("{:?}", self.inner.format).to_lowercase()
-    }
-
-    fn __repr__(&self) -> String {
-        format!("IndexItem(doc_id='{}', name='{}')", self.inner.doc_id, self.inner.name)
     }
 }
 
@@ -402,37 +506,31 @@ pub struct PyDocumentInfo {
 
 #[pymethods]
 impl PyDocumentInfo {
-    /// Document ID.
     #[getter]
     fn id(&self) -> &str {
         &self.inner.id
     }
 
-    /// Document name.
     #[getter]
     fn name(&self) -> &str {
         &self.inner.name
     }
 
-    /// Document format.
     #[getter]
     fn format(&self) -> &str {
         &self.inner.format
     }
 
-    /// Document description (if available).
     #[getter]
     fn description(&self) -> Option<&str> {
         self.inner.description.as_deref()
     }
 
-    /// Page count (for PDFs).
     #[getter]
     fn page_count(&self) -> Option<usize> {
         self.inner.page_count
     }
 
-    /// Line count (for text files).
     #[getter]
     fn line_count(&self) -> Option<usize> {
         self.inner.line_count
@@ -447,6 +545,254 @@ impl PyDocumentInfo {
 }
 
 // ============================================================
+// DocumentGraph types
+// ============================================================
+
+use ::vectorless::graph::{DocumentGraph, DocumentGraphNode, EdgeEvidence, GraphEdge, WeightedKeyword};
+
+/// A keyword with weight from document analysis.
+#[pyclass(name = "WeightedKeyword")]
+pub struct PyWeightedKeyword {
+    inner: WeightedKeyword,
+}
+
+#[pymethods]
+impl PyWeightedKeyword {
+    #[getter]
+    fn keyword(&self) -> &str {
+        &self.inner.keyword
+    }
+
+    #[getter]
+    fn weight(&self) -> f32 {
+        self.inner.weight
+    }
+
+    fn __repr__(&self) -> String {
+        format!("WeightedKeyword('{}', weight={:.2})", self.inner.keyword, self.inner.weight)
+    }
+}
+
+/// Evidence for a cross-document connection.
+#[pyclass(name = "EdgeEvidence")]
+pub struct PyEdgeEvidence {
+    inner: EdgeEvidence,
+}
+
+#[pymethods]
+impl PyEdgeEvidence {
+    /// Number of shared keywords.
+    #[getter]
+    fn shared_keyword_count(&self) -> usize {
+        self.inner.shared_keyword_count
+    }
+
+    /// Jaccard similarity of keyword sets.
+    #[getter]
+    fn keyword_jaccard(&self) -> f32 {
+        self.inner.keyword_jaccard
+    }
+
+    /// Shared keywords with weights.
+    #[getter]
+    fn shared_keywords(&self) -> Vec<(String, f32, f32)> {
+        self.inner
+            .shared_keywords
+            .iter()
+            .map(|sk| (sk.keyword.clone(), sk.source_weight, sk.target_weight))
+            .collect()
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "EdgeEvidence(shared={}, jaccard={:.2})",
+            self.inner.shared_keyword_count, self.inner.keyword_jaccard
+        )
+    }
+}
+
+/// An edge representing a relationship between two documents.
+#[pyclass(name = "GraphEdge")]
+pub struct PyGraphEdge {
+    inner: GraphEdge,
+}
+
+#[pymethods]
+impl PyGraphEdge {
+    /// Target document ID.
+    #[getter]
+    fn target_doc_id(&self) -> &str {
+        &self.inner.target_doc_id
+    }
+
+    /// Edge weight (connection strength).
+    #[getter]
+    fn weight(&self) -> f32 {
+        self.inner.weight
+    }
+
+    /// Evidence for this connection.
+    #[getter]
+    fn evidence(&self) -> PyEdgeEvidence {
+        PyEdgeEvidence {
+            inner: self.inner.evidence.clone(),
+        }
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "GraphEdge(target='{}', weight={:.2})",
+            self.inner.target_doc_id, self.inner.weight
+        )
+    }
+}
+
+/// A node in the document graph representing an indexed document.
+#[pyclass(name = "DocumentGraphNode")]
+pub struct PyDocumentGraphNode {
+    inner: DocumentGraphNode,
+}
+
+#[pymethods]
+impl PyDocumentGraphNode {
+    #[getter]
+    fn doc_id(&self) -> &str {
+        &self.inner.doc_id
+    }
+
+    #[getter]
+    fn title(&self) -> &str {
+        &self.inner.title
+    }
+
+    #[getter]
+    fn format(&self) -> &str {
+        &self.inner.format
+    }
+
+    #[getter]
+    fn node_count(&self) -> usize {
+        self.inner.node_count
+    }
+
+    /// Top keywords extracted from the document.
+    #[getter]
+    fn top_keywords(&self) -> Vec<PyWeightedKeyword> {
+        self.inner
+            .top_keywords
+            .iter()
+            .map(|kw| PyWeightedKeyword {
+                inner: kw.clone(),
+            })
+            .collect()
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "DocumentGraphNode(doc_id='{}', title='{}')",
+            self.inner.doc_id, self.inner.title
+        )
+    }
+}
+
+/// Cross-document relationship graph.
+///
+/// Automatically rebuilt after indexing. Connects documents
+/// that share keywords via Jaccard similarity.
+#[pyclass(name = "DocumentGraph")]
+pub struct PyDocumentGraph {
+    inner: DocumentGraph,
+}
+
+#[pymethods]
+impl PyDocumentGraph {
+    /// Number of document nodes.
+    fn node_count(&self) -> usize {
+        self.inner.node_count()
+    }
+
+    /// Number of relationship edges.
+    fn edge_count(&self) -> usize {
+        self.inner.edge_count()
+    }
+
+    /// Get a document node by ID.
+    fn get_node(&self, doc_id: String) -> Option<PyDocumentGraphNode> {
+        self.inner.get_node(&doc_id).map(|n| PyDocumentGraphNode {
+            inner: n.clone(),
+        })
+    }
+
+    /// Get all document IDs in the graph.
+    fn doc_ids(&self) -> Vec<String> {
+        self.inner.doc_ids().map(|s| s.to_string()).collect()
+    }
+
+    /// Get edges (neighbors) for a document.
+    fn get_neighbors(&self, doc_id: String) -> Vec<PyGraphEdge> {
+        self.inner
+            .get_neighbors(&doc_id)
+            .iter()
+            .map(|e| PyGraphEdge {
+                inner: e.clone(),
+            })
+            .collect()
+    }
+
+    /// Whether the graph is empty.
+    fn is_empty(&self) -> bool {
+        self.inner.is_empty()
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "DocumentGraph(nodes={}, edges={})",
+            self.inner.node_count(),
+            self.inner.edge_count()
+        )
+    }
+}
+
+// ============================================================
+// Engine async helpers (named functions to avoid FnOnce HRTB issue)
+// ============================================================
+
+async fn run_index(engine: Arc<Engine>, ctx: IndexContext) -> PyResult<PyIndexResult> {
+    let result = engine.index(ctx).await.map_err(to_py_err)?;
+    Ok(PyIndexResult { inner: result })
+}
+
+async fn run_query(engine: Arc<Engine>, ctx: QueryContext) -> PyResult<PyQueryResult> {
+    let result = engine.query(ctx).await.map_err(to_py_err)?;
+    Ok(PyQueryResult { inner: result })
+}
+
+async fn run_list(engine: Arc<Engine>) -> PyResult<Vec<PyDocumentInfo>> {
+    let docs = engine.list().await.map_err(to_py_err)?;
+    Ok(docs
+        .into_iter()
+        .map(|d| PyDocumentInfo { inner: d })
+        .collect())
+}
+
+async fn run_remove(engine: Arc<Engine>, doc_id: String) -> PyResult<bool> {
+    engine.remove(&doc_id).await.map_err(to_py_err)
+}
+
+async fn run_clear(engine: Arc<Engine>) -> PyResult<usize> {
+    engine.clear().await.map_err(to_py_err)
+}
+
+async fn run_exists(engine: Arc<Engine>, doc_id: String) -> PyResult<bool> {
+    engine.exists(&doc_id).await.map_err(to_py_err)
+}
+
+async fn run_get_graph(engine: Arc<Engine>) -> PyResult<Option<PyDocumentGraph>> {
+    let graph = engine.get_graph().await.map_err(to_py_err)?;
+    Ok(graph.map(|g| PyDocumentGraph { inner: g }))
+}
+
+// ============================================================
 // Engine
 // ============================================================
 
@@ -454,32 +800,26 @@ impl PyDocumentInfo {
 ///
 /// `api_key` and `model` are **required**.
 ///
-/// # Example
-///
 /// ```python
-/// from vectorless import Engine
+/// from vectorless import Engine, IndexContext
 ///
 /// engine = Engine(
 ///     workspace="./data",
 ///     api_key="sk-...",
 ///     model="gpt-4o",
 /// )
-/// ```
 ///
-/// # With Custom Endpoint
+/// # Index
+/// result = await engine.index(IndexContext.from_file("./report.pdf"))
+/// doc_id = result.doc_id
 ///
-/// ```python
-/// engine = Engine(
-///     workspace="./data",
-///     api_key="sk-...",
-///     model="deepseek-chat",
-///     endpoint="https://api.deepseek.com/v1",
-/// )
+/// # Query
+/// answer = await engine.query(doc_id, "What is the revenue?")
+/// print(answer.single().content)
 /// ```
 #[pyclass(name = "Engine")]
 pub struct PyEngine {
     inner: Arc<Engine>,
-    rt: Runtime,
 }
 
 #[pymethods]
@@ -487,14 +827,14 @@ impl PyEngine {
     /// Create a new Engine.
     ///
     /// Args:
-    ///     workspace: Path to the workspace directory (optional if config_path provides it).
-    ///     config_path: Path to configuration file (optional, advanced usage).
+    ///     workspace: Path to the workspace directory.
+    ///     config_path: Path to configuration file (optional).
     ///     api_key: **Required**. LLM API key.
-    ///     model: **Required**. LLM model name (e.g., "gpt-4o", "deepseek-chat").
-    ///     endpoint: Optional API endpoint (e.g., "https://api.deepseek.com/v1").
+    ///     model: **Required**. LLM model name.
+    ///     endpoint: Optional API endpoint.
     ///
     /// Raises:
-    ///     VectorlessError: If engine creation fails (missing api_key/model, workspace error, etc.).
+    ///     VectorlessError: If engine creation fails.
     #[new]
     #[pyo3(signature = (workspace=None, config_path=None, api_key=None, model=None, endpoint=None))]
     fn new(
@@ -514,24 +854,18 @@ impl PyEngine {
         let engine = rt.block_on(async {
             let mut builder = EngineBuilder::new();
 
-            // Set config path first (if provided)
             if let Some(path) = &config_path {
                 builder = builder.with_config_path(path);
             }
-
-            // Set workspace (if provided)
             if let Some(ws) = &workspace {
                 builder = builder.with_workspace(ws);
             }
-
             if let Some(m) = &model {
                 builder = builder.with_model(m);
             }
-
             if let Some(e) = &endpoint {
                 builder = builder.with_endpoint(e);
             }
-
             if let Some(key) = api_key {
                 builder = builder.with_key(key);
             }
@@ -548,120 +882,103 @@ impl PyEngine {
 
         Ok(Self {
             inner: Arc::new(engine),
-            rt,
         })
     }
 
     /// Index a document.
     ///
     /// Args:
-    ///     ctx: IndexContext created from from_file, from_text, or from_bytes.
+    ///     ctx: IndexContext created from from_file, from_files, from_dir, etc.
     ///
     /// Returns:
-    ///     IndexResult with doc_id and metadata.
+    ///     IndexResult with doc_id and items.
     ///
     /// Raises:
     ///     VectorlessError: If indexing fails.
-    fn index(&self, ctx: &PyIndexContext) -> PyResult<PyIndexResult> {
+    fn index<'py>(&self, py: Python<'py>, ctx: &PyIndexContext) -> PyResult<Bound<'py, PyAny>> {
         let engine = Arc::clone(&self.inner);
         let index_ctx = ctx.inner.clone();
-
-        let result = self.rt.block_on(async move {
-            engine.index(index_ctx).await.map_err(to_py_err)
-        })?;
-
-        Ok(PyIndexResult { inner: result })
+        future_into_py(py, run_index(engine, index_ctx))
     }
 
-    /// Query a document.
+    /// Query indexed documents.
     ///
     /// Args:
-    ///     doc_id: Document ID returned from index().
+    ///     doc_id: Document ID (or list of IDs) returned from index().
     ///     question: The question to ask.
     ///
     /// Returns:
-    ///     QueryResult with the answer.
+    ///     QueryResult with answer and score.
     ///
     /// Raises:
     ///     VectorlessError: If query fails.
-    fn query(&self, doc_id: String, question: String) -> PyResult<PyQueryResult> {
+    #[pyo3(signature = (doc_id, question))]
+    fn query<'py>(
+        &self,
+        py: Python<'py>,
+        doc_id: &Bound<'_, PyAny>,
+        question: String,
+    ) -> PyResult<Bound<'py, PyAny>> {
         let engine = Arc::clone(&self.inner);
 
-        let ctx = QueryContext::new(&question).with_doc_id(&doc_id);
+        let ctx = if let Ok(single) = doc_id.extract::<String>() {
+            QueryContext::new(&question).with_doc_id(&single)
+        } else if let Ok(multi) = doc_id.extract::<Vec<String>>() {
+            QueryContext::new(&question).with_doc_ids(multi)
+        } else {
+            return Err(PyErr::from(VectorlessError::new(
+                "doc_id must be a string or list of strings".to_string(),
+                "config",
+            )));
+        };
 
-        let result = self.rt.block_on(async move {
-            engine.query(ctx).await.map_err(to_py_err)
-        })?;
-
-        Ok(PyQueryResult { inner: result })
+        future_into_py(py, run_query(engine, ctx))
     }
 
     /// List all indexed documents.
     ///
     /// Returns:
     ///     List of DocumentInfo objects.
-    ///
-    /// Raises:
-    ///     VectorlessError: If listing fails.
-    fn list(&self) -> PyResult<Vec<PyDocumentInfo>> {
+    fn list<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let engine = Arc::clone(&self.inner);
-
-        let docs = self.rt.block_on(async move {
-            engine.list().await.map_err(to_py_err)
-        })?;
-
-        Ok(docs
-            .into_iter()
-            .map(|d| PyDocumentInfo { inner: d })
-            .collect())
+        future_into_py(py, run_list(engine))
     }
 
-    /// Remove a document.
-    ///
-    /// Args:
-    ///     doc_id: Document ID to remove.
+    /// Remove a document by ID.
     ///
     /// Returns:
-    ///     True if document was removed, False if not found.
-    ///
-    /// Raises:
-    ///     VectorlessError: If removal fails.
-    fn remove(&self, doc_id: String) -> PyResult<bool> {
+    ///     True if removed, False if not found.
+    fn remove<'py>(&self, py: Python<'py>, doc_id: String) -> PyResult<Bound<'py, PyAny>> {
         let engine = Arc::clone(&self.inner);
-
-        self.rt.block_on(async move {
-            engine.remove(&doc_id).await.map_err(to_py_err)
-        })
+        future_into_py(py, run_remove(engine, doc_id))
     }
 
-    /// Clear all documents.
+    /// Remove all indexed documents.
     ///
     /// Returns:
     ///     Number of documents removed.
-    ///
-    /// Raises:
-    ///     VectorlessError: If clearing fails.
-    fn clear(&self) -> PyResult<usize> {
+    fn clear<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let engine = Arc::clone(&self.inner);
-
-        self.rt.block_on(async move { engine.clear().await.map_err(to_py_err) })
+        future_into_py(py, run_clear(engine))
     }
 
     /// Check if a document exists.
-    ///
-    /// Args:
-    ///     doc_id: Document ID to check.
+    fn exists<'py>(&self, py: Python<'py>, doc_id: String) -> PyResult<Bound<'py, PyAny>> {
+        let engine = Arc::clone(&self.inner);
+        future_into_py(py, run_exists(engine, doc_id))
+    }
+
+    /// Get the cross-document relationship graph.
     ///
     /// Returns:
-    ///     True if document exists.
-    fn exists(&self, doc_id: String) -> PyResult<bool> {
+    ///     DocumentGraph if any documents exist, else None.
+    fn get_graph<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let engine = Arc::clone(&self.inner);
-
-        self.rt.block_on(async move { engine.exists(&doc_id).await.map_err(to_py_err) })
+        future_into_py(py, run_get_graph(engine))
     }
 
     fn __repr__(&self) -> String {
-        "Engine(workspace=...)".to_string()
+        "Engine(...)".to_string()
     }
 }
 
@@ -671,35 +988,32 @@ impl PyEngine {
 
 /// Vectorless - Reasoning-native document intelligence engine.
 ///
-/// Quick Start:
-///
 /// ```python
 /// from vectorless import Engine, IndexContext
 ///
-/// # Create engine
-/// engine = Engine(workspace="./data")
-///
-/// # Index a document
-/// ctx = IndexContext.from_file("./report.pdf")
-/// result = engine.index(ctx)
-///
-/// # Query
-/// answer = engine.query(result.doc_id, "What is the revenue?")
-/// print(answer.content)
+/// engine = Engine(workspace="./data", api_key="sk-...", model="gpt-4o")
+/// result = await engine.index(IndexContext.from_file("./report.pdf"))
+/// answer = await engine.query(result.doc_id, "What is the revenue?")
+/// print(answer.single().content)
 /// ```
 #[pymodule]
-fn vectorless(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
+fn vectorless(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<VectorlessError>()?;
+    m.add_class::<PyIndexOptions>()?;
     m.add_class::<PyIndexContext>()?;
     m.add_class::<PyIndexResult>()?;
     m.add_class::<PyIndexItem>()?;
-    m.add_class::<PyQueryResultItem>()?;
     m.add_class::<PyQueryResult>()?;
+    m.add_class::<PyQueryResultItem>()?;
     m.add_class::<PyFailedItem>()?;
     m.add_class::<PyDocumentInfo>()?;
+    m.add_class::<PyDocumentGraphNode>()?;
+    m.add_class::<PyDocumentGraph>()?;
+    m.add_class::<PyGraphEdge>()?;
+    m.add_class::<PyEdgeEvidence>()?;
+    m.add_class::<PyWeightedKeyword>()?;
     m.add_class::<PyEngine>()?;
 
-    // Add version
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
 
     Ok(())
