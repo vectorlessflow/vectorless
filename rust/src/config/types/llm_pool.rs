@@ -263,8 +263,7 @@ impl RetryConfig {
 
     /// Calculate delay for a given attempt (0-indexed).
     pub fn delay_for_attempt(&self, attempt: usize) -> std::time::Duration {
-        let delay_ms =
-            (self.initial_delay_ms as f64) * self.multiplier.powi(attempt as i32);
+        let delay_ms = (self.initial_delay_ms as f64) * self.multiplier.powi(attempt as i32);
         let delay_ms = delay_ms.min(self.max_delay_ms as f64);
         std::time::Duration::from_millis(delay_ms as u64)
     }

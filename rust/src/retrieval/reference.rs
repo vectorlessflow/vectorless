@@ -52,7 +52,7 @@
 //! }
 //! ```
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 use crate::document::{
     DocumentTree, NodeId, NodeReference, RefType, ReferenceExtractor, RetrievalIndex,
@@ -147,9 +147,6 @@ impl FollowedReference {
 }
 
 /// Reference follower for expanding content via cross-references.
-///
-/// This implements the PageIndex paper's reference following capability,
-/// allowing the retrieval system to follow "see Appendix G" style references.
 #[derive(Debug, Clone)]
 pub struct ReferenceFollower {
     config: ReferenceConfig,
@@ -256,7 +253,14 @@ impl ReferenceFollower {
             if let Some(target_id) = r#ref.target_node {
                 if !visited.contains(&target_id) {
                     visited.insert(target_id);
-                    self.follow_from_node_inner(tree, index, target_id, depth + 1, visited, results);
+                    self.follow_from_node_inner(
+                        tree,
+                        index,
+                        target_id,
+                        depth + 1,
+                        visited,
+                        results,
+                    );
                 }
             }
         }

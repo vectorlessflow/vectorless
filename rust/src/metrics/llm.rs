@@ -131,7 +131,8 @@ impl LlmMetrics {
                 0.0
             },
             total_latency_ms: total_latency,
-            estimated_cost_usd: self.estimated_cost_micros.load(Ordering::Relaxed) as f64 / 1_000_000.0,
+            estimated_cost_usd: self.estimated_cost_micros.load(Ordering::Relaxed) as f64
+                / 1_000_000.0,
             rate_limit_errors: self.rate_limit_errors.load(Ordering::Relaxed),
             timeout_errors: self.timeout_errors.load(Ordering::Relaxed),
             fallback_triggers: self.fallback_triggers.load(Ordering::Relaxed),

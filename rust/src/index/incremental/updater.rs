@@ -7,7 +7,7 @@ use tracing::info;
 
 use crate::document::{DocumentTree, NodeId};
 use crate::error::Result;
-use crate::parser::RawNode;
+use crate::index::parse::RawNode;
 
 use super::detector::ChangeDetector;
 

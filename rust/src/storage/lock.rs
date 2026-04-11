@@ -62,7 +62,6 @@ impl FileLock {
         // Try to acquire the lock
         #[cfg(unix)]
         {
-            use std::os::unix::fs::MetadataExt;
             let fd = std::os::unix::io::AsRawFd::as_raw_fd(&file);
 
             let result = if exclusive {

@@ -259,7 +259,10 @@ impl RetrieveOptions {
 
     /// Set the cross-document graph for graph-aware retrieval boosting.
     #[must_use]
-    pub fn with_document_graph(mut self, graph: std::sync::Arc<crate::graph::DocumentGraph>) -> Self {
+    pub fn with_document_graph(
+        mut self,
+        graph: std::sync::Arc<crate::graph::DocumentGraph>,
+    ) -> Self {
         self.document_graph = Some(graph);
         self
     }
@@ -564,11 +567,11 @@ impl ReasoningChain {
         self.steps
             .iter()
             .map(|s| {
-                let node_info = s
-                    .title
-                    .as_deref()
-                    .unwrap_or("(no node)");
-                format!("[{}] {} (score={:.2}): {}", s.stage, node_info, s.score, s.reasoning)
+                let node_info = s.title.as_deref().unwrap_or("(no node)");
+                format!(
+                    "[{}] {} (score={:.2}): {}",
+                    s.stage, node_info, s.score, s.reasoning
+                )
             })
             .collect::<Vec<_>>()
             .join("\n")

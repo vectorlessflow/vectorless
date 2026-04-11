@@ -21,7 +21,4 @@ mod lazy;
 mod selective;
 mod strategy;
 
-pub use full::FullStrategy;
-pub use lazy::LazyStrategy;
-pub use selective::SelectiveStrategy;
 pub use strategy::{LlmSummaryGenerator, SummaryGenerator, SummaryStrategy, SummaryStrategyConfig};

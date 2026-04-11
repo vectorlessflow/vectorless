@@ -28,5 +28,5 @@
 mod parser;
 mod types;
 
-pub use parser::{PdfParser, PdfParserConfig};
-pub use types::{PdfMetadata, PdfPage, PdfParseResult};
+pub use parser::PdfParser;
+pub use types::PdfPage;

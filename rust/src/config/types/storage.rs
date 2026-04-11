@@ -387,14 +387,30 @@ pub struct HybridStrategyConfig {
     pub llm_weight: f32,
 }
 
-fn default_true() -> bool { true }
-fn default_pre_filter_ratio() -> f32 { 0.3 }
-fn default_min_candidates() -> usize { 2 }
-fn default_max_candidates() -> usize { 5 }
-fn default_auto_accept_threshold() -> f32 { 0.85 }
-fn default_auto_reject_threshold() -> f32 { 0.15 }
-fn default_bm25_weight() -> f32 { 0.4 }
-fn default_llm_weight() -> f32 { 0.6 }
+fn default_true() -> bool {
+    true
+}
+fn default_pre_filter_ratio() -> f32 {
+    0.3
+}
+fn default_min_candidates() -> usize {
+    2
+}
+fn default_max_candidates() -> usize {
+    5
+}
+fn default_auto_accept_threshold() -> f32 {
+    0.85
+}
+fn default_auto_reject_threshold() -> f32 {
+    0.15
+}
+fn default_bm25_weight() -> f32 {
+    0.4
+}
+fn default_llm_weight() -> f32 {
+    0.6
+}
 
 impl Default for HybridStrategyConfig {
     fn default() -> Self {
@@ -443,11 +459,21 @@ pub struct CrossDocumentStrategyConfig {
     pub parallel_search: bool,
 }
 
-fn default_max_documents() -> usize { 10 }
-fn default_max_results_per_doc() -> usize { 3 }
-fn default_max_total_results() -> usize { 10 }
-fn default_min_score() -> f32 { 0.3 }
-fn default_merge_strategy() -> String { "TopK".to_string() }
+fn default_max_documents() -> usize {
+    10
+}
+fn default_max_results_per_doc() -> usize {
+    3
+}
+fn default_max_total_results() -> usize {
+    10
+}
+fn default_min_score() -> f32 {
+    0.3
+}
+fn default_merge_strategy() -> String {
+    "TopK".to_string()
+}
 
 impl Default for CrossDocumentStrategyConfig {
     fn default() -> Self {
@@ -483,7 +509,9 @@ pub struct PageRangeStrategyConfig {
     pub min_overlap_ratio: f32,
 }
 
-fn default_min_overlap_ratio() -> f32 { 0.1 }
+fn default_min_overlap_ratio() -> f32 {
+    0.1
+}
 
 impl Default for PageRangeStrategyConfig {
     fn default() -> Self {

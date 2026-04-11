@@ -3,12 +3,11 @@
 
 //! Main Markdown parser implementation.
 
-use async_trait::async_trait;
 use pulldown_cmark::Options;
 use std::path::Path;
 
 use crate::error::Result;
-use crate::parser::{DocumentFormat, DocumentMeta, DocumentParser, ParseResult, RawNode};
+use crate::index::parse::{DocumentFormat, DocumentMeta, ParseResult, RawNode};
 use crate::utils::estimate_tokens;
 
 use super::config::MarkdownConfig;
@@ -363,13 +362,9 @@ fn finish_current_node(
     None
 }
 
-#[async_trait]
-impl DocumentParser for MarkdownParser {
-    fn format(&self) -> DocumentFormat {
-        DocumentFormat::Markdown
-    }
-
-    async fn parse(&self, content: &str) -> Result<ParseResult> {
+impl MarkdownParser {
+    /// Parse Markdown content and return result.
+    pub async fn parse(&self, content: &str) -> Result<ParseResult> {
         let line_count = content.lines().count();
         let (nodes, fm_fields) = self.extract_nodes(content);
 
@@ -396,7 +391,8 @@ impl DocumentParser for MarkdownParser {
         Ok(ParseResult::new(meta, nodes))
     }
 
-    async fn parse_file(&self, path: &Path) -> Result<ParseResult> {
+    /// Parse a Markdown file.
+    pub async fn parse_file(&self, path: &Path) -> Result<ParseResult> {
         let content = tokio::fs::read_to_string(path)
             .await
             .map_err(|e| crate::Error::Parse(format!("Failed to read file: {}", e)))?;

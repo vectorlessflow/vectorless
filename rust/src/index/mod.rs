@@ -8,17 +8,34 @@
 //! # Architecture
 //!
 //! ```text
-//! ┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
-//! │   Parse     │───►│   Build     │───►│  Enhance    │───►│   Enrich    │
-//! │  (Document) │    │   (Tree)    │    │  (LLM Boost)│    │  (Metadata) │
-//! └─────────────┘    └─────────────┘    └─────────────┘    └─────────────┘
-//!                                                                  │
-//!                                                                  ▼
-//! ┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
-//! │   Output    │◄───│   Persist   │◄───│   Optimize  │◄───│   Enrich    │
-//! │  (Indexed)  │    │  (Storage)  │    │   (Tree)    │    │             │
-//! └─────────────┘    └─────────────┘    └─────────────┘    └─────────────┘
+//! Priority  10: ┌──────────┐
+//!               │  Parse    │  Parse document into raw nodes
+//!               └────┬─────┘
+//! Priority  20: ┌────▼─────┐
+//!               │  Build   │  Construct tree + thinning (with content merge)
+//!               └────┬─────┘
+//! Priority  22: ┌────▼─────┐
+//!               │ Validate │  Tree integrity checks (optional)
+//!               └────┬─────┘
+//! Priority  25: ┌────▼─────┐
+//!               │  Split   │  Split oversized leaf nodes (optional)
+//!               └────┬─────┘
+//! Priority  30: ┌────▼─────┐
+//!               │ Enhance  │  LLM summaries (when client available)
+//!               └────┬─────┘
+//! Priority  40: ┌────▼─────┐
+//!               │  Enrich  │  Metadata + cross-references
+//!               └────┬─────┘
+//! Priority  45: ┌────▼──────────┐
+//!               │ Reasoning Idx │  Pre-computed reasoning index
+//!               └────┬──────────┘
+//! Priority  60: ┌────▼──────┐
+//!               │ Optimize  │  Final tree optimization
+//!               └───────────┘
 //! ```
+//!
+//! Checkpointing is available when `PipelineOptions::checkpoint_dir` is set.
+//! State is saved after each stage group and resumed on restart.
 //!
 //! # Usage
 //!
@@ -37,29 +54,16 @@
 
 pub mod config;
 pub mod incremental;
+pub mod parse;
 pub mod pipeline;
 pub mod stages;
 pub mod summary;
 
 // Re-export main types from pipeline
-pub use pipeline::{
-    ExecutionGroup, FailurePolicy, IndexContext, IndexInput, IndexMetrics, PipelineResult,
-    PipelineExecutor, PipelineOrchestrator, StageResult, StageRetryConfig,
-};
+pub use pipeline::{IndexInput, IndexMetrics, PipelineExecutor, PipelineResult};
 
 // Re-export config types
-pub use config::{IndexMode, OptimizationConfig, PipelineOptions, ThinningConfig};
-
-// Re-export stages
-pub use stages::IndexStage;
+pub use config::{IndexMode, PipelineOptions, ThinningConfig};
 
 // Re-export summary
-pub use summary::{
-    FullStrategy, LazyStrategy, LlmSummaryGenerator, SelectiveStrategy, SummaryGenerator,
-    SummaryStrategy, SummaryStrategyConfig,
-};
-
-// Re-export incremental
-pub use incremental::{ChangeDetector, ChangeSet, PartialUpdater};
-
-pub(crate) use crate::config::{ConcurrencyConfig, IndexerConfig};
+pub use summary::SummaryStrategy;

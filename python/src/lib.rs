@@ -171,10 +171,8 @@ fn parse_format(format: &str) -> PyResult<DocumentFormat> {
     match format.to_lowercase().as_str() {
         "markdown" | "md" => Ok(DocumentFormat::Markdown),
         "pdf" => Ok(DocumentFormat::Pdf),
-        "docx" | "doc" => Ok(DocumentFormat::Docx),
-        "html" | "htm" => Ok(DocumentFormat::Html),
         _ => Err(PyErr::from(VectorlessError::new(
-            format!("Unknown format: {}. Supported: markdown, pdf, docx, html", format),
+            format!("Unknown format: {}. Supported: markdown, pdf", format),
             "config",
         ))),
     }

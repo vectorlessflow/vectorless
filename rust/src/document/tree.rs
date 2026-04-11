@@ -602,7 +602,7 @@ impl DocumentTree {
         }
     }
 
-    /// Export the tree structure to JSON format (PageIndex compatible).
+    /// Export the tree structure to JSON format.
     pub fn to_structure_json(&self, doc_name: &str) -> DocumentStructure {
         let structure = self.build_structure_nodes(self.root_id);
         DocumentStructure {

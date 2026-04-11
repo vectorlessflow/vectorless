@@ -10,7 +10,7 @@
 //! - Decision quality metrics
 
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use super::decision::InterventionPoint;
 

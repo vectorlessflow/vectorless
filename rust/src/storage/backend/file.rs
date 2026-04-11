@@ -7,7 +7,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::RwLock;
 
-use tracing::{debug, warn};
+use tracing::debug;
 
 use super::StorageBackend;
 use crate::Error;

@@ -291,10 +291,8 @@ impl ChangeDetector {
         }
 
         // Record processing version
-        self.processing_versions.insert(
-            doc_id.to_string(),
-            self.current_processing_version,
-        );
+        self.processing_versions
+            .insert(doc_id.to_string(), self.current_processing_version);
     }
 
     /// Record document from ChangeInfo.
@@ -316,11 +314,7 @@ impl ChangeDetector {
     }
 
     /// Detect changes between two trees using fingerprints.
-    pub fn detect_changes(
-        &self,
-        old_tree: &DocumentTree,
-        new_tree: &DocumentTree,
-    ) -> ChangeSet {
+    pub fn detect_changes(&self, old_tree: &DocumentTree, new_tree: &DocumentTree) -> ChangeSet {
         let mut changes = ChangeSet::new();
 
         // Collect fingerprints from both trees
@@ -333,7 +327,10 @@ impl ChangeDetector {
             let mut map = HashMap::new();
             for node_id in old_tree.traverse() {
                 if let Some(node) = old_tree.get(node_id) {
-                    let key = node.node_id.clone().unwrap_or_else(|| format!("node_{:?}", node_id.0));
+                    let key = node
+                        .node_id
+                        .clone()
+                        .unwrap_or_else(|| format!("node_{:?}", node_id.0));
                     if let Some(fp) = old_fps.get(&key) {
                         map.insert(node.title.clone(), (key, fp.clone()));
                     }
@@ -346,7 +343,10 @@ impl ChangeDetector {
             let mut map = HashMap::new();
             for node_id in new_tree.traverse() {
                 if let Some(node) = new_tree.get(node_id) {
-                    let key = node.node_id.clone().unwrap_or_else(|| format!("node_{:?}", node_id.0));
+                    let key = node
+                        .node_id
+                        .clone()
+                        .unwrap_or_else(|| format!("node_{:?}", node_id.0));
                     if let Some(fp) = new_fps.get(&key) {
                         map.insert(node.title.clone(), (key, fp.clone()));
                     }
@@ -369,12 +369,8 @@ impl ChangeDetector {
         for (title, (node_key, fp)) in &old_by_title {
             if !new_by_title.contains_key(title) {
                 changes.removed.push(
-                    NodeChange::new(
-                        Some(node_key.clone()),
-                        title.clone(),
-                        ChangeType::Removed,
-                    )
-                    .with_fingerprint(fp.clone()),
+                    NodeChange::new(Some(node_key.clone()), title.clone(), ChangeType::Removed)
+                        .with_fingerprint(fp.clone()),
                 );
             }
         }
@@ -384,12 +380,8 @@ impl ChangeDetector {
             if let Some((_old_key, old_fp)) = old_by_title.get(title) {
                 if new_fp.content_changed(old_fp) {
                     changes.modified.push(
-                        NodeChange::new(
-                            Some(new_key.clone()),
-                            title.clone(),
-                            ChangeType::Modified,
-                        )
-                        .with_fingerprint(new_fp.clone()),
+                        NodeChange::new(Some(new_key.clone()), title.clone(), ChangeType::Modified)
+                            .with_fingerprint(new_fp.clone()),
                     );
                 } else if new_fp.subtree_changed(old_fp) {
                     changes.restructured.push(
@@ -562,7 +554,10 @@ pub fn compute_all_node_fingerprints(tree: &DocumentTree) -> HashMap<String, Nod
 
     for node_id in tree.traverse() {
         if let Some(node) = tree.get(node_id) {
-            let key = node.node_id.clone().unwrap_or_else(|| format!("node_{:?}", node_id.0));
+            let key = node
+                .node_id
+                .clone()
+                .unwrap_or_else(|| format!("node_{:?}", node_id.0));
             let fp = compute_node_fingerprint(tree, node_id);
             fingerprints.insert(key, fp);
         }

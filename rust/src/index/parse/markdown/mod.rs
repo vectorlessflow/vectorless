@@ -27,5 +27,4 @@ mod config;
 mod frontmatter;
 mod parser;
 
-pub use config::MarkdownConfig;
 pub use parser::MarkdownParser;

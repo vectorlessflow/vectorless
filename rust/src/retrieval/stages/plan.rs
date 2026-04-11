@@ -80,7 +80,9 @@ impl PlanStage {
             }
             QueryComplexity::Medium => {
                 if budget_status == BudgetStatus::Constrained {
-                    info!("Complexity is Medium but budget constrained, selecting Keyword strategy");
+                    info!(
+                        "Complexity is Medium but budget constrained, selecting Keyword strategy"
+                    );
                     StrategyPreference::ForceKeyword
                 } else if self.llm_client.is_some() {
                     info!("Complexity is Medium, selecting LLM strategy");
@@ -92,7 +94,9 @@ impl PlanStage {
             }
             QueryComplexity::Complex => {
                 if budget_status == BudgetStatus::Constrained {
-                    info!("Complexity is Complex but budget constrained, selecting Hybrid strategy");
+                    info!(
+                        "Complexity is Complex but budget constrained, selecting Hybrid strategy"
+                    );
                     if self.llm_client.is_some() {
                         StrategyPreference::ForceHybrid
                     } else {

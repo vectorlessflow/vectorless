@@ -11,10 +11,10 @@
 use tracing::info;
 
 use crate::document::DocumentTree;
+use crate::index::config::PipelineOptions;
+use crate::index::parse::DocumentFormat;
 use crate::storage::PersistedDocument;
 use crate::utils::fingerprint::Fingerprint;
-use crate::index::config::PipelineOptions;
-use crate::parser::DocumentFormat;
 
 /// Action to take for a source during indexing.
 pub enum IndexAction {
@@ -71,7 +71,10 @@ pub fn resolve_action(
     let current_fp = Fingerprint::from_bytes(file_bytes);
 
     // Layer 1: File-level content fingerprint
-    if !stored_doc.meta.needs_reprocessing(&current_fp, pipeline_options.processing_version) {
+    if !stored_doc
+        .meta
+        .needs_reprocessing(&current_fp, pipeline_options.processing_version)
+    {
         info!("File fingerprint unchanged, skipping");
         return IndexAction::Skip(SkipInfo {
             doc_id: stored_doc.meta.id.clone(),

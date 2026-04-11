@@ -29,6 +29,3 @@ mod types;
 
 pub use emitter::EventEmitter;
 pub use types::{Event, IndexEvent, QueryEvent, WorkspaceEvent};
-
-// Re-export handler traits for internal use
-pub(crate) use emitter::{AsyncEventHandler, EventHandler};

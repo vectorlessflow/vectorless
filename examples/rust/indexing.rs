@@ -28,9 +28,7 @@ async fn main() -> vectorless::Result<()> {
 
     // 2. Index a single document with default options
     println!("--- Single document (default mode) ---");
-    let result = engine
-        .index(IndexContext::from_path("./README.md"))
-        .await?;
+    let result = engine.index(IndexContext::from_path("./README.md")).await?;
 
     for item in &result.items {
         println!("  doc_id:  {}", item.doc_id);
@@ -60,10 +58,7 @@ async fn main() -> vectorless::Result<()> {
         // 3. Re-index with incremental mode — should detect no change
         println!("\n--- Re-index (incremental, unchanged) ---");
         let result2 = engine
-            .index(
-                IndexContext::from_path("./README.md")
-                    .with_mode(IndexMode::Incremental),
-            )
+            .index(IndexContext::from_path("./README.md").with_mode(IndexMode::Incremental))
             .await?;
 
         for item in &result2.items {
@@ -86,8 +81,16 @@ async fn main() -> vectorless::Result<()> {
             batch.failed.len()
         );
         for item in &batch.items {
-            let time = item.metrics.as_ref().map(|m| m.total_time_ms()).unwrap_or(0);
-            let nodes = item.metrics.as_ref().map(|m| m.nodes_processed).unwrap_or(0);
+            let time = item
+                .metrics
+                .as_ref()
+                .map(|m| m.total_time_ms())
+                .unwrap_or(0);
+            let nodes = item
+                .metrics
+                .as_ref()
+                .map(|m| m.nodes_processed)
+                .unwrap_or(0);
             println!("  {} — {}ms, {} nodes", item.name, time, nodes);
         }
 

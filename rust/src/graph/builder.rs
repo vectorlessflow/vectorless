@@ -250,10 +250,7 @@ mod tests {
     use super::*;
 
     fn make_keywords(pairs: &[(&str, f32)]) -> HashMap<String, f32> {
-        pairs
-            .iter()
-            .map(|&(k, w)| (k.to_string(), w))
-            .collect()
+        pairs.iter().map(|&(k, w)| (k.to_string(), w)).collect()
     }
 
     #[test]
@@ -359,13 +356,7 @@ mod tests {
             "A",
             "md",
             5,
-            make_keywords(&[
-                ("a", 0.9),
-                ("b", 0.8),
-                ("c", 0.7),
-                ("d", 0.6),
-                ("e", 0.5),
-            ]),
+            make_keywords(&[("a", 0.9), ("b", 0.8), ("c", 0.7), ("d", 0.6), ("e", 0.5)]),
         );
         builder.add_document(
             "doc2",

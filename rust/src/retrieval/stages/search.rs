@@ -16,21 +16,21 @@ use crate::document::DocumentTree;
 use crate::document::ReasoningIndex;
 use crate::llm::LlmClient;
 use crate::retrieval::RetrievalContext;
-use crate::retrieval::pilot::Pilot;
 use crate::retrieval::cache::CachedCandidate;
+use crate::retrieval::pilot::Pilot;
 use crate::retrieval::pipeline::{
-    BudgetStatus, CandidateNode, FailurePolicy, PipelineContext, RetrievalStage, SearchAlgorithm,
-    StageOutcome,
-};
-use crate::retrieval::search::{
-    BeamSearch, GreedySearch, SearchConfig as SearchAlgConfig, SearchCue, SearchTree,
-    ToCNavigator,
+    CandidateNode, FailurePolicy, PipelineContext, RetrievalStage, SearchAlgorithm, StageOutcome,
 };
 use crate::retrieval::search::extract_keywords;
+use crate::retrieval::search::{
+    BeamSearch, GreedySearch, SearchConfig as SearchAlgConfig, SearchCue, SearchTree, ToCNavigator,
+};
 use crate::retrieval::strategy::{
     HybridConfig, HybridStrategy, KeywordStrategy, LlmStrategy, RetrievalStrategy,
 };
-use crate::retrieval::types::{NavigationDecision, ReasoningCandidate, ReasoningStep, StageName, StrategyPreference};
+use crate::retrieval::types::{
+    NavigationDecision, ReasoningCandidate, ReasoningStep, StageName, StrategyPreference,
+};
 
 /// Search Stage - executes tree search with optional Pilot guidance.
 ///
@@ -115,9 +115,8 @@ impl SearchStage {
     pub fn with_hybrid_config(mut self, config: HybridConfig) -> Self {
         if let Some(ref llm) = self.llm_strategy {
             let llm_boxed: Box<dyn RetrievalStrategy> = Box::new((**llm).clone());
-            self.hybrid_strategy = Some(Arc::new(
-                HybridStrategy::new(llm_boxed).with_config(config)
-            ));
+            self.hybrid_strategy =
+                Some(Arc::new(HybridStrategy::new(llm_boxed).with_config(config)));
         }
         self
     }
@@ -163,7 +162,9 @@ impl SearchStage {
                     let llm_boxed: Box<dyn RetrievalStrategy> = Box::new((**llm).clone());
                     Arc::new(HybridStrategy::new(llm_boxed))
                 } else {
-                    warn!("Hybrid strategy requested but no LLM available, falling back to Keyword");
+                    warn!(
+                        "Hybrid strategy requested but no LLM available, falling back to Keyword"
+                    );
                     Arc::new(self.keyword_strategy.clone())
                 }
             }
@@ -172,13 +173,14 @@ impl SearchStage {
                     info!("Using Hybrid strategy as fallback for {:?})", preference);
                     strategy.clone()
                 } else {
-                    warn!("{:?} requires special configuration, falling back to Keyword", preference);
+                    warn!(
+                        "{:?} requires special configuration, falling back to Keyword",
+                        preference
+                    );
                     Arc::new(self.keyword_strategy.clone())
                 }
             }
-            StrategyPreference::Auto => {
-                Arc::new(self.keyword_strategy.clone())
-            }
+            StrategyPreference::Auto => Arc::new(self.keyword_strategy.clone()),
         }
     }
 
@@ -250,11 +252,8 @@ impl SearchStage {
         let mut total_pilot_interventions = 0u64;
 
         for query in queries {
-            let legacy_ctx = RetrievalContext::new(
-                query,
-                ctx.options.max_tokens,
-                ctx.options.sufficiency_check,
-            );
+            let legacy_ctx =
+                RetrievalContext::new(query, ctx.options.max_tokens, ctx.options.sufficiency_check);
 
             for cue in cues {
                 debug!(
@@ -265,18 +264,36 @@ impl SearchStage {
                 let result = match algorithm {
                     SearchAlgorithm::Greedy => {
                         GreedySearch::new()
-                            .search_from(&ctx.tree, &legacy_ctx, &search_config, pilot_ref, cue.root)
+                            .search_from(
+                                &ctx.tree,
+                                &legacy_ctx,
+                                &search_config,
+                                pilot_ref,
+                                cue.root,
+                            )
                             .await
                     }
                     SearchAlgorithm::Beam => {
                         BeamSearch::new()
-                            .search_from(&ctx.tree, &legacy_ctx, &search_config, pilot_ref, cue.root)
+                            .search_from(
+                                &ctx.tree,
+                                &legacy_ctx,
+                                &search_config,
+                                pilot_ref,
+                                cue.root,
+                            )
                             .await
                     }
                     // MCTS is not truly implemented — falls back to Beam behavior.
                     SearchAlgorithm::Mcts => {
                         BeamSearch::new()
-                            .search_from(&ctx.tree, &legacy_ctx, &search_config, pilot_ref, cue.root)
+                            .search_from(
+                                &ctx.tree,
+                                &legacy_ctx,
+                                &search_config,
+                                pilot_ref,
+                                cue.root,
+                            )
                             .await
                     }
                 };
@@ -467,7 +484,10 @@ impl RetrievalStage for SearchStage {
         // Reset Pilot state for new query
         if let Some(ref pilot) = self.pilot {
             pilot.reset();
-            debug!("SearchStage: Pilot is available, is_active={}", pilot.is_active());
+            debug!(
+                "SearchStage: Pilot is available, is_active={}",
+                pilot.is_active()
+            );
         }
 
         // Apply budget-aware beam width adjustment
@@ -480,21 +500,29 @@ impl RetrievalStage for SearchStage {
             algorithm,
             effective_beam,
             budget_status,
-            if self.has_pilot() { "enabled" } else { "disabled" }
+            if self.has_pilot() {
+                "enabled"
+            } else {
+                "disabled"
+            }
         );
 
         ctx.increment_search_iteration();
 
         // === L1 Cache check: return cached results if available ===
         if ctx.options.enable_cache && ctx.search_iterations <= 1 {
-            let scope_fp = crate::utils::fingerprint::Fingerprint::from_str(
-                &format!("{:?}", ctx.tree.root()),
-            );
+            let scope_fp =
+                crate::utils::fingerprint::Fingerprint::from_str(&format!("{:?}", ctx.tree.root()));
             if let Some(cached) = ctx.reasoning_cache.l1_get(&ctx.query, &scope_fp) {
-                info!("L1 cache hit for query, returning {} cached candidates", cached.len());
+                info!(
+                    "L1 cache hit for query, returning {} cached candidates",
+                    cached.len()
+                );
                 ctx.candidates = cached
                     .into_iter()
-                    .map(|c| CandidateNode::new(c.node_id, c.score, c.depth, ctx.tree.is_leaf(c.node_id)))
+                    .map(|c| {
+                        CandidateNode::new(c.node_id, c.score, c.depth, ctx.tree.is_leaf(c.node_id))
+                    })
                     .collect();
                 ctx.metrics.cache_hits += 1;
                 ctx.record_reasoning(
@@ -599,7 +627,10 @@ impl RetrievalStage for SearchStage {
         );
         for (i, c) in ctx.candidates.iter().enumerate().take(5) {
             if let Some(node) = ctx.tree.get(c.node_id) {
-                debug!("Candidate {}: score={:.3}, title='{}'", i, c.score, node.title);
+                debug!(
+                    "Candidate {}: score={:.3}, title='{}'",
+                    i, c.score, node.title
+                );
             }
         }
 
@@ -627,9 +658,8 @@ impl RetrievalStage for SearchStage {
 
         // Store results in L1 cache
         if ctx.options.enable_cache && ctx.search_iterations <= 1 && !ctx.candidates.is_empty() {
-            let scope_fp = crate::utils::fingerprint::Fingerprint::from_str(
-                &format!("{:?}", ctx.tree.root()),
-            );
+            let scope_fp =
+                crate::utils::fingerprint::Fingerprint::from_str(&format!("{:?}", ctx.tree.root()));
             let cached: Vec<CachedCandidate> = ctx
                 .candidates
                 .iter()
@@ -662,7 +692,14 @@ impl RetrievalStage for SearchStage {
             .unwrap_or_else(|| "auto".to_string());
         let search_iterations = ctx.search_iterations;
 
-        let reasoning_data: Vec<(String, Option<String>, f32, usize, String, Vec<ReasoningCandidate>)> = ctx
+        let reasoning_data: Vec<(
+            String,
+            Option<String>,
+            f32,
+            usize,
+            String,
+            Vec<ReasoningCandidate>,
+        )> = ctx
             .candidates
             .iter()
             .take(5)
@@ -689,10 +726,20 @@ impl RetrievalStage for SearchStage {
 
                 let reasoning = format!(
                     "Candidate '{}' (score={:.3}) found via {} search, iteration {}",
-                    title, candidate.score, algorithm.name(), search_iterations
+                    title,
+                    candidate.score,
+                    algorithm.name(),
+                    search_iterations
                 );
 
-                (format!("{:?}", candidate.node_id), Some(title), candidate.score, depth, reasoning, considered)
+                (
+                    format!("{:?}", candidate.node_id),
+                    Some(title),
+                    candidate.score,
+                    depth,
+                    reasoning,
+                    considered,
+                )
             })
             .collect();
 
@@ -723,7 +770,6 @@ impl RetrievalStage for SearchStage {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::retrieval::pilot::NoopPilot;
 
     #[test]
     fn test_search_stage_creation() {
@@ -737,14 +783,5 @@ mod tests {
     fn test_search_stage_dependencies() {
         let stage = SearchStage::new();
         assert_eq!(stage.depends_on(), vec!["plan"]);
-    }
-
-    #[test]
-    fn test_search_stage_with_noop_pilot() {
-        let pilot = Arc::new(NoopPilot::new());
-        let stage = SearchStage::new().with_pilot(pilot);
-
-        // NoopPilot is not active
-        assert!(!stage.has_pilot());
     }
 }

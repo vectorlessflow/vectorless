@@ -9,7 +9,7 @@ use tracing::info;
 
 use crate::document::{DocumentTree, NodeId};
 use crate::error::Result;
-use crate::parser::RawNode;
+use crate::index::parse::RawNode;
 use crate::utils::estimate_tokens;
 
 use super::{IndexStage, StageResult};
@@ -84,19 +84,47 @@ impl BuildStage {
     }
 
     /// Apply thinning to raw nodes before tree construction.
-    fn apply_thinning(nodes: &[RawNode], config: &ThinningConfig) -> Vec<bool> {
+    ///
+    /// When `merge_content` is true: small nodes are merged into their parent
+    /// by concatenating child content into the parent, then marking children for removal.
+    /// When `merge_content` is false: small nodes are simply marked for removal.
+    fn apply_thinning(nodes: &mut [RawNode], config: &ThinningConfig) -> Vec<bool> {
         if !config.enabled || nodes.is_empty() {
             return vec![true; nodes.len()];
         }
 
         let mut keep = vec![true; nodes.len()];
 
-        // Process from leaves to root
+        // Process from leaves to root (bottom-up)
         for i in (0..nodes.len()).rev() {
+            if !keep[i] {
+                continue;
+            }
             let total_tokens = nodes[i].total_token_count.unwrap_or(0);
 
             if total_tokens < config.threshold {
-                keep[i] = false;
+                // Find all children of this node
+                let children_indices = Self::find_all_children_indices(i, nodes);
+
+                if !children_indices.is_empty() && config.merge_content {
+                    // Merge children content into this node
+                    let mut merged_content = nodes[i].content.clone();
+                    for &child_idx in &children_indices {
+                        if !nodes[child_idx].content.trim().is_empty() {
+                            if !merged_content.is_empty() {
+                                merged_content.push_str("\n\n");
+                            }
+                            merged_content.push_str(&nodes[child_idx].content);
+                        }
+                    }
+                    nodes[i].content = merged_content;
+                    nodes[i].token_count = Some(nodes[i].token_count.unwrap_or(0));
+                }
+
+                // Mark children for removal
+                for &child_idx in &children_indices {
+                    keep[child_idx] = false;
+                }
             }
         }
 
@@ -241,7 +269,7 @@ impl IndexStage for BuildStage {
 
         // Step 2: Apply thinning if enabled
         let _original_count = raw_nodes.len();
-        let keep = Self::apply_thinning(&raw_nodes, &ctx.options.thinning);
+        let keep = Self::apply_thinning(&mut raw_nodes, &ctx.options.thinning);
 
         let nodes_before_merge = raw_nodes.len();
         raw_nodes = raw_nodes

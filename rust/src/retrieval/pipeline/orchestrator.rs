@@ -21,7 +21,7 @@ use crate::error::Result;
 use crate::retrieval::pilot::{Pilot, SearchState};
 // FailurePolicy is re-exported for stages
 use crate::retrieval::stream::{
-    RetrieveEvent, RetrieveEventReceiver, RetrieveEventSender, DEFAULT_STREAM_BOUND,
+    DEFAULT_STREAM_BOUND, RetrieveEvent, RetrieveEventReceiver, RetrieveEventSender,
 };
 use crate::retrieval::types::{RetrieveOptions, RetrieveResponse};
 
@@ -860,10 +860,7 @@ impl RetrievalOrchestrator {
         tree: Arc<DocumentTree>,
         query: &str,
         options: RetrieveOptions,
-    ) -> (
-        tokio::task::JoinHandle<()>,
-        RetrieveEventReceiver,
-    ) {
+    ) -> (tokio::task::JoinHandle<()>, RetrieveEventReceiver) {
         let (tx, rx) = tokio::sync::mpsc::channel(DEFAULT_STREAM_BOUND);
         let query_owned = query.to_string();
 
@@ -956,9 +953,7 @@ impl RetrievalOrchestrator {
                                     total_start.elapsed().as_millis() as u64;
                                 info!("Retrieval completed by stage: {}", stage_name);
                                 let response = ctx.finalize();
-                                let _ = tx
-                                    .send(RetrieveEvent::Completed { response })
-                                    .await;
+                                let _ = tx.send(RetrieveEvent::Completed { response }).await;
                                 return Ok(());
                             }
                             StageOutcome::NeedMoreData {
@@ -1129,9 +1124,7 @@ impl RetrievalOrchestrator {
                                 ctx.metrics.total_time_ms =
                                     total_start.elapsed().as_millis() as u64;
                                 let response = ctx.finalize();
-                                let _ = tx
-                                    .send(RetrieveEvent::Completed { response })
-                                    .await;
+                                let _ = tx.send(RetrieveEvent::Completed { response }).await;
                                 return Ok(());
                             }
                         }

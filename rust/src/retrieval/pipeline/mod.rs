@@ -9,16 +9,6 @@
 //! - [`StageOutcome`] - Controls pipeline flow (continue, backtrack, etc.)
 //! - [`RetrievalOrchestrator`] - Manages stage execution
 //!
-//! # Architecture
-//!
-//! The retrieval pipeline consists of four stages:
-//!
-//! ```text
-//! ┌─────────┐    ┌─────────┐    ┌─────────┐    ┌─────────┐
-//! │ Analyze │───►│  Plan   │───►│ Search  │───►│  Evaluate  │
-//! │ (分析)  │    │ (规划)  │    │ (搜索)  │    │ (判断)  │
-//! └─────────┘    └─────────┘    └─────────┘    └─────────┘
-//! ```
 //!
 //! # Flow Control
 //!
@@ -50,11 +40,9 @@ mod orchestrator;
 mod outcome;
 mod stage;
 
-pub use budget::{BudgetStatus, RetrievalBudgetController};
-pub use context::{
-    CandidateNode, PipelineContext, RetrievalMetrics, SearchAlgorithm, SearchConfig, StageResult,
-};
-pub use orchestrator::{ExecutionGroup, RetrievalOrchestrator};
+pub use budget::BudgetStatus;
+pub use context::{CandidateNode, PipelineContext, SearchAlgorithm, SearchConfig};
+pub use orchestrator::RetrievalOrchestrator;
 pub use outcome::StageOutcome;
 pub use stage::RetrievalStage;
 

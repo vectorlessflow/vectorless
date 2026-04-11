@@ -24,7 +24,6 @@
 //! ```
 
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::Arc;
 
 /// Status of the budget for stage-level decision making.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -89,9 +88,7 @@ impl Clone for RetrievalBudgetController {
         Self {
             total_budget: self.total_budget,
             consumed: AtomicUsize::new(self.consumed.load(Ordering::Relaxed)),
-            exhaustion_signaled: AtomicBool::new(
-                self.exhaustion_signaled.load(Ordering::Relaxed),
-            ),
+            exhaustion_signaled: AtomicBool::new(self.exhaustion_signaled.load(Ordering::Relaxed)),
             constrain_threshold: self.constrain_threshold,
         }
     }
@@ -148,7 +145,8 @@ impl RetrievalBudgetController {
 
     /// Get remaining token budget.
     pub fn remaining(&self) -> usize {
-        self.total_budget.saturating_sub(self.consumed.load(Ordering::Relaxed))
+        self.total_budget
+            .saturating_sub(self.consumed.load(Ordering::Relaxed))
     }
 
     /// Get total budget.
@@ -193,7 +191,11 @@ impl RetrievalBudgetController {
             }
             BudgetStatus::Constrained => {
                 // Reduce beam to save tokens
-                let reduced = if iteration <= 1 { current_beam } else { (current_beam / 2).max(1) };
+                let reduced = if iteration <= 1 {
+                    current_beam
+                } else {
+                    (current_beam / 2).max(1)
+                };
                 reduced
             }
             BudgetStatus::Exhausted => {

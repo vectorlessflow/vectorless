@@ -34,7 +34,7 @@
 
 use std::path::PathBuf;
 
-use crate::parser::DocumentFormat;
+use crate::index::parse::DocumentFormat;
 
 use super::types::{IndexMode, IndexOptions};
 
@@ -149,10 +149,10 @@ impl IndexContext {
     /// Create from a directory path.
     ///
     /// Indexes all supported files in the directory (non-recursive).
-    /// Supported extensions: `.md`, `.pdf`, `.docx`, `.html`, `.txt`.
+    /// Supported extensions: `.md`, `.pdf`, `.txt`.
     pub fn from_dir(dir: impl Into<PathBuf>) -> Self {
         let dir = dir.into();
-        let supported_extensions = ["md", "markdown", "pdf", "docx", "html", "htm", "txt"];
+        let supported_extensions = ["md", "markdown", "pdf", "txt"];
 
         let mut sources = Vec::new();
         if let Ok(entries) = std::fs::read_dir(&dir) {

@@ -99,19 +99,12 @@ pub use events::EventEmitter;
 // ============================================================
 
 pub use types::{
-    ClientError,
-    DocumentInfo,
-    FailedItem,
-    IndexItem,
-    IndexMode,
-    IndexOptions,
-    IndexResult,
-    QueryResult,
-    QueryResultItem,
+    ClientError, DocumentInfo, FailedItem, IndexItem, IndexMode, IndexOptions, IndexResult,
+    QueryResult, QueryResultItem,
 };
 
 // ============================================================
 // Parser Types (needed for IndexContext::from_content)
 // ============================================================
 
-pub use crate::parser::DocumentFormat;
+pub use crate::index::parse::DocumentFormat;

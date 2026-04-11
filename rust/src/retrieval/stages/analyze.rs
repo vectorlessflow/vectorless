@@ -17,7 +17,6 @@ use crate::retrieval::complexity::ComplexityDetector;
 use crate::retrieval::decompose::{DecompositionConfig, QueryDecomposer};
 use crate::retrieval::pipeline::{FailurePolicy, PipelineContext, RetrievalStage, StageOutcome};
 use crate::retrieval::types::{NavigationDecision, StageName};
-use crate::llm::LlmClient;
 
 /// Analyze Stage - analyzes queries for retrieval planning.
 ///
@@ -41,8 +40,16 @@ fn chinese_num_to_int(s: &str) -> Option<usize> {
     }
     let map = |c: char| -> usize {
         match c {
-            '一' => 1, '二' => 2, '三' => 3, '四' => 4, '五' => 5,
-            '六' => 6, '七' => 7, '八' => 8, '九' => 9, '十' => 10,
+            '一' => 1,
+            '二' => 2,
+            '三' => 3,
+            '四' => 4,
+            '五' => 5,
+            '六' => 6,
+            '七' => 7,
+            '八' => 8,
+            '九' => 9,
+            '十' => 10,
             '百' => 100,
             _ => 0,
         }
@@ -140,12 +147,11 @@ impl AnalyzeStage {
     /// Enable query decomposition with LLM client.
     pub fn with_llm_client(mut self, client: crate::llm::LlmClient) -> Self {
         if self.query_decomposer.is_none() {
-            self.query_decomposer = Some(
-                QueryDecomposer::new(DecompositionConfig::default())
-                    .with_llm_client(client),
-            );
+            self.query_decomposer =
+                Some(QueryDecomposer::new(DecompositionConfig::default()).with_llm_client(client));
         } else if let Some(ref mut decomposer) = self.query_decomposer {
-            *decomposer = QueryDecomposer::new(DecompositionConfig::default()).with_llm_client(client);
+            *decomposer =
+                QueryDecomposer::new(DecompositionConfig::default()).with_llm_client(client);
         }
         self.enable_decomposition = true;
         self
@@ -370,14 +376,18 @@ impl RetrievalStage for AnalyzeStage {
             info!(
                 "Resolved {} structure hints: {:?}",
                 ctx.resolved_path_hints.len(),
-                ctx.resolved_path_hints.iter().map(|(s, _)| s).collect::<Vec<_>>()
+                ctx.resolved_path_hints
+                    .iter()
+                    .map(|(s, _)| s)
+                    .collect::<Vec<_>>()
             );
         }
 
         // 4. Decompose query if enabled and complex enough
         if self.enable_decomposition {
             if let Some(ref decomposer) = self.query_decomposer {
-                let complexity_score = ctx.complexity
+                let complexity_score = ctx
+                    .complexity
                     .as_ref()
                     .map(|c| match c {
                         crate::retrieval::types::QueryComplexity::Simple => 0.3,
@@ -396,13 +406,19 @@ impl RetrievalStage for AnalyzeStage {
                                     result.sub_queries.len()
                                 );
                                 for (i, sq) in result.sub_queries.iter().enumerate() {
-                                    info!("  Sub-query {}: {} (priority: {})", i, sq.text, sq.priority);
+                                    info!(
+                                        "  Sub-query {}: {} (priority: {})",
+                                        i, sq.text, sq.priority
+                                    );
                                 }
                             }
                             ctx.decomposition = Some(result);
                         }
                         Err(e) => {
-                            info!("Query decomposition failed: {}, continuing with original query", e);
+                            info!(
+                                "Query decomposition failed: {}, continuing with original query",
+                                e
+                            );
                         }
                     }
                 }
@@ -424,7 +440,10 @@ impl RetrievalStage for AnalyzeStage {
         if !ctx.resolved_path_hints.is_empty() {
             reasoning_parts.push(format!(
                 "Structure hints: {:?}",
-                ctx.resolved_path_hints.iter().map(|(s, _)| s).collect::<Vec<_>>()
+                ctx.resolved_path_hints
+                    .iter()
+                    .map(|(s, _)| s)
+                    .collect::<Vec<_>>()
             ));
         }
         if let Some(ref decomp) = ctx.decomposition {

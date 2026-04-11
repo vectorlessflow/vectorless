@@ -97,8 +97,13 @@ impl MetricsHub {
         if !self.config.enabled || !self.config.llm.track_tokens {
             return;
         }
-        self.llm
-            .record_call(input_tokens, output_tokens, latency_ms, success, &self.config.llm);
+        self.llm.record_call(
+            input_tokens,
+            output_tokens,
+            latency_ms,
+            success,
+            &self.config.llm,
+        );
     }
 
     /// Record an LLM rate limit error.
@@ -193,17 +198,16 @@ impl MetricsHub {
     // ========================================================================
 
     /// Record a retrieval query.
-    pub fn record_retrieval_query(
-        &self,
-        iterations: u64,
-        nodes_visited: u64,
-        latency_ms: u64,
-    ) {
+    pub fn record_retrieval_query(&self, iterations: u64, nodes_visited: u64, latency_ms: u64) {
         if !self.config.enabled {
             return;
         }
-        self.retrieval
-            .record_query(iterations, nodes_visited, latency_ms, &self.config.retrieval);
+        self.retrieval.record_query(
+            iterations,
+            nodes_visited,
+            latency_ms,
+            &self.config.retrieval,
+        );
     }
 
     /// Record a found path.

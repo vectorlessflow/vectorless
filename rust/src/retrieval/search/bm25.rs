@@ -9,11 +9,8 @@
 //! - IDF caching for efficient scoring
 //! - Query expansion support
 
-use std::collections::HashMap;
-
 use bm25::{
-    Embedder, EmbedderBuilder, Embedding, Language, Scorer, ScoredDocument,
-    DefaultTokenizer, Tokenizer,
+    DefaultTokenizer, Embedder, EmbedderBuilder, Language, ScoredDocument, Scorer, Tokenizer,
 };
 
 /// Field weights for BM25 scoring.
@@ -84,7 +81,12 @@ pub struct FieldDocument<K> {
 impl<K> FieldDocument<K> {
     /// Create a new field document.
     pub fn new(id: K, title: String, summary: String, content: String) -> Self {
-        Self { id, title, summary, content }
+        Self {
+            id,
+            title,
+            summary,
+            content,
+        }
     }
 
     /// Get combined text for embedding.
@@ -161,13 +163,10 @@ impl<K: std::hash::Hash + Eq + Clone + std::fmt::Debug> Bm25Engine<K> {
     /// This calculates the true average document length from the corpus.
     pub fn fit_to_corpus(documents: &[FieldDocument<K>]) -> Self {
         // Collect owned strings first
-        let corpus: Vec<String> = documents.iter()
-            .map(|d| d.combined_text())
-            .collect();
+        let corpus: Vec<String> = documents.iter().map(|d| d.combined_text()).collect();
         let corpus_refs: Vec<&str> = corpus.iter().map(|s| s.as_str()).collect();
 
-        let embedder = EmbedderBuilder::with_fit_to_corpus(Language::English, &corpus_refs)
-            .build();
+        let embedder = EmbedderBuilder::with_fit_to_corpus(Language::English, &corpus_refs).build();
 
         let mut engine = Self {
             embedder,
@@ -268,7 +267,8 @@ impl<K: std::hash::Hash + Eq + Clone + std::fmt::Debug> Bm25Engine<K> {
         let total_weight = self.weights.title + self.weights.summary + self.weights.content;
         let weighted_score = (title_score * self.weights.title
             + summary_score * self.weights.summary
-            + content_score * self.weights.content) / total_weight;
+            + content_score * self.weights.content)
+            / total_weight;
 
         Some(weighted_score)
     }
@@ -278,7 +278,11 @@ impl<K: std::hash::Hash + Eq + Clone + std::fmt::Debug> Bm25Engine<K> {
     /// Returns documents sorted by score (descending).
     pub fn search(&self, query: &str, limit: usize) -> Vec<ScoredDocument<K>> {
         let query_emb = self.embedder.embed(query);
-        self.scorer.matches(&query_emb).into_iter().take(limit).collect()
+        self.scorer
+            .matches(&query_emb)
+            .into_iter()
+            .take(limit)
+            .collect()
     }
 
     /// Search with per-field weighting.
@@ -303,7 +307,8 @@ impl<K: std::hash::Hash + Eq + Clone + std::fmt::Debug> Bm25Engine<K> {
                 let total_weight = self.weights.title + self.weights.summary + self.weights.content;
                 let weighted_score = (title_score * self.weights.title
                     + summary_score * self.weights.summary
-                    + content_score * self.weights.content) / total_weight;
+                    + content_score * self.weights.content)
+                    / total_weight;
 
                 Some((id, weighted_score))
             })
@@ -357,7 +362,11 @@ impl ExpandedQuery {
     /// Create a new expanded query.
     pub fn new(original: String, expansions: Vec<String>) -> Self {
         let combined = format!("{} {}", original, expansions.join(" "));
-        Self { original, expansions, combined }
+        Self {
+            original,
+            expansions,
+            combined,
+        }
     }
 }
 
@@ -370,21 +379,128 @@ pub trait QueryExpander: Send + Sync {
 
 /// Common English stop words for keyword filtering.
 pub const STOPWORDS: &[&str] = &[
-    "a", "an", "the", "is", "are", "was", "were", "be", "been", "being",
-    "have", "has", "had", "do", "does", "did", "will", "would", "could",
-    "should", "may", "might", "must", "shall", "can", "need", "dare",
-    "ought", "used", "to", "of", "in", "for", "on", "with", "at", "by",
-    "from", "as", "into", "through", "during", "before", "after", "above",
-    "below", "between", "under", "again", "further", "then", "once",
-    "here", "there", "when", "where", "why", "how", "all", "each", "few",
-    "more", "most", "other", "some", "such", "no", "nor", "not", "only",
-    "own", "same", "so", "than", "too", "very", "just", "and", "but",
-    "if", "or", "because", "until", "while", "about", "what", "which",
-    "who", "whom", "this", "that", "these", "those", "i", "me", "my",
-    "myself", "we", "our", "ours", "ourselves", "you", "your", "yours",
-    "yourself", "yourselves", "he", "him", "his", "himself", "she", "her",
-    "hers", "herself", "it", "its", "itself", "they", "them", "their",
-    "theirs", "themselves",
+    "a",
+    "an",
+    "the",
+    "is",
+    "are",
+    "was",
+    "were",
+    "be",
+    "been",
+    "being",
+    "have",
+    "has",
+    "had",
+    "do",
+    "does",
+    "did",
+    "will",
+    "would",
+    "could",
+    "should",
+    "may",
+    "might",
+    "must",
+    "shall",
+    "can",
+    "need",
+    "dare",
+    "ought",
+    "used",
+    "to",
+    "of",
+    "in",
+    "for",
+    "on",
+    "with",
+    "at",
+    "by",
+    "from",
+    "as",
+    "into",
+    "through",
+    "during",
+    "before",
+    "after",
+    "above",
+    "below",
+    "between",
+    "under",
+    "again",
+    "further",
+    "then",
+    "once",
+    "here",
+    "there",
+    "when",
+    "where",
+    "why",
+    "how",
+    "all",
+    "each",
+    "few",
+    "more",
+    "most",
+    "other",
+    "some",
+    "such",
+    "no",
+    "nor",
+    "not",
+    "only",
+    "own",
+    "same",
+    "so",
+    "than",
+    "too",
+    "very",
+    "just",
+    "and",
+    "but",
+    "if",
+    "or",
+    "because",
+    "until",
+    "while",
+    "about",
+    "what",
+    "which",
+    "who",
+    "whom",
+    "this",
+    "that",
+    "these",
+    "those",
+    "i",
+    "me",
+    "my",
+    "myself",
+    "we",
+    "our",
+    "ours",
+    "ourselves",
+    "you",
+    "your",
+    "yours",
+    "yourself",
+    "yourselves",
+    "he",
+    "him",
+    "his",
+    "himself",
+    "she",
+    "her",
+    "hers",
+    "herself",
+    "it",
+    "its",
+    "itself",
+    "they",
+    "them",
+    "their",
+    "theirs",
+    "themselves",
 ];
 
 /// Extract keywords from a query string, filtering stop words.
@@ -421,8 +537,18 @@ mod tests {
     #[test]
     fn test_bm25_engine_fit_to_corpus() {
         let docs = vec![
-            FieldDocument::new(1u32, "Rust Programming".to_string(), "About Rust".to_string(), "Rust is a systems programming language.".to_string()),
-            FieldDocument::new(2u32, "Python Guide".to_string(), "About Python".to_string(), "Python is a scripting language.".to_string()),
+            FieldDocument::new(
+                1u32,
+                "Rust Programming".to_string(),
+                "About Rust".to_string(),
+                "Rust is a systems programming language.".to_string(),
+            ),
+            FieldDocument::new(
+                2u32,
+                "Python Guide".to_string(),
+                "About Python".to_string(),
+                "Python is a scripting language.".to_string(),
+            ),
         ];
 
         let engine = Bm25Engine::fit_to_corpus(&docs);
@@ -433,9 +559,24 @@ mod tests {
     #[test]
     fn test_bm25_search() {
         let docs = vec![
-            FieldDocument::new(1u32, "Rust Programming".to_string(), "About Rust".to_string(), "Rust is a systems programming language with memory safety.".to_string()),
-            FieldDocument::new(2u32, "Python Guide".to_string(), "About Python".to_string(), "Python is a scripting language for data science.".to_string()),
-            FieldDocument::new(3u32, "Rust Memory Safety".to_string(), "Memory in Rust".to_string(), "Rust provides guaranteed memory safety without garbage collection.".to_string()),
+            FieldDocument::new(
+                1u32,
+                "Rust Programming".to_string(),
+                "About Rust".to_string(),
+                "Rust is a systems programming language with memory safety.".to_string(),
+            ),
+            FieldDocument::new(
+                2u32,
+                "Python Guide".to_string(),
+                "About Python".to_string(),
+                "Python is a scripting language for data science.".to_string(),
+            ),
+            FieldDocument::new(
+                3u32,
+                "Rust Memory Safety".to_string(),
+                "Memory in Rust".to_string(),
+                "Rust provides guaranteed memory safety without garbage collection.".to_string(),
+            ),
         ];
 
         let engine = Bm25Engine::fit_to_corpus(&docs);
@@ -449,16 +590,25 @@ mod tests {
     #[test]
     fn test_bm25_weighted_search() {
         let docs = vec![
-            FieldDocument::new(1u32, "Rust Programming".to_string(), "About memory safety".to_string(), "Content about other things.".to_string()),
-            FieldDocument::new(2u32, "Other Language".to_string(), "About other things".to_string(), "Rust memory safety is important.".to_string()),
+            FieldDocument::new(
+                1u32,
+                "Rust Programming".to_string(),
+                "About memory safety".to_string(),
+                "Content about other things.".to_string(),
+            ),
+            FieldDocument::new(
+                2u32,
+                "Other Language".to_string(),
+                "About other things".to_string(),
+                "Rust memory safety is important.".to_string(),
+            ),
         ];
 
-        let engine = Bm25Engine::fit_to_corpus(&docs)
-            .with_weights(FieldWeights {
-                title: 3.0,
-                summary: 2.0,
-                content: 1.0,
-            });
+        let engine = Bm25Engine::fit_to_corpus(&docs).with_weights(FieldWeights {
+            title: 3.0,
+            summary: 2.0,
+            content: 1.0,
+        });
 
         let results = engine.search_weighted("rust", 10);
 
@@ -468,9 +618,12 @@ mod tests {
 
     #[test]
     fn test_bm25_score() {
-        let docs = vec![
-            FieldDocument::new(1u32, "Rust Programming".to_string(), "About Rust".to_string(), "Rust is a systems programming language.".to_string()),
-        ];
+        let docs = vec![FieldDocument::new(
+            1u32,
+            "Rust Programming".to_string(),
+            "About Rust".to_string(),
+            "Rust is a systems programming language.".to_string(),
+        )];
 
         let engine = Bm25Engine::fit_to_corpus(&docs);
         let score = engine.score(&1u32, "rust programming");
@@ -493,9 +646,12 @@ mod tests {
 
     #[test]
     fn test_bm25_remove() {
-        let docs = vec![
-            FieldDocument::new(1u32, "Rust".to_string(), "About Rust".to_string(), "Rust content.".to_string()),
-        ];
+        let docs = vec![FieldDocument::new(
+            1u32,
+            "Rust".to_string(),
+            "About Rust".to_string(),
+            "Rust content.".to_string(),
+        )];
 
         let mut engine = Bm25Engine::fit_to_corpus(&docs);
         assert_eq!(engine.len(), 1);

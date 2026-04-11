@@ -12,7 +12,7 @@
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::fs::File;
-use std::io::{BufReader, BufWriter, Read, Write};
+use std::io::{BufReader, BufWriter, Write};
 use std::path::{Path, PathBuf};
 
 use crate::Error;
@@ -53,14 +53,19 @@ pub struct DocumentMeta {
     pub modified_at: chrono::DateTime<chrono::Utc>,
 
     // === Processing State (for incremental updates) ===
-
     /// Content fingerprint for change detection.
-    #[serde(default, skip_serializing_if = "crate::utils::fingerprint::Fingerprint::is_zero")]
+    #[serde(
+        default,
+        skip_serializing_if = "crate::utils::fingerprint::Fingerprint::is_zero"
+    )]
     pub content_fingerprint: crate::utils::fingerprint::Fingerprint,
 
     /// Logic fingerprint (hash of pipeline configuration used to produce this document).
     /// If the pipeline config changes, a full reprocess is needed even if content didn't change.
-    #[serde(default, skip_serializing_if = "crate::utils::fingerprint::Fingerprint::is_zero")]
+    #[serde(
+        default,
+        skip_serializing_if = "crate::utils::fingerprint::Fingerprint::is_zero"
+    )]
     pub logic_fingerprint: crate::utils::fingerprint::Fingerprint,
 
     /// Processing version (incremented when algorithm changes).
@@ -171,7 +176,11 @@ impl DocumentMeta {
     }
 
     /// Check if the document needs reprocessing.
-    pub fn needs_reprocessing(&self, current_fp: &crate::utils::fingerprint::Fingerprint, current_version: u32) -> bool {
+    pub fn needs_reprocessing(
+        &self,
+        current_fp: &crate::utils::fingerprint::Fingerprint,
+        current_version: u32,
+    ) -> bool {
         // Never processed
         if self.processing_version == 0 {
             return true;

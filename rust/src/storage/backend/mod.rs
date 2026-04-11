@@ -31,5 +31,4 @@ mod memory;
 mod trait_def;
 
 pub use file::FileBackend;
-pub use memory::MemoryBackend;
 pub use trait_def::StorageBackend;

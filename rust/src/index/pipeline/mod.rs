@@ -11,6 +11,7 @@
 //! - [`FailurePolicy`] - Configurable failure handling for stages
 //! - [`StageRetryConfig`] - Retry configuration for stages
 
+mod checkpoint;
 mod context;
 mod executor;
 mod metrics;
@@ -20,5 +21,4 @@ mod policy;
 pub use context::{IndexContext, IndexInput, PipelineResult, StageResult};
 pub use executor::PipelineExecutor;
 pub use metrics::IndexMetrics;
-pub use orchestrator::{CustomStageBuilder, ExecutionGroup, PipelineOrchestrator};
 pub use policy::{FailurePolicy, StageRetryConfig};

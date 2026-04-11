@@ -146,7 +146,7 @@ impl IndexStage for OptimizeStage {
     fn access_pattern(&self) -> AccessPattern {
         AccessPattern {
             reads_tree: true,
-            writes_tree: true,  // merges small leaf nodes
+            writes_tree: true, // merges small leaf nodes
             ..Default::default()
         }
     }

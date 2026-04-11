@@ -67,7 +67,10 @@ impl ReasoningIndex {
 
     /// Check if a node is marked as hot.
     pub fn is_hot(&self, node_id: NodeId) -> bool {
-        self.hot_nodes.get(&node_id).map(|e| e.is_hot).unwrap_or(false)
+        self.hot_nodes
+            .get(&node_id)
+            .map(|e| e.is_hot)
+            .unwrap_or(false)
     }
 
     /// Get the hot node entry for a node.
@@ -160,7 +163,8 @@ impl ReasoningIndexBuilder {
 
     /// Add a section mapping.
     pub fn add_section(&mut self, title: impl Into<String>, node_id: NodeId) {
-        self.section_map.insert(title.into().to_lowercase(), node_id);
+        self.section_map
+            .insert(title.into().to_lowercase(), node_id);
     }
 
     /// Set the config hash for cache invalidation.

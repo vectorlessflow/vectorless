@@ -10,8 +10,8 @@ use crate::config::LlmConfig;
 use crate::error::Result;
 
 use super::types::TocDetection;
+use crate::index::parse::pdf::PdfPage;
 use crate::llm::LlmClient;
-use crate::parser::pdf::PdfPage;
 
 /// TOC detector configuration.
 #[derive(Debug, Clone)]

@@ -18,15 +18,10 @@ mod detector;
 mod resolver;
 mod updater;
 
-pub use detector::{
-    ChangeDetector, ChangeDetectorState, ChangeSet, ChangeType, DocumentChangeInfo, NodeChange,
-    compute_all_node_fingerprints, compute_tree_fingerprint,
-};
-pub use resolver::{IndexAction, SkipInfo, resolve_action};
-pub use updater::PartialUpdater;
-
-use std::collections::HashMap;
 use crate::document::DocumentTree;
+pub use detector::ChangeDetector;
+pub use resolver::{IndexAction, SkipInfo, resolve_action};
+use std::collections::HashMap;
 
 /// Reuse summaries from old tree for unchanged nodes in the new tree.
 ///
@@ -41,7 +36,8 @@ pub fn compute_reusable_summaries(
     let detector = ChangeDetector::new();
     let changes = detector.detect_changes(old_tree, new_tree);
 
-    let changed_titles: std::collections::HashSet<String> = changes.modified
+    let changed_titles: std::collections::HashSet<String> = changes
+        .modified
         .iter()
         .chain(changes.restructured.iter())
         .chain(changes.added.iter())

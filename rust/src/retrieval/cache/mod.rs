@@ -15,7 +15,4 @@ mod path_cache;
 mod reasoning_cache;
 
 pub use hot_tracker::HotNodeTracker;
-pub use path_cache::PathCache;
-pub use reasoning_cache::{
-    CachedCandidate, ReasoningCache, ReasoningCacheConfig, ReasoningCacheStats,
-};
+pub use reasoning_cache::{CachedCandidate, ReasoningCache};

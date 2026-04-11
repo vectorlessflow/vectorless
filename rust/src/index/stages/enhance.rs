@@ -9,12 +9,12 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tracing::{debug, info, warn};
 
-use crate::document::{DocumentTree, NodeId, TreeNode};
+use crate::document::NodeId;
 use crate::error::Result;
 use crate::index::incremental;
-use crate::utils::fingerprint::Fingerprint;
 use crate::llm::LlmClient;
-use crate::memo::{MemoKey, MemoStore, MemoValue};
+use crate::memo::{MemoKey, MemoStore};
+use crate::utils::fingerprint::Fingerprint;
 
 use super::{IndexStage, StageResult};
 use crate::index::pipeline::{FailurePolicy, IndexContext, StageRetryConfig};
@@ -25,6 +25,7 @@ struct PendingNode {
     node_id: NodeId,
     title: String,
     content: String,
+    is_leaf: bool,
 }
 
 /// Enhance stage - generates summaries using LLM.
@@ -174,6 +175,8 @@ impl IndexStage for EnhanceStage {
         let mut generated = 0;
         let mut skipped_no_content = 0;
         let mut skipped_tokens = 0;
+        let mut shortcut_used = 0;
+        let shortcut_threshold = strategy.shortcut_threshold();
 
         for node_id in node_ids {
             let node = match tree.get(node_id) {
@@ -201,13 +204,19 @@ impl IndexStage for EnhanceStage {
 
             // Check memo store (fast path — apply immediately)
             if let Some(store) = self.memo_store.as_deref() {
-                let content_fp =
-                    Fingerprint::from_str(&format!("{}|{}", node.title, node.content));
+                let content_fp = Fingerprint::from_str(&format!("{}|{}", node.title, node.content));
                 let memo_key = MemoKey::summary(&content_fp);
-                if let Some(cached) = store.get(&memo_key).and_then(|c| c.as_summary().map(|s| s.to_string())) {
+                if let Some(cached) = store
+                    .get(&memo_key)
+                    .and_then(|c| c.as_summary().map(|s| s.to_string()))
+                {
                     if !cached.is_empty() {
                         tree.set_summary(node_id, &cached);
-                        debug!("Using cached summary for node: {} ({} chars)", node.title, cached.len());
+                        debug!(
+                            "Using cached summary for node: {} ({} chars)",
+                            node.title,
+                            cached.len()
+                        );
                         ctx.metrics.increment_summaries();
                         generated += 1;
                         continue;
@@ -215,11 +224,29 @@ impl IndexStage for EnhanceStage {
                 }
             }
 
+            // Shortcut: use original content as summary for short nodes (Borrow A)
+            let token_count = node
+                .token_count
+                .unwrap_or_else(|| crate::utils::estimate_tokens(&node.content));
+            if shortcut_threshold > 0 && token_count > 0 && token_count <= shortcut_threshold {
+                tree.set_summary(node_id, &node.content);
+                debug!(
+                    "Shortcut: using original content as summary for '{}' ({} tokens)",
+                    node.title, token_count
+                );
+                ctx.metrics.increment_summaries();
+                generated += 1;
+                shortcut_used += 1;
+                continue;
+            }
+
             // Needs LLM call
+            let is_leaf = tree.is_leaf(node_id);
             pending_llm.push(PendingNode {
                 node_id,
                 title: node.title,
                 content: node.content,
+                is_leaf,
             });
         }
 
@@ -230,7 +257,8 @@ impl IndexStage for EnhanceStage {
         if !pending_llm.is_empty() {
             info!(
                 "Generating summaries for {} nodes (concurrency: {})",
-                pending_llm.len(), concurrency
+                pending_llm.len(),
+                concurrency
             );
 
             // Collect results: (NodeId, Result<String>)
@@ -239,7 +267,13 @@ impl IndexStage for EnhanceStage {
                     .map(|pending| {
                         let generator = Arc::clone(&generator);
                         async move {
-                            let result = generator.generate(&pending.title, &pending.content).await;
+                            let result = generator
+                                .generate_for_node(
+                                    &pending.title,
+                                    &pending.content,
+                                    pending.is_leaf,
+                                )
+                                .await;
                             (pending.node_id, result.map_err(|e| e.to_string()))
                         }
                     })
@@ -272,8 +306,8 @@ impl IndexStage for EnhanceStage {
         ctx.metrics.record_enhance(duration);
 
         info!(
-            "Generated {} summaries ({} failed, {} skipped no content, {} skipped tokens) in {}ms",
-            generated, failed, skipped_no_content, skipped_tokens, duration
+            "Generated {} summaries ({} shortcut, {} failed, {} skipped no content, {} skipped tokens) in {}ms",
+            generated, shortcut_used, failed, skipped_no_content, skipped_tokens, duration
         );
 
         let mut stage_result = StageResult::success("enhance");

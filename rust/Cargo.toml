@@ -23,10 +23,6 @@ name = "advanced"
 path = "../examples/rust/advanced.rs"
 
 [[example]]
-name = "cli_tool"
-path = "../examples/rust/cli_tool.rs"
-
-[[example]]
 name = "custom_config"
 path = "../examples/rust/custom_config.rs"
 
@@ -113,18 +109,11 @@ libc = { workspace = true }
 pdf-extract = { workspace = true }
 lopdf = { workspace = true }
 
-# DOCX processing
-zip = { workspace = true }
-roxmltree = { workspace = true }
-
 # Random number generation
 rand = { workspace = true }
 
 # BM25 scoring
 bm25 = { workspace = true }
-
-# HTML parsing
-scraper = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

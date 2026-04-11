@@ -354,7 +354,8 @@ impl ContextBuilder {
 
     /// Get the effective max candidates (mode default or override).
     fn effective_max_candidates(&self) -> usize {
-        self.max_candidates.unwrap_or_else(|| self.mode.max_candidates())
+        self.max_candidates
+            .unwrap_or_else(|| self.mode.max_candidates())
     }
 
     /// Get the effective max path depth (mode default or override).
@@ -364,17 +365,20 @@ impl ContextBuilder {
 
     /// Get the effective include summaries setting (mode default or override).
     fn effective_include_summaries(&self) -> bool {
-        self.include_summaries.unwrap_or_else(|| self.mode.include_summaries())
+        self.include_summaries
+            .unwrap_or_else(|| self.mode.include_summaries())
     }
 
     /// Get the effective max TOC depth (mode default or override).
     fn effective_max_toc_depth(&self) -> usize {
-        self.max_toc_depth.unwrap_or_else(|| self.mode.max_toc_depth())
+        self.max_toc_depth
+            .unwrap_or_else(|| self.mode.max_toc_depth())
     }
 
     /// Get the effective summary truncation length (mode default or override).
     fn effective_summary_truncation(&self) -> usize {
-        self.summary_truncation.unwrap_or_else(|| self.mode.summary_truncation())
+        self.summary_truncation
+            .unwrap_or_else(|| self.mode.summary_truncation())
     }
 
     /// Get the current mode.

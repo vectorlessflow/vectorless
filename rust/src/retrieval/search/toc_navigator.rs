@@ -116,9 +116,7 @@ impl ToCNavigator {
                     "Top BM25 score {:.3} below threshold {:.3}, attempting LLM refinement",
                     best_score, self.llm_threshold
                 );
-                return self
-                    .llm_refine(query, tree, top_level_nodes, client)
-                    .await;
+                return self.llm_refine(query, tree, top_level_nodes, client).await;
             }
         }
 

@@ -7,8 +7,8 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 use crate::document::{DocumentTree, NodeId, ReasoningIndex};
+use crate::index::parse::{DocumentFormat, RawNode};
 use crate::llm::LlmClient;
-use crate::parser::{DocumentFormat, RawNode};
 
 use super::super::{PipelineOptions, SummaryStrategy};
 use super::metrics::IndexMetrics;
@@ -417,6 +417,8 @@ impl PipelineResult {
     pub fn total_time_ms(&self) -> u64 {
         self.metrics.parse_time_ms
             + self.metrics.build_time_ms
+            + self.metrics.validate_time_ms
+            + self.metrics.split_time_ms
             + self.metrics.enhance_time_ms
             + self.metrics.enrich_time_ms
             + self.metrics.reasoning_index_time_ms

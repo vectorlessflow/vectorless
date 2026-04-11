@@ -10,11 +10,10 @@ use tracing::{info, warn};
 
 use crate::Error;
 use crate::error::Result;
-use crate::parser::DocumentParser;
-use crate::parser::toc::TocProcessor;
+use crate::index::parse::toc::TocProcessor;
 
 use super::types::{PdfMetadata, PdfPage, PdfParseResult};
-use crate::parser::{DocumentFormat, DocumentMeta, ParseResult, RawNode};
+use crate::index::parse::{DocumentFormat, DocumentMeta, ParseResult, RawNode};
 
 /// PDF document parser.
 #[derive(Debug, Clone)]
@@ -60,16 +59,12 @@ impl PdfParser {
         })
     }
 
-    /// Parse a PDF file and return detailed result.
-    pub fn parse_file(&self, path: &Path) -> Result<PdfParseResult> {
-        let bytes = std::fs::read(path)
-            .map_err(|e| Error::Parse(format!("Failed to read PDF file: {}", e)))?;
-
-        self.parse_bytes(&bytes, path.file_stem().and_then(|s| s.to_str()))
-    }
-
-    /// Parse PDF from bytes.
-    pub fn parse_bytes(&self, bytes: &[u8], filename: Option<&str>) -> Result<PdfParseResult> {
+    /// Parse PDF from bytes and return raw pages.
+    pub async fn parse_bytes_raw(
+        &self,
+        bytes: &[u8],
+        filename: Option<&str>,
+    ) -> Result<PdfParseResult> {
         let doc = LopdfDocument::load_mem(bytes)
             .map_err(|e| Error::Parse(format!("Failed to parse PDF: {}", e)))?;
 
@@ -327,7 +322,7 @@ impl PdfParser {
     /// Convert TOC entries to RawNodes.
     fn toc_entries_to_raw_nodes(
         &self,
-        entries: &[crate::parser::toc::TocEntry],
+        entries: &[crate::index::parse::toc::TocEntry],
         pages: &[PdfPage],
     ) -> Vec<RawNode> {
         let mut nodes = Vec::new();
@@ -353,7 +348,7 @@ impl PdfParser {
     /// Get content for a TOC entry from pages.
     fn get_content_for_entry(
         &self,
-        entry: &crate::parser::toc::TocEntry,
+        entry: &crate::index::parse::toc::TocEntry,
         pages: &[PdfPage],
     ) -> String {
         let start_page = entry.physical_page.unwrap_or(1);
@@ -394,27 +389,34 @@ impl Default for PdfParser {
     }
 }
 
-#[async_trait::async_trait]
-impl DocumentParser for PdfParser {
-    fn format(&self) -> DocumentFormat {
-        DocumentFormat::Pdf
-    }
-
-    async fn parse(&self, content: &str) -> Result<ParseResult> {
-        // For PDF, content is the file path
-        let path = Path::new(content);
-        self.parse_path(path).await
-    }
-
-    async fn parse_file(&self, path: &Path) -> Result<ParseResult> {
-        self.parse_path(path).await
-    }
-}
-
 impl PdfParser {
-    /// Internal async method to parse PDF from path.
-    async fn parse_path(&self, path: &Path) -> Result<ParseResult> {
-        let result = self.parse_pdf_file(path)?;
+    /// Parse a PDF file into raw nodes for the index pipeline.
+    pub async fn parse_file(&self, path: &Path) -> Result<ParseResult> {
+        let bytes = tokio::fs::read(path)
+            .await
+            .map_err(|e| Error::Parse(format!("Failed to read PDF file: {}", e)))?;
+        let filename = path.file_stem().and_then(|s| s.to_str());
+        self.parse_bytes_to_result(&bytes, filename, Some(path))
+            .await
+    }
+
+    /// Parse PDF bytes into raw nodes for the index pipeline.
+    pub async fn parse_bytes_async(
+        &self,
+        bytes: &[u8],
+        filename: Option<&str>,
+    ) -> Result<ParseResult> {
+        self.parse_bytes_to_result(bytes, filename, None).await
+    }
+
+    /// Core async parsing logic shared by parse_file and parse_bytes_async.
+    async fn parse_bytes_to_result(
+        &self,
+        bytes: &[u8],
+        filename: Option<&str>,
+        source_path: Option<&Path>,
+    ) -> Result<ParseResult> {
+        let result = self.parse_bytes_raw(bytes, filename).await?;
         let page_count = result.pages.len();
 
         // Try TOC extraction if enabled
@@ -449,19 +451,11 @@ impl PdfParser {
             format: DocumentFormat::Pdf,
             page_count: Some(page_count),
             line_count: 0,
-            source_path: Some(path.to_string_lossy().to_string()),
+            source_path: source_path.map(|p| p.to_string_lossy().to_string()),
             description: result.metadata.subject,
         };
 
         Ok(ParseResult::new(meta, nodes))
-    }
-
-    /// Parse a PDF file and return detailed result.
-    fn parse_pdf_file(&self, path: &Path) -> Result<PdfParseResult> {
-        let bytes = std::fs::read(path)
-            .map_err(|e| Error::Parse(format!("Failed to read PDF file: {}", e)))?;
-
-        self.parse_bytes(&bytes, path.file_stem().and_then(|s| s.to_str()))
     }
 }
 

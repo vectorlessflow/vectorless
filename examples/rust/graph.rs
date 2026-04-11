@@ -53,7 +53,11 @@ async fn main() -> vectorless::Result<()> {
                         "  Node: {} — {} keyword(s), top: {:?}",
                         node.title,
                         node.top_keywords.len(),
-                        node.top_keywords.iter().take(3).map(|kw| &kw.keyword).collect::<Vec<_>>()
+                        node.top_keywords
+                            .iter()
+                            .take(3)
+                            .map(|kw| &kw.keyword)
+                            .collect::<Vec<_>>()
                     );
 
                     // Show edges (connected documents)

@@ -229,7 +229,8 @@ impl SearchTree for GreedySearch {
         config: &SearchConfig,
         pilot: Option<&dyn Pilot>,
     ) -> SearchResult {
-        self.search_impl(tree, context, config, pilot, tree.root()).await
+        self.search_impl(tree, context, config, pilot, tree.root())
+            .await
     }
 
     async fn search_from(
@@ -240,7 +241,8 @@ impl SearchTree for GreedySearch {
         pilot: Option<&dyn Pilot>,
         start_node: NodeId,
     ) -> SearchResult {
-        self.search_impl(tree, context, config, pilot, start_node).await
+        self.search_impl(tree, context, config, pilot, start_node)
+            .await
     }
 
     fn name(&self) -> &'static str {
