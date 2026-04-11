@@ -13,10 +13,7 @@
 
 </div>
 
-**Vectorless** is an ultra-performant reasoning-native document intelligence engine for AI, with the core written in Rust. It transforms documents into rich semantic trees and uses LLMs to intelligently traverse the hierarchy — retrieving the most relevant content through structural reasoning and deep contextual understanding.
-
-<div align="center"><img src="https://raw.githubusercontent.com/vectorlessflow/vectorless/main/docs/design/positioning.svg" alt="Vectorless" width="550" height="550"></div>
-
+**Vectorless** is a reasoning-native document intelligence engine written in Rust — **no vector database, no embeddings, no similarity search**. It transforms documents into hierarchical semantic trees and uses LLMs to navigate the structure, retrieving the most relevant content through reasoning instead of vector math.
 
 ## Quick Start
 
@@ -40,7 +37,7 @@ from vectorless import Engine, IndexContext
 # Create engine with a workspace directory
 engine = Engine(workspace="./data")
 
-# Index a document (PDF, Markdown, DOCX, HTML)
+# Index a document (PDF or Markdown)
 result = engine.index(IndexContext.from_file("./report.pdf"))
 doc_id = result.doc_id
 
@@ -84,6 +81,7 @@ async fn main() -> vectorless::Result<()> {
 </details>
 
 ## Examples
+
 See [examples](examples/) for more and stay tuned.
 
 ## Contributing
