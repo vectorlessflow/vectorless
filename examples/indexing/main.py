@@ -10,10 +10,12 @@ import asyncio
 import os
 from vectorless import Engine, IndexContext, IndexOptions
 
+# os is used only for removing the sample file
+
 # --- Configuration ---
 # Replace with your own credentials
-API_KEY = os.environ.get("VECTORLESS_API_KEY", "sk-...")
-MODEL = os.environ.get("VECTORLESS_MODEL", "gpt-4o")
+API_KEY = "sk-..."
+MODEL = "gpt-4o"
 WORKSPACE = "./workspace"
 
 

@@ -11,30 +11,36 @@ pip install vectorless
 ## Quick Start
 
 ```python
+import asyncio
 from vectorless import Engine, IndexContext
 
-# Create engine (uses OPENAI_API_KEY env var by default)
-engine = Engine(workspace="./data")
+async def main():
+    # Create engine — api_key and model are required
+    engine = Engine(
+        workspace="./data",
+        api_key="sk-...",
+        model="gpt-4o",
+    )
 
-# Or with explicit API key
-engine = Engine(workspace="./data", api_key="sk-...")
+    # Index a document
+    result = await engine.index(IndexContext.from_file("./report.pdf"))
+    doc_id = result.doc_id
+    print(f"Indexed: {doc_id}")
 
-# Index a document
-ctx = IndexContext.from_file("./report.pdf")
-doc_id = engine.index(ctx)
-print(f"Indexed: {doc_id}")
+    # Query the document
+    result = await engine.query(doc_id, "What is the total revenue?")
+    item = result.single()
+    print(f"Answer: {item.content}")
+    print(f"Score: {item.score:.2f}")
 
-# Query the document
-result = engine.query(doc_id, "What is the total revenue?")
-print(f"Answer: {result.content}")
-print(f"Score: {result.score:.2f}")
+    # List all documents
+    for doc in await engine.list():
+        print(f"  - {doc.name} ({doc.id})")
 
-# List all documents
-for doc in engine.list_docs():
-    print(f"  - {doc.name} ({doc.id})")
+    # Cleanup
+    await engine.remove(doc_id)
 
-# Cleanup
-engine.remove(doc_id)
+asyncio.run(main())
 ```
 
 ## API Reference
@@ -47,19 +53,20 @@ The main entry point for vectorless.
 class Engine:
     def __init__(
         self,
-        workspace: str,
+        workspace: str | None = None,
+        config_path: str | None = None,
         api_key: str | None = None,
         model: str | None = None,
         endpoint: str | None = None,
     ): ...
 
-    def index(self, ctx: IndexContext) -> str: ...
-    def query(self, doc_id: str, question: str) -> QueryResult: ...
-    def list_docs(self) -> list[DocumentInfo]: ...
-    def remove(self, doc_id: str) -> bool: ...
-    def clear(self) -> int: ...
-    def exists(self, doc_id: str) -> bool: ...
-    def len(self) -> int: ...
+    async def index(self, ctx: IndexContext) -> IndexResult: ...
+    async def query(self, doc_id: str | list[str], question: str) -> QueryResult: ...
+    async def list(self) -> list[DocumentInfo]: ...
+    async def remove(self, doc_id: str) -> bool: ...
+    async def clear(self) -> int: ...
+    async def exists(self, doc_id: str) -> bool: ...
+    async def get_graph(self) -> DocumentGraph | None: ...
 ```
 
 ### IndexContext
@@ -72,7 +79,13 @@ class IndexContext:
     def from_file(path: str, name: str | None = None) -> IndexContext: ...
 
     @staticmethod
-    def from_text(
+    def from_files(paths: list[str]) -> IndexContext: ...
+
+    @staticmethod
+    def from_dir(path: str) -> IndexContext: ...
+
+    @staticmethod
+    def from_content(
         content: str,
         name: str | None = None,
         format: str = "markdown",
@@ -84,37 +97,70 @@ class IndexContext:
         name: str,
         format: str,
     ) -> IndexContext: ...
+
+    def with_options(self, options: IndexOptions) -> IndexContext: ...
+    def with_mode(self, mode: str) -> IndexContext: ...
 ```
 
 **Supported formats:**
 - `"markdown"` / `"md"` - Markdown content
 - `"pdf"` - PDF documents
-- `"docx"` / `"doc"` - Word documents
-- `"html"` / `"htm"` - HTML content
-- `"text"` / `"txt"` - Plain text
+
+### IndexOptions
+
+```python
+class IndexOptions:
+    def __init__(
+        self,
+        mode: str = "default",
+        summaries: bool = False,
+        description: bool = False,
+    ): ...
+```
+
+### IndexResult
+
+```python
+class IndexResult:
+    @property
+    def doc_id(self) -> str | None: ...
+    @property
+    def items(self) -> list[IndexItem]: ...
+    @property
+    def failed(self) -> list[FailedItem]: ...
+    def has_failures(self) -> bool: ...
+    def total(self) -> int: ...
+    def __len__(self) -> int: ...
+```
 
 ### QueryResult
-
-Result of a document query.
 
 ```python
 class QueryResult:
     @property
-    def doc_id(self) -> str: ...
+    def items(self) -> list[QueryResultItem]: ...
+    @property
+    def failed(self) -> list[FailedItem]: ...
+    def single(self) -> QueryResultItem | None: ...
+    def has_failures(self) -> bool: ...
+    def __len__(self) -> int: ...
+```
 
+### QueryResultItem
+
+```python
+class QueryResultItem:
+    @property
+    def doc_id(self) -> str: ...
     @property
     def content(self) -> str: ...
-
     @property
     def score(self) -> float: ...
-
     @property
     def node_ids(self) -> list[str]: ...
 ```
 
 ### DocumentInfo
-
-Information about an indexed document.
 
 ```python
 class DocumentInfo:
@@ -134,63 +180,12 @@ class DocumentInfo:
 
 ### VectorlessError
 
-Exception raised for vectorless errors.
-
 ```python
 class VectorlessError(Exception):
     @property
     def message(self) -> str: ...
-
     @property
     def kind(self) -> str: ...  # "config", "parse", "not_found", "llm"
-```
-
-## Examples
-
-### Index from different sources
-
-```python
-from vectorless import Engine, IndexContext
-
-engine = Engine(workspace="./data")
-
-# From file (format auto-detected)
-doc_id = engine.index(IndexContext.from_file("./report.pdf"))
-
-# From markdown text
-doc_id = engine.index(IndexContext.from_text(
-    "# Report\n\nThis is the content...",
-    name="report",
-    format="markdown"
-))
-
-# From HTML
-doc_id = engine.index(IndexContext.from_text(
-    "<html><body><h1>Title</h1></body></html>",
-    name="page",
-    format="html"
-))
-
-# From bytes (e.g., downloaded file)
-with open("document.pdf", "rb") as f:
-    doc_id = engine.index(IndexContext.from_bytes(
-        f.read(),
-        name="downloaded",
-        format="pdf"
-    ))
-```
-
-### Error handling
-
-```python
-from vectorless import Engine, VectorlessError
-
-engine = Engine(workspace="./data")
-
-try:
-    result = engine.query("nonexistent", "question")
-except VectorlessError as e:
-    print(f"Error: {e.message} (kind={e.kind})")
 ```
 
 ## Development

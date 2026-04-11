@@ -11,7 +11,5 @@ pip install vectorless
 ## Run
 
 ```bash
-export VECTORLESS_API_KEY="sk-..."
-export VECTORLESS_MODEL="gpt-4o"
 python main.py
 ```
