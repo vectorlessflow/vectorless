@@ -80,6 +80,11 @@ impl ReasoningIndex {
         self.section_map.get(&title.to_lowercase()).copied()
     }
 
+    /// Iterate over all keyword → topic entries (for graph building).
+    pub fn all_topic_entries(&self) -> impl Iterator<Item = (&String, &[TopicEntry])> {
+        self.topic_paths.iter().map(|(k, v)| (k, v.as_slice()))
+    }
+
     /// Get the number of topic keywords indexed.
     pub fn topic_count(&self) -> usize {
         self.topic_paths.len()

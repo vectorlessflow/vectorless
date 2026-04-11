@@ -10,7 +10,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
-use crate::document::{DocumentGraph, DocumentTree, NodeId, ReasoningIndex, RetrievalIndex};
+use crate::document::{DocumentTree, NodeId, ReasoningIndex, RetrievalIndex};
+use crate::graph::DocumentGraph;
 use crate::retrieval::cache::{HotNodeTracker, ReasoningCache};
 use crate::retrieval::pipeline::budget::RetrievalBudgetController;
 use crate::retrieval::pilot::Pilot;
@@ -343,8 +344,8 @@ impl PipelineContext {
     }
 
     /// Set the document graph for graph-aware retrieval.
-    pub fn with_document_graph(mut self, graph: DocumentGraph) -> Self {
-        self.document_graph = Some(Arc::new(graph));
+    pub fn with_document_graph(mut self, graph: Arc<DocumentGraph>) -> Self {
+        self.document_graph = Some(graph);
         self
     }
 

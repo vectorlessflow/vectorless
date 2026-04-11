@@ -10,9 +10,9 @@ use std::collections::HashMap;
 
 use tracing::info;
 
-use crate::document::{
-    DocumentGraph, DocumentGraphConfig, DocumentGraphNode, EdgeEvidence, GraphEdge, SharedKeyword,
-    WeightedKeyword,
+use super::config::DocumentGraphConfig;
+use super::types::{
+    DocumentGraph, DocumentGraphNode, EdgeEvidence, GraphEdge, SharedKeyword, WeightedKeyword,
 };
 
 /// Intermediate data collected per document during graph building.

@@ -125,6 +125,9 @@ pub struct RetrieveOptions {
     /// `RetrieveEvent`s as each pipeline stage completes. When disabled
     /// (default), the standard `query()` returns a single final result.
     pub streaming: bool,
+
+    /// Cross-document graph for graph-aware retrieval boosting.
+    pub document_graph: Option<std::sync::Arc<crate::graph::DocumentGraph>>,
 }
 
 impl Default for RetrieveOptions {
@@ -144,6 +147,7 @@ impl Default for RetrieveOptions {
             token_estimation: super::TokenEstimation::default(),
             use_async_context: false,
             streaming: false,
+            document_graph: None,
         }
     }
 }
@@ -250,6 +254,13 @@ impl RetrieveOptions {
     #[must_use]
     pub fn with_streaming(mut self, enable: bool) -> Self {
         self.streaming = enable;
+        self
+    }
+
+    /// Set the cross-document graph for graph-aware retrieval boosting.
+    #[must_use]
+    pub fn with_document_graph(mut self, graph: std::sync::Arc<crate::graph::DocumentGraph>) -> Self {
+        self.document_graph = Some(graph);
         self
     }
 }

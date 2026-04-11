@@ -35,6 +35,7 @@
 //! # }
 //! ```
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use futures::StreamExt;
@@ -45,7 +46,7 @@ use crate::error::Result;
 use crate::index::PipelineOptions;
 use crate::index::incremental::{self, IndexAction};
 use crate::retrieval::{PipelineRetriever, RetrieveEventReceiver};
-use crate::storage::Workspace;
+use crate::storage::{PersistedDocument, Workspace};
 use crate::utils::fingerprint::Fingerprint;
 use crate::{DocumentTree, Error};
 
@@ -166,6 +167,11 @@ impl Engine {
                     failed.len()
                 )));
             }
+            if !items.is_empty() {
+                if let Err(e) = self.rebuild_graph().await {
+                    tracing::warn!("Graph rebuild failed: {}", e);
+                }
+            }
             return Ok(IndexResult::with_partial(items, failed));
         }
 
@@ -198,6 +204,13 @@ impl Engine {
                 "All {} source(s) failed to index",
                 failed.len()
             )));
+        }
+
+        // Rebuild document graph after successful batch index
+        if !items.is_empty() {
+            if let Err(e) = self.rebuild_graph().await {
+                tracing::warn!("Graph rebuild failed: {}", e);
+            }
         }
 
         Ok(IndexResult::with_partial(items, failed))
@@ -345,7 +358,16 @@ impl Engine {
     /// ```
     pub async fn query(&self, ctx: QueryContext) -> Result<QueryResult> {
         let doc_ids = self.resolve_scope(&ctx.scope).await?;
-        let options = ctx.to_retrieve_options(&self.config);
+        let mut options = ctx.to_retrieve_options(&self.config);
+
+        // Load document graph for graph-aware retrieval (if enabled)
+        if self.config.graph.enabled {
+            if let Some(ref workspace) = self.workspace {
+                if let Ok(Some(graph)) = workspace.get_graph().await {
+                    options = options.with_document_graph(Arc::new(graph));
+                }
+            }
+        }
 
         let mut items = Vec::with_capacity(doc_ids.len());
         let mut failed = Vec::new();
@@ -506,6 +528,51 @@ impl Engine {
             generate_description: options.generate_description,
             ..Default::default()
         }
+    }
+
+    /// Rebuild the document graph after indexing, if graph is enabled.
+    async fn rebuild_graph(&self) -> Result<()> {
+        if !self.config.graph.enabled {
+            return Ok(());
+        }
+        let workspace = match self.workspace {
+            Some(ref ws) => ws,
+            None => return Ok(()),
+        };
+
+        // Load all documents and extract keyword profiles
+        let doc_ids = workspace.inner().list_documents().await;
+        let mut builder = crate::graph::DocumentGraphBuilder::new(self.config.graph.clone());
+
+        for doc_id in &doc_ids {
+            if let Some(doc) = workspace.load(doc_id).await? {
+                let keywords = Self::extract_keywords_from_doc(&doc);
+                builder.add_document(
+                    &doc.meta.id,
+                    &doc.meta.name,
+                    &doc.meta.format,
+                    doc.meta.node_count,
+                    keywords,
+                );
+            }
+        }
+
+        let graph = builder.build();
+        workspace.set_graph(&graph).await?;
+        Ok(())
+    }
+
+    /// Extract keyword → weight map from a persisted document's ReasoningIndex.
+    fn extract_keywords_from_doc(doc: &PersistedDocument) -> HashMap<String, f32> {
+        let mut keywords = HashMap::new();
+        if let Some(ref ri) = doc.reasoning_index {
+            for (kw, entries) in ri.all_topic_entries() {
+                let weight: f32 =
+                    entries.iter().map(|e| e.weight).sum::<f32>() / entries.len().max(1) as f32;
+                keywords.insert(kw.clone(), weight);
+            }
+        }
+        keywords
     }
 
     /// Resolve what action to take for a source.

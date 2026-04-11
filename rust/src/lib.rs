@@ -56,6 +56,7 @@ pub mod client;
 mod config;
 pub mod document;
 pub mod error;
+mod graph;
 mod index;
 mod llm;
 mod memo;
