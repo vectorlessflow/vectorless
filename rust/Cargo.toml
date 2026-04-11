@@ -42,6 +42,10 @@ path = "../examples/rust/markdownflow.rs"
 name = "graph"
 path = "../examples/rust/graph.rs"
 
+[[example]]
+name = "indexing"
+path = "../examples/rust/indexing.rs"
+
 [dependencies]
 # Async runtime
 tokio = { workspace = true }
