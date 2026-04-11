@@ -183,14 +183,14 @@ impl Engine {
             .max_concurrent_requests
             .min(ctx.sources.len());
 
-        let results: Vec<(Vec<IndexItem>, Vec<FailedItem>)> = futures::stream::iter(&ctx.sources)
+        let results: Vec<(Vec<IndexItem>, Vec<FailedItem>)> = futures::stream::iter(ctx.sources.iter().cloned())
             .map(|source| {
                 let options = ctx.options.clone();
                 let name = ctx.name.clone();
                 let engine = self.clone();
                 async move {
                     engine
-                        .process_source(source, &options, name.as_deref())
+                        .process_source(&source, &options, name.as_deref())
                         .await
                 }
             })

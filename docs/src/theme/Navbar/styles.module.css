@@ -1,0 +1,86 @@
+.navbarContainer {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 24px;
+  display: flex;
+  align-items: center;
+  height: 100%;
+}
+
+.navbarBrand {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  margin-right: 24rem;
+}
+
+.navbarLogoLink {
+  display: flex;
+  align-items: center;
+  text-decoration: none;
+  color: inherit;
+  transition: opacity 0.2s;
+}
+
+.navbarLogoLink:hover {
+  opacity: 0.8;
+}
+
+.navbarLogo {
+  height: 32px;
+  width: auto;
+}
+
+/* Center: navigation links */
+.navbarCenter {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2rem;
+}
+
+.navbarCenter :global(.navbar__link) {
+  font-size: 0.875rem;
+  font-weight: 400;
+  padding: 0;
+  text-decoration: none;
+  transition: opacity 0.15s ease;
+}
+
+.navbarCenter :global(.navbar__link:hover) {
+  opacity: 0.7;
+  text-decoration: none;
+}
+
+.navbarCenter :global(.navbar__link--active) {
+  font-weight: 600;
+}
+
+.navbarCenter :global(.navbar__link--active:hover) {
+  opacity: 1;
+}
+
+/* Right: github star */
+.navbarRight {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-shrink: 0;
+  margin-left: 24rem;
+}
+
+.githubStarWrapper {
+  display: flex;
+  align-items: center;
+}
+
+@media (max-width: 996px) {
+  .navbarContainer {
+    padding: 0 16px;
+  }
+
+  .navbarCenter {
+    display: none;
+  }
+}

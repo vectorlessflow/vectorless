@@ -1,0 +1,122 @@
+// Copyright (c) 2026 vectorless developers
+// SPDX-License-Identifier: Apache-2.0
+
+//! Complete Markdown processing flow example.
+//!
+//! This example demonstrates the full pipeline:
+//! 1. Create a Vectorless client
+//! 2. Index a Markdown document
+//! 3. Show document structure in JSON format
+//! 4. Query the document
+//!
+//! # Usage
+//!
+//! ```bash
+//! cargo run --example flow
+//! ```
+
+use vectorless::EngineBuilder;
+use vectorless::client::{IndexContext, IndexOptions, QueryContext};
+
+/// Sample markdown content for demonstration.
+const SAMPLE_MARKDOWN: &str = r#"
+# Project Documentation
+
+This document describes the architecture and usage of the vectorless library.
+
+## Overview
+
+Vectorless is a document indexing and retrieval library that uses tree-based navigation instead of vector embeddings.
+"#;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Initialize tracing for debug output (set RUST_LOG=debug to see more)
+    tracing_subscriber::fmt::init();
+
+    println!("=== Vectorless Flow Example ===\n");
+
+    // Step 1: Create a Vectorless client
+    println!("Step 1: Creating Vectorless client...");
+
+    let client = EngineBuilder::new()
+        .with_workspace("./workspace")
+        .with_key("sk-...")
+        .with_model("gpt-4o")
+        .build()
+        .await
+        .map_err(|e: vectorless::BuildError| vectorless::Error::Config(e.to_string()))?;
+
+    println!("  - Client created successfully");
+    println!();
+
+    // Step 2: Index the sample Markdown document
+    println!("Step 2: Indexing Markdown document...");
+
+    let temp_dir = tempfile::tempdir()?;
+    let md_path = temp_dir.path().join("sample.md");
+    tokio::fs::write(&md_path, SAMPLE_MARKDOWN).await?;
+
+    let index_result = client
+        .index(IndexContext::from_path(&md_path).with_options(IndexOptions::new().with_summaries()))
+        .await?;
+    let doc_id = index_result.doc_id().unwrap().to_string();
+
+    println!("  - Document indexed successfully");
+    println!("  - Document ID: {}", doc_id);
+    println!();
+
+    // Step 3: List indexed documents
+    println!("Step 3: Indexed documents:");
+    for doc in client.list().await? {
+        println!("  - {} ({})", doc.name, doc.id);
+    }
+    println!();
+
+    // Step 4: Query the document
+    println!("Step 4: Querying the document...");
+
+    let queries = vec!["What is this project about?"];
+
+    for query in queries {
+        println!("  Query: \"{}\"", query);
+
+        match client
+            .query(QueryContext::new(query).with_doc_id(&doc_id))
+            .await
+        {
+            Ok(result) => {
+                if let Some(item) = result.single() {
+                    if item.content.is_empty() {
+                        println!("    - No relevant content found");
+                    } else {
+                        println!("    - Found relevant content:");
+                        let preview = if item.content.len() > 200 {
+                            format!("{}...", &item.content[..200])
+                        } else {
+                            item.content.clone()
+                        };
+                        for line in preview.lines().take(5) {
+                            println!("      {}", line);
+                        }
+                    }
+                } else {
+                    println!("    - No results");
+                }
+            }
+            Err(e) => {
+                println!("    - Error: {}", e);
+            }
+        }
+        println!();
+    }
+
+    // Step 5: Cleanup
+    println!("Step 5: Cleanup...");
+
+    client.remove(&doc_id).await?;
+    println!("  - Document removed");
+
+    println!("\n=== Example Complete ===");
+    Ok(())
+}

@@ -50,7 +50,7 @@ mod config;
 pub mod document;
 pub mod error;
 pub mod events;
-mod graph;
+pub mod graph;
 mod index;
 mod llm;
 mod memo;

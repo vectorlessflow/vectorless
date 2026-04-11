@@ -9,11 +9,11 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LlmConfig {
     /// Model name (e.g., "gpt-4o-mini", "claude-3-haiku").
-    #[serde(default = "default_model")]
+    #[serde(default)]
     pub model: String,
 
     /// API endpoint.
-    #[serde(default = "default_endpoint")]
+    #[serde(default)]
     pub endpoint: String,
 
     /// API key.
@@ -29,14 +29,6 @@ pub struct LlmConfig {
     pub temperature: f32,
 }
 
-fn default_model() -> String {
-    "gpt-4o-mini".to_string()
-}
-
-fn default_endpoint() -> String {
-    "https://api.openai.com/v1".to_string()
-}
-
 fn default_max_tokens() -> usize {
     1000
 }
@@ -48,8 +40,8 @@ fn default_temperature() -> f32 {
 impl Default for LlmConfig {
     fn default() -> Self {
         Self {
-            model: default_model(),
-            endpoint: default_endpoint(),
+            model: String::new(),
+            endpoint: String::new(),
             api_key: None,
             max_tokens: default_max_tokens(),
             temperature: default_temperature(),
@@ -103,11 +95,11 @@ impl LlmConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SummaryConfig {
     /// Model name for summarization.
-    #[serde(default = "default_summary_model")]
+    #[serde(default)]
     pub model: String,
 
     /// API endpoint for summary model.
-    #[serde(default = "default_endpoint")]
+    #[serde(default)]
     pub endpoint: String,
 
     /// API key.
@@ -123,10 +115,6 @@ pub struct SummaryConfig {
     pub temperature: f32,
 }
 
-fn default_summary_model() -> String {
-    "gpt-4o-mini".to_string()
-}
-
 fn default_max_summary_tokens() -> usize {
     200
 }
@@ -134,8 +122,8 @@ fn default_max_summary_tokens() -> usize {
 impl Default for SummaryConfig {
     fn default() -> Self {
         Self {
-            model: default_summary_model(),
-            endpoint: default_endpoint(),
+            model: String::new(),
+            endpoint: String::new(),
             api_key: None,
             max_tokens: default_max_summary_tokens(),
             temperature: default_temperature(),
@@ -192,8 +180,8 @@ mod tests {
     #[test]
     fn test_llm_config_defaults() {
         let config = LlmConfig::default();
-        assert_eq!(config.model, "gpt-4o-mini");
-        assert_eq!(config.endpoint, "https://api.openai.com/v1");
+        assert!(config.model.is_empty());
+        assert!(config.endpoint.is_empty());
         assert!(config.api_key.is_none());
     }
 
@@ -212,7 +200,7 @@ mod tests {
     #[test]
     fn test_summary_config() {
         let config = SummaryConfig::default();
-        assert_eq!(config.model, "gpt-4o-mini");
+        assert!(config.model.is_empty());
         assert_eq!(config.max_tokens, 200);
     }
 }

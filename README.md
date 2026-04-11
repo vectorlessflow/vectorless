@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="https://raw.githubusercontent.com/vectorlessflow/vectorless/main/docs/design/with-title.png" alt="Vectorless" width="400" style="vertical-align:middle;">
+<img src="https://vectorless.dev/img/with-title.png" alt="Vectorless" width="400" style="vertical-align:middle;">
 
 <h1>Reasoning-native Document Intelligence Engine</h1>
 
@@ -27,23 +27,26 @@ pip install vectorless
 ### Index and Query
 
 ```python
+import asyncio
 from vectorless import Engine, IndexContext
 
-# Create engine — api_key and model are required
-engine = Engine(
-    workspace="./data",
-    api_key="sk-...",
-    model="gpt-4o",
-)
+async def main():
+    # Create engine — api_key and model are required
+    engine = Engine(
+        workspace="./data",
+        api_key="sk-...",
+        model="gpt-4o",
+    )
 
-# Index a document (PDF or Markdown)
-result = engine.index(IndexContext.from_file("./report.pdf"))
-doc_id = result.doc_id
+    # Index a document (PDF or Markdown)
+    result = await engine.index(IndexContext.from_file("./report.pdf"))
+    doc_id = result.doc_id
 
-# Query
-result = engine.query(doc_id, "What is the total revenue?")
-print(result.content)
-print(f"Score: {result.score}")
+    # Query
+    result = await engine.query(doc_id, "What is the total revenue?")
+    print(result.single().content)
+
+asyncio.run(main())
 ```
 
 <details>

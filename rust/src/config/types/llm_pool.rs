@@ -48,7 +48,6 @@ pub struct LlmPoolConfig {
 
 fn default_pilot_config() -> LlmClientConfig {
     LlmClientConfig {
-        model: "gpt-4o-mini".to_string(),
         max_tokens: 300,
         temperature: 0.0,
         ..Default::default()
@@ -60,7 +59,6 @@ impl Default for LlmPoolConfig {
         Self {
             summary: LlmClientConfig::default(),
             retrieval: LlmClientConfig {
-                model: "gpt-4o".to_string(),
                 max_tokens: 100,
                 ..Default::default()
             },
@@ -114,11 +112,11 @@ impl LlmPoolConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LlmClientConfig {
     /// Model name.
-    #[serde(default = "default_model")]
+    #[serde(default)]
     pub model: String,
 
     /// API endpoint.
-    #[serde(default = "default_endpoint")]
+    #[serde(default)]
     pub endpoint: String,
 
     /// API key (optional, falls back to default).
@@ -134,14 +132,6 @@ pub struct LlmClientConfig {
     pub temperature: f32,
 }
 
-fn default_model() -> String {
-    "gpt-4o-mini".to_string()
-}
-
-fn default_endpoint() -> String {
-    "https://api.openai.com/v1".to_string()
-}
-
 fn default_max_tokens() -> usize {
     200
 }
@@ -153,8 +143,8 @@ fn default_temperature() -> f32 {
 impl Default for LlmClientConfig {
     fn default() -> Self {
         Self {
-            model: default_model(),
-            endpoint: default_endpoint(),
+            model: String::new(),
+            endpoint: String::new(),
             api_key: None,
             max_tokens: default_max_tokens(),
             temperature: default_temperature(),
@@ -420,9 +410,9 @@ mod tests {
     #[test]
     fn test_llm_pool_config_defaults() {
         let config = LlmPoolConfig::default();
-        assert_eq!(config.summary.model, "gpt-4o-mini");
-        assert_eq!(config.retrieval.model, "gpt-4o");
-        assert_eq!(config.pilot.model, "gpt-4o-mini");
+        assert!(config.summary.model.is_empty());
+        assert!(config.retrieval.model.is_empty());
+        assert!(config.pilot.model.is_empty());
         assert_eq!(config.retry.max_attempts, 3);
         assert_eq!(config.throttle.max_concurrent_requests, 10);
     }

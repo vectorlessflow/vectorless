@@ -84,7 +84,8 @@ rand = "0.8"
 bm25 = { version = "2.3.2", features = ["parallelism"] }
 
 # Python bindings
-pyo3 = { version = "0.22", features = ["extension-module"] }
+pyo3 = { version = "0.28", features = ["extension-module"] }
+pyo3-async-runtimes = { version = "0.28", features = ["tokio-runtime"] }
 
 # Dev dependencies
 tempfile = "3.10"

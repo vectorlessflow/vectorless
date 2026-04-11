@@ -12,11 +12,11 @@ use super::storage::{CacheConfig, StrategyConfig, SufficiencyConfig};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RetrievalConfig {
     /// Model name for retrieval/navigation.
-    #[serde(default = "default_retrieval_model")]
+    #[serde(default)]
     pub model: String,
 
     /// API endpoint for retrieval model.
-    #[serde(default = "default_endpoint")]
+    #[serde(default)]
     pub endpoint: String,
 
     /// API key.
@@ -56,14 +56,6 @@ pub struct RetrievalConfig {
     pub content: ContentAggregatorConfig,
 }
 
-fn default_retrieval_model() -> String {
-    "gpt-4o".to_string()
-}
-
-fn default_endpoint() -> String {
-    "https://api.openai.com/v1".to_string()
-}
-
 fn default_max_retrieval_tokens() -> usize {
     1000
 }
@@ -79,8 +71,8 @@ fn default_top_k() -> usize {
 impl Default for RetrievalConfig {
     fn default() -> Self {
         Self {
-            model: default_retrieval_model(),
-            endpoint: default_endpoint(),
+            model: String::new(),
+            endpoint: String::new(),
             api_key: None,
             max_tokens: default_max_retrieval_tokens(),
             temperature: default_temperature(),
@@ -204,7 +196,7 @@ mod tests {
     #[test]
     fn test_retrieval_config_defaults() {
         let config = RetrievalConfig::default();
-        assert_eq!(config.model, "gpt-4o");
+        assert!(config.model.is_empty());
         assert_eq!(config.top_k, 3);
         assert_eq!(config.search.top_k, 5);
     }

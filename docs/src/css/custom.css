@@ -1,0 +1,53 @@
+/**
+ * Any CSS included here will be global. The classic template
+ * bundles Infima by default. Infima is a CSS framework designed to
+ * work well for content-centric websites.
+ */
+
+:root {
+  --primary: #AF788B;
+  --primary-dark: #96637A;
+  --primary-light: #C9A0AE;
+  --text: #1e293b;
+  --text-light: #64748b;
+  --bg: #ffffff;
+  --bg-secondary: #fdf8f9;
+  --border: #e8dde1;
+
+  --ifm-color-primary: #AF788B;
+  --ifm-color-primary-dark: #96637A;
+  --ifm-color-primary-darker: #8d5a6f;
+  --ifm-color-primary-darkest: #6e4556;
+  --ifm-color-primary-light: #C9A0AE;
+  --ifm-color-primary-lighter: #d3b0bb;
+  --ifm-color-primary-lightest: #e8d0d8;
+  --ifm-code-font-size: 95%;
+  --docusaurus-highlighted-code-line-bg: rgba(175, 120, 139, 0.1);
+}
+
+[data-theme='dark'] {
+  --ifm-color-primary: #C9A0AE;
+  --ifm-color-primary-dark: #b88d9d;
+  --ifm-color-primary-darker: #af7f91;
+  --ifm-color-primary-darkest: #96637A;
+  --ifm-color-primary-light: #d3b0bb;
+  --ifm-color-primary-lighter: #ddc0cb;
+  --ifm-color-primary-lightest: #ebd5dc;
+  --docusaurus-highlighted-code-line-bg: rgba(175, 120, 139, 0.2);
+}
+
+/* Navbar: no border, no shadow, match homepage bg */
+.navbar {
+  background-color: #fdf8f9 !important;
+  border-bottom: none !important;
+  box-shadow: none !important;
+}
+
+[data-theme='dark'] .navbar {
+  background-color: var(--ifm-background-color) !important;
+}
+
+/* Footer: transparent */
+.footer {
+  background-color: transparent !important;
+}
