@@ -173,8 +173,8 @@ mod tests {
     fn test_default_config() {
         let config = Config::default();
         assert_eq!(config.indexer.subsection_threshold, 300);
-        assert_eq!(config.summary.model, "gpt-4o-mini");
-        assert_eq!(config.retrieval.model, "gpt-4o");
+        assert!(config.summary.model.is_empty());
+        assert!(config.retrieval.model.is_empty());
     }
 
     #[test]
@@ -195,6 +195,6 @@ mod tests {
     fn test_config_loader_with_validation() {
         let config = ConfigLoader::new().with_validation(true).load().unwrap();
 
-        assert_eq!(config.retrieval.model, "gpt-4o");
+        assert!(config.retrieval.model.is_empty());
     }
 }

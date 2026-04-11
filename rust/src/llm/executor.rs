@@ -171,7 +171,7 @@ impl LlmExecutor {
     ) -> LlmResult<String> {
         let mut attempts = 0;
         let mut current_model = self.config.model.clone();
-        let current_endpoint = self.config.auto_detect_endpoint();
+        let current_endpoint = self.config.endpoint.clone();
         let mut fallback_history: Vec<FallbackStep> = vec![];
         let mut total_attempts_including_fallback = 0;
 
@@ -336,9 +336,9 @@ impl LlmExecutor {
             },
         };
 
-        let api_key = self.config.get_api_key().ok_or_else(|| {
+        let api_key = self.config.api_key.clone().ok_or_else(|| {
             LlmError::Config(
-                "No API key found. Set OPENAI_API_KEY environment variable.".to_string(),
+                "No API key configured. Call .with_key(\"sk-...\") when building the engine.".to_string(),
             )
         })?;
 

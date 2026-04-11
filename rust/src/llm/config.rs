@@ -107,14 +107,14 @@ impl RetryConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LlmConfig {
     /// Model name (e.g., "gpt-4o-mini", "gpt-4o").
-    #[serde(default = "default_model")]
+    #[serde(default)]
     pub model: String,
 
     /// API endpoint URL.
-    #[serde(default = "default_endpoint")]
+    #[serde(default)]
     pub endpoint: String,
 
-    /// API key (optional, will use environment variable if not set).
+    /// API key.
     #[serde(default)]
     pub api_key: Option<String>,
 
@@ -131,12 +131,6 @@ pub struct LlmConfig {
     pub retry: RetryConfig,
 }
 
-fn default_model() -> String {
-    "gpt-4o-mini".to_string()
-}
-fn default_endpoint() -> String {
-    "https://api.openai.com/v1".to_string()
-}
 fn default_max_tokens() -> usize {
     2000
 }
@@ -147,8 +141,8 @@ fn default_temperature() -> f32 {
 impl Default for LlmConfig {
     fn default() -> Self {
         Self {
-            model: default_model(),
-            endpoint: default_endpoint(),
+            model: String::new(),
+            endpoint: String::new(),
             api_key: None,
             max_tokens: default_max_tokens(),
             temperature: default_temperature(),
@@ -201,48 +195,6 @@ impl LlmConfig {
         self.retry = retry;
         self
     }
-
-    /// Get the API key from config or environment.
-    pub fn get_api_key(&self) -> Option<String> {
-        self.api_key
-            .clone()
-            .or_else(|| std::env::var("OPENAI_API_KEY").ok())
-            .or_else(|| std::env::var("ANTHROPIC_API_KEY").ok())
-            .or_else(|| std::env::var("AZURE_OPENAI_API_KEY").ok())
-    }
-
-    /// Auto-detect the best endpoint based on available API keys.
-    pub fn auto_detect_endpoint(&self) -> String {
-        if self.endpoint != default_endpoint() {
-            return self.endpoint.clone();
-        }
-
-        if std::env::var("OPENAI_API_KEY").is_ok() {
-            "https://api.openai.com/v1".to_string()
-        } else if std::env::var("AZURE_OPENAI_ENDPOINT").is_ok() {
-            std::env::var("AZURE_OPENAI_ENDPOINT").unwrap_or_default()
-        } else if std::env::var("ANTHROPIC_API_KEY").is_ok() {
-            // Anthropic uses different API structure
-            "https://api.anthropic.com/v1".to_string()
-        } else {
-            self.endpoint.clone()
-        }
-    }
-
-    /// Auto-detect the best model based on available API keys.
-    pub fn auto_detect_model(&self) -> String {
-        if self.model != default_model() {
-            return self.model.clone();
-        }
-
-        if std::env::var("OPENAI_API_KEY").is_ok() {
-            "gpt-4o-mini".to_string()
-        } else if std::env::var("ANTHROPIC_API_KEY").is_ok() {
-            "claude-3-haiku-20240307".to_string()
-        } else {
-            self.model.clone()
-        }
-    }
 }
 
 /// Pool of LLM configurations for different purposes.
@@ -263,7 +215,6 @@ pub struct LlmConfigs {
 
 fn default_summary_config() -> LlmConfig {
     LlmConfig {
-        model: auto_detect_summary_model(),
         max_tokens: 200,
         temperature: 0.0,
         ..LlmConfig::default()
@@ -272,7 +223,6 @@ fn default_summary_config() -> LlmConfig {
 
 fn default_retrieval_config() -> LlmConfig {
     LlmConfig {
-        model: auto_detect_retrieval_model(),
         max_tokens: 100,
         temperature: 0.0,
         ..LlmConfig::default()
@@ -281,40 +231,9 @@ fn default_retrieval_config() -> LlmConfig {
 
 fn default_toc_config() -> LlmConfig {
     LlmConfig {
-        model: auto_detect_toc_model(),
         max_tokens: 2000,
         temperature: 0.0,
         ..LlmConfig::default()
-    }
-}
-
-fn auto_detect_summary_model() -> String {
-    if std::env::var("OPENAI_API_KEY").is_ok() {
-        "gpt-4o-mini".to_string()
-    } else if std::env::var("ANTHROPIC_API_KEY").is_ok() {
-        "claude-3-haiku-20240307".to_string()
-    } else {
-        "glm-4-flash".to_string()
-    }
-}
-
-fn auto_detect_retrieval_model() -> String {
-    if std::env::var("OPENAI_API_KEY").is_ok() {
-        "gpt-4o".to_string()
-    } else if std::env::var("ANTHROPIC_API_KEY").is_ok() {
-        "claude-3-sonnet-20240229".to_string()
-    } else {
-        "glm-4".to_string()
-    }
-}
-
-fn auto_detect_toc_model() -> String {
-    if std::env::var("OPENAI_API_KEY").is_ok() {
-        "gpt-4o-mini".to_string()
-    } else if std::env::var("ANTHROPIC_API_KEY").is_ok() {
-        "claude-3-haiku-20240307".to_string()
-    } else {
-        "glm-4-flash".to_string()
     }
 }
 
