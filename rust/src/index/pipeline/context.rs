@@ -8,7 +8,7 @@ use std::path::PathBuf;
 
 use crate::document::{DocumentTree, NodeId, ReasoningIndex};
 use crate::llm::LlmClient;
-use crate::parser::{DocumentFormat, RawNode};
+use crate::index::parse::{DocumentFormat, RawNode};
 
 use super::super::{PipelineOptions, SummaryStrategy};
 use super::metrics::IndexMetrics;

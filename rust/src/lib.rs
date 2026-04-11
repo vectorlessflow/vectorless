@@ -62,7 +62,6 @@ mod index;
 mod llm;
 mod memo;
 mod metrics;
-mod parser;
 mod retrieval;
 mod storage;
 mod throttle;

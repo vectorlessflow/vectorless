@@ -23,10 +23,6 @@ name = "advanced"
 path = "../examples/rust/advanced.rs"
 
 [[example]]
-name = "cli_tool"
-path = "../examples/rust/cli_tool.rs"
-
-[[example]]
 name = "custom_config"
 path = "../examples/rust/custom_config.rs"
 
