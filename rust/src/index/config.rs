@@ -162,6 +162,10 @@ pub struct PipelineOptions {
     /// Existing tree from a previous index (for incremental updates).
     /// Stages (enhance, reasoning) can reuse data from unchanged nodes.
     pub existing_tree: Option<DocumentTree>,
+
+    /// Current processing version. Bumped when indexing algorithm changes
+    /// to force reprocessing of existing documents.
+    pub processing_version: u32,
 }
 
 impl Default for PipelineOptions {
@@ -177,6 +181,7 @@ impl Default for PipelineOptions {
             indexer: IndexerConfig::default(),
             reasoning_index: ReasoningIndexConfig::default(),
             existing_tree: None,
+            processing_version: 1,
         }
     }
 }

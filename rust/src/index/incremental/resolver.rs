@@ -71,7 +71,7 @@ pub fn resolve_action(
     let current_fp = Fingerprint::from_bytes(file_bytes);
 
     // Layer 1: File-level content fingerprint
-    if !stored_doc.meta.needs_reprocessing(&current_fp, stored_doc.meta.processing_version) {
+    if !stored_doc.meta.needs_reprocessing(&current_fp, pipeline_options.processing_version) {
         info!("File fingerprint unchanged, skipping");
         return IndexAction::Skip(SkipInfo {
             doc_id: stored_doc.meta.id.clone(),
