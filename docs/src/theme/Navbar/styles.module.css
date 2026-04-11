@@ -1,18 +1,17 @@
 .navbarContainer {
-  width: 100%;
+  max-width: 1200px;
   margin: 0 auto;
-  padding: 0 var(--ifm-navbar-padding-horizontal);
+  padding: 0 24px;
   display: flex;
   align-items: center;
   height: 100%;
-  gap: 2rem;
+  gap: 2.25rem;
 }
 
 .navbarLeft {
   display: flex;
   align-items: center;
   gap: 1rem;
-  flex: 1;
 }
 
 .navbarBrand {
@@ -41,7 +40,9 @@
 .navbarItemsLeft {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 1.5rem;
+  flex: 1;
 }
 
 .navbarItemsLeft :global(.navbar__link) {
@@ -61,11 +62,14 @@
   font-weight: 600;
 }
 
+.navbarItemsLeft :global(.navbar__link--active:hover) {
+  opacity: 1;
+}
+
 .navbarItemsRight {
   display: flex;
   align-items: center;
   gap: 1rem;
-  margin-left: auto;
   flex-shrink: 0;
 }
 
@@ -74,12 +78,11 @@
   align-items: center;
 }
 
-.colorModeToggle {
-  display: flex;
-  align-items: center;
-}
-
 @media (max-width: 996px) {
+  .navbarContainer {
+    padding: 0 16px;
+  }
+
   .navbarItemsLeft {
     display: none;
   }
