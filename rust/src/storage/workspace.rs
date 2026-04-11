@@ -111,7 +111,7 @@ struct WorkspaceInner {
     /// LRU cache for loaded documents.
     cache: DocumentCache,
     /// Cross-document relationship graph (cached).
-    document_graph: Option<crate::document::DocumentGraph>,
+    document_graph: Option<crate::graph::DocumentGraph>,
 }
 
 /// An async workspace for managing indexed documents.
@@ -381,6 +381,21 @@ impl Workspace {
         inner.meta_index.is_empty()
     }
 
+    /// Find a document ID by its source path.
+    ///
+    /// Returns the first document whose `source_path` matches.
+    /// Used for incremental indexing to check if a file has already been indexed.
+    pub async fn find_by_source_path(&self, path: &std::path::Path) -> Option<String> {
+        let target = path.to_string_lossy().to_string();
+        let inner = self.inner.read().await;
+        for (_, entry) in &inner.meta_index {
+            if entry.path.as_deref() == Some(target.as_str()) {
+                return Some(entry.id.clone());
+            }
+        }
+        None
+    }
+
     /// Get the number of items currently in the LRU cache.
     pub async fn cache_len(&self) -> usize {
         let inner = self.inner.read().await;
@@ -415,7 +430,7 @@ impl Workspace {
     const GRAPH_KEY: &'static str = "_graph";
 
     /// Get the document graph, loading from backend if not cached.
-    pub async fn get_graph(&self) -> Result<Option<crate::document::DocumentGraph>> {
+    pub async fn get_graph(&self) -> Result<Option<crate::graph::DocumentGraph>> {
         // Check cache first
         {
             let inner = self.inner.read().await;
@@ -428,7 +443,7 @@ impl Workspace {
         let inner = self.inner.read().await;
         match inner.backend.get(Self::GRAPH_KEY)? {
             Some(bytes) => {
-                let graph: crate::document::DocumentGraph =
+                let graph: crate::graph::DocumentGraph =
                     serde_json::from_slice(&bytes).map_err(|e| {
                         crate::Error::Serialization(format!("Failed to deserialize graph: {}", e))
                     })?;
@@ -440,7 +455,7 @@ impl Workspace {
     }
 
     /// Persist the document graph to the backend.
-    pub async fn set_graph(&self, graph: &crate::document::DocumentGraph) -> Result<()> {
+    pub async fn set_graph(&self, graph: &crate::graph::DocumentGraph) -> Result<()> {
         let mut inner = self.inner.write().await;
         let bytes = serde_json::to_vec(graph).map_err(|e| {
             crate::Error::Serialization(format!("Failed to serialize graph: {}", e))

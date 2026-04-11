@@ -4,12 +4,14 @@
 //! Enhance stage - Generate summaries using LLM.
 
 use super::async_trait;
+use futures::StreamExt;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tracing::{debug, info, warn};
 
 use crate::document::{DocumentTree, NodeId, TreeNode};
 use crate::error::Result;
+use crate::index::incremental;
 use crate::utils::fingerprint::Fingerprint;
 use crate::llm::LlmClient;
 use crate::memo::{MemoKey, MemoStore, MemoValue};
@@ -17,6 +19,13 @@ use crate::memo::{MemoKey, MemoStore, MemoValue};
 use super::{IndexStage, StageResult};
 use crate::index::pipeline::{FailurePolicy, IndexContext, StageRetryConfig};
 use crate::index::summary::{LlmSummaryGenerator, SummaryGenerator, SummaryStrategy};
+
+/// A node that needs LLM summary generation.
+struct PendingNode {
+    node_id: NodeId,
+    title: String,
+    content: String,
+}
 
 /// Enhance stage - generates summaries using LLM.
 pub struct EnhanceStage {
@@ -101,7 +110,6 @@ impl IndexStage for EnhanceStage {
 
         // Check if we need summaries
         if !self.needs_summaries(ctx) {
-            println!("[DEBUG] Summary generation skipped (strategy: {:?})", ctx.options.summary_strategy);
             info!(
                 "Summary generation skipped (strategy: {:?})",
                 ctx.options.summary_strategy
@@ -113,7 +121,6 @@ impl IndexStage for EnhanceStage {
         let llm_client = match &self.llm_client {
             Some(client) => client,
             None => {
-                println!("[DEBUG] No LLM client configured, skipping summary generation");
                 warn!("No LLM client configured, skipping summary generation");
                 return Ok(StageResult::success("enhance"));
             }
@@ -123,45 +130,56 @@ impl IndexStage for EnhanceStage {
         let tree = match ctx.tree.as_mut() {
             Some(t) => t,
             None => {
-                println!("[DEBUG] No tree built, skipping enhance stage");
                 warn!("No tree built, skipping enhance stage");
                 return Ok(StageResult::success("enhance"));
             }
         };
 
-        println!("[DEBUG] Using summary strategy: {:?}", ctx.options.summary_strategy);
         info!("Using summary strategy: {:?}", ctx.options.summary_strategy);
 
-        // Create summary generator with optional memo store
-        let mut generator = LlmSummaryGenerator::new((*llm_client).as_ref().clone())
-            .with_max_tokens(ctx.options.indexer.max_summary_tokens);
-
-        // Attach memo store to generator if available
-        if let Some(store) = &self.memo_store {
-            generator = generator.with_memo_store((**store).clone());
-        }
+        // Create summary generator (shared via Arc for concurrent use)
+        let generator = Arc::new(
+            LlmSummaryGenerator::new((*llm_client).as_ref().clone())
+                .with_max_tokens(ctx.options.indexer.max_summary_tokens)
+                .with_memo_store(
+                    self.memo_store
+                        .as_ref()
+                        .map(|s| (**s).clone())
+                        .unwrap_or_default(),
+                ),
+        );
 
         // Get all nodes to process
         let node_ids: Vec<NodeId> = tree.traverse();
         let total_nodes = node_ids.len();
 
-        println!("[DEBUG] Processing {} nodes for summary generation", total_nodes);
+        // === Incremental: reuse summaries from existing tree for unchanged nodes ===
+        if let Some(ref old_tree) = ctx.existing_tree {
+            let reusable = incremental::compute_reusable_summaries(old_tree, tree);
+            let applied = incremental::apply_reusable_summaries(tree, &reusable);
+            for _ in 0..applied {
+                ctx.metrics.increment_summaries();
+            }
+            info!(
+                "Incremental: {} of {} nodes unchanged, reusing summaries",
+                applied, total_nodes,
+            );
+        }
+
         info!("Processing {} nodes for summary generation", total_nodes);
 
-        // Process nodes
+        // === Phase 1: Collect pending nodes (cache hits applied immediately) ===
+        let strategy = ctx.options.summary_strategy.clone();
+        let mut pending_llm: Vec<PendingNode> = Vec::new();
         let mut generated = 0;
-        let mut failed = 0;
         let mut skipped_no_content = 0;
         let mut skipped_tokens = 0;
-        let strategy = ctx.options.summary_strategy.clone();
 
         for node_id in node_ids {
-            // Get node data (need to clone to avoid borrow issues)
             let node = match tree.get(node_id) {
                 Some(n) => n.clone(),
                 None => continue,
             };
-            println!("[DEBUG] Evaluating node for summary: {} {}", node.title, node.content);
 
             // Skip if no content
             if node.content.is_empty() {
@@ -169,78 +187,93 @@ impl IndexStage for EnhanceStage {
                 continue;
             }
 
-            // Get token count and check if we should generate
+            // Skip if summary already set (incremental: reused from old tree)
+            if !node.summary.is_empty() {
+                continue;
+            }
+
+            // Check if strategy says we should generate
             let token_count = node.token_count.unwrap_or(0);
             if !strategy.should_generate(tree, node_id, token_count) {
                 skipped_tokens += 1;
                 continue;
             }
 
-            // Check memo store first (additional check beyond generator)
-            let cached_summary = if let Some(store) = self.memo_store.as_deref() {
+            // Check memo store (fast path — apply immediately)
+            if let Some(store) = self.memo_store.as_deref() {
                 let content_fp =
                     Fingerprint::from_str(&format!("{}|{}", node.title, node.content));
                 let memo_key = MemoKey::summary(&content_fp);
-
-                store
-                    .get(&memo_key)
-                    .and_then(|cached| cached.as_summary().map(|s| s.to_string()))
-            } else {
-                None
-            };
-
-            if let Some(summary) = cached_summary {
-                if !summary.is_empty() {
-                    tree.set_summary(node_id, &summary);
-                    debug!(
-                        "Using cached summary for node: {} ({} chars)",
-                        node.title,
-                        summary.len()
-                    );
-                    ctx.metrics.increment_summaries();
-                    generated += 1;
-                    continue;
-                }
-            }
-
-            // Generate summary (generator also has memoization built-in)
-            println!("[DEBUG] Calling LLM to generate summary for node: {} ({} tokens)", node.title, token_count);
-            println!("[DEBUG] Node content: {}", node.content);
-
-            match generator.generate(&node.title, &node.content).await {
-                Ok(summary) => {
-                    if summary.is_empty() {
-                        warn!("Empty summary returned for node '{}'", node.title);
-                        failed += 1;
-                    } else {
-                        tree.set_summary(node_id, &summary);
-                        debug!(
-                            "Generated summary for node: {} ({} chars)",
-                            node.title,
-                            summary.len()
-                        );
+                if let Some(cached) = store.get(&memo_key).and_then(|c| c.as_summary().map(|s| s.to_string())) {
+                    if !cached.is_empty() {
+                        tree.set_summary(node_id, &cached);
+                        debug!("Using cached summary for node: {} ({} chars)", node.title, cached.len());
                         ctx.metrics.increment_summaries();
                         generated += 1;
+                        continue;
                     }
-                }
-                Err(e) => {
-                    warn!("Failed to generate summary for {}: {}", node.title, e);
-                    failed += 1;
                 }
             }
 
-            // Increment LLM calls metric
-            ctx.metrics.increment_llm_calls();
+            // Needs LLM call
+            pending_llm.push(PendingNode {
+                node_id,
+                title: node.title,
+                content: node.content,
+            });
+        }
+
+        // === Phase 2: Concurrent LLM calls with buffer_unordered ===
+        let mut failed = 0;
+        let concurrency = ctx.options.concurrency.max_concurrent_requests;
+
+        if !pending_llm.is_empty() {
+            info!(
+                "Generating summaries for {} nodes (concurrency: {})",
+                pending_llm.len(), concurrency
+            );
+
+            // Collect results: (NodeId, Result<String>)
+            let results: Vec<(NodeId, std::result::Result<String, String>)> =
+                futures::stream::iter(pending_llm)
+                    .map(|pending| {
+                        let generator = Arc::clone(&generator);
+                        async move {
+                            let result = generator.generate(&pending.title, &pending.content).await;
+                            (pending.node_id, result.map_err(|e| e.to_string()))
+                        }
+                    })
+                    .buffer_unordered(concurrency)
+                    .collect()
+                    .await;
+
+            // Write results back to tree
+            for (node_id, result) in results {
+                ctx.metrics.increment_llm_calls();
+                match result {
+                    Ok(summary) => {
+                        if summary.is_empty() {
+                            failed += 1;
+                        } else {
+                            tree.set_summary(node_id, &summary);
+                            generated += 1;
+                            ctx.metrics.increment_summaries();
+                        }
+                    }
+                    Err(e) => {
+                        warn!("Failed to generate summary: {}", e);
+                        failed += 1;
+                    }
+                }
+            }
         }
 
         let duration = start.elapsed().as_millis() as u64;
         ctx.metrics.record_enhance(duration);
 
-        println!("[DEBUG] Generated {} summaries ({} failed, {} skipped no content, {} skipped tokens) in {}ms",
-            generated, failed, skipped_no_content, skipped_tokens, duration);
         info!(
-            "Generated {} summaries ({} failed) in {}ms",
-            generated, failed, duration
+            "Generated {} summaries ({} failed, {} skipped no content, {} skipped tokens) in {}ms",
+            generated, failed, skipped_no_content, skipped_tokens, duration
         );
 
         let mut stage_result = StageResult::success("enhance");

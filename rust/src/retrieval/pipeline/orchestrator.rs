@@ -322,7 +322,11 @@ impl RetrievalOrchestrator {
         );
 
         // Create context with Pilot
+        let document_graph = options.document_graph.clone();
         let mut ctx = PipelineContext::with_pilot(tree, query, options, self.pilot.clone());
+        if let Some(graph) = document_graph {
+            ctx = ctx.with_document_graph(graph);
+        }
 
         // Track execution state
         let mut backtrack_count = 0;
@@ -600,9 +604,13 @@ impl RetrievalOrchestrator {
         let groups = self.compute_execution_groups(&order);
 
         // Create context with Pilot and reasoning index
+        let document_graph = options.document_graph.clone();
         let mut ctx = PipelineContext::with_pilot(tree, query, options, self.pilot.clone());
         if let Some(ri) = reasoning_index {
             ctx = ctx.with_reasoning_index(ri);
+        }
+        if let Some(graph) = document_graph {
+            ctx = ctx.with_document_graph(graph);
         }
 
         let mut backtrack_count = 0;
@@ -897,7 +905,11 @@ impl RetrievalOrchestrator {
 
         let order = self.resolve_order()?;
         let groups = self.compute_execution_groups(&order);
+        let document_graph = options.document_graph.clone();
         let mut ctx = PipelineContext::with_pilot(tree, query, options, self.pilot.clone());
+        if let Some(graph) = document_graph {
+            ctx = ctx.with_document_graph(graph);
+        }
 
         let mut backtrack_count = 0;
         let mut total_iterations = 0;

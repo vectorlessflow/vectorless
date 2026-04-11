@@ -68,6 +68,10 @@ pub struct Config {
     #[serde(default)]
     pub concurrency: ConcurrencyConfig,
 
+    /// Document graph configuration.
+    #[serde(default)]
+    pub graph: crate::graph::DocumentGraphConfig,
+
     /// Fallback/error recovery configuration (legacy, prefer llm.fallback).
     #[serde(default)]
     pub fallback: FallbackConfig,
@@ -83,6 +87,7 @@ impl Default for Config {
             retrieval: RetrievalConfig::default(),
             storage: StorageConfig::default(),
             concurrency: ConcurrencyConfig::default(),
+            graph: crate::graph::DocumentGraphConfig::default(),
             fallback: FallbackConfig::default(),
         }
     }
@@ -133,6 +138,12 @@ impl Config {
     /// Set the concurrency configuration.
     pub fn with_concurrency(mut self, concurrency: ConcurrencyConfig) -> Self {
         self.concurrency = concurrency;
+        self
+    }
+
+    /// Set the document graph configuration.
+    pub fn with_graph(mut self, graph: crate::graph::DocumentGraphConfig) -> Self {
+        self.graph = graph;
         self
     }
 
@@ -206,6 +217,20 @@ impl Config {
             errors.push(ValidationError::error(
                 "concurrency.max_concurrent_requests",
                 "Max concurrent requests must be greater than 0",
+            ));
+        }
+
+        // Validate graph
+        if self.graph.min_keyword_jaccard < 0.0 || self.graph.min_keyword_jaccard > 1.0 {
+            errors.push(ValidationError::error(
+                "graph.min_keyword_jaccard",
+                "Must be between 0.0 and 1.0",
+            ));
+        }
+        if self.graph.max_edges_per_node == 0 {
+            errors.push(ValidationError::error(
+                "graph.max_edges_per_node",
+                "Must be greater than 0",
             ));
         }
 

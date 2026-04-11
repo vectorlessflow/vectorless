@@ -11,7 +11,7 @@ use std::sync::Arc;
 use tokio::runtime::Runtime;
 
 // Use ::vectorless to avoid conflict with the #[pymodule] named vectorless
-use ::vectorless::client::{Engine, EngineBuilder, IndexContext, IndexItem, IndexResult, QueryContext, QueryResult, DocumentInfo};
+use ::vectorless::client::{Engine, EngineBuilder, IndexContext, IndexItem, IndexResult, QueryContext, QueryResult, QueryResultItem, DocumentInfo, FailedItem};
 use ::vectorless::client::DocumentFormat;
 use ::vectorless::error::Error as RustError;
 
@@ -181,17 +181,17 @@ fn parse_format(format: &str) -> PyResult<DocumentFormat> {
 }
 
 // ============================================================
-// QueryResult
+// QueryResultItem
 // ============================================================
 
-/// Result of a document query.
-#[pyclass(name = "QueryResult")]
-pub struct PyQueryResult {
-    inner: QueryResult,
+/// A single document's query result.
+#[pyclass(name = "QueryResultItem")]
+pub struct PyQueryResultItem {
+    inner: QueryResultItem,
 }
 
 #[pymethods]
-impl PyQueryResult {
+impl PyQueryResultItem {
     /// The document ID.
     #[getter]
     fn doc_id(&self) -> &str {
@@ -218,11 +218,96 @@ impl PyQueryResult {
 
     fn __repr__(&self) -> String {
         format!(
-            "QueryResult(doc_id='{}', score={:.2}, content_len={})",
+            "QueryResultItem(doc_id='{}', score={:.2}, content_len={})",
             self.inner.doc_id,
             self.inner.score,
             self.inner.content.len()
         )
+    }
+}
+
+// ============================================================
+// FailedItem
+// ============================================================
+
+/// A failed item in a batch operation.
+#[pyclass(name = "FailedItem")]
+pub struct PyFailedItem {
+    inner: FailedItem,
+}
+
+#[pymethods]
+impl PyFailedItem {
+    /// Source description.
+    #[getter]
+    fn source(&self) -> &str {
+        &self.inner.source
+    }
+
+    /// Error message.
+    #[getter]
+    fn error(&self) -> &str {
+        &self.inner.error
+    }
+
+    fn __repr__(&self) -> String {
+        format!("FailedItem(source='{}', error='{}')", self.inner.source, self.inner.error)
+    }
+}
+
+// ============================================================
+// QueryResult
+// ============================================================
+
+/// Result of a document query (may contain results from multiple documents).
+#[pyclass(name = "QueryResult")]
+pub struct PyQueryResult {
+    inner: QueryResult,
+}
+
+#[pymethods]
+impl PyQueryResult {
+    /// Result items (one per document).
+    #[getter]
+    fn items(&self) -> Vec<PyQueryResultItem> {
+        self.inner
+            .items
+            .iter()
+            .map(|i| PyQueryResultItem {
+                inner: i.clone(),
+            })
+            .collect()
+    }
+
+    /// Get the first (single-doc) result item.
+    fn single(&self) -> Option<PyQueryResultItem> {
+        self.inner.single().map(|i| PyQueryResultItem {
+            inner: i.clone(),
+        })
+    }
+
+    /// Number of result items.
+    fn len(&self) -> usize {
+        self.inner.len()
+    }
+
+    /// Whether any documents failed.
+    fn has_failures(&self) -> bool {
+        self.inner.has_failures()
+    }
+
+    /// Failed items.
+    #[getter]
+    fn failed(&self) -> Vec<PyFailedItem> {
+        self.inner
+            .failed
+            .iter()
+            .map(|f| PyFailedItem { inner: f.clone() })
+            .collect()
+    }
+
+    fn __repr__(&self) -> String {
+        format!("QueryResult(items={}, failed={})", self.inner.len(), self.inner.failed.len())
     }
 }
 
@@ -254,11 +339,27 @@ impl PyIndexResult {
             .collect()
     }
 
+    /// Failed items.
+    #[getter]
+    fn failed(&self) -> Vec<PyFailedItem> {
+        self.inner
+            .failed
+            .iter()
+            .map(|f| PyFailedItem { inner: f.clone() })
+            .collect()
+    }
+
+    /// Whether any items failed.
+    fn has_failures(&self) -> bool {
+        self.inner.has_failures()
+    }
+
     fn __repr__(&self) -> String {
         format!(
-            "IndexResult(doc_id={:?}, count={})",
+            "IndexResult(doc_id={:?}, count={}, failed={})",
             self.inner.doc_id(),
-            self.inner.items.len()
+            self.inner.items.len(),
+            self.inner.failed.len()
         )
     }
 }
@@ -606,7 +707,9 @@ fn vectorless(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyIndexContext>()?;
     m.add_class::<PyIndexResult>()?;
     m.add_class::<PyIndexItem>()?;
+    m.add_class::<PyQueryResultItem>()?;
     m.add_class::<PyQueryResult>()?;
+    m.add_class::<PyFailedItem>()?;
     m.add_class::<PyDocumentInfo>()?;
     m.add_class::<PyEngine>()?;
 

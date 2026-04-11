@@ -8,7 +8,6 @@ mod enhance;
 mod enrich;
 mod optimize;
 mod parse;
-mod persist;
 mod reasoning;
 
 pub use build::BuildStage;
@@ -16,12 +15,25 @@ pub use enhance::EnhanceStage;
 pub use enrich::EnrichStage;
 pub use optimize::OptimizeStage;
 pub use parse::ParseStage;
-pub use persist::PersistStage;
 pub use reasoning::ReasoningIndexStage;
 
 use super::pipeline::{FailurePolicy, IndexContext, StageResult};
 use crate::error::Result;
 pub use async_trait::async_trait;
+
+/// Declares which context fields a stage reads/writes.
+/// Used by the orchestrator to determine safe parallel execution.
+#[derive(Debug, Clone, Default)]
+pub struct AccessPattern {
+    /// Whether this stage reads the tree.
+    pub reads_tree: bool,
+    /// Whether this stage mutates the tree (summaries, structure, etc.).
+    pub writes_tree: bool,
+    /// Whether this stage writes to `reasoning_index`.
+    pub writes_reasoning_index: bool,
+    /// Whether this stage writes to `description`.
+    pub writes_description: bool,
+}
 
 /// Index pipeline stage.
 ///
@@ -105,5 +117,11 @@ pub trait IndexStage: Send + Sync {
         } else {
             FailurePolicy::fail()
         }
+    }
+
+    /// Declare which context fields this stage accesses.
+    /// Used by the orchestrator for safe parallel execution.
+    fn access_pattern(&self) -> AccessPattern {
+        AccessPattern::default()
     }
 }

@@ -11,7 +11,8 @@
 
 use super::summary::SummaryStrategy;
 use crate::config::{ConcurrencyConfig, IndexerConfig};
-use crate::document::ReasoningIndexConfig;
+use crate::document::{DocumentTree, ReasoningIndexConfig};
+use crate::utils::fingerprint::{Fingerprint, Fingerprinter};
 
 /// Index mode for document processing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -157,6 +158,14 @@ pub struct PipelineOptions {
 
     /// Reasoning index configuration.
     pub reasoning_index: ReasoningIndexConfig,
+
+    /// Existing tree from a previous index (for incremental updates).
+    /// Stages (enhance, reasoning) can reuse data from unchanged nodes.
+    pub existing_tree: Option<DocumentTree>,
+
+    /// Current processing version. Bumped when indexing algorithm changes
+    /// to force reprocessing of existing documents.
+    pub processing_version: u32,
 }
 
 impl Default for PipelineOptions {
@@ -171,6 +180,8 @@ impl Default for PipelineOptions {
             concurrency: ConcurrencyConfig::default(),
             indexer: IndexerConfig::default(),
             reasoning_index: ReasoningIndexConfig::default(),
+            existing_tree: None,
+            processing_version: 1,
         }
     }
 }
@@ -233,6 +244,21 @@ impl PipelineOptions {
     pub fn with_reasoning_index(mut self, config: ReasoningIndexConfig) -> Self {
         self.reasoning_index = config;
         self
+    }
+
+    /// Compute a fingerprint of the pipeline configuration.
+    ///
+    /// If this fingerprint changes between runs, all documents need full reprocessing
+    /// even if their content hasn't changed (because the processing logic is different).
+    pub fn logic_fingerprint(&self) -> Fingerprint {
+        Fingerprinter::new()
+            .with_str(&format!("{:?}", self.mode))
+            .with_bool(self.generate_ids)
+            .with_str(&format!("{:?}", self.summary_strategy))
+            .with_bool(self.generate_description)
+            .with_bool(self.optimization.enabled)
+            .with_str(&format!("{:?}", self.reasoning_index))
+            .into_fingerprint()
     }
 }
 

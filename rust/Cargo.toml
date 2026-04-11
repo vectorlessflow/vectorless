@@ -38,6 +38,10 @@ path = "../examples/rust/events.rs"
 name = "markdownflow"
 path = "../examples/rust/markdownflow.rs"
 
+[[example]]
+name = "graph"
+path = "../examples/rust/graph.rs"
+
 [dependencies]
 # Async runtime
 tokio = { workspace = true }

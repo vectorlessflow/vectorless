@@ -36,7 +36,6 @@
 //! ```
 
 pub mod config;
-pub mod graph_builder;
 pub mod incremental;
 pub mod pipeline;
 pub mod stages;
@@ -44,7 +43,7 @@ pub mod summary;
 
 // Re-export main types from pipeline
 pub use pipeline::{
-    ExecutionGroup, FailurePolicy, IndexContext, IndexInput, IndexMetrics, IndexResult,
+    ExecutionGroup, FailurePolicy, IndexContext, IndexInput, IndexMetrics, PipelineResult,
     PipelineExecutor, PipelineOrchestrator, StageResult, StageRetryConfig,
 };
 

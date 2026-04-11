@@ -3,7 +3,7 @@
 
 //! Optimize stage - Optimize tree structure.
 
-use super::async_trait;
+use super::{AccessPattern, async_trait};
 use std::time::Instant;
 use tracing::info;
 
@@ -141,6 +141,14 @@ impl IndexStage for OptimizeStage {
 
     fn depends_on(&self) -> Vec<&'static str> {
         vec!["enrich"]
+    }
+
+    fn access_pattern(&self) -> AccessPattern {
+        AccessPattern {
+            reads_tree: true,
+            writes_tree: true,  // merges small leaf nodes
+            ..Default::default()
+        }
     }
 
     async fn execute(&mut self, ctx: &mut IndexContext) -> Result<StageResult> {

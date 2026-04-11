@@ -88,19 +88,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         match client.query(QueryContext::new(query).with_doc_id(&doc_id)).await {
             Ok(result) => {
-                if result.content.is_empty() {
-                    println!("    - No relevant content found");
-                } else {
-                    println!("    - Found relevant content:");
-                    // Print first 200 chars
-                    let preview = if result.content.len() > 200 {
-                        format!("{}...", &result.content[..200])
+                if let Some(item) = result.single() {
+                    if item.content.is_empty() {
+                        println!("    - No relevant content found");
                     } else {
-                        result.content.clone()
-                    };
-                    for line in preview.lines().take(5) {
-                        println!("      {}", line);
+                        println!("    - Found relevant content:");
+                        let preview = if item.content.len() > 200 {
+                            format!("{}...", &item.content[..200])
+                        } else {
+                            item.content.clone()
+                        };
+                        for line in preview.lines().take(5) {
+                            println!("      {}", line);
+                        }
                     }
+                } else {
+                    println!("    - No results");
                 }
             }
             Err(e) => {

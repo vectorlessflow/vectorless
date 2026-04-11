@@ -245,6 +245,10 @@ pub struct IndexContext {
     /// Pre-computed reasoning index (built by ReasoningIndexStage).
     pub reasoning_index: Option<ReasoningIndex>,
 
+    /// Existing tree from previous indexing (for incremental updates).
+    /// When set, the enhance and reasoning stages can reuse data from unchanged nodes.
+    pub existing_tree: Option<DocumentTree>,
+
     /// Stage execution results.
     pub stage_results: HashMap<String, StageResult>,
 
@@ -276,6 +280,7 @@ impl IndexContext {
             llm_client: None,
             summary_cache: SummaryCache::default(),
             reasoning_index: None,
+            existing_tree: None,
             stage_results: HashMap::new(),
             metrics: IndexMetrics::default(),
             description: None,
@@ -314,6 +319,12 @@ impl IndexContext {
         self
     }
 
+    /// Set the existing tree for incremental updates.
+    pub fn with_existing_tree(mut self, tree: DocumentTree) -> Self {
+        self.existing_tree = Some(tree);
+        self
+    }
+
     /// Initialize summary cache based on strategy.
     pub fn init_summary_cache(&mut self) {
         if let SummaryStrategy::Lazy { persist, .. } = self.options.summary_strategy {
@@ -337,8 +348,8 @@ impl IndexContext {
     }
 
     /// Finalize and build the result.
-    pub fn finalize(self) -> IndexResult {
-        IndexResult {
+    pub fn finalize(self) -> PipelineResult {
+        PipelineResult {
             doc_id: self.doc_id,
             name: self.name,
             format: self.format,
@@ -356,7 +367,7 @@ impl IndexContext {
 
 /// Final result from the index pipeline.
 #[derive(Debug)]
-pub struct IndexResult {
+pub struct PipelineResult {
     /// Document ID.
     pub doc_id: String,
 
@@ -391,7 +402,7 @@ pub struct IndexResult {
     pub reasoning_index: Option<ReasoningIndex>,
 }
 
-impl IndexResult {
+impl PipelineResult {
     /// Check if the result has a tree.
     pub fn has_tree(&self) -> bool {
         self.tree.is_some()
@@ -410,6 +421,5 @@ impl IndexResult {
             + self.metrics.enrich_time_ms
             + self.metrics.reasoning_index_time_ms
             + self.metrics.optimize_time_ms
-            + self.metrics.persist_time_ms
     }
 }

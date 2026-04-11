@@ -420,7 +420,9 @@ impl EngineBuilder {
             }
             // Also set legacy config for backwards compatibility
             if config.summary.api_key.is_none() {
-                config.summary.api_key = Some(std::env::var("OPENAI_API_KEY").unwrap());
+                if let Ok(api_key) = std::env::var("OPENAI_API_KEY") {
+                    config.summary.api_key = Some(api_key);
+                }
             }
         }
 
@@ -542,9 +544,8 @@ impl EngineBuilder {
             .await
             .map_err(|e| BuildError::Workspace(e.to_string()))?;
 
-        // Create pipeline executor with LLM client if API key is available
-        let executor = if let Some(api_key) = config.summary.api_key.clone() {
-            // Create LlmConfig from SummaryConfig
+        // Create indexer client with LLM-enabled factory if API key is available
+        let indexer = if let Some(api_key) = config.summary.api_key.clone() {
             let llm_config = crate::llm::LlmConfig::new(&config.summary.model)
                 .with_endpoint(config.summary.endpoint.clone())
                 .with_api_key(api_key)
@@ -552,9 +553,9 @@ impl EngineBuilder {
                 .with_temperature(config.summary.temperature);
 
             let llm_client = crate::llm::LlmClient::new(llm_config);
-            crate::index::PipelineExecutor::with_llm(llm_client)
+            crate::client::indexer::IndexerClient::with_llm(llm_client)
         } else {
-            crate::index::PipelineExecutor::new()
+            crate::client::indexer::IndexerClient::new(crate::index::PipelineExecutor::new())
         };
 
         // Create pipeline retriever with config
@@ -595,7 +596,7 @@ impl EngineBuilder {
         }
 
         // Build engine
-        Engine::with_components(config, workspace, retriever, executor)
+        Engine::with_components(config, workspace, retriever, indexer)
             .await
             .map_err(|e| BuildError::Other(e.to_string()))
     }

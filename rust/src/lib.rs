@@ -56,6 +56,7 @@ pub mod client;
 mod config;
 pub mod document;
 pub mod error;
+mod graph;
 mod index;
 mod llm;
 mod memo;
@@ -80,4 +81,10 @@ pub use document::{
     DocumentStructure, DocumentTree, NodeId, StructureNode, TocConfig, TocEntry, TocNode, TocView,
     TreeNode,
 };
+
+// Graph types
+pub use graph::DocumentGraph;
+
+// Index metrics
+pub use metrics::IndexMetrics;
 

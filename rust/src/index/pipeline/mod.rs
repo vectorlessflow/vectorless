@@ -17,7 +17,7 @@ mod metrics;
 mod orchestrator;
 mod policy;
 
-pub use context::{IndexContext, IndexInput, IndexResult, StageResult};
+pub use context::{IndexContext, IndexInput, PipelineResult, StageResult};
 pub use executor::PipelineExecutor;
 pub use metrics::IndexMetrics;
 pub use orchestrator::{CustomStageBuilder, ExecutionGroup, PipelineOrchestrator};

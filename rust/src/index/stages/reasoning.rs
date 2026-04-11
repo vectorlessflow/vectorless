@@ -18,7 +18,7 @@ use crate::error::Result;
 use crate::retrieval::search::extract_keywords;
 
 use super::async_trait;
-use super::{IndexStage, StageResult};
+use super::{AccessPattern, IndexStage, StageResult};
 use crate::index::pipeline::IndexContext;
 
 /// Reasoning Index Stage - builds a pre-computed reasoning index from the document tree.
@@ -219,6 +219,14 @@ impl IndexStage for ReasoningIndexStage {
 
     fn is_optional(&self) -> bool {
         true
+    }
+
+    fn access_pattern(&self) -> AccessPattern {
+        AccessPattern {
+            reads_tree: true,
+            writes_reasoning_index: true,
+            ..Default::default()
+        }
     }
 
     async fn execute(&mut self, ctx: &mut IndexContext) -> Result<StageResult> {

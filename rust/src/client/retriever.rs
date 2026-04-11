@@ -31,7 +31,7 @@ use crate::retrieval::{
     SufficiencyLevel,
 };
 use super::events::{EventEmitter, QueryEvent};
-use super::types::QueryResult;
+use super::types::QueryResultItem;
 
 /// Document retrieval client.
 ///
@@ -127,7 +127,7 @@ impl RetrieverClient {
         tree: &DocumentTree,
         question: &str,
         options: &RetrieveOptions,
-    ) -> Result<QueryResult> {
+    ) -> Result<QueryResultItem> {
         self.events.emit_query(QueryEvent::Started {
             query: question.to_string(),
         });
@@ -221,8 +221,8 @@ impl RetrieverClient {
         Ok(rx)
     }
 
-    /// Build QueryResult from RetrieveResponse.
-    fn build_query_result(&self, response: &RetrieveResponse) -> QueryResult {
+    /// Build QueryResultItem from RetrieveResponse.
+    fn build_query_result(&self, response: &RetrieveResponse) -> QueryResultItem {
         // Extract node IDs
         let node_ids: Vec<String> = response
             .results
@@ -249,7 +249,7 @@ impl RetrieverClient {
             content_parts.join("\n\n---\n\n")
         };
 
-        QueryResult {
+        QueryResultItem {
             doc_id: String::new(), // Will be set by caller
             node_ids,
             content,

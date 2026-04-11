@@ -58,6 +58,11 @@ pub struct DocumentMeta {
     #[serde(default, skip_serializing_if = "crate::utils::fingerprint::Fingerprint::is_zero")]
     pub content_fingerprint: crate::utils::fingerprint::Fingerprint,
 
+    /// Logic fingerprint (hash of pipeline configuration used to produce this document).
+    /// If the pipeline config changes, a full reprocess is needed even if content didn't change.
+    #[serde(default, skip_serializing_if = "crate::utils::fingerprint::Fingerprint::is_zero")]
+    pub logic_fingerprint: crate::utils::fingerprint::Fingerprint,
+
     /// Processing version (incremented when algorithm changes).
     #[serde(default)]
     pub processing_version: u32,
@@ -94,6 +99,7 @@ impl DocumentMeta {
             created_at: now,
             modified_at: now,
             content_fingerprint: crate::utils::fingerprint::Fingerprint::zero(),
+            logic_fingerprint: crate::utils::fingerprint::Fingerprint::zero(),
             processing_version: 0,
             node_count: 0,
             total_summary_tokens: 0,
@@ -117,6 +123,12 @@ impl DocumentMeta {
     /// Set the content fingerprint.
     pub fn with_fingerprint(mut self, fp: crate::utils::fingerprint::Fingerprint) -> Self {
         self.content_fingerprint = fp;
+        self
+    }
+
+    /// Set the logic fingerprint.
+    pub fn with_logic_fingerprint(mut self, fp: crate::utils::fingerprint::Fingerprint) -> Self {
+        self.logic_fingerprint = fp;
         self
     }
 

@@ -11,7 +11,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use super::r#trait::{NodeEvaluation, RetrievalStrategy, StrategyCapabilities};
-use crate::document::{DocumentGraph, DocumentTree, NodeId};
+use crate::document::{DocumentTree, NodeId};
+use crate::graph::DocumentGraph;
 use crate::retrieval::types::{NavigationDecision, QueryComplexity};
 use crate::retrieval::RetrievalContext;
 

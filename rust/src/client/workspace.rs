@@ -292,6 +292,23 @@ impl WorkspaceClient {
     pub(crate) fn inner(&self) -> Arc<Workspace> {
         Arc::clone(&self.workspace)
     }
+
+    /// Find a document ID by its source file path.
+    ///
+    /// Used for incremental indexing to check if a file has already been indexed.
+    pub async fn find_by_source_path(&self, path: &std::path::Path) -> Option<String> {
+        self.workspace.find_by_source_path(path).await
+    }
+
+    /// Get the document graph, loading from backend if not cached.
+    pub async fn get_graph(&self) -> Result<Option<crate::graph::DocumentGraph>> {
+        self.workspace.get_graph().await
+    }
+
+    /// Persist the document graph to the backend.
+    pub async fn set_graph(&self, graph: &crate::graph::DocumentGraph) -> Result<()> {
+        self.workspace.set_graph(graph).await
+    }
 }
 
 /// Workspace statistics.

@@ -13,10 +13,10 @@ use crate::llm::LlmClient;
 
 use super::super::PipelineOptions;
 use super::super::stages::{
-    BuildStage, EnhanceStage, EnrichStage, IndexStage, OptimizeStage, ParseStage, PersistStage,
+    BuildStage, EnhanceStage, EnrichStage, IndexStage, OptimizeStage, ParseStage,
     ReasoningIndexStage,
 };
-use super::context::{IndexInput, IndexResult};
+use super::context::{IndexInput, PipelineResult};
 use super::orchestrator::PipelineOrchestrator;
 
 /// Pipeline executor for document indexing.
@@ -140,14 +140,6 @@ impl PipelineExecutor {
         self
     }
 
-    /// Add persistence stage with async workspace.
-    pub fn with_persistence(mut self, workspace: crate::storage::Workspace) -> Self {
-        self.orchestrator = self
-            .orchestrator
-            .stage_with_priority(PersistStage::with_workspace(workspace), 80);
-        self
-    }
-
     /// Get the list of stage names in execution order.
     pub fn stage_names(&self) -> Result<Vec<&str>> {
         self.orchestrator.stage_names()
@@ -165,7 +157,7 @@ impl PipelineExecutor {
         &mut self,
         input: IndexInput,
         options: PipelineOptions,
-    ) -> Result<IndexResult> {
+    ) -> Result<PipelineResult> {
         info!(
             "Starting index pipeline with {} stages",
             self.orchestrator.stage_count()

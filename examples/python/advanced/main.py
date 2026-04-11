@@ -91,8 +91,9 @@ For higher accuracy:
     for q in questions:
         result = engine.query(doc_id, q)
         print(f"Q: {q}")
-        print(f"A: {result.content[:150]}...")
-        print(f"   Score: {result.score:.2f}\n")
+        if item := result.single():
+            print(f"A: {item.content[:150]}...")
+            print(f"   Score: {item.score:.2f}\n")
 
     # Cleanup
     engine.remove(doc_id)
