@@ -21,6 +21,20 @@ use super::pipeline::{FailurePolicy, IndexContext, StageResult};
 use crate::error::Result;
 pub use async_trait::async_trait;
 
+/// Declares which context fields a stage reads/writes.
+/// Used by the orchestrator to determine safe parallel execution.
+#[derive(Debug, Clone, Default)]
+pub struct AccessPattern {
+    /// Whether this stage reads the tree.
+    pub reads_tree: bool,
+    /// Whether this stage mutates the tree (summaries, structure, etc.).
+    pub writes_tree: bool,
+    /// Whether this stage writes to `reasoning_index`.
+    pub writes_reasoning_index: bool,
+    /// Whether this stage writes to `description`.
+    pub writes_description: bool,
+}
+
 /// Index pipeline stage.
 ///
 /// Each stage represents a discrete step in the document indexing process.
@@ -103,5 +117,11 @@ pub trait IndexStage: Send + Sync {
         } else {
             FailurePolicy::fail()
         }
+    }
+
+    /// Declare which context fields this stage accesses.
+    /// Used by the orchestrator for safe parallel execution.
+    fn access_pattern(&self) -> AccessPattern {
+        AccessPattern::default()
     }
 }

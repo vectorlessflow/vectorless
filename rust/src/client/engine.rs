@@ -42,7 +42,7 @@ use tracing::info;
 
 use crate::config::Config;
 use crate::error::Result;
-use crate::index::{PipelineExecutor, PipelineOptions};
+use crate::index::PipelineOptions;
 use crate::index::incremental::{self, IndexAction};
 use crate::retrieval::{PipelineRetriever, RetrieveEventReceiver};
 use crate::storage::Workspace;
@@ -97,13 +97,13 @@ impl Engine {
         config: Config,
         workspace: Workspace,
         retriever: PipelineRetriever,
-        executor: PipelineExecutor,
+        indexer: IndexerClient,
     ) -> Result<Self> {
         let config = Arc::new(config);
         let events = EventEmitter::new();
 
-        // Create indexer client
-        let indexer = IndexerClient::new(executor).with_events(events.clone());
+        // Attach event emitter to indexer
+        let indexer = indexer.with_events(events.clone());
 
         // Create retriever client
         let retriever =
@@ -228,7 +228,7 @@ impl Engine {
                     Vec::new(),
                 )
             }
-            Ok(IndexAction::FullIndex) => {
+            Ok(IndexAction::FullIndex { existing_id }) => {
                 match self.indexer.index(source, name, options).await {
                     Ok(doc) => {
                         let pipeline_options = self.build_pipeline_options(options, doc.format);
@@ -244,6 +244,10 @@ impl Engine {
                         if let Some(ref workspace) = self.workspace {
                             if let Err(e) = workspace.save(&persisted).await {
                                 return (Vec::new(), vec![FailedItem::new(&source_label, e.to_string())]);
+                            }
+                            // Clean up old document after successful save (atomic: save-first, then remove old)
+                            if let Some(old_id) = &existing_id {
+                                let _ = workspace.remove(old_id).await;
                             }
                         }
 
@@ -276,7 +280,7 @@ impl Engine {
                         let persisted = self.indexer.to_persisted_with_options(doc, &pipeline_options);
 
                         if let Some(ref workspace) = self.workspace {
-                            let _ = workspace.remove(&existing_id).await;
+                            // save() is atomic (write-lock + put), no need to remove first
                             if let Err(e) = workspace.save(&persisted).await {
                                 return (Vec::new(), vec![FailedItem::new(&source_label, e.to_string())]);
                             }
@@ -512,24 +516,24 @@ impl Engine {
     ) -> Result<IndexAction> {
         let workspace = match self.workspace {
             Some(ref ws) => ws,
-            None => return Ok(IndexAction::FullIndex),
+            None => return Ok(IndexAction::FullIndex { existing_id: None }),
         };
 
         // Force mode always re-indexes from scratch
         if options.mode == IndexMode::Force {
-            return Ok(IndexAction::FullIndex);
+            return Ok(IndexAction::FullIndex { existing_id: None });
         }
 
         // Only path sources support incremental indexing
         let path = match source {
             IndexSource::Path(p) => p,
-            _ => return Ok(IndexAction::FullIndex),
+            _ => return Ok(IndexAction::FullIndex { existing_id: None }),
         };
 
         // Find if this file has already been indexed
         let existing_id = match workspace.find_by_source_path(path).await {
             Some(id) => id,
-            None => return Ok(IndexAction::FullIndex), // New file
+            None => return Ok(IndexAction::FullIndex { existing_id: None }), // New file
         };
 
         // Default mode: skip if already indexed (no content check)
@@ -552,12 +556,12 @@ impl Engine {
         // Incremental mode: load stored document and delegate to resolver
         let current_bytes = match std::fs::read(path) {
             Ok(b) => b,
-            Err(_) => return Ok(IndexAction::FullIndex),
+            Err(_) => return Ok(IndexAction::FullIndex { existing_id: None }),
         };
 
         let stored_doc = match workspace.load(&existing_id).await? {
             Some(d) => d,
-            None => return Ok(IndexAction::FullIndex),
+            None => return Ok(IndexAction::FullIndex { existing_id: None }),
         };
 
         let format = crate::parser::DocumentFormat::from_extension(&stored_doc.meta.format)
@@ -572,9 +576,8 @@ impl Engine {
             format,
         );
 
-        if matches!(action, IndexAction::FullIndex) {
-            let _ = workspace.remove(&existing_id).await;
-        }
+        // Note: if FullIndex, old doc cleanup happens in process_source()
+        // after successful save (save-first, then remove old).
 
         Ok(action)
     }

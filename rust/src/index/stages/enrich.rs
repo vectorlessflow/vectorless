@@ -10,7 +10,7 @@ use tracing::info;
 use crate::document::{DocumentTree, NodeId, TocView};
 use crate::error::Result;
 
-use super::{IndexStage, StageResult};
+use super::{AccessPattern, IndexStage, StageResult};
 use crate::index::pipeline::IndexContext;
 
 /// Enrich stage - adds metadata to the tree.
@@ -109,6 +109,15 @@ impl IndexStage for EnrichStage {
 
     fn depends_on(&self) -> Vec<&'static str> {
         vec!["build"]
+    }
+
+    fn access_pattern(&self) -> AccessPattern {
+        AccessPattern {
+            reads_tree: true,
+            writes_tree: true,    // sets page_boundaries
+            writes_description: true,
+            ..Default::default()
+        }
     }
 
     async fn execute(&mut self, ctx: &mut IndexContext) -> Result<StageResult> {

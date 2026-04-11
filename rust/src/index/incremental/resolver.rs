@@ -21,7 +21,12 @@ pub enum IndexAction {
     /// Skip entirely — content unchanged.
     Skip(SkipInfo),
     /// Full index from scratch — new file, logic changed, or force mode.
-    FullIndex,
+    /// If replacing an existing document, `existing_id` contains the old doc ID
+    /// to clean up after the new document is successfully saved.
+    FullIndex {
+        /// Old document ID to remove after successful re-index (if replacing).
+        existing_id: Option<String>,
+    },
     /// Incremental update — content changed, pipeline unchanged.
     IncrementalUpdate {
         /// The old tree to reuse data from.
@@ -83,7 +88,9 @@ pub fn resolve_action(
         && !stored_doc.meta.logic_fingerprint.is_zero()
     {
         info!("Logic fingerprint changed, full reprocess required");
-        return IndexAction::FullIndex;
+        return IndexAction::FullIndex {
+            existing_id: Some(stored_doc.meta.id.clone()),
+        };
     }
 
     // Layer 3: Content changed, pipeline unchanged → incremental update

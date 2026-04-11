@@ -30,7 +30,7 @@ use tracing::{error, info, warn};
 use crate::error::Result;
 
 use super::super::PipelineOptions;
-use super::super::stages::IndexStage;
+use super::super::stages::{AccessPattern, IndexStage};
 use super::context::{IndexContext, IndexInput, PipelineResult, StageResult};
 use super::policy::FailurePolicy;
 
@@ -480,14 +480,16 @@ impl PipelineOrchestrator {
                 let idx_b = group.stage_indices[1];
 
                 // Determine which stage reads tree (gets snapshot) vs writes tree (gets ctx)
+                // using AccessPattern instead of hardcoded name checks.
                 let (writer_idx, reader_idx) = {
-                    let name_a = self.stages[idx_a].stage.name();
-                    let name_b = self.stages[idx_b].stage.name();
-                    // reasoning_index is read-only; optimize writes tree
-                    if name_a.contains("reasoning") {
-                        (idx_b, idx_a)
+                    let ap_a = self.stages[idx_a].stage.access_pattern();
+                    let ap_b = self.stages[idx_b].stage.access_pattern();
+                    // The stage that writes tree gets the main ctx;
+                    // the other (read-only on tree) gets a clone.
+                    if ap_b.writes_tree && !ap_a.writes_tree {
+                        (idx_b, idx_a) // b writes tree, a is reader
                     } else {
-                        (idx_a, idx_b)
+                        (idx_a, idx_b) // a writes tree (or both/neither write), b is reader
                     }
                 };
 
@@ -538,17 +540,19 @@ impl PipelineOrchestrator {
                 // Handle reader result
                 Self::handle_stage_result(reader_result, &reader_name, &reader_policy, &mut ctx)?;
 
-                // Merge reader's outputs back into main context
-                if reader_ctx.reasoning_index.is_some() {
+                // Merge reader's outputs back based on its AccessPattern
+                let reader_ap = self.stages[reader_idx].stage.access_pattern();
+                if reader_ap.writes_reasoning_index {
                     ctx.reasoning_index = reader_ctx.reasoning_index;
                 }
-                if reader_ctx.description.is_some() {
+                if reader_ap.writes_description {
                     ctx.description = reader_ctx.description;
                 }
-                // Merge metrics (additive counters)
+                // Merge additive metrics
                 ctx.metrics.llm_calls += reader_ctx.metrics.llm_calls;
                 ctx.metrics.summaries_generated += reader_ctx.metrics.summaries_generated;
                 ctx.metrics.total_tokens_generated += reader_ctx.metrics.total_tokens_generated;
+                ctx.metrics.nodes_processed += reader_ctx.metrics.nodes_processed;
                 if reader_ctx.metrics.reasoning_index_time_ms > 0 {
                     ctx.metrics.record_reasoning_index(
                         reader_ctx.metrics.reasoning_index_time_ms,
@@ -556,6 +560,11 @@ impl PipelineOrchestrator {
                         reader_ctx.metrics.keywords_indexed,
                     );
                 }
+                if reader_ctx.metrics.optimize_time_ms > 0 {
+                    ctx.metrics.record_optimize(reader_ctx.metrics.optimize_time_ms);
+                }
+                ctx.metrics.nodes_merged += reader_ctx.metrics.nodes_merged;
+                ctx.metrics.nodes_skipped += reader_ctx.metrics.nodes_skipped;
             } else {
                 // === Sequential execution (single stage or non-parallel group) ===
                 for &idx in &group.stage_indices {

@@ -21,13 +21,14 @@
 //! ```
 
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use tracing::info;
 use uuid::Uuid;
 
 use crate::error::{Error, Result};
 use crate::index::{IndexInput, IndexMode, PipelineExecutor, PipelineOptions, SummaryStrategy};
+use crate::llm::LlmClient;
 use crate::parser::DocumentFormat;
 use crate::storage::{DocumentMeta, PersistedDocument};
 
@@ -38,9 +39,11 @@ use super::types::{IndexOptions, IndexedDocument};
 /// Document indexing client.
 ///
 /// Provides operations for parsing and indexing documents.
+/// Each index operation creates a fresh pipeline executor, enabling
+/// true parallel document indexing without mutex contention.
 pub(crate) struct IndexerClient {
-    /// Pipeline executor.
-    executor: Arc<Mutex<PipelineExecutor>>,
+    /// Factory for creating pipeline executors (one per index operation).
+    executor_factory: Arc<dyn Fn() -> PipelineExecutor + Send + Sync>,
 
     /// Event emitter.
     events: EventEmitter,
@@ -73,10 +76,20 @@ impl Default for IndexerConfig {
 }
 
 impl IndexerClient {
-    /// Create a new indexer client.
-    pub fn new(executor: PipelineExecutor) -> Self {
+    /// Create a new indexer client with a default pipeline executor.
+    pub fn new(_executor: PipelineExecutor) -> Self {
         Self {
-            executor: Arc::new(Mutex::new(executor)),
+            executor_factory: Arc::new(PipelineExecutor::new),
+            events: EventEmitter::new(),
+            config: IndexerConfig::default(),
+        }
+    }
+
+    /// Create with an LLM-enabled pipeline.
+    pub fn with_llm(client: LlmClient) -> Self {
+        let client = Arc::new(client);
+        Self {
+            executor_factory: Arc::new(move || PipelineExecutor::with_llm((*client).clone())),
             events: EventEmitter::new(),
             config: IndexerConfig::default(),
         }
@@ -94,14 +107,14 @@ impl IndexerClient {
         self
     }
 
-    /// Create from an existing executor Arc.
-    pub(crate) fn from_arc(
-        executor: Arc<Mutex<PipelineExecutor>>,
+    /// Create from an executor factory function.
+    pub(crate) fn from_factory(
+        factory: Arc<dyn Fn() -> PipelineExecutor + Send + Sync>,
         events: EventEmitter,
         config: IndexerConfig,
     ) -> Self {
         Self {
-            executor,
+            executor_factory: factory,
             events,
             config,
         }
@@ -163,13 +176,8 @@ impl IndexerClient {
 
         // Create pipeline input and execute
         let input = IndexInput::file(&path);
-        let result = {
-            let mut executor = self
-                .executor
-                .lock()
-                .map_err(|_| Error::Other("Pipeline executor lock poisoned".to_string()))?;
-            executor.execute(input, pipeline_options).await?
-        };
+        let mut executor = (self.executor_factory)();
+        let result = executor.execute(input, pipeline_options).await?;
 
         self.build_indexed_document(doc_id, result, format, name, Some(&path))
     }
@@ -200,13 +208,8 @@ impl IndexerClient {
         );
 
         let input = IndexInput::content(content);
-        let result = {
-            let mut executor = self
-                .executor
-                .lock()
-                .map_err(|_| Error::Other("Pipeline executor lock poisoned".to_string()))?;
-            executor.execute(input, pipeline_options).await?
-        };
+        let mut executor = (self.executor_factory)();
+        let result = executor.execute(input, pipeline_options).await?;
 
         self.build_indexed_document(doc_id, result, format, name, None)
     }
@@ -241,13 +244,8 @@ impl IndexerClient {
         );
 
         let input = IndexInput::bytes(bytes);
-        let result = {
-            let mut executor = self
-                .executor
-                .lock()
-                .map_err(|_| Error::Other("Pipeline executor lock poisoned".to_string()))?;
-            executor.execute(input, pipeline_options).await?
-        };
+        let mut executor = (self.executor_factory)();
+        let result = executor.execute(input, pipeline_options).await?;
 
         self.build_indexed_document(doc_id, result, format, name, None)
     }
@@ -429,17 +427,12 @@ impl IndexerClient {
 
         persisted
     }
-
-    /// Get the underlying executor Arc (for advanced use).
-    pub(crate) fn inner(&self) -> Arc<Mutex<PipelineExecutor>> {
-        Arc::clone(&self.executor)
-    }
 }
 
 impl Clone for IndexerClient {
     fn clone(&self) -> Self {
         Self {
-            executor: Arc::clone(&self.executor),
+            executor_factory: Arc::clone(&self.executor_factory),
             events: self.events.clone(),
             config: self.config.clone(),
         }
