@@ -28,6 +28,8 @@
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {
 //!     let client = EngineBuilder::new()
 //!         .with_workspace("./workspace")
+//!         .with_key("sk-...")
+//!         .with_model("gpt-4o")
 //!         .build()
 //!         .await?;
 //!

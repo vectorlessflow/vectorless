@@ -3,33 +3,22 @@
 
 //! Configuration loader.
 //!
-//! Loads configuration from TOML files with environment variable overrides.
+//! Loads configuration from TOML files.
 //!
 //! # Configuration Priority
 //!
 //! Configuration is loaded in this order (later overrides earlier):
 //! 1. Default configuration
-//! 2. Config file (if found or specified)
-//! 3. Environment variables
-//!
-//! # Environment Variables
-//!
-//! | Variable | Description | Maps To |
-//! |----------|-------------|---------|
-//! | `OPENAI_API_KEY` | LLM API key | `llm.api_key` / `retrieval.api_key` |
-//! | `VECTORLESS_MODEL` | Default LLM model | `retrieval.model` |
-//! | `VECTORLESS_ENDPOINT` | LLM API endpoint | `retrieval.endpoint` |
-//! | `VECTORLESS_WORKSPACE` | Workspace directory | `storage.workspace_dir` |
+//! 2. Config file(s)
 //!
 //! # Example
 //!
 //! ```rust,no_run
 //! use vectorless::config::{ConfigLoader, Config};
 //!
-//! // Load from file with environment variable overrides
+//! // Load from file
 //! let config = ConfigLoader::new()
 //!     .file("config.toml")
-//!     .with_env(true)  // Enable environment variables (default: true)
 //!     .load()?;
 //!
 //! // Load with validation
@@ -89,9 +78,6 @@ pub struct ConfigLoader {
 
     /// Custom validator (optional).
     validator: Option<ConfigValidator>,
-
-    /// Whether to apply environment variable overrides.
-    env_enabled: bool,
 }
 
 impl Default for ConfigLoader {
@@ -107,7 +93,6 @@ impl ConfigLoader {
             files: Vec::new(),
             validate: false,
             validator: None,
-            env_enabled: true,
         }
     }
 
@@ -142,68 +127,13 @@ impl ConfigLoader {
         self
     }
 
-    /// Enable or disable environment variable overrides.
-    ///
-    /// When enabled (default), environment variables override config file values:
-    /// - `OPENAI_API_KEY` → sets API key for all LLM clients
-    /// - `VECTORLESS_MODEL` → sets default model
-    /// - `VECTORLESS_ENDPOINT` → sets API endpoint
-    /// - `VECTORLESS_WORKSPACE` → sets workspace directory
-    pub fn with_env(mut self, enabled: bool) -> Self {
-        self.env_enabled = enabled;
-        self
-    }
-
-    /// Apply environment variable overrides to configuration.
-    fn apply_env_overrides(&self, config: &mut Config) {
-        if !self.env_enabled {
-            return;
-        }
-
-        // OPENAI_API_KEY: Set API key for all LLM clients
-        if let Ok(api_key) = std::env::var("OPENAI_API_KEY") {
-            // Set default API key
-            config.llm.api_key = Some(api_key.clone());
-            // Override individual client API keys if not explicitly set
-            if config.llm.summary.api_key.is_none() {
-                config.llm.summary.api_key = Some(api_key.clone());
-            }
-            if config.llm.retrieval.api_key.is_none() {
-                config.llm.retrieval.api_key = Some(api_key.clone());
-            }
-            if config.llm.pilot.api_key.is_none() {
-                config.llm.pilot.api_key = Some(api_key);
-            }
-        }
-
-        // VECTORLESS_MODEL: Set default model
-        if let Ok(model) = std::env::var("VECTORLESS_MODEL") {
-            config.llm.summary.model = model.clone();
-            config.llm.retrieval.model = model.clone();
-            config.llm.pilot.model = model;
-        }
-
-        // VECTORLESS_ENDPOINT: Set API endpoint
-        if let Ok(endpoint) = std::env::var("VECTORLESS_ENDPOINT") {
-            config.llm.summary.endpoint = endpoint.clone();
-            config.llm.retrieval.endpoint = endpoint.clone();
-            config.llm.pilot.endpoint = endpoint;
-        }
-
-        // VECTORLESS_WORKSPACE: Set workspace directory
-        if let Ok(workspace) = std::env::var("VECTORLESS_WORKSPACE") {
-            config.storage.workspace_dir = PathBuf::from(workspace);
-        }
-    }
-
     /// Load the configuration.
     ///
     /// # Behavior
     ///
     /// 1. Start with default configuration
     /// 2. Load and merge each specified file (in order)
-    /// 3. Apply environment variable overrides (if enabled)
-    /// 4. Validate configuration (if enabled)
+    /// 3. Validate configuration (if enabled)
     ///
     /// # Errors
     ///
@@ -224,9 +154,6 @@ impl ConfigLoader {
                 return Err(ConfigError::NotFound(path.clone()));
             }
         }
-
-        // Apply environment variable overrides
-        self.apply_env_overrides(&mut config);
 
         // Validate if requested
         if self.validate {

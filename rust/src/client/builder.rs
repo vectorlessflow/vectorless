@@ -6,44 +6,18 @@
 //! This module provides [`EngineBuilder`] for configuring and building
 //! [`Engine`] instances with sensible defaults.
 //!
-//! # Configuration Priority
+//! # Configuration
 //!
-//! Configuration is applied in this order (later overrides earlier):
+//! `api_key` and `model` are **required**. `endpoint` is optional
+//! (defaults to the model provider's standard endpoint).
+//!
+//! Configuration sources (later overrides earlier):
 //! 1. Default configuration
-//! 2. Auto-detected config file (`vectorless.toml`, `config.toml`, `.vectorless.toml`)
-//! 3. Explicit config file (`with_config_path`)
-//! 4. Environment variables (`OPENAI_API_KEY`, `VECTORLESS_MODEL`, etc.)
-//! 5. Builder methods (`with_openai`, `with_model`, etc.) - highest priority
-//!
-//! # Environment Variables
-//!
-//! | Variable | Description |
-//! |----------|-------------|
-//! | `OPENAI_API_KEY` | LLM API key |
-//! | `VECTORLESS_MODEL` | Default model name |
-//! | `VECTORLESS_ENDPOINT` | API endpoint URL |
-//! | `VECTORLESS_WORKSPACE` | Workspace directory |
+//! 2. Config file (via `with_config_path`)
+//! 3. Builder methods (`with_key`, `with_model`, etc.) — highest priority
 //!
 //! # Examples
 //!
-//! ## Zero Configuration (Recommended)
-//!
-//! ```rust,no_run
-//! use vectorless::client::EngineBuilder;
-//!
-//! # #[tokio::main]
-//! # async fn main() -> Result<(), vectorless::BuildError> {
-//! // Just set OPENAI_API_KEY environment variable
-//! let engine = EngineBuilder::new()
-//!     .with_workspace("./data")
-//!     .build()
-//!     .await?;
-//! # Ok(())
-//! # }
-//! ```
-//!
-//! ## With Custom Model
-//!
 //! ```rust,no_run
 //! use vectorless::client::EngineBuilder;
 //!
@@ -51,14 +25,15 @@
 //! # async fn main() -> Result<(), vectorless::BuildError> {
 //! let engine = EngineBuilder::new()
 //!     .with_workspace("./data")
-//!     .with_model("gpt-4o-mini", None)  // Uses OPENAI_API_KEY from env
+//!     .with_key("sk-...")
+//!     .with_model("gpt-4o")
 //!     .build()
 //!     .await?;
 //! # Ok(())
 //! # }
 //! ```
 //!
-//! ## With Full Config File (Advanced)
+//! ## With Custom Endpoint
 //!
 //! ```rust,no_run
 //! use vectorless::client::EngineBuilder;
@@ -66,7 +41,10 @@
 //! # #[tokio::main]
 //! # async fn main() -> Result<(), vectorless::BuildError> {
 //! let engine = EngineBuilder::new()
-//!     .with_config_path("./vectorless.toml")
+//!     .with_workspace("./data")
+//!     .with_key("sk-...")
+//!     .with_model("deepseek-chat")
+//!     .with_endpoint("https://api.deepseek.com/v1")
 //!     .build()
 //!     .await?;
 //! # Ok(())
@@ -85,26 +63,8 @@ use super::events::EventEmitter;
 
 /// Builder for creating a [`Engine`] client.
 ///
-/// The builder uses sensible defaults and automatically loads
-/// configuration from config files and environment variables.
-///
-/// # Configuration Priority
-///
-/// Configuration is applied in this order (later overrides earlier):
-/// 1. Default configuration
-/// 2. Auto-detected config file (`vectorless.toml`, `config.toml`, `.vectorless.toml`)
-/// 3. Explicit config file (`with_config_path`)
-/// 4. Environment variables (`OPENAI_API_KEY`, `VECTORLESS_MODEL`, etc.)
-/// 5. Builder methods (`with_openai`, `with_model`, etc.) - highest priority
-///
-/// # Environment Variables
-///
-/// | Variable | Description |
-/// |----------|-------------|
-/// | `OPENAI_API_KEY` | LLM API key |
-/// | `VECTORLESS_MODEL` | Default model name |
-/// | `VECTORLESS_ENDPOINT` | API endpoint URL |
-/// | `VECTORLESS_WORKSPACE` | Workspace directory |
+/// `api_key` and `model` are required and must be set via builder methods
+/// or provided through a config file.
 ///
 /// # Example
 ///
@@ -113,9 +73,10 @@ use super::events::EventEmitter;
 ///
 /// # #[tokio::main]
 /// # async fn main() -> Result<(), vectorless::BuildError> {
-/// // Zero configuration - just set OPENAI_API_KEY environment variable
 /// let client = EngineBuilder::new()
 ///     .with_workspace("./my_workspace")
+///     .with_key("sk-...")
+///     .with_model("gpt-4o")
 ///     .build()
 ///     .await?;
 /// # Ok(())
@@ -211,9 +172,7 @@ impl EngineBuilder {
 
     /// Set the configuration file path.
     ///
-    /// If not set, the builder searches for `vectorless.toml`,
-    /// `config.toml`, or `.vectorless.toml` in the current directory
-    /// and parent directories.
+    /// The file must be a valid TOML configuration. No auto-detection is performed.
     #[must_use]
     pub fn with_config_path(mut self, path: impl Into<PathBuf>) -> Self {
         self.config_path = Some(path.into());
@@ -280,9 +239,7 @@ impl EngineBuilder {
     // LLM Configuration
     // ============================================================
 
-    /// Set the LLM API key.
-    ///
-    /// If not set, reads from `OPENAI_API_KEY` environment variable.
+    /// Set the LLM API key. **Required**.
     ///
     /// # Example
     ///
@@ -399,67 +356,16 @@ impl EngineBuilder {
         self
     }
 
-    /// Apply environment variable overrides to a Config.
-    ///
-    /// This is used when a custom Config is provided via `with_config`
-    /// or when using default config without a config file.
-    fn apply_env_overrides(config: &mut Config) {
-        // OPENAI_API_KEY: Set API key for all LLM clients
-        if let Ok(api_key) = std::env::var("OPENAI_API_KEY") {
-            // Set default API key
-            config.llm.api_key = Some(api_key.clone());
-            // Override individual client API keys if not explicitly set
-            if config.llm.summary.api_key.is_none() {
-                config.llm.summary.api_key = Some(api_key.clone());
-            }
-            if config.llm.retrieval.api_key.is_none() {
-                config.llm.retrieval.api_key = Some(api_key.clone());
-            }
-            if config.llm.pilot.api_key.is_none() {
-                config.llm.pilot.api_key = Some(api_key);
-            }
-            // Also set legacy config for backwards compatibility
-            if config.summary.api_key.is_none() {
-                if let Ok(api_key) = std::env::var("OPENAI_API_KEY") {
-                    config.summary.api_key = Some(api_key);
-                }
-            }
-        }
-
-        // VECTORLESS_MODEL: Set default model
-        if let Ok(model) = std::env::var("VECTORLESS_MODEL") {
-            config.llm.summary.model = model.clone();
-            config.llm.retrieval.model = model.clone();
-            config.llm.pilot.model = model.clone();
-            // Also set legacy config
-            config.summary.model = model.clone();
-            config.retrieval.model = model;
-        }
-
-        // VECTORLESS_ENDPOINT: Set API endpoint
-        if let Ok(endpoint) = std::env::var("VECTORLESS_ENDPOINT") {
-            config.llm.summary.endpoint = endpoint.clone();
-            config.llm.retrieval.endpoint = endpoint.clone();
-            config.llm.pilot.endpoint = endpoint.clone();
-            // Also set legacy config
-            config.summary.endpoint = endpoint.clone();
-            config.retrieval.endpoint = endpoint;
-        }
-
-        // VECTORLESS_WORKSPACE: Set workspace directory
-        if let Ok(workspace) = std::env::var("VECTORLESS_WORKSPACE") {
-            config.storage.workspace_dir = PathBuf::from(workspace);
-        }
-    }
-
     /// Build the Engine client.
+    ///
+    /// `api_key` and `model` must be provided via builder methods or config file.
     ///
     /// # Errors
     ///
     /// Returns a [`BuildError`] if:
     /// - Configuration loading fails
     /// - Workspace creation fails
-    /// - Required API key is missing
+    /// - Required `api_key` or `model` is missing
     ///
     /// # Example
     ///
@@ -470,7 +376,8 @@ impl EngineBuilder {
     /// # async fn main() -> Result<(), vectorless::BuildError> {
     /// let engine = EngineBuilder::new()
     ///     .with_workspace("./data")
-    ///     .with_key(std::env::var("OPENAI_API_KEY").unwrap())
+    ///     .with_key("sk-...")
+    ///     .with_model("gpt-4o")
     ///     .build()
     ///     .await?;
     /// # Ok(())
@@ -478,22 +385,15 @@ impl EngineBuilder {
     /// ```
     pub async fn build(self) -> Result<Engine, BuildError> {
         // Load or create configuration
-        // ConfigLoader automatically applies environment variable overrides
         let mut config = if let Some(config) = self.config {
-            // Custom config - still apply env vars
-            let mut cfg = config;
-            Self::apply_env_overrides(&mut cfg);
-            cfg
+            config
         } else if let Some(path) = self.config_path {
             ConfigLoader::new()
                 .file(&path)
                 .load()
                 .map_err(|e| BuildError::Config(e.to_string()))?
         } else {
-            // No config file - use defaults with env var overrides
-            let mut cfg = Config::default();
-            Self::apply_env_overrides(&mut cfg);
-            cfg
+            Config::default()
         };
 
         // Apply builder overrides to retrieval config
@@ -534,6 +434,14 @@ impl EngineBuilder {
             config.retrieval.search.max_iterations = 100;
         }
 
+        // Validate required settings
+        if config.summary.api_key.is_none() && config.retrieval.api_key.is_none() {
+            return Err(BuildError::MissingApiKey);
+        }
+        if config.retrieval.model.is_empty() {
+            return Err(BuildError::MissingModel);
+        }
+
         // Open workspace: prefer explicit path, fallback to config
         let workspace_path = self
             .workspace
@@ -563,8 +471,7 @@ impl EngineBuilder {
         let mut retriever =
             PipelineRetriever::new().with_max_iterations(retrieval_config.search.max_iterations);
 
-        // LLM API key is REQUIRED for retrieval (Pilot needs it for semantic navigation)
-        // Try retrieval config first, then fall back to summary config
+        // Resolve API key: retrieval config first, then summary config
         let retrieval_api_key = retrieval_config
             .api_key
             .clone()
@@ -620,11 +527,13 @@ pub enum BuildError {
     #[error("Workspace error: {0}")]
     Workspace(String),
 
-    /// Missing API key for retrieval.
-    #[error(
-        "Missing API key: LLM API key is required for retrieval. Set OPENAI_API_KEY environment variable or configure retrieval.api_key"
-    )]
+    /// Missing API key.
+    #[error("Missing API key: call .with_key(\"sk-...\") or set api_key in config file")]
     MissingApiKey,
+
+    /// Missing model name.
+    #[error("Missing model: call .with_model(\"gpt-4o\") or set model in config file")]
+    MissingModel,
 
     /// Other error.
     #[error("{0}")]

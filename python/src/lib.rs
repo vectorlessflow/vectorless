@@ -452,32 +452,29 @@ impl PyDocumentInfo {
 
 /// The main vectorless engine.
 ///
-/// Configuration priority (later overrides earlier):
-/// 1. Default configuration
-/// 2. Explicit config file (config_path parameter)
-/// 3. Environment variables (OPENAI_API_KEY, VECTORLESS_MODEL, etc.)
-/// 4. Constructor parameters (api_key, model, endpoint) - highest priority
+/// `api_key` and `model` are **required**.
 ///
-/// # Zero Configuration (Recommended)
-///
-/// Just set OPENAI_API_KEY environment variable:
+/// # Example
 ///
 /// ```python
 /// from vectorless import Engine
 ///
-/// engine = Engine(workspace="./data")
+/// engine = Engine(
+///     workspace="./data",
+///     api_key="sk-...",
+///     model="gpt-4o",
+/// )
 /// ```
 ///
-/// # With Custom Model
+/// # With Custom Endpoint
 ///
 /// ```python
-/// engine = Engine(workspace="./data", model="gpt-4o-mini")
-/// ```
-///
-/// # With Config File (Advanced)
-///
-/// ```python
-/// engine = Engine(workspace="./data", config_path="./vectorless.toml")
+/// engine = Engine(
+///     workspace="./data",
+///     api_key="sk-...",
+///     model="deepseek-chat",
+///     endpoint="https://api.deepseek.com/v1",
+/// )
 /// ```
 #[pyclass(name = "Engine")]
 pub struct PyEngine {
@@ -492,18 +489,12 @@ impl PyEngine {
     /// Args:
     ///     workspace: Path to the workspace directory (optional if config_path provides it).
     ///     config_path: Path to configuration file (optional, advanced usage).
-    ///     api_key: Optional API key. If not provided, uses OPENAI_API_KEY env var.
-    ///     model: Optional model name. Default: "gpt-4o".
-    ///     endpoint: Optional API endpoint.
-    ///
-    /// Configuration priority (later overrides earlier):
-    ///     1. Default configuration
-    ///     2. config_path parameter (if provided)
-    ///     3. Environment variables (OPENAI_API_KEY, VECTORLESS_MODEL, etc.)
-    ///     4. Constructor parameters (api_key, model, endpoint)
+    ///     api_key: **Required**. LLM API key.
+    ///     model: **Required**. LLM model name (e.g., "gpt-4o", "deepseek-chat").
+    ///     endpoint: Optional API endpoint (e.g., "https://api.deepseek.com/v1").
     ///
     /// Raises:
-    ///     VectorlessError: If engine creation fails.
+    ///     VectorlessError: If engine creation fails (missing api_key/model, workspace error, etc.).
     #[new]
     #[pyo3(signature = (workspace=None, config_path=None, api_key=None, model=None, endpoint=None))]
     fn new(
@@ -519,9 +510,6 @@ impl PyEngine {
                 "config",
             ))
         })?;
-
-        // Resolve API key: explicit > env var
-        let resolved_api_key = api_key.or_else(|| std::env::var("OPENAI_API_KEY").ok());
 
         let engine = rt.block_on(async {
             let mut builder = EngineBuilder::new();
@@ -544,7 +532,7 @@ impl PyEngine {
                 builder = builder.with_endpoint(e);
             }
 
-            if let Some(key) = resolved_api_key {
+            if let Some(key) = api_key {
                 builder = builder.with_key(key);
             }
 
