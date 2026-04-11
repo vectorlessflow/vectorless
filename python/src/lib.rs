@@ -3,9 +3,6 @@
 
 //! Python bindings for vectorless.
 
-// PyO3 macro expansions trigger unsafe_op_in_unsafe_fn under Rust 2024 edition.
-#![allow(unsafe_op_in_unsafe_fn)]
-
 use pyo3::prelude::*;
 use pyo3::exceptions::PyException;
 use pyo3_async_runtimes::tokio::future_into_py;
