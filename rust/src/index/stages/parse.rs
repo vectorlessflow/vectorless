@@ -42,8 +42,6 @@ impl ParseStage {
             },
             IndexMode::Markdown => Ok(DocumentFormat::Markdown),
             IndexMode::Pdf => Ok(DocumentFormat::Pdf),
-            IndexMode::Docx => Ok(DocumentFormat::Docx),
-            IndexMode::Html => Ok(DocumentFormat::Html),
         }
     }
 }

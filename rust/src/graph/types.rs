@@ -144,7 +144,7 @@ pub struct DocumentGraphNode {
     pub doc_id: String,
     /// Document title/name.
     pub title: String,
-    /// Document format (md, pdf, docx).
+    /// Document format (md, pdf).
     pub format: String,
     /// Top-N representative keywords extracted from the document's
     /// ReasoningIndex topic_paths, sorted by aggregate weight.

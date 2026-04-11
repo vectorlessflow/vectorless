@@ -17,10 +17,6 @@ pub enum DocumentFormat {
     Markdown,
     /// PDF files (.pdf)
     Pdf,
-    /// HTML files (.html, .htm)
-    Html,
-    /// Word documents (.docx)
-    Docx,
 }
 
 impl DocumentFormat {
@@ -29,8 +25,6 @@ impl DocumentFormat {
         match ext.to_lowercase().as_str() {
             "md" | "markdown" => Some(Self::Markdown),
             "pdf" => Some(Self::Pdf),
-            "html" | "htm" => Some(Self::Html),
-            "docx" => Some(Self::Docx),
             _ => None,
         }
     }
@@ -40,8 +34,6 @@ impl DocumentFormat {
         match self {
             Self::Markdown => "md",
             Self::Pdf => "pdf",
-            Self::Html => "html",
-            Self::Docx => "docx",
         }
     }
 }

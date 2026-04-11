@@ -113,18 +113,11 @@ libc = { workspace = true }
 pdf-extract = { workspace = true }
 lopdf = { workspace = true }
 
-# DOCX processing
-zip = { workspace = true }
-roxmltree = { workspace = true }
-
 # Random number generation
 rand = { workspace = true }
 
 # BM25 scoring
 bm25 = { workspace = true }
-
-# HTML parsing
-scraper = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

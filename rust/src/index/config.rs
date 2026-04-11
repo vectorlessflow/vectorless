@@ -23,10 +23,6 @@ pub enum IndexMode {
     Markdown,
     /// Force PDF format.
     Pdf,
-    /// Force DOCX format.
-    Docx,
-    /// Force HTML format.
-    Html,
 }
 
 impl Default for IndexMode {

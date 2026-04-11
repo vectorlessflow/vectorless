@@ -270,8 +270,6 @@ impl IndexerClient {
             mode: match format {
                 DocumentFormat::Markdown => IndexMode::Markdown,
                 DocumentFormat::Pdf => IndexMode::Pdf,
-                DocumentFormat::Html => IndexMode::Html,
-                DocumentFormat::Docx => IndexMode::Docx,
             },
             generate_ids: options.generate_ids,
             summary_strategy: if options.generate_summaries {

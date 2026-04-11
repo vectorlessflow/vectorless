@@ -531,8 +531,6 @@ impl Engine {
             mode: match format {
                 crate::parser::DocumentFormat::Markdown => crate::index::IndexMode::Markdown,
                 crate::parser::DocumentFormat::Pdf => crate::index::IndexMode::Pdf,
-                crate::parser::DocumentFormat::Html => crate::index::IndexMode::Html,
-                crate::parser::DocumentFormat::Docx => crate::index::IndexMode::Docx,
             },
             generate_ids: options.generate_ids,
             summary_strategy: if options.generate_summaries {

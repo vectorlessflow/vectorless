@@ -14,7 +14,7 @@ use std::sync::{Arc, RwLock};
 use crate::Error;
 use crate::error::Result;
 use crate::parser::{
-    DocumentFormat, DocumentParser, HtmlParser, MarkdownParser, ParseResult, PdfParser,
+    DocumentFormat, DocumentParser, MarkdownParser, ParseResult, PdfParser,
 };
 
 /// Type alias for parser factory functions.
@@ -65,12 +65,10 @@ impl ParserRegistry {
         registry
     }
 
-    /// Register default parsers (Markdown, PDF, HTML, DOCX).
+    /// Register default parsers (Markdown, PDF).
     pub fn register_defaults(&self) {
         self.register("markdown", || Box::new(MarkdownParser::new()));
         self.register("pdf", || Box::new(PdfParser::new()));
-        self.register("html", || Box::new(HtmlParser::new()));
-        self.register("docx", || Box::new(super::docx::DocxParser::new()));
     }
 
     /// Register a parser factory by name.
@@ -141,13 +139,13 @@ impl ParserRegistry {
     /// For binary formats (PDF, DOCX), the parser handles the bytes directly.
     pub async fn parse_bytes(&self, bytes: &[u8], format: DocumentFormat) -> Result<ParseResult> {
         match format {
-            DocumentFormat::Markdown | DocumentFormat::Html => {
+            DocumentFormat::Markdown => {
                 // Text formats - convert to string first
                 let content = std::str::from_utf8(bytes)
                     .map_err(|e| Error::Parse(format!("Invalid UTF-8 content: {}", e)))?;
                 self.parse(content, format).await
             }
-            DocumentFormat::Pdf | DocumentFormat::Docx => {
+            DocumentFormat::Pdf => {
                 // Binary formats - write to temp file and parse
                 // This is a temporary solution until parsers support bytes directly
                 let temp_dir = std::env::temp_dir();
@@ -186,8 +184,6 @@ pub fn get_parser(format: DocumentFormat) -> Option<Box<dyn DocumentParser>> {
     match format {
         DocumentFormat::Markdown => Some(Box::new(MarkdownParser::new())),
         DocumentFormat::Pdf => Some(Box::new(PdfParser::new())),
-        DocumentFormat::Html => Some(Box::new(HtmlParser::new())),
-        DocumentFormat::Docx => Some(Box::new(super::docx::DocxParser::new())),
     }
 }
 
@@ -246,7 +242,7 @@ mod tests {
         let registry = ParserRegistry::with_defaults();
         let formats = registry.supported_formats();
         assert!(formats.contains(&DocumentFormat::Markdown));
-        assert!(formats.contains(&DocumentFormat::Html));
+        assert!(formats.contains(&DocumentFormat::Pdf));
     }
 
     #[test]
@@ -272,14 +268,6 @@ mod tests {
     }
 
     #[test]
-    fn test_html_parser_registered() {
-        let registry = ParserRegistry::with_defaults();
-        assert!(registry.supports(DocumentFormat::Html));
-        let parser = registry.get(DocumentFormat::Html);
-        assert!(parser.is_some());
-    }
-
-    #[test]
     fn test_get_parser_function() {
         let parser = get_parser(DocumentFormat::Markdown);
         assert!(parser.is_some());
@@ -292,8 +280,8 @@ mod tests {
     }
 
     #[test]
-    fn test_get_html_parser_for_file() {
-        let parser = get_parser_for_file(Path::new("test.html"));
+    fn test_get_pdf_parser_for_file() {
+        let parser = get_parser_for_file(Path::new("test.pdf"));
         assert!(parser.is_some());
     }
 }
