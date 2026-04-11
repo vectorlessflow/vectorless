@@ -93,7 +93,7 @@ const config: Config = {
       ],
     },
     footer: {
-      style: 'dark',
+      style: 'light',
       links: [
         {
           title: 'Docs',
@@ -131,7 +131,7 @@ const config: Config = {
           ],
         },
       ],
-      copyright: `Copyright © ${new Date().getFullYear()} vectorlessflow. Licensed under Apache-2.0.`,
+      copyright: `Copyright © ${new Date().getFullYear()} Vectorless`,
     },
     prism: {
       theme: prismThemes.github,

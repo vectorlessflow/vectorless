@@ -2,46 +2,83 @@
 sidebar_position: 1
 ---
 
-# Tutorial Intro
+# Introduction
 
-Let's discover **Docusaurus in less than 5 minutes**.
+**Vectorless** is a reasoning-native document intelligence engine written in Rust — **no vector database, no embeddings, no similarity search**.
 
-## Getting Started
+It transforms documents into hierarchical semantic trees and uses LLMs to navigate the structure, retrieving the most relevant content through deep contextual understanding instead of vector math.
 
-Get started by **creating a new site**.
+## How It Works
 
-Or **try Docusaurus immediately** with **[docusaurus.new](https://docusaurus.new)**.
+1. **Parse** — Documents (Markdown, PDF) are parsed into hierarchical semantic trees, preserving structure and relationships between sections.
+2. **Index** — Trees are stored with metadata, keywords, and optional summaries. Incremental indexing skips unchanged files via content fingerprinting.
+3. **Query** — An LLM navigates the tree to find the most relevant sections. No embeddings, no similarity search — just structural reasoning.
 
-### What you'll need
+## Quick Start
 
-- [Node.js](https://nodejs.org/en/download/) version 20.0 or above:
-  - When installing Node.js, you are recommended to check all checkboxes related to dependencies.
-
-## Generate a new site
-
-Generate a new Docusaurus site using the **classic template**.
-
-The classic template will automatically be added to your project after you run the command:
+### Python
 
 ```bash
-npm init docusaurus@latest my-website classic
+pip install vectorless
 ```
 
-You can type this command into Command Prompt, Powershell, Terminal, or any other integrated terminal of your code editor.
+```python
+import asyncio
+from vectorless import Engine, IndexContext
 
-The command also installs all necessary dependencies you need to run Docusaurus.
+async def main():
+    engine = Engine(
+        workspace="./data",
+        api_key="sk-...",
+        model="gpt-4o",
+    )
 
-## Start your site
+    result = await engine.index(IndexContext.from_file("./report.pdf"))
+    doc_id = result.doc_id
 
-Run the development server:
+    answer = await engine.query(doc_id, "What is the total revenue?")
+    print(answer.single().content)
 
-```bash
-cd my-website
-npm run start
+asyncio.run(main())
 ```
 
-The `cd` command changes the directory you're working with. In order to work with your newly created Docusaurus site, you'll need to navigate the terminal there.
+### Rust
 
-The `npm run start` command builds your website locally and serves it through a development server, ready for you to view at http://localhost:3000/.
+```toml
+[dependencies]
+vectorless = "0.1"
+tokio = { version = "1", features = ["full"] }
+```
 
-Open `docs/intro.md` (this page) and edit some lines: the site **reloads automatically** and displays your changes.
+```rust
+use vectorless::{EngineBuilder, IndexContext, QueryContext};
+
+#[tokio::main]
+async fn main() -> vectorless::Result<()> {
+    let engine = EngineBuilder::new()
+        .with_workspace("./data")
+        .with_key("sk-...")
+        .with_model("gpt-4o")
+        .build()
+        .await?;
+
+    let result = engine.index(IndexContext::from_path("./report.pdf")).await?;
+    let doc_id = result.doc_id().unwrap();
+
+    let result = engine.query(
+        QueryContext::new("What is the total revenue?").with_doc_id(doc_id)
+    ).await?;
+    println!("{}", result.content);
+
+    Ok(())
+}
+```
+
+## Features
+
+- **Hierarchical Semantic Trees** — Preserves document structure, not flat chunks
+- **LLM-Powered Retrieval** — Structural reasoning over the tree, not vector similarity
+- **Incremental Indexing** — Content fingerprinting skips unchanged files
+- **Cross-Document Graph** — Automatic relationship discovery between documents
+- **Multi-Format** — Markdown and PDF support
+- **Zero Infrastructure** — No vector DB, no embedding models, just an LLM API key
