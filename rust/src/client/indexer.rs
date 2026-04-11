@@ -311,7 +311,8 @@ impl IndexerClient {
 
         let mut doc = IndexedDocument::new(&doc_id, format)
             .with_name(&doc_name)
-            .with_tree(tree);
+            .with_tree(tree)
+            .with_metrics(result.metrics);
 
         if let Some(p) = path {
             doc = doc.with_source_path(p);

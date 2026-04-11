@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 use crate::document::DocumentTree;
+use crate::metrics::IndexMetrics;
 use crate::parser::DocumentFormat;
 
 // ============================================================
@@ -44,6 +45,9 @@ pub struct IndexedDocument {
 
     /// Per-page content (for PDFs).
     pub pages: Vec<PageContent>,
+
+    /// Indexing pipeline metrics.
+    pub metrics: Option<IndexMetrics>,
 }
 
 impl IndexedDocument {
@@ -59,6 +63,7 @@ impl IndexedDocument {
             line_count: None,
             tree: None,
             pages: Vec::new(),
+            metrics: None,
         }
     }
 
@@ -95,6 +100,12 @@ impl IndexedDocument {
     /// Set the document tree.
     pub fn with_tree(mut self, tree: DocumentTree) -> Self {
         self.tree = Some(tree);
+        self
+    }
+
+    /// Set the indexing metrics.
+    pub fn with_metrics(mut self, metrics: IndexMetrics) -> Self {
+        self.metrics = Some(metrics);
         self
     }
 
@@ -307,6 +318,8 @@ pub struct IndexItem {
     pub description: Option<String>,
     /// Page count (for PDFs).
     pub page_count: Option<usize>,
+    /// Indexing pipeline metrics (timing, LLM usage, node stats).
+    pub metrics: Option<IndexMetrics>,
 }
 
 impl IndexItem {
@@ -324,7 +337,20 @@ impl IndexItem {
             format,
             description,
             page_count,
+            metrics: None,
         }
+    }
+
+    /// Set the indexing metrics.
+    pub fn with_metrics(mut self, metrics: IndexMetrics) -> Self {
+        self.metrics = Some(metrics);
+        self
+    }
+
+    /// Set the indexing metrics (optional).
+    pub fn with_metrics_opt(mut self, metrics: Option<IndexMetrics>) -> Self {
+        self.metrics = metrics;
+        self
     }
 }
 

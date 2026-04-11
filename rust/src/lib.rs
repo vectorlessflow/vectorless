@@ -85,3 +85,6 @@ pub use document::{
 // Graph types
 pub use graph::DocumentGraph;
 
+// Index metrics
+pub use metrics::IndexMetrics;
+

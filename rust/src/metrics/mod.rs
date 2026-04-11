@@ -50,11 +50,13 @@
 //! ```
 
 mod hub;
+mod index;
 mod llm;
 mod pilot;
 mod retrieval;
 
 pub use hub::MetricsHub;
+pub use index::IndexMetrics;
 pub use llm::{LlmMetrics, LlmMetricsReport};
 pub use pilot::{InterventionPoint, PilotMetrics, PilotMetricsReport};
 pub use retrieval::{RetrievalMetrics, RetrievalMetricsReport};

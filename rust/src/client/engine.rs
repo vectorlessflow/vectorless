@@ -245,13 +245,14 @@ impl Engine {
                 match self.indexer.index(source, name, options).await {
                     Ok(doc) => {
                         let pipeline_options = self.build_pipeline_options(options, doc.format);
+                        let metrics = doc.metrics.clone();
                         let item = IndexItem::new(
                             doc.id.clone(),
                             doc.name.clone(),
                             doc.format.clone(),
                             doc.description.clone(),
                             doc.page_count,
-                        );
+                        ).with_metrics_opt(metrics);
                         let persisted = self.indexer.to_persisted_with_options(doc, &pipeline_options);
 
                         if let Some(ref workspace) = self.workspace {
@@ -283,13 +284,14 @@ impl Engine {
                     Ok(mut doc) => {
                         doc.id = existing_id.clone();
                         let pipeline_options = self.build_pipeline_options(options, doc.format);
+                        let metrics = doc.metrics.clone();
                         let item = IndexItem::new(
                             doc.id.clone(),
                             doc.name.clone(),
                             doc.format.clone(),
                             doc.description.clone(),
                             doc.page_count,
-                        );
+                        ).with_metrics_opt(metrics);
                         let persisted = self.indexer.to_persisted_with_options(doc, &pipeline_options);
 
                         if let Some(ref workspace) = self.workspace {
