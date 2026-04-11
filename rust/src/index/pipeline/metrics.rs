@@ -88,7 +88,7 @@ impl IndexMetrics {
 
     /// Record enrich stage time.
     pub fn record_enrich(&mut self, duration_ms: u64) {
-        self.enhance_time_ms = duration_ms;
+        self.enrich_time_ms = duration_ms;
     }
 
     /// Record optimize stage time.

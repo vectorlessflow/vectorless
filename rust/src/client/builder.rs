@@ -420,7 +420,9 @@ impl EngineBuilder {
             }
             // Also set legacy config for backwards compatibility
             if config.summary.api_key.is_none() {
-                config.summary.api_key = Some(std::env::var("OPENAI_API_KEY").unwrap());
+                if let Ok(api_key) = std::env::var("OPENAI_API_KEY") {
+                    config.summary.api_key = Some(api_key);
+                }
             }
         }
 

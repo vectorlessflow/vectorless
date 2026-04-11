@@ -260,10 +260,9 @@ impl PipelineOrchestrator {
 
         // Check for cycles
         if result.len() != n {
-            let remaining: Vec<&str> = result
-                .iter()
-                .filter(|&&i| !result.contains(&i))
-                .map(|&i| self.stages[i].stage.name())
+            let remaining: Vec<&str> = (0..n)
+                .filter(|i| !result.contains(i))
+                .map(|i| self.stages[i].stage.name())
                 .collect();
             return Err(crate::error::Error::Config(format!(
                 "Circular dependency detected involving stages: {:?}",

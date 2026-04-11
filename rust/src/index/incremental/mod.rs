@@ -41,10 +41,12 @@ pub fn compute_reusable_summaries(
     let detector = ChangeDetector::new();
     let changes = detector.detect_changes(old_tree, new_tree);
 
-    let changed_titles: std::collections::HashSet<String> = changes.changed_node_ids()
-        .into_iter()
-        .map(|s| s.to_string())
-        .chain(changes.removed.iter().map(|c| c.title.clone()))
+    let changed_titles: std::collections::HashSet<String> = changes.modified
+        .iter()
+        .chain(changes.restructured.iter())
+        .chain(changes.added.iter())
+        .chain(changes.removed.iter())
+        .map(|c| c.title.clone())
         .collect();
 
     let mut reusable = HashMap::new();
