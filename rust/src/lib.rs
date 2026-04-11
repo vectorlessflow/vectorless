@@ -82,3 +82,6 @@ pub use document::{
     TreeNode,
 };
 
+// Graph types
+pub use graph::DocumentGraph;
+

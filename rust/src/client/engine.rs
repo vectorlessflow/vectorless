@@ -471,6 +471,19 @@ impl Engine {
         workspace.clear().await
     }
 
+    /// Get the cross-document relationship graph.
+    ///
+    /// The graph is automatically rebuilt after indexing documents.
+    /// Returns `None` if no graph has been built yet.
+    pub async fn get_graph(&self) -> Result<Option<crate::graph::DocumentGraph>> {
+        let workspace = self
+            .workspace
+            .as_ref()
+            .ok_or_else(|| Error::Config("No workspace configured".to_string()))?;
+
+        workspace.get_graph().await
+    }
+
     // ============================================================
     // Internal
     // ============================================================
