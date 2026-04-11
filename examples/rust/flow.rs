@@ -12,11 +12,7 @@
 //! # Usage
 //!
 //! ```bash
-//! # Without summaries (default)
-//! cargo run --example markdown_flow
-//!
-//! # With summary generation (requires OPENAI_API_KEY)
-//! OPENAI_API_KEY=sk-... cargo run --example markdown_flow
+//! cargo run --example flow
 //! ```
 
 use vectorless::EngineBuilder;
@@ -38,13 +34,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize tracing for debug output (set RUST_LOG=debug to see more)
     tracing_subscriber::fmt::init();
 
-    println!("=== Vectorless Markdown Flow Example ===\n");
+    println!("=== Vectorless Flow Example ===\n");
 
-    // Step 1: Create a Vectorless client (no API key needed - LLM config is automatic)
+    // Step 1: Create a Vectorless client
     println!("Step 1: Creating Vectorless client...");
 
     let client = EngineBuilder::new()
         .with_workspace("./workspace")
+        .with_key("sk-...")
+        .with_model("gpt-4o")
         .build()
         .await
         .map_err(|e: vectorless::BuildError| vectorless::Error::Config(e.to_string()))?;
@@ -55,13 +53,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Step 2: Index the sample Markdown document
     println!("Step 2: Indexing Markdown document...");
 
-    // Write sample content to a temp file
     let temp_dir = tempfile::tempdir()?;
     let md_path = temp_dir.path().join("sample.md");
     tokio::fs::write(&md_path, SAMPLE_MARKDOWN).await?;
 
-    // Check if we should generate summaries (requires API key)
-    println!("  - API key detected, generating summaries...");
     let index_result = client
         .index(IndexContext::from_path(&md_path).with_options(IndexOptions::new().with_summaries()))
         .await?;

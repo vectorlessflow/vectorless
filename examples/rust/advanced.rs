@@ -3,7 +3,7 @@
 
 //! Advanced usage example - Full Configuration.
 //!
-//! This example demonstrates how to use a full configuration file
+//! This example demonstrates how to use a configuration file
 //! for advanced use cases where you need fine-grained control.
 //!
 //! # Usage
@@ -20,22 +20,22 @@ use vectorless::{EngineBuilder, IndexContext, QueryContext};
 
 #[tokio::main]
 async fn main() -> vectorless::Result<()> {
-    println!("=== Vectorless Advanced Example (Full Configuration) ===\n");
+    println!("=== Vectorless Advanced Example (Config File) ===\n");
 
-    // Method 1: Use explicit config file path
-    // This loads all settings from the specified config file
+    // Load all settings from the specified config file.
+    // The config file must include api_key and model.
     let client = EngineBuilder::new()
-        .with_config_path("./config.toml") // or "./my_vectorless.toml"
+        .with_config_path("./config.toml")
         .build()
         .await
         .map_err(|e: vectorless::BuildError| vectorless::Error::Config(e.to_string()))?;
 
-    println!("✓ Client created with config file\n");
+    println!("Client created with config file\n");
 
     // Index a document
     let result = client.index(IndexContext::from_path("./README.md")).await?;
     let doc_id = result.doc_id().unwrap().to_string();
-    println!("✓ Indexed: {}\n", doc_id);
+    println!("Indexed: {}\n", doc_id);
 
     // Query
     let result = client
@@ -52,21 +52,7 @@ async fn main() -> vectorless::Result<()> {
 
     // Cleanup
     client.remove(&doc_id).await?;
-    println!("✓ Cleaned up");
-
-    println!("\n=== Configuration Options ===\n");
-    println!("Configuration Priority (later overrides earlier):");
-    println!("  1. Default configuration");
-    println!("  2. Auto-detected config file (vectorless.toml, config.toml, .vectorless.toml)");
-    println!("  3. Explicit config file (with_config_path)");
-    println!("  4. Environment variables (OPENAI_API_KEY, VECTORLESS_MODEL, etc.)");
-    println!("  5. Builder methods (with_key, with_model, with_endpoint)");
-    println!();
-    println!("Environment Variables:");
-    println!("  OPENAI_API_KEY       - LLM API key");
-    println!("  VECTORLESS_MODEL     - Default model name");
-    println!("  VECTORLESS_ENDPOINT  - API endpoint URL");
-    println!("  VECTORLESS_WORKSPACE - Workspace directory");
+    println!("Cleaned up");
 
     println!("\n=== Done ===");
     Ok(())

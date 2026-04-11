@@ -15,24 +15,16 @@ exclude = ["docs/", ".*"]
 
 # Example directory configuration
 [[example]]
-name = "basic"
-path = "../examples/rust/basic.rs"
-
-[[example]]
 name = "advanced"
 path = "../examples/rust/advanced.rs"
-
-[[example]]
-name = "custom_config"
-path = "../examples/rust/custom_config.rs"
 
 [[example]]
 name = "events"
 path = "../examples/rust/events.rs"
 
 [[example]]
-name = "markdownflow"
-path = "../examples/rust/markdownflow.rs"
+name = "flow"
+path = "../examples/rust/flow.rs"
 
 [[example]]
 name = "graph"

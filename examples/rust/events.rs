@@ -94,6 +94,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Step 2: Creating engine with event emitter...");
     let engine = EngineBuilder::new()
         .with_workspace("./workspace_events_example")
+        .with_key("sk-...")
+        .with_model("gpt-4o")
         .with_events(events)
         .build()
         .await

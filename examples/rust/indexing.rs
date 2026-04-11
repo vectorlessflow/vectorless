@@ -20,6 +20,8 @@ async fn main() -> vectorless::Result<()> {
     // 1. Create engine
     let engine = EngineBuilder::new()
         .with_workspace("./workspace_index_example")
+        .with_key("sk-...")
+        .with_model("gpt-4o")
         .build()
         .await
         .map_err(|e: vectorless::BuildError| vectorless::Error::Config(e.to_string()))?;
