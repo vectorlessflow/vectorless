@@ -3,8 +3,6 @@
 
 //! Document structure types for JSON export.
 //!
-//! These types define the JSON format for exporting document trees,
-//! compatible with PageIndex format.
 
 use serde::{Deserialize, Serialize};
 

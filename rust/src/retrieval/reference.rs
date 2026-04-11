@@ -147,9 +147,6 @@ impl FollowedReference {
 }
 
 /// Reference follower for expanding content via cross-references.
-///
-/// This implements the PageIndex paper's reference following capability,
-/// allowing the retrieval system to follow "see Appendix G" style references.
 #[derive(Debug, Clone)]
 pub struct ReferenceFollower {
     config: ReferenceConfig,
