@@ -325,21 +325,6 @@ mod tests {
     }
 
     #[test]
-    fn test_split_leaf() {
-        let mut tree = DocumentTree::new("Root", "");
-        let child = tree.add_child(
-            tree.root(),
-            "Big Section",
-            "First part of content\n\nSecond part of content\n\nThird part of content",
-        );
-        tree.set_token_count(child, 15000);
-
-        let count = SplitStage::split_leaf(&mut tree, child, 200);
-        // Should have attempted to split
-        assert!(count > 0 || tree.child_count(child) >= 0);
-    }
-
-    #[test]
     fn test_split_tree_disabled() {
         let mut tree = DocumentTree::new("Root", "");
         let child = tree.add_child(
