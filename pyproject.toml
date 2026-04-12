@@ -40,7 +40,7 @@ dev = [
 [project.urls]
 Homepage = "https://vectorless.dev"
 Repository = "https://github.com/vectorlessflow/vectorless"
-Documentation = "https://docs.rs/vectorless"
+Documentation = "https://www.vectorless.dev/docs/intro"
 
 [tool.maturin]
 python-source = "python"
