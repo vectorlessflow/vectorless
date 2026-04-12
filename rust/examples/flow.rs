@@ -48,7 +48,7 @@ The system is designed for accuracy over speed. By leveraging document structure
 "#;
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> vectorless::Result<()> {
     // Initialize tracing for debug output (set RUST_LOG=debug to see more)
     tracing_subscriber::fmt::init();
 
@@ -57,13 +57,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Step 1: Create a Vectorless client
     println!("Step 1: Creating Vectorless client...");
 
-    let client = EngineBuilder::new()
-        .with_workspace("./workspace")
-        .with_key("sk-...")
+    let engine = EngineBuilder::new()
+        .with_workspace("./worksspace_flow_example")
+        .with_key("sk...")
         .with_model("gpt-4o")
+        .with_endpoint("https://api")
         .build()
         .await
-        .map_err(|e: vectorless::BuildError| vectorless::Error::Config(e.to_string()))?;
+        .map_err(|e| vectorless::Error::Config(e.to_string()))?;
 
     println!("  - Client created successfully");
     println!();
@@ -75,7 +76,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let md_path = temp_dir.path().join("sample.md");
     tokio::fs::write(&md_path, SAMPLE_MARKDOWN).await?;
 
-    let index_result = client
+    let index_result = engine
         .index(IndexContext::from_path(&md_path).with_options(IndexOptions::new().with_summaries()))
         .await?;
     let doc_id = index_result.doc_id().unwrap().to_string();
@@ -86,7 +87,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Step 3: List indexed documents
     println!("Step 3: Indexed documents:");
-    for doc in client.list().await? {
+    for doc in engine.list().await? {
         println!("  - {} ({})", doc.name, doc.id);
     }
     println!();
@@ -94,12 +95,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Step 4: Query the document
     println!("Step 4: Querying the document...");
 
-    let queries = vec!["What is this project about?"];
+    let queries = vec!["What is the seconds for complex multi-hop?"];
 
     for query in queries {
         println!("  Query: \"{}\"", query);
 
-        match client
+        match engine
             .query(QueryContext::new(query).with_doc_id(&doc_id))
             .await
         {
@@ -110,7 +111,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     } else {
                         println!("    - Found relevant content:");
                         let preview = if item.content.len() > 200 {
-                            format!("{}...", &item.content[..200])
+                            format!("{}...", &item.content)
                         } else {
                             item.content.clone()
                         };
@@ -132,8 +133,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Step 5: Cleanup
     println!("Step 5: Cleanup...");
 
-    client.remove(&doc_id).await?;
-    println!("  - Document removed");
+    // engine.remove(&doc_id).await?;
+    // println!("  - Document removed");
 
     println!("\n=== Example Complete ===");
     Ok(())
