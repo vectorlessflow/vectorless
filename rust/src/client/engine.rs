@@ -407,8 +407,8 @@ impl Engine {
         let mut failed = Vec::new();
 
         for doc_id in doc_ids {
-            let tree = match self.get_structure(&doc_id).await {
-                Ok(t) => t,
+            let (tree, reasoning_index) = match self.get_structure(&doc_id).await {
+                Ok((t, ri)) => (t, ri),
                 Err(e) => {
                     tracing::warn!("Skipping document {}: {}", doc_id, e);
                     failed.push(FailedItem::new(&doc_id, e.to_string()));
@@ -416,7 +416,7 @@ impl Engine {
                 }
             };
 
-            match self.retriever.query(&tree, &ctx.query, &options).await {
+            match self.retriever.query_with_reasoning_index(&tree, &ctx.query, &options, reasoning_index).await {
                 Ok(mut result) => {
                     result.doc_id = doc_id;
                     items.push(result);
@@ -456,7 +456,7 @@ impl Engine {
             }
         };
 
-        let tree = self.get_structure(&doc_id).await?;
+        let (tree, _reasoning_index) = self.get_structure(&doc_id).await?;
         let options = ctx.to_retrieve_options(&self.config);
 
         let rx = self
@@ -530,8 +530,8 @@ impl Engine {
     // Internal
     // ============================================================
 
-    /// Get document structure (tree). Internal use only.
-    pub(crate) async fn get_structure(&self, doc_id: &str) -> Result<DocumentTree> {
+    /// Get document structure (tree) and optional reasoning index. Internal use only.
+    pub(crate) async fn get_structure(&self, doc_id: &str) -> Result<(DocumentTree, Option<crate::document::ReasoningIndex>)> {
         let workspace = self
             .workspace
             .as_ref()
@@ -542,7 +542,7 @@ impl Engine {
             .await?
             .ok_or_else(|| Error::DocumentNotFound(format!("Document not found: {}", doc_id)))?;
 
-        Ok(doc.tree)
+        Ok((doc.tree, doc.reasoning_index))
     }
 
     /// Resolve QueryScope into a list of document IDs.

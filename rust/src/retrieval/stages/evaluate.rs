@@ -168,11 +168,16 @@ impl EvaluateStage {
     }
 
     /// Collect content from leaf descendants of a node (excluding the node itself).
+    ///
+    /// Uses BFS (FIFO) traversal to preserve document order — the first
+    /// section in the document appears first in the output.
     fn collect_leaf_content(
         &self,
         tree: &crate::document::DocumentTree,
         node_id: crate::document::NodeId,
     ) -> String {
+        use std::collections::VecDeque;
+
         let mut content_parts = Vec::new();
 
         // Start with children, not the node itself
@@ -182,9 +187,9 @@ impl EvaluateStage {
             return String::new();
         }
 
-        let mut stack: Vec<crate::document::NodeId> = children;
+        let mut queue: VecDeque<crate::document::NodeId> = children.into_iter().collect();
 
-        while let Some(current_id) = stack.pop() {
+        while let Some(current_id) = queue.pop_front() {
             let current_children = tree.children(current_id);
 
             if current_children.is_empty() {
@@ -195,8 +200,8 @@ impl EvaluateStage {
                     }
                 }
             } else {
-                // Non-leaf node - add children to stack
-                stack.extend(current_children);
+                // Non-leaf node - add children to queue (FIFO preserves order)
+                queue.extend(current_children);
             }
         }
 
@@ -285,7 +290,6 @@ impl EvaluateStage {
     /// Calculate overall confidence score.
     fn calculate_confidence(&self, ctx: &PipelineContext) -> f32 {
         if ctx.candidates.is_empty() {
-            println!("[DEBUG] calculate_confidence: no candidates, returning 0.0");
             return 0.0;
         }
 
@@ -299,12 +303,7 @@ impl EvaluateStage {
             SufficiencyLevel::Insufficient => 0.4,
         };
 
-        let confidence = avg_score * sufficiency_factor;
-        println!(
-            "[DEBUG] calculate_confidence: avg_score={:.3}, sufficiency={:?}, factor={:.1}, confidence={:.3}",
-            avg_score, ctx.sufficiency, sufficiency_factor, confidence
-        );
-        confidence
+        avg_score * sufficiency_factor
     }
 }
 
@@ -333,12 +332,6 @@ impl RetrievalStage for EvaluateStage {
     async fn execute(&self, ctx: &mut PipelineContext) -> crate::error::Result<StageOutcome> {
         let start = std::time::Instant::now();
 
-        println!(
-            "[DEBUG] EvaluateStage: {} candidates, iteration {}",
-            ctx.candidates.len(),
-            ctx.search_iterations
-        );
-
         info!(
             "Judging sufficiency: {} candidates, iteration {}",
             ctx.candidates.len(),
@@ -358,6 +351,26 @@ impl RetrievalStage for EvaluateStage {
         // 3. Check sufficiency
         ctx.sufficiency = self.check_sufficiency(ctx);
         info!("Sufficiency level: {:?}", ctx.sufficiency);
+
+        // 3.5 Detect stagnant candidates (same results as previous iteration)
+        // If candidates haven't changed, further backtracking won't help.
+        let stagnant = ctx.check_candidates_stagnant();
+        if stagnant {
+            info!(
+                "Candidates unchanged after backtrack, completing with {} candidates",
+                ctx.candidates.len()
+            );
+            ctx.result = Some(self.build_response(ctx));
+            ctx.record_reasoning(
+                StageName::Evaluate,
+                format!(
+                    "Candidates stagnant (unchanged), forced completion with {} candidates",
+                    ctx.candidates.len()
+                ),
+                NavigationDecision::Skip,
+            );
+            return Ok(StageOutcome::complete());
+        }
 
         // Update metrics
         ctx.metrics.evaluate_time_ms += start.elapsed().as_millis() as u64;

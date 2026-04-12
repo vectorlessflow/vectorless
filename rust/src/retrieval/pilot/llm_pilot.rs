@@ -10,7 +10,7 @@ use async_trait::async_trait;
 use std::sync::Arc;
 use tracing::{debug, info, warn};
 
-use crate::document::DocumentTree;
+use crate::document::{DocumentTree, NodeId};
 use crate::llm::{LlmClient, LlmExecutor};
 use crate::memo::{MemoKey, MemoStore, MemoValue};
 use crate::utils::fingerprint::Fingerprint;
@@ -631,8 +631,16 @@ impl Pilot for LlmPilot {
         decision
     }
 
-    async fn guide_start(&self, tree: &DocumentTree, query: &str) -> Option<PilotDecision> {
-        println!("[DEBUG] LlmPilot::guide_start() called, query='{}'", query);
+    async fn guide_start(
+        &self,
+        tree: &DocumentTree,
+        query: &str,
+        start_node: NodeId,
+    ) -> Option<PilotDecision> {
+        println!(
+            "[DEBUG] LlmPilot::guide_start() called, query='{}', start_node={:?}",
+            query, start_node
+        );
 
         // Check if guide_at_start is enabled
         if !self.config.guide_at_start {
@@ -650,10 +658,14 @@ impl Pilot for LlmPilot {
         // Build start context
         let context = self.context_builder.build_start_context(tree, query);
 
-        // Get root's children as candidates
-        let node_ids = tree.children(tree.root());
+        // Get start_node's children as candidates (NOT root's children)
+        let node_ids = tree.children(start_node);
+        if node_ids.is_empty() {
+            debug!("Start node has no children, no guidance needed");
+            return None;
+        }
         println!(
-            "[DEBUG] LlmPilot::guide_start() - {} root children candidates",
+            "[DEBUG] LlmPilot::guide_start() - {} children candidates from start_node",
             node_ids.len()
         );
 

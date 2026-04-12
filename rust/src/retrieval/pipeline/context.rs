@@ -256,6 +256,9 @@ pub struct PipelineContext {
     pub accumulated_content: String,
     /// Estimated token count.
     pub token_count: usize,
+    /// Fingerprint of candidate node IDs from previous evaluate call.
+    /// Used to detect stagnant loops (same candidates → same evaluation).
+    pub prev_candidate_fingerprint: Option<u64>,
 
     // ============ Final Result ============
     /// Final retrieval response.
@@ -307,6 +310,7 @@ impl PipelineContext {
             sufficiency: SufficiencyLevel::default(),
             accumulated_content: String::new(),
             token_count: 0,
+            prev_candidate_fingerprint: None,
             result: None,
             stage_results: HashMap::new(),
             metrics: RetrievalMetrics::default(),
@@ -400,6 +404,25 @@ impl PipelineContext {
     /// Increment backtrack count.
     pub fn increment_backtrack(&mut self) {
         self.metrics.backtracks += 1;
+    }
+
+    /// Compute a fingerprint of the current candidate node IDs.
+    fn candidate_fingerprint(&self) -> u64 {
+        use std::hash::{Hash, Hasher};
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        for c in &self.candidates {
+            format!("{:?}", c.node_id).hash(&mut hasher);
+        }
+        hasher.finish()
+    }
+
+    /// Check if candidates changed since the last call, and update the stored fingerprint.
+    /// Returns `true` if candidates are the same as before (stagnant loop detected).
+    pub fn check_candidates_stagnant(&mut self) -> bool {
+        let fp = self.candidate_fingerprint();
+        let stagnant = self.prev_candidate_fingerprint == Some(fp);
+        self.prev_candidate_fingerprint = Some(fp);
+        stagnant
     }
 
     /// Check if token limit is reached.

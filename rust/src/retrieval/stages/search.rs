@@ -326,9 +326,9 @@ impl SearchStage {
     /// Check if a query is asking for a document summary/overview.
     fn is_summary_query(query: &str) -> bool {
         let lower = query.to_lowercase();
+
+        // Direct keyword matches
         let patterns = [
-            "what is this document",
-            "what is this about",
             "summarize",
             "summary",
             "overview",
@@ -344,7 +344,30 @@ impl SearchStage {
             "文档简介",
             "介绍一下",
         ];
-        patterns.iter().any(|p| lower.contains(p))
+        if patterns.iter().any(|p| lower.contains(p)) {
+            return true;
+        }
+
+        // Phrase patterns — match with intervening words removed.
+        // "what is this project about" → remove common filler words, check for "what is this about"
+        let filler_words = ["project", "document", "file", "paper", "article", "text", "book", "the", "a", "an"];
+        let cleaned: String = lower
+            .split_whitespace()
+            .filter(|w| !filler_words.contains(w))
+            .collect::<Vec<_>>()
+            .join(" ");
+
+        let phrase_patterns = [
+            "what is this about",
+            "what is this document",
+            "what is this about",
+            "what does this mean",
+            "tell me about this",
+            "what is the main idea",
+            "what are the key points",
+            "what is the purpose",
+        ];
+        phrase_patterns.iter().any(|p| cleaned.contains(p))
     }
 
     /// Try to match the query against pre-computed reasoning index entries.
@@ -357,21 +380,33 @@ impl SearchStage {
         // Check 1: Summary shortcut — handle "overview" style queries
         if let Some(ref shortcut) = ridx.summary_shortcut() {
             if Self::is_summary_query(&ctx.query) {
-                let mut candidates = vec![CandidateNode::new(
+                // For summary queries, return all top-level sections as candidates.
+                // Don't include the root node itself — it has no direct content,
+                // only descendant leaf content which is already covered by sections.
+                let candidates: Vec<CandidateNode> = shortcut
+                    .section_summaries
+                    .iter()
+                    .map(|section| {
+                        CandidateNode::new(
+                            section.node_id,
+                            1.0,
+                            section.depth,
+                            ctx.tree.is_leaf(section.node_id),
+                        )
+                    })
+                    .collect();
+
+                if !candidates.is_empty() {
+                    return Some(candidates);
+                }
+
+                // Fallback: if no sections, use root node
+                return Some(vec![CandidateNode::new(
                     shortcut.root_node,
                     1.0,
                     0,
                     ctx.tree.is_leaf(shortcut.root_node),
-                )];
-                for section in &shortcut.section_summaries {
-                    candidates.push(CandidateNode::new(
-                        section.node_id,
-                        0.9,
-                        section.depth,
-                        ctx.tree.is_leaf(section.node_id),
-                    ));
-                }
-                return Some(candidates);
+                )]);
             }
         }
 
