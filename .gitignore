@@ -84,3 +84,6 @@ wheels/
 .venv/
 venv/
 ENV/
+
+# Test workspace
+workspace*

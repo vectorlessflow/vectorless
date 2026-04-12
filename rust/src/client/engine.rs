@@ -164,8 +164,9 @@ impl Engine {
                 .await;
             if items.is_empty() && !failed.is_empty() {
                 return Err(Error::Config(format!(
-                    "All {} source(s) failed to index",
-                    failed.len()
+                    "All {} source(s) failed to index: {}",
+                    failed.len(),
+                    failed.iter().map(|f| format!("{} ({})", f.source, f.error)).collect::<Vec<_>>().join("; ")
                 )));
             }
             if !items.is_empty() {
@@ -207,8 +208,9 @@ impl Engine {
 
         if items.is_empty() && !failed.is_empty() {
             return Err(Error::Config(format!(
-                "All {} source(s) failed to index",
-                failed.len()
+                "All {} source(s) failed to index: {}",
+                failed.len(),
+                failed.iter().map(|f| format!("{} ({})", f.source, f.error)).collect::<Vec<_>>().join("; ")
             )));
         }
 
