@@ -30,7 +30,7 @@ async fn main() -> vectorless::Result<()> {
 
     // 2. Index documents — graph is rebuilt automatically
     let result = engine
-        .index(IndexContext::from_paths(&["./README.md", "./CLAUDE.md"]))
+        .index(IndexContext::from_paths(&["../README.md", "../CLAUDE.md"]))
         .await?;
 
     println!("Indexed {} document(s)", result.items.len());
