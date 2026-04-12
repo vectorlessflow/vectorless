@@ -48,6 +48,9 @@ pub struct IndexedDocument {
 
     /// Indexing pipeline metrics.
     pub metrics: Option<IndexMetrics>,
+
+    /// Pre-computed reasoning index for retrieval acceleration.
+    pub reasoning_index: Option<crate::document::ReasoningIndex>,
 }
 
 impl IndexedDocument {
@@ -64,6 +67,7 @@ impl IndexedDocument {
             tree: None,
             pages: Vec::new(),
             metrics: None,
+            reasoning_index: None,
         }
     }
 
