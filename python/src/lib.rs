@@ -1069,7 +1069,7 @@ impl PyEngine {
 /// print(answer.single().content)
 /// ```
 #[pymodule]
-fn vectorless(m: &Bound<'_, PyModule>) -> PyResult<()> {
+fn _vectorless(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<VectorlessError>()?;
     m.add_class::<PyIndexOptions>()?;
     m.add_class::<PyIndexContext>()?;
