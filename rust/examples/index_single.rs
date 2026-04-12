@@ -58,8 +58,22 @@ The modular design allows independent scaling of each component.
         println!("doc_id:  {}", item.doc_id);
         println!("name:    {}", item.name);
         println!("format:  {:?}", item.format);
-        if let Some(m) = &item.metrics {
-            println!("time:    {}ms, nodes: {}", m.total_time_ms(), m.nodes_processed);
+
+        if let Some(metrics) = &item.metrics {
+            println!("  metrics:");
+            println!("    total time:  {}ms", metrics.total_time_ms());
+            println!("    parse:       {}ms", metrics.parse_time_ms);
+            println!("    build:       {}ms", metrics.build_time_ms);
+            println!("    enhance:     {}ms", metrics.enhance_time_ms);
+            println!("    enrich:      {}ms", metrics.enrich_time_ms);
+            println!("    optimize:    {}ms", metrics.optimize_time_ms);
+            println!("    reasoning:   {}ms", metrics.reasoning_index_time_ms);
+            println!("    nodes:       {}", metrics.nodes_processed);
+            println!("    summaries:   {}", metrics.summaries_generated);
+            println!("    llm calls:   {}", metrics.llm_calls);
+            println!("    tokens:      {}", metrics.total_tokens_generated);
+            println!("    topics:      {}", metrics.topics_indexed);
+            println!("    keywords:    {}", metrics.keywords_indexed);
         }
     }
 
