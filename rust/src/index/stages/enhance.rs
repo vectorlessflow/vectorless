@@ -289,6 +289,9 @@ impl IndexStage for EnhanceStage {
                         if summary.is_empty() {
                             failed += 1;
                         } else {
+                            ctx.metrics.add_tokens_generated(
+                                crate::utils::estimate_tokens(&summary),
+                            );
                             tree.set_summary(node_id, &summary);
                             generated += 1;
                             ctx.metrics.increment_summaries();

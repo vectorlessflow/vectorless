@@ -376,12 +376,24 @@ impl LlmExecutor {
         let request =
             request.map_err(|e| LlmError::Request(format!("Failed to build request: {}", e)))?;
 
-        debug!("Sending LLM request to {} with model {}", endpoint, model);
+        info!(
+            "LLM request → endpoint: {}, model: {}, system: {} chars, user: {} chars",
+            endpoint,
+            model,
+            system.len(),
+            truncated.len()
+        );
 
+        let request_start = std::time::Instant::now();
         let response = client.chat().create(request).await.map_err(|e| {
             let msg = e.to_string();
             LlmError::from_api_message(&msg)
         })?;
+        let request_elapsed = request_start.elapsed();
+
+        let usage = response.usage.as_ref();
+        let prompt_tokens = usage.map(|u| u.prompt_tokens).unwrap_or(0);
+        let completion_tokens = usage.map(|u| u.completion_tokens).unwrap_or(0);
 
         let content = response
             .choices
@@ -389,7 +401,13 @@ impl LlmExecutor {
             .and_then(|choice| choice.message.content.clone())
             .ok_or(LlmError::NoContent)?;
 
-        debug!("LLM response length: {} chars", content.len());
+        info!(
+            "LLM response ← {}ms, tokens: {} prompt + {} completion, content: {} chars",
+            request_elapsed.as_millis(),
+            prompt_tokens,
+            completion_tokens,
+            content.len()
+        );
 
         Ok(content)
     }

@@ -34,7 +34,7 @@ impl Default for SummaryStrategyConfig {
             max_tokens: 200,
             min_content_tokens: 50,
             persist_lazy: false,
-            shortcut_threshold: 200,
+            shortcut_threshold: 50,
         }
     }
 }
