@@ -482,7 +482,7 @@ impl Workspace {
 
     /// Get the storage key for a document.
     fn doc_key(id: &str) -> String {
-        format!("doc:{}", id)
+        id.to_string()
     }
 
     /// Load the meta index from backend.
@@ -516,7 +516,11 @@ impl Workspace {
     /// Rebuild the meta index from existing documents.
     fn rebuild_meta_index(inner: &mut WorkspaceInner) -> Result<()> {
         let keys = inner.backend.keys()?;
-        let doc_keys: Vec<_> = keys.iter().filter(|k| k.starts_with("doc:")).collect();
+        let reserved = ["meta", "_graph"];
+        let doc_keys: Vec<_> = keys
+            .iter()
+            .filter(|k| !reserved.contains(&k.as_str()))
+            .collect();
 
         for key in doc_keys {
             if let Some(bytes) = inner.backend.get(key)? {
