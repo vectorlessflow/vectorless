@@ -431,8 +431,9 @@ impl Engine {
         // If everything failed, return error
         if items.is_empty() && !failed.is_empty() {
             return Err(Error::Config(format!(
-                "Query failed for all {} document(s)",
-                failed.len()
+                "Query failed for all {} document(s): {}",
+                failed.len(),
+                failed.iter().map(|f| format!("{} ({})", f.source, f.error)).collect::<Vec<_>>().join("; ")
             )));
         }
 
