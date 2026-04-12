@@ -9,7 +9,7 @@
 
 use async_trait::async_trait;
 
-use crate::document::DocumentTree;
+use crate::document::{DocumentTree, NodeId};
 
 use super::{InterventionPoint, Pilot, PilotConfig, PilotDecision, SearchState};
 
@@ -69,7 +69,12 @@ impl Pilot for NoopPilot {
         }
     }
 
-    async fn guide_start(&self, _tree: &DocumentTree, _query: &str) -> Option<PilotDecision> {
+    async fn guide_start(
+        &self,
+        _tree: &DocumentTree,
+        _query: &str,
+        _start_node: NodeId,
+    ) -> Option<PilotDecision> {
         // No guidance at start
         None
     }
@@ -138,7 +143,7 @@ mod tests {
         let pilot = NoopPilot::new();
         let tree = DocumentTree::new("test", "test content");
 
-        let guidance = pilot.guide_start(&tree, "test").await;
+        let guidance = pilot.guide_start(&tree, "test", tree.root()).await;
         assert!(guidance.is_none());
     }
 

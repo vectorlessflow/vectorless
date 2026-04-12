@@ -167,8 +167,16 @@ pub trait Pilot: Send + Sync {
     /// Called once at the beginning of search to help determine
     /// the starting point and initial direction.
     ///
+    /// `start_node` is the node from which the search begins. The pilot
+    /// should evaluate that node's children (not root's children) as candidates.
+    ///
     /// Returns `None` if no guidance is available or needed.
-    async fn guide_start(&self, tree: &DocumentTree, query: &str) -> Option<PilotDecision>;
+    async fn guide_start(
+        &self,
+        tree: &DocumentTree,
+        query: &str,
+        start_node: NodeId,
+    ) -> Option<PilotDecision>;
 
     /// Provide guidance during backtracking.
     ///

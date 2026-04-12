@@ -15,7 +15,7 @@ use super::retriever::{CostEstimate, Retriever, RetrieverError, RetrieverResult}
 use super::stages::{AnalyzeStage, EvaluateStage, PlanStage, SearchStage};
 use super::stream::RetrieveEventReceiver;
 use super::types::{RetrieveOptions, RetrieveResponse};
-use crate::document::DocumentTree;
+use crate::document::{DocumentTree, ReasoningIndex};
 use crate::llm::LlmClient;
 use crate::memo::MemoStore;
 use crate::retrieval::pilot::{LlmPilot, PilotConfig};
@@ -149,6 +149,30 @@ impl PipelineRetriever {
     /// Convert pipeline options to retriever options format.
     fn options_to_retrieve_options(&self, options: &RetrieveOptions) -> RetrieveOptions {
         options.clone()
+    }
+
+    /// Retrieve with optional reasoning index for fast-path lookup.
+    pub async fn retrieve_with_reasoning_index(
+        &self,
+        tree: &DocumentTree,
+        query: &str,
+        options: &RetrieveOptions,
+        reasoning_index: Option<ReasoningIndex>,
+    ) -> RetrieverResult<RetrieveResponse> {
+        let mut orchestrator = self.build_orchestrator();
+        let tree_arc = Arc::new(tree.clone());
+
+        let response = orchestrator
+            .execute_with_reasoning_index(
+                tree_arc,
+                query,
+                self.options_to_retrieve_options(options),
+                reasoning_index,
+            )
+            .await
+            .map_err(|e| RetrieverError::Internal(e.to_string()))?;
+
+        Ok(response)
     }
 
     /// Execute streaming retrieval.

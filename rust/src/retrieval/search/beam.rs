@@ -137,7 +137,8 @@ impl BeamSearch {
         let start_children = tree.children(start_node);
         debug!("Start node has {} children", start_children.len());
 
-        // Check if Pilot wants to guide the start
+        // Check if Pilot wants to guide the start.
+        // Pass start_node so the pilot evaluates the correct children.
         let initial_candidates = if let Some(p) = pilot {
             debug!(
                 "BeamSearch: Pilot is available, name={}, guide_at_start={}",
@@ -145,7 +146,7 @@ impl BeamSearch {
                 p.config().guide_at_start
             );
             if p.config().guide_at_start {
-                if let Some(guidance) = p.guide_start(tree, &context.query).await {
+                if let Some(guidance) = p.guide_start(tree, &context.query, start_node).await {
                     debug!(
                         "Pilot provided start guidance with confidence {}",
                         guidance.confidence

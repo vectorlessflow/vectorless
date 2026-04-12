@@ -250,13 +250,13 @@ pub struct PageContent {
 
 /// Wrapper for persisted data with checksum.
 #[derive(Debug, Serialize, Deserialize)]
-struct PersistedWrapper<T> {
+struct PersistedWrapper {
     /// Format version.
     version: u32,
     /// SHA-256 checksum of the payload.
     checksum: String,
-    /// The actual data.
-    payload: T,
+    /// The actual data as raw JSON value (avoids re-serialization drift).
+    payload: serde_json::Value,
 }
 
 /// Options for save/load operations.
@@ -330,17 +330,20 @@ pub fn save_document_with_options(
     doc: &PersistedDocument,
     options: &PersistenceOptions,
 ) -> Result<()> {
-    // Serialize the payload first
-    let payload_bytes = serde_json::to_vec(doc).map_err(|e| Error::Serialization(e.to_string()))?;
+    // Serialize to serde_json::Value first (avoids HashMap key ordering drift)
+    let payload_value =
+        serde_json::to_value(doc).map_err(|e| Error::Serialization(e.to_string()))?;
 
-    // Calculate checksum
+    // Calculate checksum on the Value's canonical bytes
+    let payload_bytes =
+        serde_json::to_vec(&payload_value).map_err(|e| Error::Serialization(e.to_string()))?;
     let checksum = calculate_checksum(&payload_bytes);
 
     // Create wrapper
     let wrapper = PersistedWrapper {
         version: FORMAT_VERSION,
         checksum,
-        payload: doc.clone(),
+        payload: payload_value,
     };
 
     // Serialize wrapper
@@ -407,8 +410,8 @@ pub fn load_document_with_options(
     let file = File::open(path).map_err(Error::Io)?;
     let reader = BufReader::new(file);
 
-    // Parse wrapper
-    let wrapper: PersistedWrapper<PersistedDocument> = serde_json::from_reader(reader)
+    // Parse wrapper (payload is serde_json::Value)
+    let wrapper: PersistedWrapper = serde_json::from_reader(reader)
         .map_err(|e| Error::Parse(format!("Failed to parse document: {}", e)))?;
 
     // Check version
@@ -434,7 +437,11 @@ pub fn load_document_with_options(
         }
     }
 
-    Ok(wrapper.payload)
+    // Deserialize Value to target type
+    let doc: PersistedDocument = serde_json::from_value(wrapper.payload)
+        .map_err(|e| Error::Parse(format!("Failed to deserialize document: {}", e)))?;
+
+    Ok(doc)
 }
 
 /// Save the workspace index (metadata for all documents).
@@ -448,16 +455,19 @@ pub fn save_index_with_options(
     entries: &[DocumentMeta],
     options: &PersistenceOptions,
 ) -> Result<()> {
-    // Serialize payload
+    // Serialize to serde_json::Value first
+    let payload_value =
+        serde_json::to_value(entries).map_err(|e| Error::Serialization(e.to_string()))?;
+
     let payload_bytes =
-        serde_json::to_vec(entries).map_err(|e| Error::Serialization(e.to_string()))?;
+        serde_json::to_vec(&payload_value).map_err(|e| Error::Serialization(e.to_string()))?;
 
     let checksum = calculate_checksum(&payload_bytes);
 
     let wrapper = PersistedWrapper {
         version: FORMAT_VERSION,
         checksum,
-        payload: entries.to_vec(),
+        payload: payload_value,
     };
 
     let json =
@@ -505,7 +515,7 @@ pub fn load_index_with_options(
     let file = File::open(path).map_err(Error::Io)?;
     let reader = BufReader::new(file);
 
-    let wrapper: PersistedWrapper<Vec<DocumentMeta>> = serde_json::from_reader(reader)
+    let wrapper: PersistedWrapper = serde_json::from_reader(reader)
         .map_err(|e| Error::Parse(format!("Failed to parse index: {}", e)))?;
 
     // Check version
@@ -531,7 +541,11 @@ pub fn load_index_with_options(
         }
     }
 
-    Ok(wrapper.payload)
+    // Deserialize Value to target type
+    let entries: Vec<DocumentMeta> = serde_json::from_value(wrapper.payload)
+        .map_err(|e| Error::Parse(format!("Failed to deserialize index: {}", e)))?;
+
+    Ok(entries)
 }
 
 // ============================================================================
@@ -542,17 +556,20 @@ pub fn load_index_with_options(
 ///
 /// This is useful for storage backends that work with byte arrays.
 pub fn save_document_to_bytes(doc: &PersistedDocument) -> Result<Vec<u8>> {
-    // Serialize the payload first
-    let payload_bytes = serde_json::to_vec(doc).map_err(|e| Error::Serialization(e.to_string()))?;
+    // Serialize to serde_json::Value first
+    let payload_value =
+        serde_json::to_value(doc).map_err(|e| Error::Serialization(e.to_string()))?;
 
-    // Calculate checksum
+    // Calculate checksum on the Value's canonical bytes
+    let payload_bytes =
+        serde_json::to_vec(&payload_value).map_err(|e| Error::Serialization(e.to_string()))?;
     let checksum = calculate_checksum(&payload_bytes);
 
     // Create wrapper
     let wrapper = PersistedWrapper {
         version: FORMAT_VERSION,
         checksum,
-        payload: doc.clone(),
+        payload: payload_value,
     };
 
     // Serialize wrapper
@@ -571,8 +588,8 @@ pub fn load_document_from_bytes_with_options(
     data: &[u8],
     verify_checksum: bool,
 ) -> Result<PersistedDocument> {
-    // Parse wrapper
-    let wrapper: PersistedWrapper<PersistedDocument> = serde_json::from_slice(data)
+    // Parse wrapper (payload is serde_json::Value)
+    let wrapper: PersistedWrapper = serde_json::from_slice(data)
         .map_err(|e| Error::Parse(format!("Failed to parse document: {}", e)))?;
 
     // Check version
@@ -598,20 +615,26 @@ pub fn load_document_from_bytes_with_options(
         }
     }
 
-    Ok(wrapper.payload)
+    // Deserialize Value to target type
+    let doc: PersistedDocument = serde_json::from_value(wrapper.payload)
+        .map_err(|e| Error::Parse(format!("Failed to deserialize document: {}", e)))?;
+
+    Ok(doc)
 }
 
 /// Serialize an index to bytes.
 pub fn save_index_to_bytes(entries: &[DocumentMeta]) -> Result<Vec<u8>> {
-    let payload_bytes =
-        serde_json::to_vec(entries).map_err(|e| Error::Serialization(e.to_string()))?;
+    let payload_value =
+        serde_json::to_value(entries).map_err(|e| Error::Serialization(e.to_string()))?;
 
+    let payload_bytes =
+        serde_json::to_vec(&payload_value).map_err(|e| Error::Serialization(e.to_string()))?;
     let checksum = calculate_checksum(&payload_bytes);
 
     let wrapper = PersistedWrapper {
         version: FORMAT_VERSION,
         checksum,
-        payload: entries.to_vec(),
+        payload: payload_value,
     };
 
     serde_json::to_vec(&wrapper).map_err(|e| Error::Serialization(e.to_string()))
@@ -627,7 +650,7 @@ pub fn load_index_from_bytes_with_options(
     data: &[u8],
     verify_checksum: bool,
 ) -> Result<Vec<DocumentMeta>> {
-    let wrapper: PersistedWrapper<Vec<DocumentMeta>> = serde_json::from_slice(data)
+    let wrapper: PersistedWrapper = serde_json::from_slice(data)
         .map_err(|e| Error::Parse(format!("Failed to parse index: {}", e)))?;
 
     // Check version
@@ -653,7 +676,11 @@ pub fn load_index_from_bytes_with_options(
         }
     }
 
-    Ok(wrapper.payload)
+    // Deserialize Value to target type
+    let entries: Vec<DocumentMeta> = serde_json::from_value(wrapper.payload)
+        .map_err(|e| Error::Parse(format!("Failed to deserialize index: {}", e)))?;
+
+    Ok(entries)
 }
 
 #[cfg(test)]
@@ -734,8 +761,9 @@ mod tests {
         // Now corrupt the checksum field specifically
         let content = std::fs::read_to_string(&path).unwrap();
         // Change the checksum value but keep the payload intact
+        let payload_value = serde_json::to_value(&doc).unwrap();
         let corrupted = content.replace(
-            &calculate_checksum(&serde_json::to_vec(&doc).unwrap()),
+            &calculate_checksum(&serde_json::to_vec(&payload_value).unwrap()),
             "0000000000000000000000000000000000000000000000000000000000000000",
         );
         std::fs::write(&path, corrupted).unwrap();

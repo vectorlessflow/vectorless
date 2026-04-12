@@ -67,7 +67,7 @@ pub mod sufficiency;
 
 pub use context::{PruningStrategy, TokenEstimation};
 pub use pipeline_retriever::PipelineRetriever;
-pub use retriever::{RetrievalContext, Retriever};
+pub use retriever::RetrievalContext;
 pub use types::*;
 
 // Sufficiency exports

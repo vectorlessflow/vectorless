@@ -24,11 +24,11 @@ use tracing::info;
 use super::events::{EventEmitter, QueryEvent};
 use super::types::QueryResultItem;
 use crate::config::Config;
-use crate::document::{DocumentTree, NodeId};
+use crate::document::{DocumentTree, NodeId, ReasoningIndex};
 use crate::error::{Error, Result};
 use crate::retrieval::content::ContentAggregatorConfig;
 use crate::retrieval::stream::RetrieveEventReceiver;
-use crate::retrieval::{RetrievalResult, RetrieveOptions, RetrieveResponse, Retriever};
+use crate::retrieval::{RetrievalResult, RetrieveOptions, RetrieveResponse};
 
 /// Document retrieval client.
 ///
@@ -125,16 +125,31 @@ impl RetrieverClient {
         question: &str,
         options: &RetrieveOptions,
     ) -> Result<QueryResultItem> {
+        self.query_with_reasoning_index(tree, question, options, None).await
+    }
+
+    /// Query a document tree with optional reasoning index for fast-path lookup.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the retrieval pipeline fails.
+    pub async fn query_with_reasoning_index(
+        &self,
+        tree: &DocumentTree,
+        question: &str,
+        options: &RetrieveOptions,
+        reasoning_index: Option<ReasoningIndex>,
+    ) -> Result<QueryResultItem> {
         self.events.emit_query(QueryEvent::Started {
             query: question.to_string(),
         });
 
         info!("Querying: {:?}", question);
 
-        // Execute retrieval
+        // Execute retrieval with reasoning index
         let response = self
             .retriever
-            .retrieve(tree, question, options)
+            .retrieve_with_reasoning_index(tree, question, options, reasoning_index)
             .await
             .map_err(|e| Error::Retrieval(e.to_string()))?;
 

@@ -79,6 +79,8 @@ impl ToCNavigator {
     /// Phase A: Score top-level nodes with BM25 and keep the top-N.
     /// Phase B: If the best BM25 score is below `llm_threshold` and an LLM
     ///          client is available, ask the LLM to refine the selection.
+    /// Phase C: If BM25 produced no results and LLM is unavailable, fall back
+    ///          to keyword-overlap matching against section summaries.
     pub async fn locate(
         &self,
         query: &str,
@@ -120,23 +122,159 @@ impl ToCNavigator {
             }
         }
 
-        // Fallback: if no branches passed the filter, search from root
-        if top_branches.is_empty() {
-            debug!("ToCNavigator: no branches above threshold, falling back to root");
-            return vec![SearchCue {
-                root: tree.root(),
-                confidence: 0.5,
-            }];
+        if !top_branches.is_empty() {
+            // Return BM25 results as cues
+            return top_branches
+                .into_iter()
+                .map(|(node_id, score)| SearchCue {
+                    root: node_id,
+                    confidence: score,
+                })
+                .collect();
         }
 
-        // Return BM25 results as cues
-        top_branches
+        // Phase C: BM25 produced nothing — try keyword overlap on summaries.
+        // This handles abstract queries like "What is this project about?"
+        // where the query keywords don't appear in section titles but the
+        // summaries contain relevant semantic matches.
+        let summary_cues = self.match_by_summary(query, tree, top_level_nodes);
+        if !summary_cues.is_empty() {
+            return summary_cues;
+        }
+
+        // Final fallback: search from root
+        debug!("ToCNavigator: no branches above threshold, falling back to root");
+        vec![SearchCue {
+            root: tree.root(),
+            confidence: 0.5,
+        }]
+    }
+
+    /// Match query against section summaries using keyword overlap.
+    ///
+    /// This is a lightweight fallback for abstract queries where BM25
+    /// fails because query terms don't appear verbatim in section titles
+    /// or short content snippets.
+    ///
+    /// For overview-style queries (e.g. "What is this project about?"),
+    /// if no keywords match any section, returns all top-level sections
+    /// with the overview/introduction section boosted.
+    fn match_by_summary(
+        &self,
+        query: &str,
+        tree: &DocumentTree,
+        top_level_nodes: &[NodeId],
+    ) -> Vec<SearchCue> {
+        let query_lower = query.to_lowercase();
+        let query_words: Vec<&str> = query_lower
+            .split_whitespace()
+            .filter(|w| w.len() > 2)
+            .collect();
+
+        let is_overview = Self::is_overview_query(query);
+
+        if query_words.is_empty() && !is_overview {
+            return Vec::new();
+        }
+
+        let mut scored: Vec<(NodeId, f32)> = Vec::new();
+
+        for &node_id in top_level_nodes {
+            if let Some(node) = tree.get(node_id) {
+                let text = format!("{} {} {}", node.title, node.summary, node.content)
+                    .to_lowercase();
+
+                let match_count = query_words
+                    .iter()
+                    .filter(|w| text.contains(*w))
+                    .count();
+
+                let mut score = if query_words.is_empty() {
+                    0.0
+                } else {
+                    match_count as f32 / query_words.len() as f32
+                };
+
+                // For overview queries, also check if the section title/summary
+                // contains overview-like terms
+                if is_overview {
+                    let title_lower = node.title.to_lowercase();
+                    let summary_lower = node.summary.to_lowercase();
+                    let looks_like_overview = title_lower.contains("overview")
+                        || title_lower.contains("introduction")
+                        || title_lower.contains("summary")
+                        || title_lower.contains("简介")
+                        || title_lower.contains("概述")
+                        || summary_lower.contains("overview")
+                        || summary_lower.contains("introduction");
+
+                    if looks_like_overview {
+                        score = (score + 0.5).min(1.0);
+                    }
+                }
+
+                if score > 0.1 {
+                    scored.push((node_id, score));
+                }
+            }
+        }
+
+        // For overview queries with no matches at all, return the first
+        // section as a reasonable default (it's usually the introduction).
+        if scored.is_empty() && is_overview {
+            if let Some(&first_id) = top_level_nodes.first() {
+                info!(
+                    "ToCNavigator: overview query with no keyword matches, using first section as default"
+                );
+                return vec![SearchCue {
+                    root: first_id,
+                    confidence: 0.6,
+                }];
+            }
+            return Vec::new();
+        }
+
+        scored.sort_by(|a, b| {
+            b.1.partial_cmp(&a.1)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        scored.truncate(self.max_branches);
+
+        if !scored.is_empty() {
+            info!(
+                "ToCNavigator summary match: {} cues from {} nodes",
+                scored.len(),
+                top_level_nodes.len()
+            );
+        }
+
+        scored
             .into_iter()
             .map(|(node_id, score)| SearchCue {
                 root: node_id,
                 confidence: score,
             })
             .collect()
+    }
+
+    /// Check if a query is asking for a general overview or summary of a document.
+    fn is_overview_query(query: &str) -> bool {
+        let lower = query.to_lowercase();
+
+        let patterns = [
+            "about",
+            "overview",
+            "summary",
+            "introduction",
+            "describe",
+            "what is this",
+            "tell me about",
+            "main idea",
+            "key points",
+            "purpose",
+        ];
+
+        patterns.iter().any(|p| lower.contains(p))
     }
 
     /// Phase B: Ask the LLM to pick the most relevant subtrees.
@@ -229,11 +367,15 @@ Rules:
                 }
 
                 if cues.is_empty() {
-                    warn!("LLM refinement returned no valid candidates, falling back to BM25");
-                    return vec![SearchCue {
-                        root: tree.root(),
-                        confidence: 0.5,
-                    }];
+                    warn!("LLM refinement returned no valid candidates, falling back to summary matching");
+                    let summary_cues = self.match_by_summary(query, tree, top_level_nodes);
+                    if summary_cues.is_empty() {
+                        return vec![SearchCue {
+                            root: tree.root(),
+                            confidence: 0.5,
+                        }];
+                    }
+                    return summary_cues;
                 }
 
                 info!(
@@ -244,11 +386,17 @@ Rules:
                 cues
             }
             Err(e) => {
-                warn!("LLM refinement failed: {}, falling back to root", e);
-                vec![SearchCue {
-                    root: tree.root(),
-                    confidence: 0.5,
-                }]
+                warn!("LLM refinement failed: {}, falling back to summary matching", e);
+                // Don't fall directly to root — try summary matching first
+                let summary_cues = self.match_by_summary(query, tree, top_level_nodes);
+                if summary_cues.is_empty() {
+                    vec![SearchCue {
+                        root: tree.root(),
+                        confidence: 0.5,
+                    }]
+                } else {
+                    summary_cues
+                }
             }
         }
     }
