@@ -5,25 +5,37 @@ A document intelligence engine that uses tree-based understanding
 instead of vector databases for accurate, explainable retrieval.
 
 Quick Start:
-    from vectorless import Engine, IndexContext
+    from vectorless import Engine, IndexContext, QueryContext
 
     # Create engine
-    engine = Engine(workspace="./data")
+    engine = Engine(workspace="./data", api_key="sk-...", model="gpt-4o")
 
     # Index a document
-    ctx = IndexContext.from_file("./report.pdf")
-    doc_id = engine.index(ctx)
+    ctx = IndexContext.from_path("./report.pdf")
+    result = await engine.index(ctx)
+    doc_id = result.doc_id
 
     # Query
-    result = engine.query(doc_id, "What is the revenue?")
-    print(result.content)
+    answer = await engine.query(QueryContext("What is the revenue?").with_doc_id(doc_id))
+    print(answer.single().content)
 """
 
-from vectorless.vectorless import (
+from vectorless._vectorless import (
     Engine,
     IndexContext,
+    IndexOptions,
+    IndexResult,
+    IndexItem,
+    QueryContext,
     QueryResult,
+    QueryResultItem,
     DocumentInfo,
+    DocumentGraph,
+    DocumentGraphNode,
+    GraphEdge,
+    EdgeEvidence,
+    WeightedKeyword,
+    FailedItem,
     VectorlessError,
     __version__,
 )
@@ -31,8 +43,19 @@ from vectorless.vectorless import (
 __all__ = [
     "Engine",
     "IndexContext",
+    "IndexOptions",
+    "IndexResult",
+    "IndexItem",
+    "QueryContext",
     "QueryResult",
+    "QueryResultItem",
     "DocumentInfo",
+    "DocumentGraph",
+    "DocumentGraphNode",
+    "GraphEdge",
+    "EdgeEvidence",
+    "WeightedKeyword",
+    "FailedItem",
     "VectorlessError",
     "__version__",
 ]

@@ -8,7 +8,7 @@ Usage:
 
 import asyncio
 import os
-from vectorless import Engine, IndexContext, IndexOptions
+from vectorless import Engine, IndexContext, IndexOptions, QueryContext
 
 # os is used only for removing the sample file
 
@@ -45,8 +45,8 @@ It uses hierarchical semantic trees instead of vector embeddings.
 - **LLM Navigation**: Queries are resolved by traversing the tree.
 - **No Vectors**: No embeddings, no similarity search, no vector DB.
 """,
-            name="architecture",
-        )
+            "markdown",
+        ).with_name("architecture")
     )
     doc_id = result.doc_id
     print(f"  Indexed: {doc_id}")
@@ -74,7 +74,7 @@ Marketing spend was reduced by 8% to $1.5M.
 Projected Q1 revenue is $13.5M based on current pipeline.
 """)
 
-    result = await engine.index(IndexContext.from_file(sample_path))
+    result = await engine.index(IndexContext.from_path(sample_path))
     file_doc_id = result.doc_id
     print(f"  Indexed: {file_doc_id}\n")
     os.remove(sample_path)
@@ -84,14 +84,18 @@ Projected Q1 revenue is $13.5M based on current pipeline.
     result = await engine.index(
         IndexContext.from_content(
             "# API Reference\n\n## GET /users\n\nList all users.\n\n## POST /users\n\nCreate a user.",
-            name="api_ref",
-        ).with_options(IndexOptions(summaries=True, description=True)),
+            "markdown",
+        )
+        .with_name("api_ref")
+        .with_options(IndexOptions(generate_summaries=True, generate_description=True)),
     )
     print(f"  Indexed: {result.doc_id}\n")
 
     # --- 5. Query ---
     print("--- Query ---")
-    answer = await engine.query(file_doc_id, "What was the total revenue?")
+    answer = await engine.query(
+        QueryContext("What was the total revenue?").with_doc_id(file_doc_id)
+    )
     item = answer.single()
     if item:
         print(f"  Score: {item.score:.2f}")

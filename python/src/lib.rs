@@ -101,8 +101,10 @@ fn parse_format(format: &str) -> PyResult<DocumentFormat> {
 ///
 /// Args:
 ///     mode: Indexing mode - "default", "force", or "incremental".
-///     summaries: Whether to generate summaries. Default: False.
-///     description: Whether to generate document description. Default: False.
+///     generate_summaries: Whether to generate summaries. Default: True.
+///     generate_description: Whether to generate document description. Default: False.
+///     include_text: Whether to include node text in the tree. Default: True.
+///     generate_ids: Whether to generate node IDs. Default: True.
 #[pyclass(name = "IndexOptions", skip_from_py_object)]
 #[derive(Clone)]
 pub struct PyIndexOptions {
@@ -112,8 +114,14 @@ pub struct PyIndexOptions {
 #[pymethods]
 impl PyIndexOptions {
     #[new]
-    #[pyo3(signature = (mode="default", summaries=false, description=false))]
-    fn new(mode: &str, summaries: bool, description: bool) -> PyResult<Self> {
+    #[pyo3(signature = (mode="default", generate_summaries=true, generate_description=false, include_text=true, generate_ids=true))]
+    fn new(
+        mode: &str,
+        generate_summaries: bool,
+        generate_description: bool,
+        include_text: bool,
+        generate_ids: bool,
+    ) -> PyResult<Self> {
         let mut opts = IndexOptions::new();
         match mode {
             "default" => {}
@@ -126,17 +134,26 @@ impl PyIndexOptions {
                 )))
             }
         }
-        if summaries {
-            opts = opts.with_summaries();
-        }
-        if description {
-            opts = opts.with_description();
-        }
+        opts.generate_summaries = generate_summaries;
+        opts.generate_description = generate_description;
+        opts.include_text = include_text;
+        opts.generate_ids = generate_ids;
         Ok(Self { inner: opts })
     }
 
     fn __repr__(&self) -> String {
-        "IndexOptions(...)".to_string()
+        format!(
+            "IndexOptions(mode='{}', generate_summaries={}, generate_description={}, include_text={}, generate_ids={})",
+            match self.inner.mode {
+                IndexMode::Default => "default",
+                IndexMode::Force => "force",
+                IndexMode::Incremental => "incremental",
+            },
+            self.inner.generate_summaries,
+            self.inner.generate_description,
+            self.inner.include_text,
+            self.inner.generate_ids,
+        )
     }
 }
 
@@ -152,19 +169,19 @@ impl PyIndexOptions {
 /// from vectorless import IndexContext
 ///
 /// # Single file
-/// ctx = IndexContext.from_file("./document.pdf")
+/// ctx = IndexContext.from_path("./document.pdf")
 ///
 /// # Multiple files
-/// ctx = IndexContext.from_files(["./a.pdf", "./b.md"])
+/// ctx = IndexContext.from_paths(["./a.pdf", "./b.md"])
 ///
 /// # Directory
 /// ctx = IndexContext.from_dir("./docs/")
 ///
 /// # From text
-/// ctx = IndexContext.from_text("# Title\\nContent...", name="doc")
+/// ctx = IndexContext.from_content("# Title\\nContent...", "markdown").with_name("doc")
 ///
 /// # From bytes
-/// ctx = IndexContext.from_bytes(data, name="doc", format="pdf")
+/// ctx = IndexContext.from_bytes(data, "pdf").with_name("doc")
 /// ```
 #[pyclass(name = "IndexContext")]
 pub struct PyIndexContext {
@@ -175,18 +192,15 @@ pub struct PyIndexContext {
 impl PyIndexContext {
     /// Create an IndexContext from a single file path.
     #[staticmethod]
-    #[pyo3(signature = (path, name=None))]
-    fn from_file(path: String, name: Option<String>) -> Self {
-        let mut ctx = IndexContext::from_path(&path);
-        if let Some(n) = name {
-            ctx = ctx.with_name(&n);
+    fn from_path(path: String) -> Self {
+        Self {
+            inner: IndexContext::from_path(&path),
         }
-        Self { inner: ctx }
     }
 
     /// Create an IndexContext from multiple file paths.
     #[staticmethod]
-    fn from_files(paths: Vec<String>) -> Self {
+    fn from_paths(paths: Vec<String>) -> Self {
         Self {
             inner: IndexContext::from_paths(&paths),
         }
@@ -202,29 +216,30 @@ impl PyIndexContext {
 
     /// Create an IndexContext from text content.
     #[staticmethod]
-    #[pyo3(signature = (content, name=None, format="markdown"))]
-    fn from_content(content: String, name: Option<String>, format: &str) -> PyResult<Self> {
+    #[pyo3(signature = (content, format="markdown"))]
+    fn from_content(content: String, format: &str) -> PyResult<Self> {
         let doc_format = parse_format(format)?;
-        let mut ctx = IndexContext::from_content(&content, doc_format);
-        if let Some(n) = name {
-            ctx = ctx.with_name(&n);
-        }
+        let ctx = IndexContext::from_content(&content, doc_format);
         Ok(Self { inner: ctx })
     }
 
     /// Create an IndexContext from binary data.
     #[staticmethod]
-    #[pyo3(signature = (data, name, format))]
-    fn from_bytes(data: Vec<u8>, name: String, format: &str) -> PyResult<Self> {
+    fn from_bytes(data: Vec<u8>, format: &str) -> PyResult<Self> {
         let doc_format = parse_format(format)?;
-        let ctx = IndexContext::from_bytes(data, doc_format).with_name(&name);
+        let ctx = IndexContext::from_bytes(data, doc_format);
         Ok(Self { inner: ctx })
+    }
+
+    /// Set the document name (single-source only).
+    fn with_name(&self, name: String) -> Self {
+        let ctx = self.inner.clone().with_name(&name);
+        Self { inner: ctx }
     }
 
     /// Apply indexing options.
     fn with_options(&self, options: &PyIndexOptions) -> Self {
-        let mut ctx = self.inner.clone();
-        ctx = ctx.with_options(options.inner.clone());
+        let ctx = self.inner.clone().with_options(options.inner.clone());
         Self { inner: ctx }
     }
 
@@ -247,6 +262,80 @@ impl PyIndexContext {
 
     fn __repr__(&self) -> String {
         "IndexContext(...)".to_string()
+    }
+}
+
+// ============================================================
+// QueryContext
+// ============================================================
+
+/// Context for a query operation.
+///
+/// ```python
+/// from vectorless import QueryContext
+///
+/// # Query a single document
+/// ctx = QueryContext("What is the total revenue?").with_doc_id(doc_id)
+///
+/// # Query multiple documents
+/// ctx = QueryContext("What is the architecture?").with_doc_ids(["doc-1", "doc-2"])
+///
+/// # Query entire workspace
+/// ctx = QueryContext("Explain the algorithm")
+/// ```
+#[pyclass(name = "QueryContext")]
+pub struct PyQueryContext {
+    inner: QueryContext,
+}
+
+#[pymethods]
+impl PyQueryContext {
+    /// Create a new query context (defaults to workspace scope).
+    #[new]
+    fn new(query: String) -> Self {
+        Self {
+            inner: QueryContext::new(&query),
+        }
+    }
+
+    /// Set scope to a single document.
+    fn with_doc_id(&self, doc_id: String) -> Self {
+        let ctx = self.inner.clone().with_doc_id(&doc_id);
+        Self { inner: ctx }
+    }
+
+    /// Set scope to multiple documents.
+    fn with_doc_ids(&self, doc_ids: Vec<String>) -> Self {
+        let ctx = self.inner.clone().with_doc_ids(doc_ids);
+        Self { inner: ctx }
+    }
+
+    /// Set scope to entire workspace.
+    fn with_workspace(&self) -> Self {
+        let ctx = self.inner.clone().with_workspace();
+        Self { inner: ctx }
+    }
+
+    /// Set the maximum tokens for the result content.
+    fn with_max_tokens(&self, tokens: usize) -> Self {
+        let ctx = self.inner.clone().with_max_tokens(tokens);
+        Self { inner: ctx }
+    }
+
+    /// Set whether to include the reasoning chain.
+    fn with_include_reasoning(&self, include: bool) -> Self {
+        let ctx = self.inner.clone().with_include_reasoning(include);
+        Self { inner: ctx }
+    }
+
+    /// Set the maximum tree traversal depth.
+    fn with_depth_limit(&self, depth: usize) -> Self {
+        let ctx = self.inner.clone().with_depth_limit(depth);
+        Self { inner: ctx }
+    }
+
+    fn __repr__(&self) -> String {
+        "QueryContext(...)".to_string()
     }
 }
 
@@ -798,7 +887,7 @@ async fn run_get_graph(engine: Arc<Engine>) -> PyResult<Option<PyDocumentGraph>>
 /// `api_key` and `model` are **required**.
 ///
 /// ```python
-/// from vectorless import Engine, IndexContext
+/// from vectorless import Engine, IndexContext, QueryContext
 ///
 /// engine = Engine(
 ///     workspace="./data",
@@ -807,11 +896,11 @@ async fn run_get_graph(engine: Arc<Engine>) -> PyResult<Option<PyDocumentGraph>>
 /// )
 ///
 /// # Index
-/// result = await engine.index(IndexContext.from_file("./report.pdf"))
+/// result = await engine.index(IndexContext.from_path("./report.pdf"))
 /// doc_id = result.doc_id
 ///
 /// # Query
-/// answer = await engine.query(doc_id, "What is the revenue?")
+/// answer = await engine.query(QueryContext("What is the revenue?").with_doc_id(doc_id))
 /// print(answer.single().content)
 /// ```
 #[pyclass(name = "Engine")]
@@ -885,7 +974,7 @@ impl PyEngine {
     /// Index a document.
     ///
     /// Args:
-    ///     ctx: IndexContext created from from_file, from_files, from_dir, etc.
+    ///     ctx: IndexContext created from from_path, from_paths, from_dir, etc.
     ///
     /// Returns:
     ///     IndexResult with doc_id and items.
@@ -901,35 +990,21 @@ impl PyEngine {
     /// Query indexed documents.
     ///
     /// Args:
-    ///     doc_id: Document ID (or list of IDs) returned from index().
-    ///     question: The question to ask.
+    ///     ctx: QueryContext with query text and scope.
     ///
     /// Returns:
     ///     QueryResult with answer and score.
     ///
     /// Raises:
     ///     VectorlessError: If query fails.
-    #[pyo3(signature = (doc_id, question))]
     fn query<'py>(
         &self,
         py: Python<'py>,
-        doc_id: &Bound<'_, PyAny>,
-        question: String,
+        ctx: &PyQueryContext,
     ) -> PyResult<Bound<'py, PyAny>> {
         let engine = Arc::clone(&self.inner);
-
-        let ctx = if let Ok(single) = doc_id.extract::<String>() {
-            QueryContext::new(&question).with_doc_id(&single)
-        } else if let Ok(multi) = doc_id.extract::<Vec<String>>() {
-            QueryContext::new(&question).with_doc_ids(multi)
-        } else {
-            return Err(PyErr::from(VectorlessError::new(
-                "doc_id must be a string or list of strings".to_string(),
-                "config",
-            )));
-        };
-
-        future_into_py(py, run_query(engine, ctx))
+        let query_ctx = ctx.inner.clone();
+        future_into_py(py, run_query(engine, query_ctx))
     }
 
     /// List all indexed documents.
@@ -986,11 +1061,11 @@ impl PyEngine {
 /// Vectorless - Reasoning-native document intelligence engine.
 ///
 /// ```python
-/// from vectorless import Engine, IndexContext
+/// from vectorless import Engine, IndexContext, QueryContext
 ///
 /// engine = Engine(workspace="./data", api_key="sk-...", model="gpt-4o")
-/// result = await engine.index(IndexContext.from_file("./report.pdf"))
-/// answer = await engine.query(result.doc_id, "What is the revenue?")
+/// result = await engine.index(IndexContext.from_path("./report.pdf"))
+/// answer = await engine.query(QueryContext("What is the revenue?").with_doc_id(result.doc_id))
 /// print(answer.single().content)
 /// ```
 #[pymodule]
@@ -998,6 +1073,7 @@ fn vectorless(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<VectorlessError>()?;
     m.add_class::<PyIndexOptions>()?;
     m.add_class::<PyIndexContext>()?;
+    m.add_class::<PyQueryContext>()?;
     m.add_class::<PyIndexResult>()?;
     m.add_class::<PyIndexItem>()?;
     m.add_class::<PyQueryResult>()?;
