@@ -22,7 +22,11 @@ impl OptimizeStage {
         Self
     }
 
-    /// Merge adjacent small leaf nodes.
+    /// Merge adjacent small leaf nodes that are siblings under the same parent.
+    ///
+    /// Only merges nodes that are both **leaves** (no children of their own).
+    /// Non-leaf nodes (section headings with subsections) are never merged,
+    /// even if their own content is empty.
     fn merge_small_leaves(
         tree: &mut crate::document::DocumentTree,
         min_tokens: usize,
@@ -30,7 +34,7 @@ impl OptimizeStage {
     ) -> usize {
         let mut merged_count = 0;
 
-        // Get all non-leaf nodes
+        // Get all non-leaf nodes (parents whose children may be candidates)
         let non_leaves: Vec<NodeId> = tree
             .traverse()
             .into_iter()
@@ -43,27 +47,43 @@ impl OptimizeStage {
                 continue;
             }
 
-            // Find pairs of adjacent small nodes
+            // Collect children info: only leaf nodes are merge candidates
+            let candidates: Vec<(NodeId, usize, bool)> = children
+                .iter()
+                .map(|&id| {
+                    let tokens = tree.get(id).and_then(|n| n.token_count).unwrap_or(0);
+                    let is_leaf = tree.is_leaf(id);
+                    (id, tokens, is_leaf)
+                })
+                .collect();
+
+            // Find pairs of adjacent small leaf siblings
             let mut i = 0;
-            while i < children.len() - 1 {
-                let curr_id = children[i];
-                let next_id = children[i + 1];
+            while i < candidates.len() - 1 {
+                let (curr_id, curr_tokens, curr_is_leaf) = candidates[i];
+                let (next_id, next_tokens, next_is_leaf) = candidates[i + 1];
 
-                let curr_tokens = tree.get(curr_id).and_then(|n| n.token_count).unwrap_or(0);
-                let next_tokens = tree.get(next_id).and_then(|n| n.token_count).unwrap_or(0);
-
-                // If both are small, merge next into current
-                if curr_tokens < min_tokens && next_tokens < min_tokens {
-                    // Merge content
+                // Both must be leaves with actual content, and both must be small
+                if curr_is_leaf
+                    && next_is_leaf
+                    && curr_tokens > 0
+                    && curr_tokens < min_tokens
+                    && next_tokens > 0
+                    && next_tokens < min_tokens
+                {
+                    // Merge next into current
                     if let Some(next_node) = tree.get(next_id).cloned() {
                         if let Some(curr) = tree.get_mut(curr_id) {
                             if !next_node.content.is_empty() {
                                 if !curr.content.is_empty() {
-                                    curr.content.push('\n');
+                                    curr.content.push_str("\n\n");
                                 }
-                                curr.content.push_str(&next_node.content);
+                                // Prefix with heading to preserve boundary
+                                curr.content
+                                    .push_str(&format!("## {}\n{}", next_node.title, next_node.content));
                             }
-                            curr.token_count = Some(curr.token_count.unwrap_or(0) + next_tokens);
+                            curr.token_count =
+                                Some(curr.token_count.unwrap_or(0) + next_tokens);
                         }
                     }
 
@@ -86,15 +106,20 @@ impl OptimizeStage {
         merged_count
     }
 
-    /// Remove empty intermediate nodes.
+    /// Remove empty intermediate nodes (skip root).
     fn remove_empty_nodes(tree: &mut crate::document::DocumentTree) -> usize {
         let mut removed_count = 0;
+        let root = tree.root();
 
-        // Find nodes with no content and only one child
+        // Find non-root nodes with no content and only one child
         let candidates: Vec<NodeId> = tree
             .traverse()
             .into_iter()
             .filter(|id| {
+                // Skip root node
+                if *id == root {
+                    return false;
+                }
                 if tree.is_leaf(*id) {
                     return false;
                 }

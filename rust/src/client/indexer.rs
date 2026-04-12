@@ -428,12 +428,23 @@ impl IndexerClient {
         let logic_fp = pipeline_options.logic_fingerprint();
         meta = meta.with_logic_fingerprint(logic_fp);
 
-        let mut persisted =
-            PersistedDocument::new(meta, doc.tree.expect("IndexedDocument must have a tree"));
+        let tree = doc.tree.expect("IndexedDocument must have a tree");
+
+        // Extract stats from metrics
+        let node_count = tree.node_count();
+        let (summary_tokens, duration_ms) = if let Some(ref m) = doc.metrics {
+            (m.total_tokens_generated, m.total_time_ms())
+        } else {
+            (0, 0)
+        };
+
+        let mut persisted = PersistedDocument::new(meta, tree);
 
         for page in doc.pages {
             persisted.add_page(page.page, &page.content);
         }
+
+        persisted.meta.update_processing_stats(node_count, summary_tokens, duration_ms);
 
         persisted
     }

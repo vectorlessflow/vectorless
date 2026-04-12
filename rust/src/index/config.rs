@@ -55,7 +55,7 @@ impl Default for OptimizationConfig {
             enabled: true,
             max_depth: None,
             max_children: None,
-            merge_leaf_threshold: 50,
+            merge_leaf_threshold: 0,
         }
     }
 }
