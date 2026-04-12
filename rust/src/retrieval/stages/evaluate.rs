@@ -98,14 +98,9 @@ impl EvaluateStage {
 
     /// Aggregate content from candidates.
     ///
-    /// When content aggregator is enabled:
-    /// - Uses relevance scoring for content selection
-    /// - Respects token budget
-    /// - Prioritizes high-relevance content
-    ///
-    /// Otherwise falls back to simple collection:
-    /// - Collects node's own content + descendant leaf content
-    fn aggregate_content(&self, ctx: &PipelineContext) -> (String, usize) {
+    /// Populates `ctx.node_content_cache` with per-node content so that
+    /// `build_response()` can reuse it without recomputing leaf traversal.
+    fn aggregate_content(&self, ctx: &mut PipelineContext) -> (String, usize) {
         // Use ContentAggregator if configured
         if let Some(ref aggregator) = self.content_aggregator {
             use crate::retrieval::content::CandidateNode;
@@ -124,47 +119,62 @@ impl EvaluateStage {
             return (result.content, result.tokens_used);
         }
 
-        // Fallback: simple content collection
+        // Simple content collection with per-node caching
         self.aggregate_content_simple(ctx)
     }
 
-    /// Simple content aggregation (legacy behavior).
-    fn aggregate_content_simple(&self, ctx: &PipelineContext) -> (String, usize) {
+    /// Simple content aggregation with per-node caching.
+    ///
+    /// Computes each candidate's content once and stores it in
+    /// `ctx.node_content_cache` for reuse by `build_response()`.
+    fn aggregate_content_simple(&self, ctx: &mut PipelineContext) -> (String, usize) {
         let mut content_parts = Vec::new();
         let mut total_tokens = 0;
 
         for candidate in &ctx.candidates {
             if let Some(node) = ctx.tree.get(candidate.node_id) {
-                // Add title
-                content_parts.push(format!("## {}\n", node.title));
+                // Build per-node content (own + leaf descendants)
+                let node_content = self.build_node_content(&ctx.tree, candidate.node_id);
 
-                // Always collect all content: own content + descendant leaf content
-                let mut has_content = false;
+                // Cache for build_response reuse
+                ctx.node_content_cache.insert(candidate.node_id, node_content.clone());
 
-                // Add node's own content if available
-                if !node.content.is_empty() {
-                    content_parts.push(format!("{}\n\n", node.content));
-                    has_content = true;
-                }
-
-                // Also collect content from leaf descendants (for intermediate nodes)
-                let leaf_content = self.collect_leaf_content(&ctx.tree, candidate.node_id);
-                if !leaf_content.is_empty() {
-                    content_parts.push(format!("{}\n\n", leaf_content));
-                    has_content = true;
-                }
-
-                // Fall back to summary only if no content available
-                if !has_content && !node.summary.is_empty() {
+                // Add to aggregated content
+                if !node_content.is_empty() {
+                    content_parts.push(format!("## {}\n", node.title));
+                    content_parts.push(format!("{}\n\n", node_content));
+                    total_tokens += estimate_tokens(&node_content);
+                } else if !node.summary.is_empty() {
+                    content_parts.push(format!("## {}\n", node.title));
                     content_parts.push(format!("{}\n\n", node.summary));
+                    total_tokens += estimate_tokens(&node.summary);
                 }
-
-                // Estimate tokens
-                total_tokens += estimate_tokens(&content_parts.last().unwrap_or(&String::new()));
             }
         }
 
         (content_parts.join(""), total_tokens)
+    }
+
+    /// Build content for a single node (own content + leaf descendants).
+    fn build_node_content(
+        &self,
+        tree: &crate::document::DocumentTree,
+        node_id: crate::document::NodeId,
+    ) -> String {
+        let mut parts = Vec::new();
+
+        if let Some(node) = tree.get(node_id) {
+            if !node.content.is_empty() {
+                parts.push(node.content.clone());
+            }
+        }
+
+        let leaf_content = self.collect_leaf_content(tree, node_id);
+        if !leaf_content.is_empty() {
+            parts.push(leaf_content);
+        }
+
+        parts.join("\n\n")
     }
 
     /// Collect content from leaf descendants of a node (excluding the node itself).
@@ -227,30 +237,27 @@ impl EvaluateStage {
     }
 
     /// Build the final response.
+    ///
+    /// Reads per-node content from `ctx.node_content_cache` populated
+    /// during `aggregate_content()` — no duplicate leaf traversal.
     fn build_response(&self, ctx: &PipelineContext) -> RetrieveResponse {
         let mut results = Vec::new();
 
         for candidate in &ctx.candidates {
             if let Some(node) = ctx.tree.get(candidate.node_id) {
-                // Build content: node's own content + all descendant leaf content
                 let content = if ctx.options.include_content {
-                    let mut content_parts = Vec::new();
-
-                    // Add node's own content
-                    if !node.content.is_empty() {
-                        content_parts.push(node.content.clone());
-                    }
-
-                    // Add content from leaf descendants
-                    let leaf_content = self.collect_leaf_content(&ctx.tree, candidate.node_id);
-                    if !leaf_content.is_empty() {
-                        content_parts.push(leaf_content);
-                    }
-
-                    if content_parts.is_empty() {
-                        None
-                    } else {
-                        Some(content_parts.join("\n\n"))
+                    // Read from cache — computed once in aggregate_content()
+                    match ctx.node_content_cache.get(&candidate.node_id) {
+                        Some(cached) if !cached.is_empty() => Some(cached.clone()),
+                        _ => {
+                            // Cache miss (edge case): compute inline
+                            let built = self.build_node_content(&ctx.tree, candidate.node_id);
+                            if built.is_empty() {
+                                None
+                            } else {
+                                Some(built)
+                            }
+                        }
                     }
                 } else {
                     None

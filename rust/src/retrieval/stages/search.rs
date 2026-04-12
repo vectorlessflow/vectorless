@@ -48,7 +48,6 @@ use crate::retrieval::types::{
 pub struct SearchStage {
     keyword_strategy: KeywordStrategy,
     llm_strategy: Option<Arc<LlmStrategy>>,
-    semantic_strategy: Option<Arc<dyn RetrievalStrategy>>,
     hybrid_strategy: Option<Arc<dyn RetrievalStrategy>>,
     /// Pilot for navigation guidance (optional).
     pilot: Option<Arc<dyn Pilot>>,
@@ -70,7 +69,6 @@ impl SearchStage {
         Self {
             keyword_strategy: KeywordStrategy::new(),
             llm_strategy: None,
-            semantic_strategy: None,
             hybrid_strategy: None,
             pilot: None,
             llm_client: None,
@@ -96,12 +94,6 @@ impl SearchStage {
     /// Add LLM strategy for complex queries.
     pub fn with_llm_strategy(mut self, strategy: LlmStrategy) -> Self {
         self.llm_strategy = Some(Arc::new(strategy));
-        self
-    }
-
-    /// Add semantic strategy for embedding-based search.
-    pub fn with_semantic_strategy(mut self, strategy: Arc<dyn RetrievalStrategy>) -> Self {
-        self.semantic_strategy = Some(strategy);
         self
     }
 
@@ -134,15 +126,6 @@ impl SearchStage {
             StrategyPreference::ForceKeyword => {
                 info!("Using Keyword strategy");
                 Arc::new(self.keyword_strategy.clone())
-            }
-            StrategyPreference::ForceSemantic => {
-                if let Some(ref strategy) = self.semantic_strategy {
-                    info!("Using Semantic strategy");
-                    strategy.clone()
-                } else {
-                    warn!("Semantic strategy requested but not available, falling back to Keyword");
-                    Arc::new(self.keyword_strategy.clone())
-                }
             }
             StrategyPreference::ForceLlm => {
                 if let Some(ref strategy) = self.llm_strategy {
@@ -607,6 +590,28 @@ impl RetrievalStage for SearchStage {
             .locate(&ctx.query, &ctx.tree, &top_level_nodes)
             .await;
 
+        // === L2 Cache boost: boost cues whose paths have historical success ===
+        let doc_key = format!("{:?}", ctx.tree.root());
+        let l2_paths = ctx.reasoning_cache.l2_top_paths(&doc_key, 5);
+        if !l2_paths.is_empty() {
+            for cue in &mut cues {
+                if let Some(node) = ctx.tree.get(cue.root) {
+                    let node_path = node.title.as_str();
+                    if let Some((_, cached_conf)) = l2_paths
+                        .iter()
+                        .find(|(path, _)| node_path.contains(path.as_str()) || path.contains(node_path))
+                    {
+                        // Blend current confidence with historical: 60% current + 40% cached
+                        cue.confidence = cue.confidence * 0.6 + cached_conf * 0.4;
+                        debug!(
+                            "L2 cache boost for '{}': {:.3} → {:.3}",
+                            node_path, cue.confidence, cue.confidence
+                        );
+                    }
+                }
+            }
+        }
+
         debug!("ToCNavigator returned {} cues", cues.len());
 
         // Inject structure hints from Analyze stage as high-priority cues
@@ -681,6 +686,44 @@ impl RetrievalStage for SearchStage {
                 .map(|c| (c.node_id, c.score))
                 .collect();
             tracker.record_hits(&hits);
+        }
+
+        // === L3 Cache boost: use cached strategy scores to refine candidates ===
+        for candidate in &mut ctx.candidates {
+            if let Some(node) = ctx.tree.get(candidate.node_id) {
+                let content_fp = crate::utils::fingerprint::Fingerprint::from_str(&node.content);
+                if let Some((cached_score, _strategy)) =
+                    ctx.reasoning_cache.l3_get(&content_fp)
+                {
+                    // Blend: if L3 has a higher score for this node, boost it
+                    if cached_score > candidate.score {
+                        candidate.score = (candidate.score + cached_score) / 2.0;
+                    }
+                }
+            }
+        }
+        // Re-sort after L3 boost
+        ctx.candidates.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+
+        // Store L3 scores for future queries
+        for candidate in &ctx.candidates {
+            if let Some(node) = ctx.tree.get(candidate.node_id) {
+                if !node.content.is_empty() {
+                    let content_fp =
+                        crate::utils::fingerprint::Fingerprint::from_str(&node.content);
+                    ctx.reasoning_cache.l3_store(
+                        content_fp,
+                        candidate.score,
+                        ctx.selected_strategy
+                            .map(|s| format!("{:?}", s))
+                            .unwrap_or_else(|| "auto".to_string()),
+                    );
+                }
+            }
         }
         // Estimate tokens consumed by this search iteration (content-based heuristic)
         let search_tokens: usize = ctx
@@ -810,7 +853,6 @@ mod tests {
     fn test_search_stage_creation() {
         let stage = SearchStage::new();
         assert!(stage.llm_strategy.is_none());
-        assert!(stage.semantic_strategy.is_none());
         assert!(!stage.has_pilot());
     }
 

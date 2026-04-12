@@ -259,6 +259,9 @@ pub struct PipelineContext {
     /// Fingerprint of candidate node IDs from previous evaluate call.
     /// Used to detect stagnant loops (same candidates → same evaluation).
     pub prev_candidate_fingerprint: Option<u64>,
+    /// Per-node content cache to avoid duplicate computation.
+    /// Populated by `aggregate_content()`, read by `build_response()`.
+    pub node_content_cache: HashMap<NodeId, String>,
 
     // ============ Final Result ============
     /// Final retrieval response.
@@ -311,6 +314,7 @@ impl PipelineContext {
             accumulated_content: String::new(),
             token_count: 0,
             prev_candidate_fingerprint: None,
+            node_content_cache: HashMap::new(),
             result: None,
             stage_results: HashMap::new(),
             metrics: RetrievalMetrics::default(),
