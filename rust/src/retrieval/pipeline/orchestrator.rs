@@ -328,6 +328,13 @@ impl RetrievalOrchestrator {
             ctx = ctx.with_document_graph(graph);
         }
 
+        // Share the pipeline budget with the Pilot (unified budget)
+        if let Some(ref pilot) = self.pilot {
+            if let Some(llm_pilot) = pilot.as_any().downcast_ref::<crate::retrieval::pilot::LlmPilot>() {
+                llm_pilot.set_pipeline_budget(ctx.budget_controller.clone());
+            }
+        }
+
         // Track execution state
         let mut backtrack_count = 0;
         let mut total_iterations = 0;
@@ -611,6 +618,13 @@ impl RetrievalOrchestrator {
         }
         if let Some(graph) = document_graph {
             ctx = ctx.with_document_graph(graph);
+        }
+
+        // Share the pipeline budget with the Pilot (unified budget)
+        if let Some(ref pilot) = self.pilot {
+            if let Some(llm_pilot) = pilot.as_any().downcast_ref::<crate::retrieval::pilot::LlmPilot>() {
+                llm_pilot.set_pipeline_budget(ctx.budget_controller.clone());
+            }
         }
 
         let mut backtrack_count = 0;
@@ -906,6 +920,13 @@ impl RetrievalOrchestrator {
         let mut ctx = PipelineContext::with_pilot(tree, query, options, self.pilot.clone());
         if let Some(graph) = document_graph {
             ctx = ctx.with_document_graph(graph);
+        }
+
+        // Share the pipeline budget with the Pilot (unified budget)
+        if let Some(ref pilot) = self.pilot {
+            if let Some(llm_pilot) = pilot.as_any().downcast_ref::<crate::retrieval::pilot::LlmPilot>() {
+                llm_pilot.set_pipeline_budget(ctx.budget_controller.clone());
+            }
         }
 
         let mut backtrack_count = 0;

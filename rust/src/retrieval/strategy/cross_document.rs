@@ -221,6 +221,9 @@ impl CrossDocumentStrategy {
     }
 
     /// Search a single document and return results.
+    ///
+    /// Performs depth-first traversal: evaluates top-level nodes first,
+    /// then recursively explores children of high-scoring nodes.
     async fn search_document(
         &self,
         doc: &DocumentEntry,
@@ -229,18 +232,31 @@ impl CrossDocumentStrategy {
         let root_id = doc.tree.root();
         let children = doc.tree.children(root_id);
 
-        // Evaluate top-level nodes to find entry points
-        let evaluations = self
+        // Phase 1: Evaluate top-level nodes
+        let top_evaluations = self
             .inner
             .evaluate_nodes(&doc.tree, &children, context)
             .await;
 
-        // Collect results with scores above threshold
         let mut scored_nodes: Vec<(NodeId, NodeEvaluation)> = children
             .into_iter()
-            .zip(evaluations.into_iter())
+            .zip(top_evaluations.into_iter())
             .filter(|(_, eval)| eval.score >= self.config.min_score)
             .collect();
+
+        // Phase 2: Depth traversal — explore children of high-scoring nodes
+        let high_score_nodes: Vec<NodeId> = scored_nodes
+            .iter()
+            .filter(|(_, eval)| eval.score >= self.config.min_score * 1.5)
+            .map(|(id, _)| *id)
+            .collect();
+
+        for node_id in high_score_nodes {
+            let depth_results = self
+                .search_subtree(&doc.tree, node_id, context, 0, 2)
+                .await;
+            scored_nodes.extend(depth_results);
+        }
 
         // Sort by score descending
         scored_nodes.sort_by(|a, b| {
@@ -248,6 +264,9 @@ impl CrossDocumentStrategy {
                 .partial_cmp(&a.1.score)
                 .unwrap_or(std::cmp::Ordering::Equal)
         });
+
+        // Deduplicate by node_id
+        scored_nodes.dedup_by(|a, b| a.0 == b.0);
 
         // Limit results per document
         scored_nodes.truncate(self.config.max_results_per_doc);
@@ -260,6 +279,55 @@ impl CrossDocumentStrategy {
             evaluations: scored_nodes,
             best_score,
         }
+    }
+
+    /// Recursively search a subtree, evaluating children of high-scoring nodes.
+    fn search_subtree<'a>(
+        &'a self,
+        tree: &'a DocumentTree,
+        parent_id: NodeId,
+        context: &'a RetrievalContext,
+        current_depth: usize,
+        max_depth: usize,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Vec<(NodeId, NodeEvaluation)>> + Send + 'a>> {
+        Box::pin(async move {
+        if current_depth >= max_depth {
+            return Vec::new();
+        }
+
+        let children = tree.children(parent_id);
+        if children.is_empty() {
+            return Vec::new();
+        }
+
+        let evaluations = self
+            .inner
+            .evaluate_nodes(tree, &children, context)
+            .await;
+
+        let mut results = Vec::new();
+        let mut explore_further = Vec::new();
+
+        for (node_id, eval) in children.into_iter().zip(evaluations.into_iter()) {
+            if eval.score >= self.config.min_score {
+                results.push((node_id, eval.clone()));
+            }
+            // Only explore deeper if score is promising
+            if eval.score >= self.config.min_score * 1.5 {
+                explore_further.push(node_id);
+            }
+        }
+
+        // Recurse into promising children
+        for child_id in explore_further {
+            let deeper = self
+                .search_subtree(tree, child_id, context, current_depth + 1, max_depth)
+                .await;
+            results.extend(deeper);
+        }
+
+        results
+        })
     }
 
     /// Merge results from all documents.

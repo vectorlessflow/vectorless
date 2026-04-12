@@ -77,8 +77,12 @@ pub struct LlmPilot {
     executor: Option<Arc<LlmExecutor>>,
     /// Pilot configuration.
     config: PilotConfig,
-    /// Budget controller.
+    /// Budget controller for per-level call tracking.
     budget: BudgetController,
+    /// Shared pipeline budget — the primary budget source when set.
+    /// When available, Pilot checks this before making LLM calls and
+    /// records token consumption here.
+    pipeline_budget: parking_lot::RwLock<Option<Arc<crate::retrieval::pipeline::RetrievalBudgetController>>>,
     /// Context builder.
     context_builder: ContextBuilder,
     /// Prompt builder.
@@ -111,6 +115,7 @@ impl LlmPilot {
             executor: None,
             config,
             budget,
+            pipeline_budget: parking_lot::RwLock::new(None),
             context_builder: ContextBuilder::new(token_budget),
             prompt_builder: PromptBuilder::new(),
             response_parser: ResponseParser::new(),
@@ -131,6 +136,7 @@ impl LlmPilot {
             executor: Some(Arc::new(executor)),
             config,
             budget,
+            pipeline_budget: parking_lot::RwLock::new(None),
             context_builder: ContextBuilder::new(token_budget),
             prompt_builder: PromptBuilder::new(),
             response_parser: ResponseParser::new(),
@@ -150,6 +156,7 @@ impl LlmPilot {
             executor: Some(executor),
             config,
             budget,
+            pipeline_budget: parking_lot::RwLock::new(None),
             context_builder: ContextBuilder::new(token_budget),
             prompt_builder: PromptBuilder::new(),
             response_parser: ResponseParser::new(),
@@ -172,6 +179,7 @@ impl LlmPilot {
             executor: None,
             config,
             budget,
+            pipeline_budget: parking_lot::RwLock::new(None),
             context_builder,
             prompt_builder,
             response_parser: ResponseParser::new(),
@@ -206,6 +214,17 @@ impl LlmPilot {
     pub fn with_memo_store(mut self, store: MemoStore) -> Self {
         self.memo_store = Some(store);
         self
+    }
+
+    /// Set the shared pipeline budget controller.
+    ///
+    /// When set, this becomes the primary budget gate for LLM calls.
+    /// The Pilot's own BudgetController still tracks per-level call counts,
+    /// but token consumption is recorded against the pipeline budget.
+    /// Call this at query time (not construction time) since the pipeline
+    /// budget is created per-query.
+    pub fn set_pipeline_budget(&self, budget: Arc<crate::retrieval::pipeline::RetrievalBudgetController>) {
+        *self.pipeline_budget.write() = Some(budget);
     }
 
     /// Check if using LlmExecutor (unified throttle/retry/fallback).
@@ -259,7 +278,17 @@ impl LlmPilot {
     }
 
     /// Check if budget allows LLM calls.
+    ///
+    /// Checks the shared pipeline budget first (if set), then falls back
+    /// to the Pilot's own per-call budget.
     fn has_budget(&self) -> bool {
+        // Primary: check pipeline budget
+        if let Some(ref pb) = *self.pipeline_budget.read() {
+            if pb.status().should_stop() {
+                return false;
+            }
+        }
+        // Secondary: check Pilot's own call-level budget
         self.budget.can_call()
     }
 
@@ -353,8 +382,14 @@ impl LlmPilot {
             Ok(response) => {
                 // Record usage (estimate output tokens)
                 let output_tokens = self.estimate_tokens(&response);
+                let total_tokens = prompt.estimated_tokens + output_tokens;
                 self.budget
                     .record_usage(prompt.estimated_tokens, output_tokens, 0);
+
+                // Also record in pipeline budget if shared
+                if let Some(ref pb) = *self.pipeline_budget.read() {
+                    pb.record_tokens(total_tokens);
+                }
 
                 // Parse response
                 let mut decision = self.response_parser.parse(&response, candidates, point);
@@ -671,7 +706,12 @@ impl Pilot for LlmPilot {
 
     fn reset(&self) {
         self.budget.reset();
+        *self.pipeline_budget.write() = None;
         debug!("LlmPilot reset for new query");
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }
 

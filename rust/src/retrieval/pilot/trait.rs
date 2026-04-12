@@ -202,6 +202,14 @@ pub trait Pilot: Send + Sync {
     /// Called at the start of each new search to reset
     /// budget counters, caches, and other per-query state.
     fn reset(&self);
+
+    /// Downcast support for shared budget injection.
+    ///
+    /// Default implementation returns a dummy Any.
+    fn as_any(&self) -> &dyn std::any::Any {
+        // Default: no downcast support
+        &()
+    }
 }
 
 /// Extension trait for Pilot with utility methods.
