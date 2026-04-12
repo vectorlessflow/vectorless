@@ -161,8 +161,12 @@ impl RelevanceScorer {
     pub fn score_chunk(&self, chunk: &ContentChunk, ctx: &ScoringContext) -> ContentRelevance {
         let mut components = ScoreComponents::default();
 
-        // 1. Keyword score
-        components.keyword_score = self.compute_keyword_score(&chunk.content);
+        // 1. Keyword score (content + title + summary combined)
+        components.keyword_score = self.compute_keyword_score(&format!(
+            "{} {}",
+            chunk.title,
+            chunk.content
+        ));
 
         // 2. BM25 score (if enabled)
         if matches!(

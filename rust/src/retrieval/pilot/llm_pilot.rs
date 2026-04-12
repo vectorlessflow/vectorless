@@ -77,8 +77,12 @@ pub struct LlmPilot {
     executor: Option<Arc<LlmExecutor>>,
     /// Pilot configuration.
     config: PilotConfig,
-    /// Budget controller.
+    /// Budget controller for per-level call tracking.
     budget: BudgetController,
+    /// Shared pipeline budget — the primary budget source when set.
+    /// When available, Pilot checks this before making LLM calls and
+    /// records token consumption here.
+    pipeline_budget: parking_lot::RwLock<Option<Arc<crate::retrieval::pipeline::RetrievalBudgetController>>>,
     /// Context builder.
     context_builder: ContextBuilder,
     /// Prompt builder.
@@ -111,6 +115,7 @@ impl LlmPilot {
             executor: None,
             config,
             budget,
+            pipeline_budget: parking_lot::RwLock::new(None),
             context_builder: ContextBuilder::new(token_budget),
             prompt_builder: PromptBuilder::new(),
             response_parser: ResponseParser::new(),
@@ -131,6 +136,7 @@ impl LlmPilot {
             executor: Some(Arc::new(executor)),
             config,
             budget,
+            pipeline_budget: parking_lot::RwLock::new(None),
             context_builder: ContextBuilder::new(token_budget),
             prompt_builder: PromptBuilder::new(),
             response_parser: ResponseParser::new(),
@@ -150,6 +156,7 @@ impl LlmPilot {
             executor: Some(executor),
             config,
             budget,
+            pipeline_budget: parking_lot::RwLock::new(None),
             context_builder: ContextBuilder::new(token_budget),
             prompt_builder: PromptBuilder::new(),
             response_parser: ResponseParser::new(),
@@ -172,6 +179,7 @@ impl LlmPilot {
             executor: None,
             config,
             budget,
+            pipeline_budget: parking_lot::RwLock::new(None),
             context_builder,
             prompt_builder,
             response_parser: ResponseParser::new(),
@@ -206,6 +214,17 @@ impl LlmPilot {
     pub fn with_memo_store(mut self, store: MemoStore) -> Self {
         self.memo_store = Some(store);
         self
+    }
+
+    /// Set the shared pipeline budget controller.
+    ///
+    /// When set, this becomes the primary budget gate for LLM calls.
+    /// The Pilot's own BudgetController still tracks per-level call counts,
+    /// but token consumption is recorded against the pipeline budget.
+    /// Call this at query time (not construction time) since the pipeline
+    /// budget is created per-query.
+    pub fn set_pipeline_budget(&self, budget: Arc<crate::retrieval::pipeline::RetrievalBudgetController>) {
+        *self.pipeline_budget.write() = Some(budget);
     }
 
     /// Check if using LlmExecutor (unified throttle/retry/fallback).
@@ -259,7 +278,17 @@ impl LlmPilot {
     }
 
     /// Check if budget allows LLM calls.
+    ///
+    /// Checks the shared pipeline budget first (if set), then falls back
+    /// to the Pilot's own per-call budget.
     fn has_budget(&self) -> bool {
+        // Primary: check pipeline budget
+        if let Some(ref pb) = *self.pipeline_budget.read() {
+            if pb.status().should_stop() {
+                return false;
+            }
+        }
+        // Secondary: check Pilot's own call-level budget
         self.budget.can_call()
     }
 
@@ -335,22 +364,6 @@ impl LlmPilot {
             }
         }
 
-        println!(
-            "[DEBUG] LlmPilot::call_llm() - point={:?}, estimated_tokens={}",
-            point, prompt.estimated_tokens
-        );
-        println!(
-            "[DEBUG] LlmPilot::call_llm() - SYSTEM PROMPT:\n{}",
-            prompt.system
-        );
-        println!(
-            "[DEBUG] LlmPilot::call_llm() - USER PROMPT:\n{}",
-            prompt.user
-        );
-        println!(
-            "[DEBUG] LlmPilot::call_llm() - candidates count: {}",
-            candidates.len()
-        );
         debug!(
             "Calling LLM for {:?} point (estimated: {} tokens)",
             point, prompt.estimated_tokens
@@ -358,35 +371,28 @@ impl LlmPilot {
 
         // Make LLM call -use executor if available, otherwise use client directly
         let result = if let Some(ref executor) = self.executor {
-            println!("[DEBUG] LlmPilot::call_llm() - using LlmExecutor");
             // Use LlmExecutor for unified throttle/retry/fallback
             executor.complete(&prompt.system, &prompt.user).await
         } else {
-            println!("[DEBUG] LlmPilot::call_llm() - using direct client");
             // Fallback to direct client call
             self.client.complete(&prompt.system, &prompt.user).await
         };
 
         match result {
             Ok(response) => {
-                println!(
-                    "[DEBUG] LlmPilot::call_llm() - RAW LLM RESPONSE:\n{}",
-                    response
-                );
                 // Record usage (estimate output tokens)
                 let output_tokens = self.estimate_tokens(&response);
+                let total_tokens = prompt.estimated_tokens + output_tokens;
                 self.budget
                     .record_usage(prompt.estimated_tokens, output_tokens, 0);
 
+                // Also record in pipeline budget if shared
+                if let Some(ref pb) = *self.pipeline_budget.read() {
+                    pb.record_tokens(total_tokens);
+                }
+
                 // Parse response
                 let mut decision = self.response_parser.parse(&response, candidates, point);
-                println!(
-                    "[DEBUG] LlmPilot::call_llm() - PARSED DECISION: confidence={:.2}, ranked={}, direction={:?}, reasoning={}",
-                    decision.confidence,
-                    decision.ranked_candidates.len(),
-                    std::mem::discriminant(&decision.direction),
-                    decision.reasoning.chars().take(100).collect::<String>()
-                );
 
                 // Apply learner adjustment if available
                 if let Some(ref adj) = adjustment {
@@ -525,13 +531,11 @@ impl Pilot for LlmPilot {
     fn should_intervene(&self, state: &SearchState<'_>) -> bool {
         // Check mode
         if !self.config.mode.uses_llm() {
-            println!("[DEBUG] LlmPilot::should_intervene() - mode doesn't use LLM");
             return false;
         }
 
         // Check budget
         if !self.has_budget() {
-            println!("[DEBUG] LlmPilot::should_intervene() - budget exhausted");
             debug!("Budget exhausted, skipping intervention");
             return false;
         }
@@ -540,11 +544,6 @@ impl Pilot for LlmPilot {
 
         // Condition 1: Fork point with enough candidates
         if state.candidates.len() > intervention.fork_threshold {
-            println!(
-                "[DEBUG] LlmPilot::should_intervene() - YES: fork point with {} candidates (threshold={})",
-                state.candidates.len(),
-                intervention.fork_threshold
-            );
             debug!(
                 "Intervening: fork point with {} candidates",
                 state.candidates.len()
@@ -554,20 +553,12 @@ impl Pilot for LlmPilot {
 
         // Condition 2: Scores are too close (algorithm uncertain)
         if self.scores_are_close(state) {
-            println!(
-                "[DEBUG] LlmPilot::should_intervene() - YES: scores are close (best={:.2})",
-                state.best_score
-            );
             debug!("Intervening: scores are close");
             return true;
         }
 
         // Condition 3: Low confidence (best score too low)
         if intervention.is_low_confidence(state.best_score) {
-            println!(
-                "[DEBUG] LlmPilot::should_intervene() - YES: low confidence (best_score={:.2}, threshold={:.2})",
-                state.best_score, intervention.low_score_threshold
-            );
             debug!(
                 "Intervening: low confidence (best_score={:.2})",
                 state.best_score
@@ -577,26 +568,15 @@ impl Pilot for LlmPilot {
 
         // Condition 4: Backtracking and guide_at_backtrack is enabled
         if state.is_backtracking && self.config.guide_at_backtrack {
-            println!("[DEBUG] LlmPilot::should_intervene() - YES: backtracking");
             debug!("Intervening: backtracking");
             return true;
         }
 
-        println!(
-            "[DEBUG] LlmPilot::should_intervene() - NO: candidates={}, best_score={:.2}",
-            state.candidates.len(),
-            state.best_score
-        );
         false
     }
 
     async fn decide(&self, state: &SearchState<'_>) -> PilotDecision {
         let point = self.get_intervention_point(state);
-        println!(
-            "[DEBUG] LlmPilot::decide() - intervention_point={:?}, candidates={}",
-            point,
-            state.candidates.len()
-        );
 
         // Build context
         let context = self.context_builder.build(state);
@@ -619,16 +599,7 @@ impl Pilot for LlmPilot {
             .collect();
 
         // Make LLM call
-        let decision = self.call_llm(point, &context, &candidate_info).await;
-
-        println!(
-            "[DEBUG] LlmPilot::decide() - result: confidence={:.2}, direction={:?}, ranked={}",
-            decision.confidence,
-            std::mem::discriminant(&decision.direction),
-            decision.ranked_candidates.len()
-        );
-
-        decision
+        self.call_llm(point, &context, &candidate_info).await
     }
 
     async fn guide_start(
@@ -637,20 +608,13 @@ impl Pilot for LlmPilot {
         query: &str,
         start_node: NodeId,
     ) -> Option<PilotDecision> {
-        println!(
-            "[DEBUG] LlmPilot::guide_start() called, query='{}', start_node={:?}",
-            query, start_node
-        );
-
         // Check if guide_at_start is enabled
         if !self.config.guide_at_start {
-            println!("[DEBUG] LlmPilot::guide_start() - guide_at_start=false, skipping");
             return None;
         }
 
         // Check budget
         if !self.has_budget() {
-            println!("[DEBUG] LlmPilot::guide_start() - budget exhausted, skipping");
             debug!("Budget exhausted, cannot guide start");
             return None;
         }
@@ -664,10 +628,6 @@ impl Pilot for LlmPilot {
             debug!("Start node has no children, no guidance needed");
             return None;
         }
-        println!(
-            "[DEBUG] LlmPilot::guide_start() - {} children candidates from start_node",
-            node_ids.len()
-        );
 
         // Build CandidateInfo with titles
         let candidates: Vec<super::parser::CandidateInfo> = node_ids
@@ -683,30 +643,12 @@ impl Pilot for LlmPilot {
             .collect();
 
         // Make LLM call
-        println!("[DEBUG] LlmPilot::guide_start() - calling LLM...");
         let decision = self
             .call_llm(InterventionPoint::Start, &context, &candidates)
             .await;
 
-        println!(
-            "[DEBUG] LlmPilot::guide_start() - LLM returned: confidence={:.2}, ranked_candidates={}, reasoning='{}'",
-            decision.confidence,
-            decision.ranked_candidates.len(),
-            decision.reasoning.chars().take(100).collect::<String>()
-        );
-
-        // Debug: show top ranked candidates
-        for (i, rc) in decision.ranked_candidates.iter().enumerate().take(3) {
-            if let Some(node) = tree.get(rc.node_id) {
-                println!(
-                    "[DEBUG]   Ranked {}: node_id={:?}, score={:.3}, title='{}'",
-                    i, rc.node_id, rc.score, node.title
-                );
-            }
-        }
-
         info!(
-            "Pilot start guidance: confidence={}, candidates={}",
+            "Pilot start guidance: confidence={:.2}, candidates={}",
             decision.confidence,
             decision.ranked_candidates.len()
         );
@@ -764,7 +706,12 @@ impl Pilot for LlmPilot {
 
     fn reset(&self) {
         self.budget.reset();
+        *self.pipeline_budget.write() = None;
         debug!("LlmPilot reset for new query");
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }
 

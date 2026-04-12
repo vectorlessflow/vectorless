@@ -40,7 +40,7 @@ mod orchestrator;
 mod outcome;
 mod stage;
 
-pub use budget::BudgetStatus;
+pub use budget::{BudgetStatus, RetrievalBudgetController};
 pub use context::{CandidateNode, PipelineContext, SearchAlgorithm, SearchConfig};
 pub use orchestrator::RetrievalOrchestrator;
 pub use outcome::StageOutcome;

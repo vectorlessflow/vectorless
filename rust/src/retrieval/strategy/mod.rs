@@ -6,7 +6,6 @@
 //! This module provides several retrieval strategies:
 //!
 //! - **KeywordStrategy**: Fast keyword matching using TF-IDF
-//! - **SemanticStrategy**: Embedding-based semantic similarity
 //! - **LlmStrategy**: LLM-powered reasoning with ToC context
 //! - **HybridStrategy**: BM25 pre-filter + LLM refinement (recommended)
 //! - **CrossDocumentStrategy**: Multi-document retrieval with result aggregation
@@ -17,7 +16,6 @@ mod hybrid;
 mod keyword;
 mod llm;
 mod page_range;
-mod semantic;
 mod r#trait;
 
 pub use hybrid::{HybridConfig, HybridStrategy};

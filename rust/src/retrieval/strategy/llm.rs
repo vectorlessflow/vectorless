@@ -4,6 +4,8 @@
 //! LLM-based retrieval strategy.
 //!
 //! Uses an LLM for deep reasoning about node relevance with ToC context.
+//! Supports batch evaluation — all sibling nodes are scored in a single
+//! LLM call instead of one call per node.
 
 use async_trait::async_trait;
 use serde::Deserialize;
@@ -14,7 +16,31 @@ use super::r#trait::{NodeEvaluation, RetrievalStrategy, StrategyCapabilities};
 use crate::document::{DocumentTree, NodeId, TocView};
 use crate::llm::LlmClient;
 
-/// LLM response for navigation decision.
+/// LLM response for a single node in batch evaluation.
+#[derive(Debug, Clone, Deserialize)]
+struct NodeScore {
+    /// 1-based index matching the order in the prompt.
+    index: usize,
+    /// Relevance score (0-100, will be normalized to 0-1).
+    relevance: u8,
+    /// Decision: "answer", "explore", or "skip".
+    action: String,
+    /// Optional reasoning.
+    #[serde(default)]
+    reasoning: Option<String>,
+}
+
+/// LLM response for batch node evaluation.
+#[derive(Debug, Clone, Deserialize)]
+struct BatchResponse {
+    /// Analysis reasoning.
+    #[serde(default)]
+    reasoning: String,
+    /// Scored nodes.
+    nodes: Vec<NodeScore>,
+}
+
+/// LLM response for single-node evaluation (fallback).
 #[derive(Debug, Clone, Deserialize)]
 struct NavigationResponse {
     /// Relevance score (0-100, will be normalized to 0-1).
@@ -31,6 +57,12 @@ struct NavigationResponse {
 /// Uses an LLM to reason about which nodes are most relevant
 /// to the query. Includes ToC context for better navigation decisions.
 ///
+/// # Batch Evaluation
+///
+/// When multiple nodes need scoring, they are sent in a single LLM call
+/// instead of one call per node. This reduces latency from O(N) LLM calls
+/// to O(1).
+///
 /// # Example
 ///
 /// ```rust,no_run
@@ -45,8 +77,10 @@ struct NavigationResponse {
 pub struct LlmStrategy {
     /// The LLM client.
     client: LlmClient,
-    /// System prompt for navigation.
+    /// System prompt for single-node navigation.
     system_prompt: String,
+    /// System prompt for batch evaluation.
+    batch_system_prompt: String,
     /// ToC view generator.
     toc_view: TocView,
     /// Whether to include ToC context in prompts.
@@ -59,6 +93,7 @@ impl LlmStrategy {
         Self {
             client,
             system_prompt: Self::default_system_prompt(),
+            batch_system_prompt: Self::default_batch_system_prompt(),
             toc_view: TocView::new(),
             include_toc: true,
         }
@@ -81,7 +116,7 @@ impl LlmStrategy {
         self
     }
 
-    /// Default system prompt for navigation.
+    /// Default system prompt for single-node navigation.
     fn default_system_prompt() -> String {
         r#"You are a document navigation assistant. Your task is to help find the most relevant sections in a document tree.
 
@@ -93,6 +128,29 @@ Respond in JSON format:
 {"relevance": <0-100>, "action": "<answer|explore|skip>", "reasoning": "<brief explanation>"}
 
 Be concise and focused on finding the most relevant information."#.to_string()
+    }
+
+    /// Default system prompt for batch node evaluation.
+    fn default_batch_system_prompt() -> String {
+        r#"You are a document navigation assistant. Score the relevance of multiple document sections against a user query.
+
+CRITICAL: Respond with ONLY valid JSON (no markdown code blocks).
+
+Response format:
+{
+  "reasoning": "Brief analysis of the query",
+  "nodes": [
+    {"index": 1, "relevance": 85, "action": "answer", "reason": "Why relevant"},
+    {"index": 2, "relevance": 30, "action": "skip", "reason": "Why not relevant"}
+  ]
+}
+
+Rules:
+- index: MUST be the number from [N] brackets in the input
+- relevance: 0-100 (how relevant this section is to the query)
+- action: one of "answer", "explore", "skip"
+- Score ALL provided nodes, not just the top ones
+- Be concise in reasons"#.to_string()
     }
 
     /// Build the navigation prompt for a single node.
@@ -144,7 +202,62 @@ Be concise and focused on finding the most relevant information."#.to_string()
         )
     }
 
-    /// Parse LLM response to evaluation.
+    /// Build a batch prompt that presents all nodes at once.
+    fn build_batch_prompt(
+        &self,
+        tree: &DocumentTree,
+        node_ids: &[NodeId],
+        context: &RetrievalContext,
+    ) -> String {
+        // Collect node descriptions
+        let node_descriptions: Vec<String> = node_ids
+            .iter()
+            .enumerate()
+            .filter_map(|(i, &node_id)| {
+                let node = tree.get(node_id)?;
+                let children = tree.children(node_id);
+                let summary = if node.summary.is_empty() {
+                    let end = 200.min(node.content.len());
+                    &node.content[..end]
+                } else {
+                    &node.summary
+                };
+                Some(format!(
+                    "[{}] Title: \"{}\"\n     Summary: \"{}\"\n     Depth: {}, Children: {}",
+                    i + 1,
+                    node.title,
+                    summary,
+                    node.depth,
+                    children.len()
+                ))
+            })
+            .collect();
+
+        let nodes_str = node_descriptions.join("\n\n");
+
+        // Optional ToC context from the first node's parent scope
+        let toc_context = if self.include_toc && !node_ids.is_empty() {
+            let toc = self.toc_view.generate_from(tree, node_ids[0]);
+            let toc_markdown = self.toc_view.format_markdown(&toc);
+            let toc_preview: String = toc_markdown.chars().take(800).collect();
+            format!(
+                "\n\nDocument ToC:\n{}\n",
+                toc_preview
+            )
+        } else {
+            String::new()
+        };
+
+        format!(
+            "USER QUERY: {}\n{}SECTIONS TO SCORE ({} entries):\n{}\n\nScore ALL sections. Respond with ONLY the JSON object:",
+            context.query,
+            toc_context,
+            node_ids.len(),
+            nodes_str
+        )
+    }
+
+    /// Parse LLM response to evaluation for a single node.
     fn parse_response(
         &self,
         response: &str,
@@ -204,6 +317,73 @@ Be concise and focused on finding the most relevant information."#.to_string()
             )),
         }
     }
+
+    /// Parse a batch LLM response into per-node evaluations.
+    ///
+    /// Returns evaluations in the same order as the input `node_ids`.
+    /// Nodes that the LLM didn't score get a default evaluation.
+    fn parse_batch_response(
+        &self,
+        response: &str,
+        tree: &DocumentTree,
+        node_ids: &[NodeId],
+    ) -> Vec<NodeEvaluation> {
+        // Try JSON parse
+        if let Ok(batch) = serde_json::from_str::<BatchResponse>(response) {
+            let mut evaluations = vec![
+                NodeEvaluation {
+                    score: 0.3,
+                    decision: NavigationDecision::ExploreMore,
+                    reasoning: Some("Not scored by LLM (batch fallback)".to_string()),
+                };
+                node_ids.len()
+            ];
+
+            for node_score in batch.nodes {
+                let idx = node_score.index.saturating_sub(1);
+                if idx < node_ids.len() {
+                    let node_id = node_ids[idx];
+                    let score = (node_score.relevance as f32 / 100.0).clamp(0.0, 1.0);
+                    let decision = match node_score.action.to_lowercase().as_str() {
+                        "answer" => NavigationDecision::ThisIsTheAnswer,
+                        "explore" => {
+                            if tree.is_leaf(node_id) {
+                                NavigationDecision::ThisIsTheAnswer
+                            } else {
+                                NavigationDecision::ExploreMore
+                            }
+                        }
+                        _ => NavigationDecision::Skip,
+                    };
+                    evaluations[idx] = NodeEvaluation {
+                        score,
+                        decision,
+                        reasoning: node_score.reasoning,
+                    };
+                }
+            }
+
+            return evaluations;
+        }
+
+        // Fallback: could not parse batch, return defaults
+        tracing::warn!(
+            "Failed to parse batch LLM response, using defaults for {} nodes",
+            node_ids.len()
+        );
+        node_ids
+            .iter()
+            .map(|&node_id| NodeEvaluation {
+                score: 0.5,
+                decision: if tree.is_leaf(node_id) {
+                    NavigationDecision::ThisIsTheAnswer
+                } else {
+                    NavigationDecision::ExploreMore
+                },
+                reasoning: Some("Batch parse fallback".to_string()),
+            })
+            .collect()
+    }
 }
 
 #[async_trait]
@@ -239,13 +419,38 @@ impl RetrievalStrategy for LlmStrategy {
         node_ids: &[NodeId],
         context: &RetrievalContext,
     ) -> Vec<NodeEvaluation> {
-        // Evaluate each node individually
-        // TODO: Could be optimized with batch prompts
-        let mut results = Vec::with_capacity(node_ids.len());
-        for node_id in node_ids {
-            results.push(self.evaluate_node(tree, *node_id, context).await);
+        if node_ids.is_empty() {
+            return Vec::new();
         }
-        results
+
+        // Single node: use the simpler single-node prompt
+        if node_ids.len() == 1 {
+            return vec![self.evaluate_node(tree, node_ids[0], context).await];
+        }
+
+        // Batch: send all nodes in one LLM call
+        let prompt = self.build_batch_prompt(tree, node_ids, context);
+
+        match self
+            .client
+            .complete(&self.batch_system_prompt, &prompt)
+            .await
+        {
+            Ok(response) => self.parse_batch_response(&response, tree, node_ids),
+            Err(e) => {
+                tracing::warn!(
+                    "Batch LLM evaluation failed ({}), falling back to single evaluation: {}",
+                    node_ids.len(),
+                    e
+                );
+                // Fallback: evaluate individually (still works, just slower)
+                let mut results = Vec::with_capacity(node_ids.len());
+                for &node_id in node_ids {
+                    results.push(self.evaluate_node(tree, node_id, context).await);
+                }
+                results
+            }
+        }
     }
 
     fn name(&self) -> &'static str {

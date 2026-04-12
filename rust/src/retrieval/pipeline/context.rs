@@ -205,7 +205,8 @@ pub struct PipelineContext {
     /// Optional Pilot for navigation guidance.
     pub pilot: Option<Arc<dyn Pilot>>,
     /// Adaptive token budget controller for the entire pipeline.
-    pub budget_controller: RetrievalBudgetController,
+    /// Shared via Arc so Pilot can read/check the same budget.
+    pub budget_controller: Arc<RetrievalBudgetController>,
     /// Tiered reasoning cache (L1 exact, L2 path pattern, L3 strategy score).
     pub reasoning_cache: Arc<ReasoningCache>,
 
@@ -259,6 +260,9 @@ pub struct PipelineContext {
     /// Fingerprint of candidate node IDs from previous evaluate call.
     /// Used to detect stagnant loops (same candidates → same evaluation).
     pub prev_candidate_fingerprint: Option<u64>,
+    /// Per-node content cache to avoid duplicate computation.
+    /// Populated by `aggregate_content()`, read by `build_response()`.
+    pub node_content_cache: HashMap<NodeId, String>,
 
     // ============ Final Result ============
     /// Final retrieval response.
@@ -282,7 +286,7 @@ impl PipelineContext {
     ) -> Self {
         // Build retrieval index for efficient operations
         let retrieval_index = Some(tree.build_retrieval_index());
-        let budget_controller = RetrievalBudgetController::new(options.max_tokens);
+        let budget_controller = Arc::new(RetrievalBudgetController::new(options.max_tokens));
 
         Self {
             query: query.into(),
@@ -311,6 +315,7 @@ impl PipelineContext {
             accumulated_content: String::new(),
             token_count: 0,
             prev_candidate_fingerprint: None,
+            node_content_cache: HashMap::new(),
             result: None,
             stage_results: HashMap::new(),
             metrics: RetrievalMetrics::default(),

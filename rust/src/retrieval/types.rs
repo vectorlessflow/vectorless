@@ -36,9 +36,6 @@ pub enum StrategyPreference {
     /// Force keyword-based strategy (fast, no LLM).
     ForceKeyword,
 
-    /// Force semantic strategy (embedding-based).
-    ForceSemantic,
-
     /// Force LLM strategy (deep reasoning).
     ForceLlm,
 
