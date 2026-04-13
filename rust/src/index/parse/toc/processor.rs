@@ -7,6 +7,7 @@
 //! degradation: if one mode fails verification, it falls back to a lower-quality
 //! but more reliable mode.
 
+use futures::future::join_all;
 use tracing::{debug, info, warn};
 
 use crate::error::Result;
@@ -393,30 +394,24 @@ impl TocProcessor {
 
         let page_count = pages.len();
 
-        // Pre-compute next-entry page numbers before consuming entries
+        // Pre-compute next-entry page numbers and classify entries
         let next_pages: Vec<Option<usize>> = entries
             .iter()
             .enumerate()
-            .map(|(i, _)| {
-                entries.get(i + 1).and_then(|e| e.physical_page)
-            })
+            .map(|(i, _)| entries.get(i + 1).and_then(|e| e.physical_page))
             .collect();
 
-        let mut refined = Vec::with_capacity(entries.len());
-
-        for (i, entry) in entries.into_iter().enumerate() {
-            let span = entry_page_span(&entry, next_pages[i], page_count);
-            let tokens = entry_token_count(&entry, pages);
-
-            if span > self.config.max_pages_per_entry
-                && tokens > self.config.max_tokens_per_entry
-            {
-                debug!(
-                    "Refining oversized entry '{}' ({} pages, ~{} tokens)",
-                    entry.title, span, tokens
-                );
-
-                // Extract sub-pages covered by this entry
+        // Identify oversized entries and launch extractions concurrently
+        let oversized_futures: Vec<_> = entries
+            .iter()
+            .enumerate()
+            .filter(|(i, entry)| {
+                let span = entry_page_span(entry, next_pages[*i], page_count);
+                let tokens = entry_token_count(entry, pages);
+                span > self.config.max_pages_per_entry
+                    && tokens > self.config.max_tokens_per_entry
+            })
+            .map(|(i, entry)| {
                 let start = entry.physical_page.unwrap_or(1);
                 let end = next_pages[i].unwrap_or(page_count);
                 let sub_pages: Vec<PdfPage> = pages
@@ -425,20 +420,24 @@ impl TocProcessor {
                     .cloned()
                     .collect();
 
-                if sub_pages.is_empty() {
-                    refined.push(entry);
-                } else {
-                    // Run structure extraction on the sub-pages
+                let entry_title = entry.title.clone();
+                let entry_level = entry.level;
+
+                async move {
+                    if sub_pages.is_empty() {
+                        return (i, Vec::new());
+                    }
+                    debug!(
+                        "Refining oversized entry '{}' (pages {}-{})",
+                        entry_title, start, end
+                    );
                     let extractor =
                         StructureExtractor::new(StructureExtractorConfig::default());
                     match extractor.extract(&sub_pages).await {
-                        Ok(sub_entries) if !sub_entries.is_empty() => {
-                            // If the first sub-entry has the same title as the
-                            // parent, skip it — the parent already represents
-                            // that content's starting point.
+                        Ok(sub_entries) => {
                             let skip = if sub_entries
                                 .first()
-                                .map(|e| e.title.trim() == entry.title.trim())
+                                .map(|e| e.title.trim() == entry_title.trim())
                                 .unwrap_or(false)
                             {
                                 1
@@ -446,37 +445,52 @@ impl TocProcessor {
                                 0
                             };
 
-                            for sub in &sub_entries[skip..] {
-                                let level_offset = entry.level;
-                                refined.push(
-                                    TocEntry::new(&sub.title, sub.level + level_offset)
+                            let refined: Vec<TocEntry> = sub_entries[skip..]
+                                .iter()
+                                .map(|sub| {
+                                    TocEntry::new(&sub.title, sub.level + entry_level)
                                         .with_physical_page(sub.physical_page.unwrap_or(start))
-                                        .with_confidence(sub.confidence * 0.9),
-                                );
-                            }
+                                        .with_confidence(sub.confidence * 0.9)
+                                })
+                                .collect();
 
                             info!(
                                 "Refined '{}' into {} sub-entries",
-                                entry.title,
-                                sub_entries.len() - skip
+                                entry_title,
+                                refined.len()
                             );
-                        }
-                        Ok(_) => {
-                            debug!("Sub-extraction produced no entries, keeping original");
-                            refined.push(entry);
+                            (i, refined)
                         }
                         Err(e) => {
-                            warn!("Sub-extraction failed for '{}': {}", entry.title, e);
-                            refined.push(entry);
+                            warn!("Sub-extraction failed for '{}': {}", entry_title, e);
+                            (i, Vec::new())
                         }
                     }
                 }
-            } else {
-                refined.push(entry);
+            })
+            .collect();
+
+        let extraction_results = join_all(oversized_futures).await;
+
+        // Build a lookup from index → refined sub-entries
+        let mut refined_map = std::collections::HashMap::new();
+        for (idx, sub_entries) in extraction_results {
+            if !sub_entries.is_empty() {
+                refined_map.insert(idx, sub_entries);
             }
         }
 
-        Ok(refined)
+        // Assemble final output
+        let mut result = Vec::with_capacity(entries.len() * 2);
+        for (i, entry) in entries.into_iter().enumerate() {
+            if let Some(sub_entries) = refined_map.remove(&i) {
+                result.extend(sub_entries);
+            } else {
+                result.push(entry);
+            }
+        }
+
+        Ok(result)
     }
 }
 

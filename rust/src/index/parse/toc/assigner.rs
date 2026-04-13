@@ -4,6 +4,7 @@
 //! Page assigner - assigns physical page numbers to TOC entries.
 
 use std::collections::HashMap;
+use futures::future::join_all;
 use tracing::{debug, info};
 
 use crate::config::LlmConfig;
@@ -121,7 +122,7 @@ impl PageAssigner {
             .collect()
     }
 
-    /// Calculate page offset by verifying anchors.
+    /// Calculate page offset by verifying anchors concurrently.
     async fn calculate_offset(
         &self,
         anchors: Vec<&TocEntry>,
@@ -132,26 +133,41 @@ impl PageAssigner {
         }
 
         let anchor_count = anchors.len();
-        let mut verified_offsets: Vec<(i32, bool)> = Vec::new();
 
-        for anchor in anchors {
-            let toc_page = anchor.toc_page.unwrap();
+        // Verify all anchors concurrently
+        let client = self.client.clone();
+        let pages_owned = pages.to_vec();
+        let futures: Vec<_> = anchors
+            .into_iter()
+            .map(|anchor| {
+                let title = anchor.title.clone();
+                let toc_page = anchor.toc_page.unwrap();
+                let client = client.clone();
+                let pages = pages_owned.clone();
 
-            // Find the physical page where this title appears
-            if let Some(physical) = self
-                .locate_title_in_range(anchor.title.as_str(), pages, toc_page)
-                .await?
-            {
-                let offset = physical as i32 - toc_page as i32;
-                verified_offsets.push((offset, true));
-                debug!(
-                    "Anchor '{}' found: toc={}, physical={}, offset={}",
-                    anchor.title, toc_page, physical, offset
-                );
-            } else {
-                verified_offsets.push((0, false));
-            }
-        }
+                async move {
+                    let range_pages = Self::pages_around(&pages, toc_page, 3);
+                    if range_pages.is_empty() {
+                        return (0, false);
+                    }
+
+                    let content = Self::format_range_pages(&range_pages);
+                    match Self::locate_with_client(&client, &title, &content).await {
+                        Ok(Some(physical)) => {
+                            let offset = physical as i32 - toc_page as i32;
+                            debug!(
+                                "Anchor '{}' found: toc={}, physical={}, offset={}",
+                                title, toc_page, physical, offset
+                            );
+                            (offset, true)
+                        }
+                        _ => (0, false),
+                    }
+                }
+            })
+            .collect();
+
+        let verified_offsets = join_all(futures).await;
 
         // Calculate the mode (most common offset)
         let successful: Vec<_> = verified_offsets
@@ -164,7 +180,7 @@ impl PageAssigner {
             return Ok(PageOffset::new(0, 0, 0.0));
         }
 
-        let mode = self.calculate_mode(&successful);
+        let mode = Self::calculate_mode_static(&successful);
         let sample_count = successful.len();
         let confidence = sample_count as f32 / anchor_count as f32;
 
@@ -173,6 +189,11 @@ impl PageAssigner {
 
     /// Calculate mode of offset values.
     fn calculate_mode(&self, values: &[i32]) -> i32 {
+        Self::calculate_mode_static(values)
+    }
+
+    /// Static version for use in concurrent contexts.
+    fn calculate_mode_static(values: &[i32]) -> i32 {
         let mut counts: HashMap<i32, usize> = HashMap::new();
         for &v in values {
             *counts.entry(v).or_insert(0) += 1;
@@ -184,25 +205,18 @@ impl PageAssigner {
             .unwrap_or(0)
     }
 
-    /// Locate a title in a range of pages using LLM.
-    async fn locate_title_in_range(
-        &self,
-        title: &str,
-        pages: &[PdfPage],
-        near_page: usize,
-    ) -> Result<Option<usize>> {
-        // Search in a range around the expected page
-        let start = (near_page.saturating_sub(3)).max(1);
-        let end = (near_page + 3).min(pages.len());
+    /// Collect pages around a center page number.
+    fn pages_around(pages: &[PdfPage], center: usize, range: usize) -> Vec<PdfPage> {
+        let start = center.saturating_sub(range).max(1);
+        let end = (center + range).min(pages.len());
+        (start..=end)
+            .filter_map(|i| pages.get(i - 1).cloned())
+            .collect()
+    }
 
-        let range_pages: Vec<_> = (start..=end).filter_map(|i| pages.get(i - 1)).collect();
-
-        if range_pages.is_empty() {
-            return Ok(None);
-        }
-
-        // Use LLM to find the exact page
-        let content = range_pages
+    /// Format pages into tagged text for LLM.
+    fn format_range_pages(pages: &[PdfPage]) -> String {
+        pages
             .iter()
             .map(|p| {
                 format!(
@@ -213,8 +227,15 @@ impl PageAssigner {
                 )
             })
             .collect::<Vec<_>>()
-            .join("\n\n");
+            .join("\n\n")
+    }
 
+    /// Locate a title in pre-formatted content using LLM (static, for concurrent use).
+    async fn locate_with_client(
+        client: &LlmClient,
+        title: &str,
+        content: &str,
+    ) -> Result<Option<usize>> {
         let system = "You are a document analysis assistant. Find which page contains a specific section title.";
         let user = format!(
             r#"Find which page contains the section titled: "{}"
@@ -232,21 +253,37 @@ Reply in JSON format:
             page: Option<usize>,
         }
 
-        let result: LocateResult = self.client.complete_json(system, &user).await?;
+        let result: LocateResult = client.complete_json(system, &user).await?;
         Ok(result.page)
     }
 
-    /// Assign pages using LLM for each entry.
+    /// Assign pages using LLM for each entry (concurrently).
     async fn assign_with_llm(&self, entries: &mut [TocEntry], pages: &[PdfPage]) -> Result<()> {
         info!("Assigning pages using LLM positioning");
 
-        // Group pages for efficient processing
-        let page_groups = self.group_pages(pages, 5);
+        let client = self.client.clone();
+        let pages_owned = pages.to_vec();
 
-        for entry in entries.iter_mut() {
-            let physical = self
-                .locate_title_in_groups(entry.title.as_str(), &page_groups)
-                .await?;
+        // Launch all entry searches concurrently
+        let futures: Vec<_> = entries
+            .iter()
+            .map(|entry| {
+                let title = entry.title.clone();
+                let client = client.clone();
+                let pages = pages_owned.clone();
+
+                async move {
+                    let groups = Self::group_pages_owned(&pages, 5);
+                    Self::locate_title_in_groups_static(&client, &title, &groups).await
+                }
+            })
+            .collect();
+
+        let results = join_all(futures).await;
+
+        // Write results back
+        for (entry, result) in entries.iter_mut().zip(results.into_iter()) {
+            let physical = result?;
             entry.physical_page = physical;
             entry.confidence = if physical.is_some() { 0.8 } else { 0.3 };
         }
@@ -254,19 +291,22 @@ Reply in JSON format:
         Ok(())
     }
 
-    /// Group pages for batch processing.
-    fn group_pages<'a>(&self, pages: &'a [PdfPage], group_size: usize) -> Vec<Vec<&'a PdfPage>> {
+    /// Group owned pages for batch processing.
+    fn group_pages_owned(pages: &[PdfPage], group_size: usize) -> Vec<Vec<PdfPage>> {
         pages
             .chunks(group_size)
-            .map(|chunk| chunk.iter().collect())
+            .map(|chunk| chunk.to_vec())
             .collect()
     }
 
-    /// Locate a title across page groups.
-    async fn locate_title_in_groups(
-        &self,
+    /// Locate a title across page groups (static, for concurrent use).
+    ///
+    /// Searches groups sequentially (early return on first match),
+    /// but multiple title searches can run concurrently.
+    async fn locate_title_in_groups_static(
+        client: &LlmClient,
         title: &str,
-        groups: &[Vec<&PdfPage>],
+        groups: &[Vec<PdfPage>],
     ) -> Result<Option<usize>> {
         let system = "You are a document analysis assistant. Find which page contains a specific section title.";
 
@@ -301,7 +341,7 @@ Reply in JSON format:
                 page: Option<usize>,
             }
 
-            let result: SearchResult = self.client.complete_json(system, &user).await?;
+            let result: SearchResult = client.complete_json(system, &user).await?;
 
             if result.found {
                 return Ok(result.page);
