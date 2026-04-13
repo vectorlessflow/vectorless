@@ -32,6 +32,7 @@
 
 mod budget;
 mod builder;
+mod complexity;
 mod config;
 mod decision;
 mod fallback;
@@ -43,6 +44,7 @@ mod parser;
 mod prompts;
 mod r#trait;
 
+pub use complexity::detect_with_llm;
 pub use config::PilotConfig;
 pub use decision::{InterventionPoint, PilotDecision};
 

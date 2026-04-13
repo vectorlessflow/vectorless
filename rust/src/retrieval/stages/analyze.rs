@@ -144,8 +144,12 @@ impl AnalyzeStage {
         self
     }
 
-    /// Enable query decomposition with LLM client.
+    /// Enable query decomposition and LLM-based complexity detection.
     pub fn with_llm_client(mut self, client: crate::llm::LlmClient) -> Self {
+        // Use LLM client for complexity detection
+        self.complexity_detector =
+            ComplexityDetector::with_llm_client(client.clone());
+        // Also enable query decomposition
         if self.query_decomposer.is_none() {
             self.query_decomposer =
                 Some(QueryDecomposer::new(DecompositionConfig::default()).with_llm_client(client));
@@ -356,8 +360,8 @@ impl RetrievalStage for AnalyzeStage {
     async fn execute(&self, ctx: &mut PipelineContext) -> crate::error::Result<StageOutcome> {
         info!("Analyzing query: '{}'", ctx.query);
 
-        // 1. Detect complexity
-        ctx.complexity = Some(self.complexity_detector.detect(&ctx.query));
+        // 1. Detect complexity (LLM-based when available, heuristic fallback)
+        ctx.complexity = Some(self.complexity_detector.detect(&ctx.query).await);
         info!("Query complexity: {:?}", ctx.complexity);
 
         // 2. Extract keywords
