@@ -447,7 +447,9 @@ impl IndexerClient {
         }
 
         persisted.reasoning_index = doc.reasoning_index;
-        persisted.meta.update_processing_stats(node_count, summary_tokens, duration_ms);
+        persisted
+            .meta
+            .update_processing_stats(node_count, summary_tokens, duration_ms);
 
         persisted
     }

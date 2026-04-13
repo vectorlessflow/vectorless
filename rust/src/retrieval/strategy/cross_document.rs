@@ -252,9 +252,7 @@ impl CrossDocumentStrategy {
             .collect();
 
         for node_id in high_score_nodes {
-            let depth_results = self
-                .search_subtree(&doc.tree, node_id, context, 0, 2)
-                .await;
+            let depth_results = self.search_subtree(&doc.tree, node_id, context, 0, 2).await;
             scored_nodes.extend(depth_results);
         }
 
@@ -289,44 +287,43 @@ impl CrossDocumentStrategy {
         context: &'a RetrievalContext,
         current_depth: usize,
         max_depth: usize,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Vec<(NodeId, NodeEvaluation)>> + Send + 'a>> {
+    ) -> std::pin::Pin<
+        Box<dyn std::future::Future<Output = Vec<(NodeId, NodeEvaluation)>> + Send + 'a>,
+    > {
         Box::pin(async move {
-        if current_depth >= max_depth {
-            return Vec::new();
-        }
-
-        let children = tree.children(parent_id);
-        if children.is_empty() {
-            return Vec::new();
-        }
-
-        let evaluations = self
-            .inner
-            .evaluate_nodes(tree, &children, context)
-            .await;
-
-        let mut results = Vec::new();
-        let mut explore_further = Vec::new();
-
-        for (node_id, eval) in children.into_iter().zip(evaluations.into_iter()) {
-            if eval.score >= self.config.min_score {
-                results.push((node_id, eval.clone()));
+            if current_depth >= max_depth {
+                return Vec::new();
             }
-            // Only explore deeper if score is promising
-            if eval.score >= self.config.min_score * 1.5 {
-                explore_further.push(node_id);
+
+            let children = tree.children(parent_id);
+            if children.is_empty() {
+                return Vec::new();
             }
-        }
 
-        // Recurse into promising children
-        for child_id in explore_further {
-            let deeper = self
-                .search_subtree(tree, child_id, context, current_depth + 1, max_depth)
-                .await;
-            results.extend(deeper);
-        }
+            let evaluations = self.inner.evaluate_nodes(tree, &children, context).await;
 
-        results
+            let mut results = Vec::new();
+            let mut explore_further = Vec::new();
+
+            for (node_id, eval) in children.into_iter().zip(evaluations.into_iter()) {
+                if eval.score >= self.config.min_score {
+                    results.push((node_id, eval.clone()));
+                }
+                // Only explore deeper if score is promising
+                if eval.score >= self.config.min_score * 1.5 {
+                    explore_further.push(node_id);
+                }
+            }
+
+            // Recurse into promising children
+            for child_id in explore_further {
+                let deeper = self
+                    .search_subtree(tree, child_id, context, current_depth + 1, max_depth)
+                    .await;
+                results.extend(deeper);
+            }
+
+            results
         })
     }
 

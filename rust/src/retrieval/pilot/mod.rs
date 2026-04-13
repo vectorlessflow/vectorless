@@ -44,7 +44,7 @@ mod prompts;
 mod r#trait;
 
 pub use config::PilotConfig;
-pub use decision::{InterventionPoint, PilotDecision, RankedCandidate, SearchDirection};
+pub use decision::{InterventionPoint, PilotDecision};
 
 pub use llm_pilot::LlmPilot;
 pub use r#trait::{Pilot, SearchState};

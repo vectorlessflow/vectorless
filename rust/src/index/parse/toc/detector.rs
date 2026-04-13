@@ -79,11 +79,7 @@ impl TocDetector {
         let use_llm = config.use_llm_fallback;
         Self {
             config,
-            llm_client: if use_llm {
-                Some(client)
-            } else {
-                None
-            },
+            llm_client: if use_llm { Some(client) } else { None },
             patterns: Self::build_patterns(),
         }
     }

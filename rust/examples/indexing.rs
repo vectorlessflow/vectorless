@@ -21,10 +21,9 @@ async fn main() -> vectorless::Result<()> {
 
     // Build engine with LLM configuration from environment or defaults.
     // Adjust the defaults below to match your setup.
-    let api_key = std::env::var("LLM_API_KEY")
-        .unwrap_or_else(|_| "sk-or-v1-...".to_string());
-    let model = std::env::var("LLM_MODEL")
-        .unwrap_or_else(|_| "google/gemini-3-flash-preview".to_string());
+    let api_key = std::env::var("LLM_API_KEY").unwrap_or_else(|_| "sk-or-v1-...".to_string());
+    let model =
+        std::env::var("LLM_MODEL").unwrap_or_else(|_| "google/gemini-3-flash-preview".to_string());
     let endpoint = std::env::var("LLM_ENDPOINT")
         .unwrap_or_else(|_| "http://localhost:4000/api/v1".to_string());
 
@@ -40,8 +39,7 @@ async fn main() -> vectorless::Result<()> {
     // Index multiple documents in a single call.
     // Paths are resolved relative to the workspace directory.
     let result = engine
-        .index(
-            IndexContext::from_paths(&["../README.md", "../CLAUDE.md"]))
+        .index(IndexContext::from_paths(&["../README.md", "../CLAUDE.md"]))
         .await?;
 
     println!("Indexed {} document(s)", result.items.len());

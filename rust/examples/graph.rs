@@ -29,10 +29,8 @@ async fn main() -> vectorless::Result<()> {
 
     // Build engine with LLM configuration from environment or defaults.
     // Adjust the defaults below to match your setup.
-    let api_key = std::env::var("LLM_API_KEY")
-        .unwrap_or_else(|_| "sk-...".to_string());
-    let model = std::env::var("LLM_MODEL")
-        .unwrap_or_else(|_| "gpt-4o".to_string());
+    let api_key = std::env::var("LLM_API_KEY").unwrap_or_else(|_| "sk-...".to_string());
+    let model = std::env::var("LLM_MODEL").unwrap_or_else(|_| "gpt-4o".to_string());
 
     // 1. Create engine
     let engine = EngineBuilder::new()

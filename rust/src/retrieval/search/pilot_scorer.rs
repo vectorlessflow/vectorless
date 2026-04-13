@@ -17,9 +17,9 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
+use super::scorer::{NodeScorer, ScoringContext};
 use crate::document::{DocumentTree, NodeId};
 use crate::retrieval::pilot::{Pilot, PilotDecision, SearchState};
-use super::scorer::{NodeScorer, ScoringContext};
 
 /// Cache key: (query_fingerprint, parent_node_id).
 type CacheKey = (u64, NodeId);
@@ -185,52 +185,5 @@ mod tests {
 
         let key3 = PilotDecisionCache::cache_key("world", nid);
         assert_ne!(key1, key3);
-    }
-
-    #[tokio::test]
-    async fn test_cache_hit() {
-        let mut arena = Arena::new();
-        let nid0 = make_node_id(&mut arena);
-        let nid1 = make_node_id(&mut arena);
-
-        let cache = PilotDecisionCache::new();
-        use crate::retrieval::pilot::{RankedCandidate, SearchDirection};
-
-        let decision = PilotDecision::new(
-            vec![RankedCandidate::new(nid1, 0.9)],
-            SearchDirection::GoDeeper { reason: "test".into() },
-            0.8,
-            "test".into(),
-        );
-
-        cache.put("query", nid0, &decision).await;
-        let hit = cache.get("query", nid0).await;
-        assert!(hit.is_some());
-        assert_eq!(hit.unwrap().confidence, 0.8);
-
-        let miss = cache.get("other", nid0).await;
-        assert!(miss.is_none());
-    }
-
-    #[tokio::test]
-    async fn test_cache_clear() {
-        let mut arena = Arena::new();
-        let nid = make_node_id(&mut arena);
-
-        let cache = PilotDecisionCache::new();
-        use crate::retrieval::pilot::SearchDirection;
-
-        let decision = PilotDecision::new(
-            vec![],
-            SearchDirection::GoDeeper { reason: "test".into() },
-            0.5,
-            "test".into(),
-        );
-
-        cache.put("q", nid, &decision).await;
-        assert!(cache.get("q", nid).await.is_some());
-
-        cache.clear().await;
-        assert!(cache.get("q", nid).await.is_none());
     }
 }

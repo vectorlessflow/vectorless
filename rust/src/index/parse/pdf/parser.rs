@@ -296,7 +296,9 @@ impl PdfParser {
                     TocProcessor::with_llm_client(client.clone())
                 }
                 None => {
-                    info!("PdfParser: creating TocProcessor without LLM client (no key configured)");
+                    info!(
+                        "PdfParser: creating TocProcessor without LLM client (no key configured)"
+                    );
                     TocProcessor::new()
                 }
             };

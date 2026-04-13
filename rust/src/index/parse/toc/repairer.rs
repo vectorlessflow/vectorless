@@ -94,23 +94,15 @@ impl IndexRepairer {
                     let start = expected_page.saturating_sub(search_range).max(1);
                     let end = (expected_page + search_range).min(pages.len());
 
-                    let result = Self::find_correct_page_static(
-                        &client,
-                        &title,
-                        &pages,
-                        start..=end,
-                    )
-                    .await;
+                    let result =
+                        Self::find_correct_page_static(&client, &title, &pages, start..=end).await;
 
                     (title, expected_page, result)
                 }
             })
             .collect();
 
-        let results: Vec<_> = stream::iter(tasks)
-            .buffer_unordered(5)
-            .collect()
-            .await;
+        let results: Vec<_> = stream::iter(tasks).buffer_unordered(5).collect().await;
 
         // Apply repairs
         let mut repaired_count = 0;

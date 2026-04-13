@@ -137,7 +137,8 @@ impl EvaluateStage {
                 let node_content = self.build_node_content(&ctx.tree, candidate.node_id);
 
                 // Cache for build_response reuse
-                ctx.node_content_cache.insert(candidate.node_id, node_content.clone());
+                ctx.node_content_cache
+                    .insert(candidate.node_id, node_content.clone());
 
                 // Add to aggregated content
                 if !node_content.is_empty() {
@@ -252,11 +253,7 @@ impl EvaluateStage {
                         _ => {
                             // Cache miss (edge case): compute inline
                             let built = self.build_node_content(&ctx.tree, candidate.node_id);
-                            if built.is_empty() {
-                                None
-                            } else {
-                                Some(built)
-                            }
+                            if built.is_empty() { None } else { Some(built) }
                         }
                     }
                 } else {

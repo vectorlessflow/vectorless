@@ -79,34 +79,29 @@ impl IndexVerifier {
 
         // Launch verification checks with bounded concurrency
         let client = self.client.clone();
-        let futures: Vec<_> = sample.iter().map(|(index, entry)| {
-            let index = *index;
-            let title = entry.title.clone();
-            let physical_page = entry.physical_page;
-            let client = client.clone();
-            let pages = pages.to_vec();
+        let futures: Vec<_> = sample
+            .iter()
+            .map(|(index, entry)| {
+                let index = *index;
+                let title = entry.title.clone();
+                let physical_page = entry.physical_page;
+                let client = client.clone();
+                let pages = pages.to_vec();
 
-            async move {
-                match physical_page {
-                    Some(page) => {
-                        let result =
-                            Self::verify_entry_with_client(&client, &title, page, &pages).await;
-                        (index, title, page, result)
+                async move {
+                    match physical_page {
+                        Some(page) => {
+                            let result =
+                                Self::verify_entry_with_client(&client, &title, page, &pages).await;
+                            (index, title, page, result)
+                        }
+                        None => (index, title, 0, Ok(Err(ErrorType::PageOutOfRange))),
                     }
-                    None => (
-                        index,
-                        title,
-                        0,
-                        Ok(Err(ErrorType::PageOutOfRange)),
-                    ),
                 }
-            }
-        }).collect();
+            })
+            .collect();
 
-        let results: Vec<_> = stream::iter(futures)
-            .buffer_unordered(5)
-            .collect()
-            .await;
+        let results: Vec<_> = stream::iter(futures).buffer_unordered(5).collect().await;
 
         // Aggregate results
         let total = results.len();
@@ -121,7 +116,12 @@ impl IndexVerifier {
                 }
                 Err(e) => {
                     debug!("Verification LLM call failed: {}", e);
-                    errors.push(VerificationError::new(index, title, page, ErrorType::TitleNotFound));
+                    errors.push(VerificationError::new(
+                        index,
+                        title,
+                        page,
+                        ErrorType::TitleNotFound,
+                    ));
                 }
             }
         }

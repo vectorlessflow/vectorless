@@ -69,8 +69,8 @@ impl MctsSearch {
         }
 
         let exploitation = child_stats.total_score / child_stats.visits as f32;
-        let exploration =
-            self.exploration_weight * (parent_visits as f32).ln().sqrt() / child_stats.visits as f32;
+        let exploration = self.exploration_weight * (parent_visits as f32).ln().sqrt()
+            / child_stats.visits as f32;
 
         // Blend exploitation with Pilot prior
         0.5 * (exploitation + prior_score) + exploration

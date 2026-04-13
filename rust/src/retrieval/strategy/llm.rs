@@ -240,10 +240,7 @@ Rules:
             let toc = self.toc_view.generate_from(tree, node_ids[0]);
             let toc_markdown = self.toc_view.format_markdown(&toc);
             let toc_preview: String = toc_markdown.chars().take(800).collect();
-            format!(
-                "\n\nDocument ToC:\n{}\n",
-                toc_preview
-            )
+            format!("\n\nDocument ToC:\n{}\n", toc_preview)
         } else {
             String::new()
         };

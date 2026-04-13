@@ -108,8 +108,7 @@ impl LlmPool {
     pub fn with_shared_concurrency(mut self, controller: Arc<ConcurrencyController>) -> Self {
         self.concurrency = Some(controller.clone());
         self.index = Arc::new(
-            LlmClient::new(self.index.config().clone())
-                .with_shared_concurrency(controller.clone()),
+            LlmClient::new(self.index.config().clone()).with_shared_concurrency(controller.clone()),
         );
         self.retrieval = Arc::new(
             LlmClient::new(self.retrieval.config().clone())

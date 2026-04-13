@@ -21,10 +21,9 @@ async fn main() -> vectorless::Result<()> {
 
     // Build engine with LLM configuration from environment or defaults.
     // Adjust the defaults below to match your setup.
-    let api_key = std::env::var("LLM_API_KEY")
-        .unwrap_or_else(|_| "sk-or-v1-...".to_string());
-    let model = std::env::var("LLM_MODEL")
-        .unwrap_or_else(|_| "google/gemini-3-flash-preview".to_string());
+    let api_key = std::env::var("LLM_API_KEY").unwrap_or_else(|_| "sk-or-v1-...".to_string());
+    let model =
+        std::env::var("LLM_MODEL").unwrap_or_else(|_| "google/gemini-3-flash-preview".to_string());
     let endpoint = std::env::var("LLM_ENDPOINT")
         .unwrap_or_else(|_| "http://localhost:4000/api/v1".to_string());
 
@@ -78,7 +77,10 @@ Monitoring is implemented using a Prometheus and Grafana stack, with custom metr
 
     // Index from content string
     let result = engine
-        .index(IndexContext::from_content(content, DocumentFormat::Markdown))
+        .index(IndexContext::from_content(
+            content,
+            DocumentFormat::Markdown,
+        ))
         .await?;
 
     for item in &result.items {

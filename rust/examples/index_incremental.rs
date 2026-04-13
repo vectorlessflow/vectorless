@@ -21,10 +21,9 @@ async fn main() -> vectorless::Result<()> {
 
     // Build engine with LLM configuration from environment or defaults.
     // Adjust the defaults below to match your setup.
-    let api_key = std::env::var("LLM_API_KEY")
-        .unwrap_or_else(|_| "sk-or-v1-...".to_string());
-    let model = std::env::var("LLM_MODEL")
-        .unwrap_or_else(|_| "google/gemini-3-flash-preview".to_string());
+    let api_key = std::env::var("LLM_API_KEY").unwrap_or_else(|_| "sk-or-v1-...".to_string());
+    let model =
+        std::env::var("LLM_MODEL").unwrap_or_else(|_| "google/gemini-3-flash-preview".to_string());
     let endpoint = std::env::var("LLM_ENDPOINT")
         .unwrap_or_else(|_| "http://localhost:4000/api/v1".to_string());
 
@@ -66,12 +65,19 @@ Deletes a user by their unique identifier.
     // 1. Initial full index
     println!("--- Initial index ---");
     let result = engine
-        .index(IndexContext::from_content(content_v1, DocumentFormat::Markdown))
+        .index(IndexContext::from_content(
+            content_v1,
+            DocumentFormat::Markdown,
+        ))
         .await?;
 
     let doc_id = result.items[0].doc_id.clone();
     if let Some(m) = &result.items[0].metrics {
-        println!("indexed in {}ms, {} nodes", m.total_time_ms(), m.nodes_processed);
+        println!(
+            "indexed in {}ms, {} nodes",
+            m.total_time_ms(),
+            m.nodes_processed
+        );
     }
 
     // 2. Re-index unchanged content (incremental) — skips processing
@@ -98,7 +104,11 @@ Deletes a user by their unique identifier.
 
     for item in &result.items {
         if let Some(m) = &item.metrics {
-            println!("updated in {}ms, {} nodes", m.total_time_ms(), m.nodes_processed);
+            println!(
+                "updated in {}ms, {} nodes",
+                m.total_time_ms(),
+                m.nodes_processed
+            );
         }
     }
 

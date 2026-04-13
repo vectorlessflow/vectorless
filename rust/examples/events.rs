@@ -100,12 +100,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Build engine with LLM configuration from environment or defaults.
     // Adjust the defaults below to match your setup.
-    let api_key = std::env::var("LLM_API_KEY")
-        .unwrap_or_else(|_| "sk-...".to_string());
-    let model = std::env::var("LLM_MODEL")
-        .unwrap_or_else(|_| "gpt-4o".to_string());
-    let endpoint = std::env::var("LLM_ENDPOINT")
-        .unwrap_or_else(|_| "https://api.openai.com/v1".to_string());
+    let api_key = std::env::var("LLM_API_KEY").unwrap_or_else(|_| "sk-...".to_string());
+    let model = std::env::var("LLM_MODEL").unwrap_or_else(|_| "gpt-4o".to_string());
+    let endpoint =
+        std::env::var("LLM_ENDPOINT").unwrap_or_else(|_| "https://api.openai.com/v1".to_string());
 
     // 2. Create engine with events
     println!("Step 2: Creating engine with event emitter...");
@@ -130,10 +128,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 4. Query with events
     println!("Step 4: Querying (with events)...");
     let result = engine
-        .query(
-            QueryContext::new("What is vectorless?")
-                .with_doc_id(&doc_id)
-        )
+        .query(QueryContext::new("What is vectorless?").with_doc_id(&doc_id))
         .await?;
     if let Some(item) = result.single() {
         println!("  ✓ Found result ({} chars)", item.content.len());
@@ -145,7 +140,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 5. Stats
     println!("\n--- Stats ---");
-    println!("  Documents indexed: {}", index_count.load(Ordering::SeqCst));
+    println!(
+        "  Documents indexed: {}",
+        index_count.load(Ordering::SeqCst)
+    );
     println!("  Queries executed: {}", query_count.load(Ordering::SeqCst));
     println!("  Nodes visited: {}", nodes_visited.load(Ordering::SeqCst));
 

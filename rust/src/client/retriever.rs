@@ -125,7 +125,8 @@ impl RetrieverClient {
         question: &str,
         options: &RetrieveOptions,
     ) -> Result<QueryResultItem> {
-        self.query_with_reasoning_index(tree, question, options, None).await
+        self.query_with_reasoning_index(tree, question, options, None)
+            .await
     }
 
     /// Query a document tree with optional reasoning index for fast-path lookup.

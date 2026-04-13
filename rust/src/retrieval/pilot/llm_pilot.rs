@@ -82,7 +82,8 @@ pub struct LlmPilot {
     /// Shared pipeline budget — the primary budget source when set.
     /// When available, Pilot checks this before making LLM calls and
     /// records token consumption here.
-    pipeline_budget: parking_lot::RwLock<Option<Arc<crate::retrieval::pipeline::RetrievalBudgetController>>>,
+    pipeline_budget:
+        parking_lot::RwLock<Option<Arc<crate::retrieval::pipeline::RetrievalBudgetController>>>,
     /// Context builder.
     context_builder: ContextBuilder,
     /// Prompt builder.
@@ -223,7 +224,10 @@ impl LlmPilot {
     /// but token consumption is recorded against the pipeline budget.
     /// Call this at query time (not construction time) since the pipeline
     /// budget is created per-query.
-    pub fn set_pipeline_budget(&self, budget: Arc<crate::retrieval::pipeline::RetrievalBudgetController>) {
+    pub fn set_pipeline_budget(
+        &self,
+        budget: Arc<crate::retrieval::pipeline::RetrievalBudgetController>,
+    ) {
         *self.pipeline_budget.write() = Some(budget);
     }
 

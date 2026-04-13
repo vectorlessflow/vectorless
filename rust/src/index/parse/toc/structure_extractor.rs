@@ -122,10 +122,8 @@ impl StructureExtractor {
                 let initial = initial_entries_ref.to_vec();
 
                 async move {
-                    let result = Self::generate_continuation_with_client(
-                        &client, &group, &initial,
-                    )
-                    .await;
+                    let result =
+                        Self::generate_continuation_with_client(&client, &group, &initial).await;
                     (group.start_page, group.end_page, result)
                 }
             })
@@ -150,10 +148,7 @@ impl StructureExtractor {
                     all_entries.extend(entries);
                 }
                 Err(e) => {
-                    warn!(
-                        "Continuation group (pages {}-{}) failed: {}",
-                        start, end, e
-                    );
+                    warn!("Continuation group (pages {}-{}) failed: {}", start, end, e);
                 }
             }
         }
@@ -165,8 +160,7 @@ impl StructureExtractor {
                 .cmp(&b.physical_page.unwrap_or(0))
         });
         all_entries.dedup_by(|a, b| {
-            a.title.trim() == b.title.trim()
-                && a.physical_page == b.physical_page
+            a.title.trim() == b.title.trim() && a.physical_page == b.physical_page
         });
 
         Ok(Self::finalize_entries(all_entries, page_count))
@@ -177,10 +171,7 @@ impl StructureExtractor {
         for entry in &mut entries {
             if let Some(p) = entry.physical_page {
                 if p > page_count {
-                    warn!(
-                        "Truncating out-of-range page {} for '{}'",
-                        p, entry.title
-                    );
+                    warn!("Truncating out-of-range page {} for '{}'", p, entry.title);
                     entry.physical_page = Some(page_count);
                 }
             }
@@ -461,21 +452,26 @@ mod tests {
         // Create pages with enough text to span multiple groups
         let pages: Vec<PdfPage> = (1..=10)
             .map(|i| {
-                let text = format!("Page {} content. This is a longer text to use more tokens. ", i).repeat(10);
+                let text = format!(
+                    "Page {} content. This is a longer text to use more tokens. ",
+                    i
+                )
+                .repeat(10);
                 PdfPage::new(i, text)
             })
             .collect();
 
         let groups = extractor.group_pages(&pages);
-        assert!(groups.len() > 1, "Expected multiple groups, got {}", groups.len());
+        assert!(
+            groups.len() > 1,
+            "Expected multiple groups, got {}",
+            groups.len()
+        );
     }
 
     #[test]
     fn test_format_group_text() {
-        let pages = vec![
-            PdfPage::new(1, "Hello"),
-            PdfPage::new(2, "World"),
-        ];
+        let pages = vec![PdfPage::new(1, "Hello"), PdfPage::new(2, "World")];
         let text = format_group_text(&pages);
         assert!(text.contains("<page_1>"));
         assert!(text.contains("<page_2>"));

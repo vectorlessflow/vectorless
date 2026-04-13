@@ -166,7 +166,11 @@ impl Engine {
                 return Err(Error::Config(format!(
                     "All {} source(s) failed to index: {}",
                     failed.len(),
-                    failed.iter().map(|f| format!("{} ({})", f.source, f.error)).collect::<Vec<_>>().join("; ")
+                    failed
+                        .iter()
+                        .map(|f| format!("{} ({})", f.source, f.error))
+                        .collect::<Vec<_>>()
+                        .join("; ")
                 )));
             }
             if !items.is_empty() {
@@ -184,20 +188,21 @@ impl Engine {
             .max_concurrent_requests
             .min(ctx.sources.len());
 
-        let results: Vec<(Vec<IndexItem>, Vec<FailedItem>)> = futures::stream::iter(ctx.sources.iter().cloned())
-            .map(|source| {
-                let options = ctx.options.clone();
-                let name = ctx.name.clone();
-                let engine = self.clone();
-                async move {
-                    engine
-                        .process_source(&source, &options, name.as_deref())
-                        .await
-                }
-            })
-            .buffer_unordered(concurrency)
-            .collect()
-            .await;
+        let results: Vec<(Vec<IndexItem>, Vec<FailedItem>)> =
+            futures::stream::iter(ctx.sources.iter().cloned())
+                .map(|source| {
+                    let options = ctx.options.clone();
+                    let name = ctx.name.clone();
+                    let engine = self.clone();
+                    async move {
+                        engine
+                            .process_source(&source, &options, name.as_deref())
+                            .await
+                    }
+                })
+                .buffer_unordered(concurrency)
+                .collect()
+                .await;
 
         let mut items = Vec::new();
         let mut failed = Vec::new();
@@ -210,7 +215,11 @@ impl Engine {
             return Err(Error::Config(format!(
                 "All {} source(s) failed to index: {}",
                 failed.len(),
-                failed.iter().map(|f| format!("{} ({})", f.source, f.error)).collect::<Vec<_>>().join("; ")
+                failed
+                    .iter()
+                    .map(|f| format!("{} ({})", f.source, f.error))
+                    .collect::<Vec<_>>()
+                    .join("; ")
             )));
         }
 
@@ -416,7 +425,11 @@ impl Engine {
                 }
             };
 
-            match self.retriever.query_with_reasoning_index(&tree, &ctx.query, &options, reasoning_index).await {
+            match self
+                .retriever
+                .query_with_reasoning_index(&tree, &ctx.query, &options, reasoning_index)
+                .await
+            {
                 Ok(mut result) => {
                     result.doc_id = doc_id;
                     items.push(result);
@@ -433,7 +446,11 @@ impl Engine {
             return Err(Error::Config(format!(
                 "Query failed for all {} document(s): {}",
                 failed.len(),
-                failed.iter().map(|f| format!("{} ({})", f.source, f.error)).collect::<Vec<_>>().join("; ")
+                failed
+                    .iter()
+                    .map(|f| format!("{} ({})", f.source, f.error))
+                    .collect::<Vec<_>>()
+                    .join("; ")
             )));
         }
 
@@ -531,7 +548,10 @@ impl Engine {
     // ============================================================
 
     /// Get document structure (tree) and optional reasoning index. Internal use only.
-    pub(crate) async fn get_structure(&self, doc_id: &str) -> Result<(DocumentTree, Option<crate::document::ReasoningIndex>)> {
+    pub(crate) async fn get_structure(
+        &self,
+        doc_id: &str,
+    ) -> Result<(DocumentTree, Option<crate::document::ReasoningIndex>)> {
         let workspace = self
             .workspace
             .as_ref()

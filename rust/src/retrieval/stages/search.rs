@@ -23,7 +23,8 @@ use crate::retrieval::pipeline::{
 };
 use crate::retrieval::search::extract_keywords;
 use crate::retrieval::search::{
-    BeamSearch, PurePilotSearch, MctsSearch, SearchConfig as SearchAlgConfig, SearchCue, SearchTree, ToCNavigator,
+    BeamSearch, MctsSearch, PurePilotSearch, SearchConfig as SearchAlgConfig, SearchCue,
+    SearchTree, ToCNavigator,
 };
 use crate::retrieval::strategy::{
     HybridConfig, HybridStrategy, KeywordStrategy, LlmStrategy, RetrievalStrategy,
@@ -409,7 +410,9 @@ impl SearchStage {
 
         // Phrase patterns — match with intervening words removed.
         // "what is this project about" → remove common filler words, check for "what is this about"
-        let filler_words = ["project", "document", "file", "paper", "article", "text", "book", "the", "a", "an"];
+        let filler_words = [
+            "project", "document", "file", "paper", "article", "text", "book", "the", "a", "an",
+        ];
         let cleaned: String = lower
             .split_whitespace()
             .filter(|w| !filler_words.contains(w))
@@ -673,10 +676,9 @@ impl RetrievalStage for SearchStage {
             for cue in &mut cues {
                 if let Some(node) = ctx.tree.get(cue.root) {
                     let node_path = node.title.as_str();
-                    if let Some((_, cached_conf)) = l2_paths
-                        .iter()
-                        .find(|(path, _)| node_path.contains(path.as_str()) || path.contains(node_path))
-                    {
+                    if let Some((_, cached_conf)) = l2_paths.iter().find(|(path, _)| {
+                        node_path.contains(path.as_str()) || path.contains(node_path)
+                    }) {
                         // Blend current confidence with historical: 60% current + 40% cached
                         cue.confidence = cue.confidence * 0.6 + cached_conf * 0.4;
                         debug!(
@@ -768,9 +770,7 @@ impl RetrievalStage for SearchStage {
         for candidate in &mut ctx.candidates {
             if let Some(node) = ctx.tree.get(candidate.node_id) {
                 let content_fp = crate::utils::fingerprint::Fingerprint::from_str(&node.content);
-                if let Some((cached_score, _strategy)) =
-                    ctx.reasoning_cache.l3_get(&content_fp)
-                {
+                if let Some((cached_score, _strategy)) = ctx.reasoning_cache.l3_get(&content_fp) {
                     // Blend: if L3 has a higher score for this node, boost it
                     if cached_score > candidate.score {
                         candidate.score = (candidate.score + cached_score) / 2.0;

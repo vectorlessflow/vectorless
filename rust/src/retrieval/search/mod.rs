@@ -16,6 +16,5 @@ pub use beam::BeamSearch;
 pub use bm25::{Bm25Engine, Bm25Params, FieldDocument, STOPWORDS, extract_keywords};
 pub use greedy::PurePilotSearch;
 pub use mcts::MctsSearch;
-pub use pilot_scorer::{PilotDecisionCache, score_candidates};
 pub use toc_navigator::{SearchCue, ToCNavigator};
 pub use r#trait::{SearchConfig, SearchResult, SearchTree};

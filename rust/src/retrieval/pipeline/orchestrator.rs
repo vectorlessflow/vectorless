@@ -330,7 +330,10 @@ impl RetrievalOrchestrator {
 
         // Share the pipeline budget with the Pilot (unified budget)
         if let Some(ref pilot) = self.pilot {
-            if let Some(llm_pilot) = pilot.as_any().downcast_ref::<crate::retrieval::pilot::LlmPilot>() {
+            if let Some(llm_pilot) = pilot
+                .as_any()
+                .downcast_ref::<crate::retrieval::pilot::LlmPilot>()
+            {
                 llm_pilot.set_pipeline_budget(ctx.budget_controller.clone());
             }
         }
@@ -622,7 +625,10 @@ impl RetrievalOrchestrator {
 
         // Share the pipeline budget with the Pilot (unified budget)
         if let Some(ref pilot) = self.pilot {
-            if let Some(llm_pilot) = pilot.as_any().downcast_ref::<crate::retrieval::pilot::LlmPilot>() {
+            if let Some(llm_pilot) = pilot
+                .as_any()
+                .downcast_ref::<crate::retrieval::pilot::LlmPilot>()
+            {
                 llm_pilot.set_pipeline_budget(ctx.budget_controller.clone());
             }
         }
@@ -924,7 +930,10 @@ impl RetrievalOrchestrator {
 
         // Share the pipeline budget with the Pilot (unified budget)
         if let Some(ref pilot) = self.pilot {
-            if let Some(llm_pilot) = pilot.as_any().downcast_ref::<crate::retrieval::pilot::LlmPilot>() {
+            if let Some(llm_pilot) = pilot
+                .as_any()
+                .downcast_ref::<crate::retrieval::pilot::LlmPilot>()
+            {
                 llm_pilot.set_pipeline_budget(ctx.budget_controller.clone());
             }
         }
