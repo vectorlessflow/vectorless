@@ -7,6 +7,7 @@
 //! module uses LLM to analyse page content and extract the document's
 //! hierarchical structure directly.
 
+use futures::stream::{self, StreamExt};
 use tracing::{debug, info, warn};
 
 use crate::config::LlmConfig;
@@ -40,6 +41,7 @@ impl Default for StructureExtractorConfig {
 }
 
 /// A group of consecutive pages with their combined text.
+#[derive(Clone)]
 struct PageGroup {
     /// Combined text with page markers: `<page_N>\n...\n</page_N>`.
     text: String,
@@ -77,42 +79,102 @@ impl StructureExtractor {
     }
 
     /// Extract hierarchical structure from all pages.
+    ///
+    /// The first page group is processed alone (initial structure), then all
+    /// remaining groups are processed in parallel, each using the initial
+    /// entries as context. Results are merged and deduplicated.
     pub async fn extract(&self, pages: &[PdfPage]) -> Result<Vec<TocEntry>> {
         if pages.is_empty() {
             return Ok(Vec::new());
         }
 
         let groups = self.group_pages(pages);
+        let page_count = pages.len();
         info!(
             "Extracting structure from {} pages in {} groups",
-            pages.len(),
+            page_count,
             groups.len()
         );
 
-        let mut all_entries = Vec::new();
-        let page_count = pages.len();
+        // Phase 1: Generate initial structure from first group
+        let initial_entries = self.generate_initial(&groups[0]).await?;
+        debug!(
+            "Initial group (pages {}-{}): extracted {} entries",
+            groups[0].start_page,
+            groups[0].end_page,
+            initial_entries.len()
+        );
 
-        for (i, group) in groups.iter().enumerate() {
-            let group_entries = if i == 0 {
-                self.generate_initial(group).await?
-            } else {
-                self.generate_continuation(group, &all_entries).await?
-            };
-
-            debug!(
-                "Group {}/{} (pages {}-{}): extracted {} entries",
-                i + 1,
-                groups.len(),
-                group.start_page,
-                group.end_page,
-                group_entries.len()
-            );
-
-            all_entries.extend(group_entries);
+        if groups.len() == 1 {
+            return Ok(Self::finalize_entries(initial_entries, page_count));
         }
 
-        // Truncate physical_page values that exceed document length
-        for entry in &mut all_entries {
+        // Phase 2: Process remaining groups in parallel (bounded concurrency)
+        // Each continuation group uses the initial entries as shared context.
+        let client = self.client.clone();
+        let initial_entries_ref = &initial_entries;
+
+        let continuation_futures: Vec<_> = groups[1..]
+            .iter()
+            .map(|group| {
+                let group = group.clone();
+                let client = client.clone();
+                let initial = initial_entries_ref.to_vec();
+
+                async move {
+                    let result = Self::generate_continuation_with_client(
+                        &client, &group, &initial,
+                    )
+                    .await;
+                    (group.start_page, group.end_page, result)
+                }
+            })
+            .collect();
+
+        let continuation_results: Vec<_> = stream::iter(continuation_futures)
+            .buffer_unordered(5)
+            .collect()
+            .await;
+
+        // Phase 3: Merge initial + continuation entries
+        let mut all_entries = initial_entries;
+        for (start, end, result) in continuation_results {
+            match result {
+                Ok(entries) => {
+                    debug!(
+                        "Continuation group (pages {}-{}): extracted {} entries",
+                        start,
+                        end,
+                        entries.len()
+                    );
+                    all_entries.extend(entries);
+                }
+                Err(e) => {
+                    warn!(
+                        "Continuation group (pages {}-{}) failed: {}",
+                        start, end, e
+                    );
+                }
+            }
+        }
+
+        // Phase 4: Sort by page number, deduplicate, truncate
+        all_entries.sort_by(|a, b| {
+            a.physical_page
+                .unwrap_or(0)
+                .cmp(&b.physical_page.unwrap_or(0))
+        });
+        all_entries.dedup_by(|a, b| {
+            a.title.trim() == b.title.trim()
+                && a.physical_page == b.physical_page
+        });
+
+        Ok(Self::finalize_entries(all_entries, page_count))
+    }
+
+    /// Truncate out-of-range page numbers and log stats.
+    fn finalize_entries(mut entries: Vec<TocEntry>, page_count: usize) -> Vec<TocEntry> {
+        for entry in &mut entries {
             if let Some(p) = entry.physical_page {
                 if p > page_count {
                     warn!(
@@ -123,9 +185,8 @@ impl StructureExtractor {
                 }
             }
         }
-
-        info!("Structure extraction complete: {} entries", all_entries.len());
-        Ok(all_entries)
+        info!("Structure extraction complete: {} entries", entries.len());
+        entries
     }
 
     /// Group pages by estimated token count.
@@ -257,6 +318,63 @@ If no new structural elements are found, return: []"#,
         );
 
         let sections: Vec<ExtractedSection> = self.client.complete_json(system, &user).await?;
+
+        Ok(sections
+            .into_iter()
+            .map(|s| {
+                TocEntry::new(s.title, s.level)
+                    .with_physical_page(s.physical_page)
+                    .with_confidence(0.7)
+            })
+            .collect())
+    }
+
+    /// Static version of continuation generation for parallel use.
+    ///
+    /// Uses an owned `LlmClient` reference instead of `&self`.
+    async fn generate_continuation_with_client(
+        client: &LlmClient,
+        group: &PageGroup,
+        previous: &[TocEntry],
+    ) -> Result<Vec<TocEntry>> {
+        let system = STRUCTURE_EXTRACTION_SYSTEM_PROMPT;
+
+        let prev_summary = previous
+            .iter()
+            .rev()
+            .take(10)
+            .rev()
+            .map(|e| {
+                format!(
+                    "  {{\"title\": \"{}\", \"level\": {}, \"physical_page\": {}}}",
+                    e.title,
+                    e.level,
+                    e.physical_page.unwrap_or(0)
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(",\n");
+
+        let user = format!(
+            r#"Previously extracted structure:
+[
+{}
+]
+
+Continue extracting structure from these pages:
+{}
+
+Return ONLY the NEW entries (do not repeat previous ones):
+[
+  {{"title": "...", "level": N, "physical_page": M}},
+  ...
+]
+
+If no new structural elements are found, return: []"#,
+            prev_summary, group.text
+        );
+
+        let sections: Vec<ExtractedSection> = client.complete_json(system, &user).await?;
 
         Ok(sections
             .into_iter()

@@ -64,6 +64,10 @@ pub struct IndexMetrics {
     #[serde(default)]
     pub summaries_generated: usize,
 
+    /// Number of summaries that failed to generate (LLM error, rate limit, etc.).
+    #[serde(default)]
+    pub summaries_failed: usize,
+
     /// Number of nodes skipped (thinning).
     #[serde(default)]
     pub nodes_skipped: usize,
@@ -139,6 +143,11 @@ impl IndexMetrics {
     /// Increment summaries generated.
     pub fn increment_summaries(&mut self) {
         self.summaries_generated += 1;
+    }
+
+    /// Add to summaries failed count.
+    pub fn add_summaries_failed(&mut self, count: usize) {
+        self.summaries_failed += count;
     }
 
     /// Increment nodes skipped.

@@ -3,7 +3,7 @@ members = ["rust", "python"]
 resolver = "2"
 
 [workspace.package]
-version = "0.1.25"
+version = "0.1.26"
 edition = "2024"
 authors = ["zTgx <beautifularea@gmail.com>"]
 license = "Apache-2.0"

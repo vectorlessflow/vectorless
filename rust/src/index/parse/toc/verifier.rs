@@ -3,7 +3,7 @@
 
 //! Index verifier - verifies TOC entry page assignments.
 
-use futures::future::join_all;
+use futures::stream::{self, StreamExt};
 use rand::seq::SliceRandom;
 use tracing::{debug, info};
 
@@ -65,7 +65,7 @@ impl IndexVerifier {
 
     /// Verify TOC entries against PDF pages.
     ///
-    /// All sample entries are verified concurrently via LLM calls.
+    /// Sample entries are verified via LLM calls with bounded concurrency.
     pub async fn verify(
         &self,
         entries: &[TocEntry],
@@ -77,36 +77,36 @@ impl IndexVerifier {
 
         let sample = self.select_sample(entries);
 
-        // Launch all verification checks concurrently
+        // Launch verification checks with bounded concurrency
         let client = self.client.clone();
-        let futures: Vec<_> = sample
-            .iter()
-            .map(|(index, entry)| {
-                let index = *index;
-                let title = entry.title.clone();
-                let physical_page = entry.physical_page;
-                let client = client.clone();
-                let pages = pages.to_vec();
+        let futures: Vec<_> = sample.iter().map(|(index, entry)| {
+            let index = *index;
+            let title = entry.title.clone();
+            let physical_page = entry.physical_page;
+            let client = client.clone();
+            let pages = pages.to_vec();
 
-                async move {
-                    match physical_page {
-                        Some(page) => {
-                            let result =
-                                Self::verify_entry_with_client(&client, &title, page, &pages).await;
-                            (index, title, page, result)
-                        }
-                        None => (
-                            index,
-                            title,
-                            0,
-                            Ok(Err(ErrorType::PageOutOfRange)),
-                        ),
+            async move {
+                match physical_page {
+                    Some(page) => {
+                        let result =
+                            Self::verify_entry_with_client(&client, &title, page, &pages).await;
+                        (index, title, page, result)
                     }
+                    None => (
+                        index,
+                        title,
+                        0,
+                        Ok(Err(ErrorType::PageOutOfRange)),
+                    ),
                 }
-            })
-            .collect();
+            }
+        }).collect();
 
-        let results = join_all(futures).await;
+        let results: Vec<_> = stream::iter(futures)
+            .buffer_unordered(5)
+            .collect()
+            .await;
 
         // Aggregate results
         let total = results.len();

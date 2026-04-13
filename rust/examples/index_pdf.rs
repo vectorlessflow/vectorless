@@ -36,9 +36,19 @@ async fn main() -> vectorless::Result<()> {
 
     println!("=== Indexing PDF: {} ===\n", pdf_path);
 
-    // Build engine with LLM configuration from environment or defaults.
-    let api_key = std::env::var("LLM_API_KEY")
-        .unwrap_or_else(|_| "sk-or-v1-...".to_string());
+    // LLM configuration is required — set these environment variables:
+    //   LLM_API_KEY   — your API key (required)
+    //   LLM_MODEL     — model name (default: google/gemini-3-flash-preview)
+    //   LLM_ENDPOINT  — API endpoint (default: http://localhost:4000/api/v1)
+    let api_key = match std::env::var("LLM_API_KEY") {
+        Ok(key) => key,
+        Err(_) => {
+            eprintln!("Error: LLM_API_KEY environment variable is required.");
+            eprintln!("Set it before running:");
+            eprintln!("  LLM_API_KEY=sk-xxx cargo run --example index_pdf -- <path>");
+            std::process::exit(1);
+        }
+    };
     let model = std::env::var("LLM_MODEL")
         .unwrap_or_else(|_| "google/gemini-3-flash-preview".to_string());
     let endpoint = std::env::var("LLM_ENDPOINT")
@@ -83,6 +93,7 @@ async fn main() -> vectorless::Result<()> {
             println!("  enhance:       {}ms", metrics.enhance_time_ms);
             println!("  nodes:         {}", metrics.nodes_processed);
             println!("  summaries:     {}", metrics.summaries_generated);
+            println!("  failed:        {}", metrics.summaries_failed);
             println!("  llm calls:     {}", metrics.llm_calls);
             println!("  tokens:        {}", metrics.total_tokens_generated);
             println!("  topics:        {}", metrics.topics_indexed);

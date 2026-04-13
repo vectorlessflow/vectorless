@@ -54,7 +54,7 @@ pub mod graph;
 mod index;
 mod llm;
 mod memo;
-mod metrics;
+pub mod metrics;
 mod retrieval;
 mod storage;
 mod throttle;
@@ -62,8 +62,9 @@ mod utils;
 
 // Client API
 pub use client::{
-    BuildError, ClientError, DocumentFormat, DocumentInfo, Engine, EngineBuilder, IndexContext,
-    IndexItem, IndexMode, IndexOptions, IndexResult, QueryContext, QueryResult,
+    BuildError, ClientError, DocumentFormat, DocumentInfo, Engine, EngineBuilder, FailedItem,
+    IndexContext, IndexItem, IndexMode, IndexOptions, IndexResult, QueryContext, QueryResult,
+    QueryResultItem,
 };
 
 // Error types

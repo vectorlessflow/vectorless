@@ -313,6 +313,9 @@ impl IndexStage for EnhanceStage {
 
         let duration = start.elapsed().as_millis() as u64;
         ctx.metrics.record_enhance(duration);
+        if failed > 0 {
+            ctx.metrics.add_summaries_failed(failed);
+        }
 
         info!(
             "Generated {} summaries ({} shortcut, {} failed, {} skipped no content, {} skipped tokens) in {}ms",
