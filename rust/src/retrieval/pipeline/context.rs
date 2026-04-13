@@ -23,11 +23,11 @@ use crate::retrieval::types::{
 /// Search algorithm type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SearchAlgorithm {
-    /// Greedy single-path search.
-    Greedy,
-    /// Beam search with multiple paths.
+    /// Pure Pilot: beam=1, Pilot picks top-1 child at each layer.
+    PurePilot,
+    /// Beam search with Pilot scoring.
     Beam,
-    /// Monte Carlo Tree Search.
+    /// MCTS with Pilot priors.
     Mcts,
 }
 
@@ -41,7 +41,7 @@ impl SearchAlgorithm {
     /// Get algorithm name.
     pub fn name(&self) -> &'static str {
         match self {
-            Self::Greedy => "greedy",
+            Self::PurePilot => "pure_pilot",
             Self::Beam => "beam",
             Self::Mcts => "mcts",
         }
@@ -239,6 +239,9 @@ pub struct PipelineContext {
     pub selected_algorithm: Option<SearchAlgorithm>,
     /// Search configuration.
     pub search_config: Option<SearchConfig>,
+    /// Ordered fallback chain for search algorithms.
+    /// When the primary algorithm's result is insufficient, try the next.
+    pub search_fallback_chain: Vec<SearchAlgorithm>,
 
     // ============ Search Stage Output ============
     /// Candidate nodes from search.
@@ -307,6 +310,11 @@ impl PipelineContext {
             selected_strategy: None,
             selected_algorithm: None,
             search_config: None,
+            search_fallback_chain: vec![
+                SearchAlgorithm::Beam,
+                SearchAlgorithm::Mcts,
+                SearchAlgorithm::PurePilot,
+            ],
             candidates: Vec::new(),
             search_paths: Vec::new(),
             reasoning_chain: ReasoningChain::new(),

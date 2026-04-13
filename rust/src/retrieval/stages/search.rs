@@ -23,7 +23,7 @@ use crate::retrieval::pipeline::{
 };
 use crate::retrieval::search::extract_keywords;
 use crate::retrieval::search::{
-    BeamSearch, GreedySearch, SearchConfig as SearchAlgConfig, SearchCue, SearchTree, ToCNavigator,
+    BeamSearch, PurePilotSearch, MctsSearch, SearchConfig as SearchAlgConfig, SearchCue, SearchTree, ToCNavigator,
 };
 use crate::retrieval::strategy::{
     HybridConfig, HybridStrategy, KeywordStrategy, LlmStrategy, RetrievalStrategy,
@@ -211,14 +211,106 @@ impl SearchStage {
         vec![ctx.query.clone()]
     }
 
-    /// Run search across all queries and cues, collecting and deduplicating results.
+    /// Run search across the fallback chain.
+    ///
+    /// Iterates through algorithms in the fallback chain. After each algorithm,
+    /// checks if the best candidate score meets `min_score`. If sufficient,
+    /// returns early. Otherwise tries the next algorithm in the chain.
     async fn run_search(
         &self,
         ctx: &mut PipelineContext,
         queries: &[String],
         cues: &[SearchCue],
     ) -> (Vec<crate::retrieval::types::SearchPath>, Vec<CandidateNode>) {
-        let algorithm = ctx.selected_algorithm.unwrap_or(SearchAlgorithm::Beam);
+        let config = ctx.search_config.clone().unwrap_or_default();
+        let min_score = config.min_score;
+
+        // Build fallback chain: primary algorithm first, then remaining from chain
+        let primary = ctx.selected_algorithm.unwrap_or(SearchAlgorithm::Beam);
+        let chain = &ctx.search_fallback_chain;
+
+        // Build ordered algorithm list: primary first, then chain (excluding primary)
+        let mut algorithms = vec![primary];
+        for &algo in chain {
+            if algo != primary {
+                algorithms.push(algo);
+            }
+        }
+
+        info!(
+            "Search fallback chain: {:?} (min_score={:.2})",
+            algorithms.iter().map(|a| a.name()).collect::<Vec<_>>(),
+            min_score
+        );
+
+        let mut best_paths = Vec::new();
+        let mut best_candidates = Vec::new();
+        let mut total_pilot_interventions = 0u64;
+
+        for (idx, &algorithm) in algorithms.iter().enumerate() {
+            let (paths, candidates) = self
+                .run_single_algorithm(ctx, queries, cues, algorithm)
+                .await;
+
+            // Accumulate pilot interventions
+            total_pilot_interventions += paths.len() as u64; // approximate
+
+            // Merge results: collect all paths and candidates across fallback rounds
+            best_paths.extend(paths);
+            best_candidates.extend(candidates);
+
+            // Check if best candidate meets the threshold
+            let best_score = best_candidates
+                .iter()
+                .map(|c| c.score)
+                .fold(0.0f32, f32::max);
+
+            if best_score >= min_score {
+                info!(
+                    "Algorithm {} (#{}) sufficient: best_score={:.3} >= min_score={:.3}",
+                    algorithm.name(),
+                    idx + 1,
+                    best_score,
+                    min_score
+                );
+                break;
+            }
+
+            info!(
+                "Algorithm {} (#{}) insufficient: best_score={:.3} < min_score={:.3}, trying next",
+                algorithm.name(),
+                idx + 1,
+                best_score,
+                min_score
+            );
+        }
+
+        // Deduplicate candidates by node_id, keeping highest score
+        best_candidates.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        best_candidates.dedup_by(|a, b| a.node_id == b.node_id);
+
+        info!(
+            "Search complete: {} paths, {} candidates (pilot interventions: {})",
+            best_paths.len(),
+            best_candidates.len(),
+            total_pilot_interventions
+        );
+
+        (best_paths, best_candidates)
+    }
+
+    /// Run a single search algorithm across all queries and cues.
+    async fn run_single_algorithm(
+        &self,
+        ctx: &mut PipelineContext,
+        queries: &[String],
+        cues: &[SearchCue],
+        algorithm: SearchAlgorithm,
+    ) -> (Vec<crate::retrieval::types::SearchPath>, Vec<CandidateNode>) {
         let config = ctx.search_config.clone().unwrap_or_default();
 
         let search_config = SearchAlgConfig {
@@ -232,7 +324,6 @@ impl SearchStage {
         let pilot_ref: Option<&dyn Pilot> = self.pilot.as_deref();
 
         let mut all_paths = Vec::new();
-        let mut total_pilot_interventions = 0u64;
 
         for query in queries {
             let legacy_ctx =
@@ -240,13 +331,16 @@ impl SearchStage {
 
             for cue in cues {
                 debug!(
-                    "Searching: algorithm={:?}, query='{}', cue.root={:?}, cue.confidence={:.3}",
-                    algorithm, query, cue.root, cue.confidence
+                    "Searching: algorithm={}, query='{}', cue.root={:?}, cue.confidence={:.3}",
+                    algorithm.name(),
+                    query,
+                    cue.root,
+                    cue.confidence
                 );
 
                 let result = match algorithm {
-                    SearchAlgorithm::Greedy => {
-                        GreedySearch::new()
+                    SearchAlgorithm::PurePilot => {
+                        PurePilotSearch::new()
                             .search_from(
                                 &ctx.tree,
                                 &legacy_ctx,
@@ -267,9 +361,8 @@ impl SearchStage {
                             )
                             .await
                     }
-                    // MCTS is not truly implemented — falls back to Beam behavior.
                     SearchAlgorithm::Mcts => {
-                        BeamSearch::new()
+                        MctsSearch::new()
                             .search_from(
                                 &ctx.tree,
                                 &legacy_ctx,
@@ -282,28 +375,11 @@ impl SearchStage {
                 };
 
                 all_paths.extend(result.paths);
-                total_pilot_interventions += result.pilot_interventions as u64;
             }
         }
 
-        let mut all_candidates = self.extract_candidates(&all_paths, &ctx.tree);
-
-        // Deduplicate by node_id, keeping the highest-scored entry
-        all_candidates.sort_by(|a, b| {
-            b.score
-                .partial_cmp(&a.score)
-                .unwrap_or(std::cmp::Ordering::Equal)
-        });
-        all_candidates.dedup_by(|a, b| a.node_id == b.node_id);
-
-        info!(
-            "Search complete: {} paths, {} candidates (pilot interventions: {})",
-            all_paths.len(),
-            all_candidates.len(),
-            total_pilot_interventions
-        );
-
-        (all_paths, all_candidates)
+        let candidates = self.extract_candidates(&all_paths, &ctx.tree);
+        (all_paths, candidates)
     }
 
     /// Check if a query is asking for a document summary/overview.
