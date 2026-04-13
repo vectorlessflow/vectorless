@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "vectorless"
-version = "0.1.4"
+version = "0.1.5"
 description = "Hierarchical document intelligence without vectors"
 readme = "README.md"
 requires-python = ">=3.9"
