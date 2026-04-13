@@ -15,12 +15,22 @@ use crate::index::IndexMode;
 use crate::index::pipeline::{IndexContext, IndexInput};
 
 /// Parse stage - extracts raw nodes from documents.
-pub struct ParseStage;
+pub struct ParseStage {
+    /// Optional LLM client for PDF structure extraction.
+    llm_client: Option<crate::llm::LlmClient>,
+}
 
 impl ParseStage {
     /// Create a new parse stage.
     pub fn new() -> Self {
-        Self
+        Self { llm_client: None }
+    }
+
+    /// Create a parse stage with an LLM client.
+    pub fn with_llm_client(client: crate::llm::LlmClient) -> Self {
+        Self {
+            llm_client: Some(client),
+        }
     }
 
     /// Detect document format from path and options.
@@ -61,6 +71,10 @@ impl IndexStage for ParseStage {
         ctx.format = format;
 
         info!("Parsing document with format: {:?}", format);
+        info!(
+            "ParseStage llm_client present: {}",
+            self.llm_client.is_some()
+        );
 
         // Parse based on input type
         let result = match &ctx.input {
@@ -77,7 +91,7 @@ impl IndexStage for ParseStage {
                     .to_string();
 
                 // Parse directly
-                crate::index::parse::parse_file(&path, format).await?
+                crate::index::parse::parse_file(&path, format, self.llm_client.clone()).await?
             }
             IndexInput::Content {
                 content,
@@ -88,14 +102,14 @@ impl IndexStage for ParseStage {
                 ctx.name = name.clone();
 
                 // Parse content directly
-                crate::index::parse::parse_content(content, *format).await?
+                crate::index::parse::parse_content(content, *format, self.llm_client.clone()).await?
             }
             IndexInput::Bytes { data, name, format } => {
                 // Set name
                 ctx.name = name.clone();
 
                 // Parse bytes
-                crate::index::parse::parse_bytes(data, *format).await?
+                crate::index::parse::parse_bytes(data, *format, self.llm_client.clone()).await?
             }
         };
 

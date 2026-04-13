@@ -10,6 +10,11 @@
 //! # Usage
 //!
 //! ```bash
+//! # Using environment variables for LLM config:
+//! LLM_API_KEY=sk-xxx LLM_MODEL=gpt-4o \
+//!   cargo run --example graph
+//!
+//! # Or with defaults (edit the code to set your key/endpoint):
 //! cargo run --example graph
 //! ```
 
@@ -17,13 +22,23 @@ use vectorless::{EngineBuilder, IndexContext};
 
 #[tokio::main]
 async fn main() -> vectorless::Result<()> {
+    // Initialize tracing for debug output (set RUST_LOG=debug to see more)
+    tracing_subscriber::fmt::init();
+
     println!("=== Document Graph Example ===\n");
+
+    // Build engine with LLM configuration from environment or defaults.
+    // Adjust the defaults below to match your setup.
+    let api_key = std::env::var("LLM_API_KEY")
+        .unwrap_or_else(|_| "sk-...".to_string());
+    let model = std::env::var("LLM_MODEL")
+        .unwrap_or_else(|_| "gpt-4o".to_string());
 
     // 1. Create engine
     let engine = EngineBuilder::new()
         .with_workspace("./workspace_graph_example")
-        .with_key("sk-...")
-        .with_model("gpt-4o")
+        .with_key(&api_key)
+        .with_model(&model)
         .build()
         .await
         .map_err(|e: vectorless::BuildError| vectorless::Error::Config(e.to_string()))?;

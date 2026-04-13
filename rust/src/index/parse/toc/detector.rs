@@ -74,6 +74,20 @@ impl TocDetector {
         }
     }
 
+    /// Create a detector with an externally provided LLM client.
+    pub fn with_client(config: TocDetectorConfig, client: LlmClient) -> Self {
+        let use_llm = config.use_llm_fallback;
+        Self {
+            config,
+            llm_client: if use_llm {
+                Some(client)
+            } else {
+                None
+            },
+            patterns: Self::build_patterns(),
+        }
+    }
+
     /// Create a detector with default configuration.
     pub fn with_defaults() -> Self {
         Self::new(TocDetectorConfig::default())

@@ -27,9 +27,14 @@ use std::path::Path;
 
 use crate::error::Result;
 use crate::index::parse::markdown::MarkdownParser;
+use crate::llm::LlmClient;
 
 /// Parse a string content document.
-pub async fn parse_content(content: &str, format: DocumentFormat) -> Result<ParseResult> {
+pub async fn parse_content(
+    content: &str,
+    format: DocumentFormat,
+    _llm_client: Option<LlmClient>,
+) -> Result<ParseResult> {
     match format {
         DocumentFormat::Markdown => {
             let parser = MarkdownParser::new();
@@ -42,21 +47,32 @@ pub async fn parse_content(content: &str, format: DocumentFormat) -> Result<Pars
 }
 
 /// Parse a file.
-pub async fn parse_file(path: &Path, format: DocumentFormat) -> Result<ParseResult> {
+pub async fn parse_file(
+    path: &Path,
+    format: DocumentFormat,
+    llm_client: Option<LlmClient>,
+) -> Result<ParseResult> {
     match format {
         DocumentFormat::Markdown => {
             let parser = MarkdownParser::new();
             parser.parse_file(path).await
         }
         DocumentFormat::Pdf => {
-            let parser = pdf::PdfParser::new();
+            let parser = match llm_client {
+                Some(client) => pdf::PdfParser::with_llm_client(client),
+                None => pdf::PdfParser::new(),
+            };
             parser.parse_file(path).await
         }
     }
 }
 
 /// Parse binary data.
-pub async fn parse_bytes(bytes: &[u8], format: DocumentFormat) -> Result<ParseResult> {
+pub async fn parse_bytes(
+    bytes: &[u8],
+    format: DocumentFormat,
+    llm_client: Option<LlmClient>,
+) -> Result<ParseResult> {
     match format {
         DocumentFormat::Markdown => {
             let content = std::str::from_utf8(bytes)
@@ -65,7 +81,10 @@ pub async fn parse_bytes(bytes: &[u8], format: DocumentFormat) -> Result<ParseRe
             parser.parse(content).await
         }
         DocumentFormat::Pdf => {
-            let parser = pdf::PdfParser::new();
+            let parser = match llm_client {
+                Some(client) => pdf::PdfParser::with_llm_client(client),
+                None => pdf::PdfParser::new(),
+            };
             parser.parse_bytes_async(bytes, None).await
         }
     }

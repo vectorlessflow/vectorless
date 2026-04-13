@@ -4,6 +4,11 @@
 //! Single document indexing example — index one document from content.
 //!
 //! ```bash
+//! # Using environment variables for LLM config:
+//! LLM_API_KEY=sk-xxx LLM_MODEL=google/gemini-3-flash-preview \
+//!   LLM_ENDPOINT=http://localhost:4000/api/v1 cargo run --example index_single
+//!
+//! # Or with defaults (edit the code to set your key/endpoint):
 //! cargo run --example index_single
 //! ```
 
@@ -11,11 +16,23 @@ use vectorless::{DocumentFormat, EngineBuilder, IndexContext};
 
 #[tokio::main]
 async fn main() -> vectorless::Result<()> {
+    // Initialize tracing for debug output (set RUST_LOG=debug to see more)
+    tracing_subscriber::fmt::init();
+
+    // Build engine with LLM configuration from environment or defaults.
+    // Adjust the defaults below to match your setup.
+    let api_key = std::env::var("LLM_API_KEY")
+        .unwrap_or_else(|_| "sk-or-v1-...".to_string());
+    let model = std::env::var("LLM_MODEL")
+        .unwrap_or_else(|_| "google/gemini-3-flash-preview".to_string());
+    let endpoint = std::env::var("LLM_ENDPOINT")
+        .unwrap_or_else(|_| "http://localhost:4000/api/v1".to_string());
+
     let engine = EngineBuilder::new()
         .with_workspace("./workspace_single_example")
-        .with_key("sk-or-v1-...")
-        .with_model("google/gemini-3-flash-preview")
-        .with_endpoint("http://localhost:4000/api/v1")
+        .with_key(&api_key)
+        .with_model(&model)
+        .with_endpoint(&endpoint)
         .build()
         .await
         .map_err(|e| vectorless::Error::Config(e.to_string()))?;
@@ -69,21 +86,10 @@ Monitoring is implemented using a Prometheus and Grafana stack, with custom metr
         println!("name:    {}", item.name);
         println!("format:  {:?}", item.format);
 
-        if let Some(metrics) = &item.metrics {
-            println!("  metrics:");
-            println!("    total time:  {}ms", metrics.total_time_ms());
-            println!("    parse:       {}ms", metrics.parse_time_ms);
-            println!("    build:       {}ms", metrics.build_time_ms);
-            println!("    enhance:     {}ms", metrics.enhance_time_ms);
-            println!("    enrich:      {}ms", metrics.enrich_time_ms);
-            println!("    optimize:    {}ms", metrics.optimize_time_ms);
-            println!("    reasoning:   {}ms", metrics.reasoning_index_time_ms);
-            println!("    nodes:       {}", metrics.nodes_processed);
-            println!("    summaries:   {}", metrics.summaries_generated);
-            println!("    llm calls:   {}", metrics.llm_calls);
-            println!("    tokens:      {}", metrics.total_tokens_generated);
-            println!("    topics:      {}", metrics.topics_indexed);
-            println!("    keywords:    {}", metrics.keywords_indexed);
+        if let Some(ref metrics) = item.metrics {
+            println!("time:    {}ms", metrics.total_time_ms());
+            println!("nodes:   {}", metrics.nodes_processed);
+            println!("tokens:  {}", metrics.total_tokens_generated);
         }
     }
 

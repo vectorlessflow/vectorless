@@ -3,6 +3,7 @@
 
 //! Index verifier - verifies TOC entry page assignments.
 
+use futures::future::join_all;
 use rand::seq::SliceRandom;
 use tracing::{debug, info};
 
@@ -49,12 +50,22 @@ impl IndexVerifier {
         Self { config, client }
     }
 
+    /// Create a verifier with an externally provided LLM client.
+    pub fn with_client(client: LlmClient) -> Self {
+        Self {
+            config: VerifierConfig::default(),
+            client,
+        }
+    }
+
     /// Create a verifier with default configuration.
     pub fn with_defaults() -> Self {
         Self::new(VerifierConfig::default())
     }
 
     /// Verify TOC entries against PDF pages.
+    ///
+    /// All sample entries are verified concurrently via LLM calls.
     pub async fn verify(
         &self,
         entries: &[TocEntry],
@@ -64,38 +75,58 @@ impl IndexVerifier {
             return Ok(VerificationReport::all_correct(0));
         }
 
-        // Select sample
         let sample = self.select_sample(entries);
 
-        // Verify each sample entry
+        // Launch all verification checks concurrently
+        let client = self.client.clone();
+        let futures: Vec<_> = sample
+            .iter()
+            .map(|(index, entry)| {
+                let index = *index;
+                let title = entry.title.clone();
+                let physical_page = entry.physical_page;
+                let client = client.clone();
+                let pages = pages.to_vec();
+
+                async move {
+                    match physical_page {
+                        Some(page) => {
+                            let result =
+                                Self::verify_entry_with_client(&client, &title, page, &pages).await;
+                            (index, title, page, result)
+                        }
+                        None => (
+                            index,
+                            title,
+                            0,
+                            Ok(Err(ErrorType::PageOutOfRange)),
+                        ),
+                    }
+                }
+            })
+            .collect();
+
+        let results = join_all(futures).await;
+
+        // Aggregate results
+        let total = results.len();
         let mut errors = Vec::new();
         let mut correct = 0;
 
-        for (index, entry) in &sample {
-            if let Some(physical_page) = entry.physical_page {
-                match self.verify_entry(entry, physical_page, pages).await? {
-                    Ok(()) => correct += 1,
-                    Err(error_type) => {
-                        errors.push(VerificationError::new(
-                            *index,
-                            entry.title.clone(),
-                            physical_page,
-                            error_type,
-                        ));
-                    }
+        for (index, title, page, result) in results {
+            match result {
+                Ok(Ok(())) => correct += 1,
+                Ok(Err(error_type)) => {
+                    errors.push(VerificationError::new(index, title, page, error_type));
                 }
-            } else {
-                // No physical page assigned
-                errors.push(VerificationError::new(
-                    *index,
-                    entry.title.clone(),
-                    0,
-                    ErrorType::PageOutOfRange,
-                ));
+                Err(e) => {
+                    debug!("Verification LLM call failed: {}", e);
+                    errors.push(VerificationError::new(index, title, page, ErrorType::TitleNotFound));
+                }
             }
         }
 
-        let report = VerificationReport::new(sample.len(), correct, errors);
+        let report = VerificationReport::new(total, correct, errors);
         info!(
             "Verification complete: {}/{} correct ({:.1}% accuracy)",
             report.correct,
@@ -126,28 +157,23 @@ impl IndexVerifier {
         }
     }
 
-    /// Verify a single entry.
-    async fn verify_entry(
-        &self,
-        entry: &TocEntry,
+    /// Verify a single entry using a cloned client (for concurrent use).
+    async fn verify_entry_with_client(
+        client: &LlmClient,
+        title: &str,
         physical_page: usize,
         pages: &[PdfPage],
     ) -> Result<std::result::Result<(), ErrorType>> {
-        // Check page bounds
         if physical_page == 0 || physical_page > pages.len() {
             return Ok(Err(ErrorType::PageOutOfRange));
         }
 
         let page = &pages[physical_page - 1];
 
-        // Use LLM to check if title appears on this page
-        let found = self.check_title_on_page(&entry.title, &page.text).await?;
+        let found = Self::check_title_on_page_with_client(client, title, &page.text).await?;
 
         if !found {
-            debug!(
-                "Title '{}' not found on page {}",
-                entry.title, physical_page
-            );
+            debug!("Title '{}' not found on page {}", title, physical_page);
             return Ok(Err(ErrorType::TitleNotFound));
         }
 
@@ -155,10 +181,13 @@ impl IndexVerifier {
     }
 
     /// Check if a title appears on a page using LLM.
-    async fn check_title_on_page(&self, title: &str, page_text: &str) -> Result<bool> {
+    async fn check_title_on_page_with_client(
+        client: &LlmClient,
+        title: &str,
+        page_text: &str,
+    ) -> Result<bool> {
         let system = "You are a document analysis assistant. Determine if a section title appears in the given text.";
 
-        // Truncate page text if too long
         let text = if page_text.len() > 1000 {
             &page_text[..1000]
         } else {
@@ -181,7 +210,7 @@ Reply in JSON format:
             found: bool,
         }
 
-        let result: CheckResult = self.client.complete_json(system, &user).await?;
+        let result: CheckResult = client.complete_json(system, &user).await?;
         Ok(result.found)
     }
 

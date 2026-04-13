@@ -1,7 +1,11 @@
 // Copyright (c) 2026 vectorless developers
 // SPDX-License-Identifier: Apache-2.0
 
-//! PDF document parser using lopdf.
+//! PDF document parser.
+//!
+//! Uses [`pdf_extract`] for reliable text extraction (handles CJK, ToUnicode
+//! CMap, font encoding, etc.) and [`lopdf`] only for metadata extraction from
+//! the PDF Info dictionary.
 
 use std::path::Path;
 
@@ -11,14 +15,16 @@ use tracing::{info, warn};
 use crate::Error;
 use crate::error::Result;
 use crate::index::parse::toc::TocProcessor;
+use crate::llm::LlmClient;
 
 use super::types::{PdfMetadata, PdfPage, PdfParseResult};
 use crate::index::parse::{DocumentFormat, DocumentMeta, ParseResult, RawNode};
 
 /// PDF document parser.
-#[derive(Debug, Clone)]
 pub struct PdfParser {
     config: PdfParserConfig,
+    /// Optional LLM client for TOC extraction and structure analysis.
+    llm_client: Option<LlmClient>,
 }
 
 /// PDF parser configuration.
@@ -35,7 +41,7 @@ impl Default for PdfParserConfig {
     fn default() -> Self {
         Self {
             max_pages: 0,
-            extract_toc: true, // Default enabled
+            extract_toc: true,
         }
     }
 }
@@ -46,17 +52,31 @@ impl PdfParser {
         Self::default()
     }
 
+    /// Create a PDF parser with an externally provided LLM client.
+    pub fn with_llm_client(client: LlmClient) -> Self {
+        Self {
+            config: PdfParserConfig::default(),
+            llm_client: Some(client),
+        }
+    }
+
     /// Create a parser with custom configuration.
     pub fn with_config(config: PdfParserConfig) -> Self {
-        Self { config }
+        Self {
+            config,
+            llm_client: None,
+        }
     }
 
     /// Create a parser without TOC extraction.
     pub fn without_toc() -> Self {
-        Self::with_config(PdfParserConfig {
-            extract_toc: false,
-            ..Default::default()
-        })
+        Self {
+            config: PdfParserConfig {
+                extract_toc: false,
+                ..Default::default()
+            },
+            llm_client: None,
+        }
     }
 
     /// Parse PDF from bytes and return raw pages.
@@ -65,19 +85,42 @@ impl PdfParser {
         bytes: &[u8],
         filename: Option<&str>,
     ) -> Result<PdfParseResult> {
-        let doc = LopdfDocument::load_mem(bytes)
-            .map_err(|e| Error::Parse(format!("Failed to parse PDF: {}", e)))?;
+        // Use pdf-extract for text (handles CJK, ToUnicode CMap, etc.)
+        let pages = self.extract_pages(bytes)?;
 
-        // Extract metadata
-        let metadata = self.extract_metadata(&doc, filename);
-
-        // Extract pages
-        let pages = self.extract_pages(&doc)?;
+        // Use lopdf only for metadata; fall back gracefully if it fails
+        let metadata = match LopdfDocument::load_mem(bytes) {
+            Ok(doc) => self.extract_metadata(&doc, filename),
+            Err(_) => PdfMetadata {
+                title: filename.unwrap_or("Document").to_string(),
+                page_count: pages.len(),
+                ..Default::default()
+            },
+        };
 
         Ok(PdfParseResult::new(metadata, pages))
     }
 
-    /// Extract metadata from PDF document.
+    /// Extract text from all pages using pdf-extract.
+    fn extract_pages(&self, bytes: &[u8]) -> Result<Vec<PdfPage>> {
+        let page_texts = pdf_extract::extract_text_from_mem_by_pages(bytes)
+            .map_err(|e| Error::Parse(format!("pdf-extract failed: {}", e)))?;
+
+        let mut pages = Vec::new();
+        for (i, text) in page_texts.iter().enumerate() {
+            if self.config.max_pages > 0 && i >= self.config.max_pages {
+                break;
+            }
+            let page_num = i + 1; // 1-based
+            if !text.trim().is_empty() {
+                pages.push(PdfPage::new(page_num, text.clone()));
+            }
+        }
+
+        Ok(pages)
+    }
+
+    /// Extract metadata from PDF Info dictionary via lopdf.
     fn extract_metadata(&self, doc: &LopdfDocument, filename: Option<&str>) -> PdfMetadata {
         let mut metadata = PdfMetadata {
             title: filename.unwrap_or("Document").to_string(),
@@ -85,26 +128,22 @@ impl PdfParser {
             ..Default::default()
         };
 
-        // Try to extract metadata from Info dictionary
         if let Ok(info) = doc.trailer.get(b"Info") {
             if let Ok(info_ref) = info.as_reference() {
                 if let Ok(info_obj) = doc.get_object(info_ref) {
                     if let Ok(dict) = info_obj.as_dict() {
-                        // Title
                         if let Ok(title_obj) = dict.get(b"Title") {
                             if let Ok(title) = title_obj.as_str() {
                                 metadata.title = self.decode_pdf_string(title);
                             }
                         }
 
-                        // Author
                         if let Ok(author_obj) = dict.get(b"Author") {
                             if let Ok(author) = author_obj.as_str() {
                                 metadata.author = Some(self.decode_pdf_string(author));
                             }
                         }
 
-                        // Subject
                         if let Ok(subject_obj) = dict.get(b"Subject") {
                             if let Ok(subject) = subject_obj.as_str() {
                                 metadata.subject = Some(self.decode_pdf_string(subject));
@@ -118,158 +157,9 @@ impl PdfParser {
         metadata
     }
 
-    /// Extract text from all pages.
-    fn extract_pages(&self, doc: &LopdfDocument) -> Result<Vec<PdfPage>> {
-        let page_map = doc.get_pages();
-        let mut pages = Vec::new();
-
-        for (i, (page_num, object_id)) in page_map.iter().enumerate() {
-            // Check max pages limit
-            if self.config.max_pages > 0 && i >= self.config.max_pages {
-                break;
-            }
-
-            let text = self.extract_page_text(doc, *object_id, *page_num as usize);
-
-            // Skip empty pages
-            if !text.trim().is_empty() {
-                pages.push(PdfPage::new(*page_num as usize, text));
-            }
-        }
-
-        Ok(pages)
-    }
-
-    /// Extract text from a single page.
-    fn extract_page_text(
-        &self,
-        doc: &LopdfDocument,
-        object_id: lopdf::ObjectId,
-        _page_num: usize,
-    ) -> String {
-        let mut text = String::new();
-
-        if let Ok(page_obj) = doc.get_object(object_id) {
-            if let Ok(page_dict) = page_obj.as_dict() {
-                if let Ok(contents) = page_dict.get(b"Contents") {
-                    match contents {
-                        lopdf::Object::Reference(ref_id) => {
-                            if let Ok(content_obj) = doc.get_object(*ref_id) {
-                                if let Ok(stream) = content_obj.as_stream() {
-                                    text = self.decode_stream_content(stream);
-                                }
-                            }
-                        }
-                        lopdf::Object::Array(arr) => {
-                            for obj in arr {
-                                if let Ok(ref_id) = obj.as_reference() {
-                                    if let Ok(content_obj) = doc.get_object(ref_id) {
-                                        if let Ok(stream) = content_obj.as_stream() {
-                                            let content = self.decode_stream_content(stream);
-                                            if !text.is_empty() {
-                                                text.push('\n');
-                                            }
-                                            text.push_str(&content);
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        _ => {}
-                    }
-                }
-            }
-        }
-
-        // Post-process text
-        self.post_process_text(&text)
-    }
-
-    /// Decode stream content to text.
-    fn decode_stream_content(&self, stream: &lopdf::Stream) -> String {
-        // Try to decode the stream
-        if let Ok(content) = stream.decompressed_content() {
-            self.extract_text_from_content(&content)
-        } else {
-            self.extract_text_from_content(&stream.content)
-        }
-    }
-
-    /// Extract text from PDF content stream (simplified).
-    fn extract_text_from_content(&self, content: &[u8]) -> String {
-        let content_str = String::from_utf8_lossy(content);
-        let mut text = String::new();
-
-        for line in content_str.lines() {
-            let line = line.trim();
-
-            // Tj operator: (text) Tj
-            if line.ends_with("Tj") {
-                if let Some(text_part) = self.extract_parentheses_text(line) {
-                    text.push_str(&text_part);
-                }
-            }
-            // TJ operator: [(text) ...] TJ
-            else if line.ends_with("TJ") {
-                if let Some(text_parts) = self.extract_array_text(line) {
-                    text.push_str(&text_parts);
-                }
-            }
-        }
-
-        text
-    }
-
-    /// Extract text from parentheses in Tj operator.
-    fn extract_parentheses_text(&self, line: &str) -> Option<String> {
-        let start = line.find('(')?;
-        let end = line.rfind(')')?;
-        if end > start {
-            let raw = &line[start + 1..end];
-            Some(self.decode_pdf_string(raw.as_bytes()))
-        } else {
-            None
-        }
-    }
-
-    /// Extract text from array in TJ operator.
-    fn extract_array_text(&self, line: &str) -> Option<String> {
-        let start = line.find('[')?;
-        let end = line.rfind(']')?;
-        if end > start {
-            let content = &line[start + 1..end];
-            let mut text = String::new();
-
-            let mut in_parens = false;
-            let mut current = String::new();
-
-            for ch in content.chars() {
-                match ch {
-                    '(' => {
-                        in_parens = true;
-                        current.clear();
-                    }
-                    ')' => {
-                        if in_parens {
-                            text.push_str(&self.decode_pdf_string(current.as_bytes()));
-                        }
-                        in_parens = false;
-                    }
-                    _ => {
-                        if in_parens {
-                            current.push(ch);
-                        }
-                    }
-                }
-            }
-
-            Some(text)
-        } else {
-            None
-        }
-    }
-
-    /// Decode PDF string (handle escape sequences).
+    /// Decode PDF string literal (handles escape sequences).
+    ///
+    /// Used only for metadata field values extracted via lopdf.
     fn decode_pdf_string(&self, bytes: &[u8]) -> String {
         let mut result = String::new();
         let mut i = 0;
@@ -299,26 +189,6 @@ impl PdfParser {
         result
     }
 
-    /// Post-process extracted text.
-    fn post_process_text(&self, text: &str) -> String {
-        let mut result = String::new();
-        let mut prev_space = false;
-
-        for ch in text.chars() {
-            if ch.is_whitespace() {
-                if !prev_space {
-                    result.push(' ');
-                    prev_space = true;
-                }
-            } else {
-                result.push(ch);
-                prev_space = false;
-            }
-        }
-
-        result.trim().to_string()
-    }
-
     /// Convert TOC entries to RawNodes.
     fn toc_entries_to_raw_nodes(
         &self,
@@ -328,7 +198,6 @@ impl PdfParser {
         let mut nodes = Vec::new();
 
         for entry in entries {
-            // Get content from the page range
             let content = self.get_content_for_entry(entry, pages);
 
             let mut node = RawNode::new(&entry.title)
@@ -353,12 +222,10 @@ impl PdfParser {
     ) -> String {
         let start_page = entry.physical_page.unwrap_or(1);
 
-        // Find content on this page
         pages
             .iter()
             .find(|p| p.number == start_page)
             .map(|p| {
-                // Try to find the title position and extract content after it
                 let text = &p.text;
                 if let Some(pos) = text.find(&entry.title) {
                     text[pos + entry.title.len()..].trim().to_string()
@@ -423,7 +290,16 @@ impl PdfParser {
         let nodes = if self.config.extract_toc {
             info!("Extracting TOC from PDF with {} pages", page_count);
 
-            let processor = TocProcessor::new();
+            let processor = match &self.llm_client {
+                Some(client) => {
+                    info!("PdfParser: creating TocProcessor with LLM client");
+                    TocProcessor::with_llm_client(client.clone())
+                }
+                None => {
+                    info!("PdfParser: creating TocProcessor without LLM client (no key configured)");
+                    TocProcessor::new()
+                }
+            };
             match processor.process(&result.pages).await {
                 Ok(entries) if !entries.is_empty() => {
                     info!("Extracted {} TOC entries", entries.len());
@@ -445,7 +321,6 @@ impl PdfParser {
             self.pages_to_raw_nodes(&result.pages)
         };
 
-        // Build metadata
         let meta = DocumentMeta {
             name: result.metadata.title,
             format: DocumentFormat::Pdf,
@@ -485,16 +360,5 @@ mod tests {
 
         let decoded = parser.decode_pdf_string(b"Hello\\nWorld");
         assert_eq!(decoded, "Hello\nWorld");
-    }
-
-    #[test]
-    fn test_post_process_text() {
-        let parser = PdfParser::new();
-
-        let processed = parser.post_process_text("Hello   World");
-        assert_eq!(processed, "Hello World");
-
-        let processed = parser.post_process_text("  Hello  World  ");
-        assert_eq!(processed, "Hello World");
     }
 }

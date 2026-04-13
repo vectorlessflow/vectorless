@@ -12,6 +12,11 @@
 //! # Usage
 //!
 //! ```bash
+//! # Using environment variables for LLM config:
+//! LLM_API_KEY=sk-xxx LLM_MODEL=gpt-4o \
+//!   LLM_ENDPOINT=https://api.openai.com/v1 cargo run --example flow
+//!
+//! # Or with defaults (edit the code to set your key/endpoint):
 //! cargo run --example flow
 //! ```
 
@@ -54,14 +59,23 @@ async fn main() -> vectorless::Result<()> {
 
     println!("=== Vectorless Flow Example ===\n");
 
+    // Build engine with LLM configuration from environment or defaults.
+    // Adjust the defaults below to match your setup.
+    let api_key = std::env::var("LLM_API_KEY")
+        .unwrap_or_else(|_| "sk-...".to_string());
+    let model = std::env::var("LLM_MODEL")
+        .unwrap_or_else(|_| "gpt-4o".to_string());
+    let endpoint = std::env::var("LLM_ENDPOINT")
+        .unwrap_or_else(|_| "https://api".to_string());
+
     // Step 1: Create a Vectorless client
     println!("Step 1: Creating Vectorless client...");
 
     let engine = EngineBuilder::new()
         .with_workspace("./worksspace_flow_example")
-        .with_key("sk...")
-        .with_model("gpt-4o")
-        .with_endpoint("https://api")
+        .with_key(&api_key)
+        .with_model(&model)
+        .with_endpoint(&endpoint)
         .build()
         .await
         .map_err(|e| vectorless::Error::Config(e.to_string()))?;
@@ -130,12 +144,10 @@ async fn main() -> vectorless::Result<()> {
         println!();
     }
 
-    // Step 5: Cleanup
-    println!("Step 5: Cleanup...");
+    // Cleanup
+    for doc in engine.list().await? {
+        engine.remove(&doc.id).await?;
+    }
 
-    // engine.remove(&doc_id).await?;
-    // println!("  - Document removed");
-
-    println!("\n=== Example Complete ===");
     Ok(())
 }

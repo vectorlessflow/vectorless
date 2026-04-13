@@ -3,6 +3,7 @@
 
 //! Index repairer - fixes incorrect TOC entry page assignments.
 
+use futures::future::join_all;
 use tracing::{debug, info};
 
 use crate::config::LlmConfig;
@@ -49,12 +50,20 @@ impl IndexRepairer {
         Self { config, client }
     }
 
+    /// Create a repairer with an externally provided LLM client.
+    pub fn with_client(client: LlmClient) -> Self {
+        Self {
+            config: RepairerConfig::default(),
+            client,
+        }
+    }
+
     /// Create a repairer with default configuration.
     pub fn with_defaults() -> Self {
         Self::new(RepairerConfig::default())
     }
 
-    /// Repair incorrect entries.
+    /// Repair incorrect entries concurrently.
     pub async fn repair(
         &self,
         entries: &mut [TocEntry],
@@ -66,38 +75,67 @@ impl IndexRepairer {
         }
 
         info!("Repairing {} incorrect entries", errors.len());
+
+        // Collect repair tasks (don't borrow entries mutably yet)
+        let client = self.client.clone();
+        let pages_owned = pages.to_vec();
+        let search_range = self.config.search_range;
+
+        let tasks: Vec<_> = errors
+            .iter()
+            .filter(|error| error.index < entries.len())
+            .map(|error| {
+                let title = entries[error.index].title.clone();
+                let expected_page = error.expected_page;
+                let client = client.clone();
+                let pages = pages_owned.clone();
+
+                async move {
+                    let start = expected_page.saturating_sub(search_range).max(1);
+                    let end = (expected_page + search_range).min(pages.len());
+
+                    let result = Self::find_correct_page_static(
+                        &client,
+                        &title,
+                        &pages,
+                        start..=end,
+                    )
+                    .await;
+
+                    (title, expected_page, result)
+                }
+            })
+            .collect();
+
+        let results = join_all(tasks).await;
+
+        // Apply repairs
         let mut repaired_count = 0;
-
-        for error in errors {
-            if error.index >= entries.len() {
-                continue;
-            }
-
-            let entry = &mut entries[error.index];
-            let expected_page = error.expected_page;
-
-            // Search around the expected page
-            let start = expected_page
-                .saturating_sub(self.config.search_range)
-                .max(1);
-            let end = (expected_page + self.config.search_range).min(pages.len());
-
-            if let Some(correct_page) = self
-                .find_correct_page(&entry.title, pages, start..=end)
-                .await?
-            {
-                debug!(
-                    "Repaired '{}' : page {} → {}",
-                    entry.title, expected_page, correct_page
-                );
-                entry.physical_page = Some(correct_page);
-                entry.confidence = 0.9;
-                repaired_count += 1;
-            } else {
-                debug!(
-                    "Could not repair '{}' (searched pages {}-{})",
-                    entry.title, start, end
-                );
+        for (title, expected_page, result) in results {
+            match result {
+                Ok(Some(correct_page)) => {
+                    // Find the corresponding error entry and fix it
+                    if let Some(error) = errors.iter().find(|e| e.title == title) {
+                        if error.index < entries.len() {
+                            debug!(
+                                "Repaired '{}' : page {} → {}",
+                                title, expected_page, correct_page
+                            );
+                            entries[error.index].physical_page = Some(correct_page);
+                            entries[error.index].confidence = 0.9;
+                            repaired_count += 1;
+                        }
+                    }
+                }
+                Ok(None) => {
+                    debug!(
+                        "Could not repair '{}' (searched around page {})",
+                        title, expected_page
+                    );
+                }
+                Err(e) => {
+                    debug!("Repair failed for '{}': {}", title, e);
+                }
             }
         }
 
@@ -105,9 +143,9 @@ impl IndexRepairer {
         Ok(repaired_count)
     }
 
-    /// Find the correct page for a title within a range.
-    async fn find_correct_page(
-        &self,
+    /// Find the correct page for a title within a range (static, for concurrent use).
+    async fn find_correct_page_static(
+        client: &LlmClient,
         title: &str,
         pages: &[PdfPage],
         range: std::ops::RangeInclusive<usize>,
@@ -152,7 +190,7 @@ Reply in JSON format:
             page: Option<usize>,
         }
 
-        let result: FindResult = self.client.complete_json(system, &user).await?;
+        let result: FindResult = client.complete_json(system, &user).await?;
 
         if result.found {
             Ok(result.page)

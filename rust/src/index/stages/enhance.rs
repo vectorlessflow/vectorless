@@ -109,6 +109,12 @@ impl IndexStage for EnhanceStage {
     async fn execute(&mut self, ctx: &mut IndexContext) -> Result<StageResult> {
         let start = Instant::now();
 
+        info!(
+            "EnhanceStage: llm_client={}, strategy={:?}",
+            self.llm_client.is_some(),
+            ctx.options.summary_strategy
+        );
+
         // Check if we need summaries
         if !self.needs_summaries(ctx) {
             info!(

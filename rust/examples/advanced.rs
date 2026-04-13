@@ -9,10 +9,10 @@
 //! # Usage
 //!
 //! ```bash
-//! # First, copy the example config and edit it
-//! cp config.toml ./my_vectorless.toml
-//! # Edit my_vectorless.toml to customize settings
+//! # Using environment variables for LLM config (overrides config file):
+//! LLM_API_KEY=sk-xxx LLM_MODEL=gpt-4o cargo run --example advanced
 //!
+//! # Or with defaults (using config file):
 //! cargo run --example advanced
 //! ```
 
@@ -20,12 +20,28 @@ use vectorless::{EngineBuilder, IndexContext, QueryContext};
 
 #[tokio::main]
 async fn main() -> vectorless::Result<()> {
+    // Initialize tracing for debug output (set RUST_LOG=debug to see more)
+    tracing_subscriber::fmt::init();
+
     println!("=== Vectorless Advanced Example (Config File) ===\n");
 
     // Load all settings from the specified config file.
     // The config file must include api_key and model.
-    let client = EngineBuilder::new()
-        .with_config_path("./config.toml")
+    // If environment variables are set, they override the config file values.
+    let mut builder = EngineBuilder::new().with_config_path("./config.toml");
+    
+    // Override config with env vars if present
+    if let Ok(api_key) = std::env::var("LLM_API_KEY") {
+        builder = builder.with_key(&api_key);
+    }
+    if let Ok(model) = std::env::var("LLM_MODEL") {
+        builder = builder.with_model(&model);
+    }
+    if let Ok(endpoint) = std::env::var("LLM_ENDPOINT") {
+        builder = builder.with_endpoint(&endpoint);
+    }
+
+    let client = builder
         .build()
         .await
         .map_err(|e: vectorless::BuildError| vectorless::Error::Config(e.to_string()))?;

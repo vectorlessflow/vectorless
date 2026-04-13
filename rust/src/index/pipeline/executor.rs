@@ -81,8 +81,9 @@ impl PipelineExecutor {
     /// 7. `reasoning_index` - Build pre-computed reasoning index
     /// 8. `optimize` - Optimize tree
     pub fn with_llm(client: LlmClient) -> Self {
+        tracing::info!("PipelineExecutor::with_llm — cloning client to ParseStage + EnhanceStage");
         let orchestrator = PipelineOrchestrator::new()
-            .stage_with_priority(ParseStage::new(), 10)
+            .stage_with_priority(ParseStage::with_llm_client(client.clone()), 10)
             .stage_with_priority(BuildStage::new(), 20)
             .stage_with_priority(ValidateStage::new(), 22)
             .stage_with_priority(SplitStage::new(), 25)
