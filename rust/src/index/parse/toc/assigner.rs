@@ -4,7 +4,7 @@
 //! Page assigner - assigns physical page numbers to TOC entries.
 
 use std::collections::HashMap;
-use futures::future::join_all;
+use futures::stream::{self, StreamExt};
 use tracing::{debug, info};
 
 use crate::config::LlmConfig;
@@ -175,7 +175,10 @@ impl PageAssigner {
             })
             .collect();
 
-        let verified_offsets = join_all(futures).await;
+        let verified_offsets: Vec<_> = stream::iter(futures)
+            .buffer_unordered(5)
+            .collect()
+            .await;
 
         // Calculate the mode (most common offset)
         let successful: Vec<_> = verified_offsets
@@ -265,29 +268,32 @@ Reply in JSON format:
         Ok(result.page)
     }
 
-    /// Assign pages using LLM for each entry (concurrently).
+    /// Assign pages using LLM for each entry (with bounded concurrency).
     async fn assign_with_llm(&self, entries: &mut [TocEntry], pages: &[PdfPage]) -> Result<()> {
         info!("Assigning pages using LLM positioning");
 
         let client = self.client.clone();
         let pages_owned = pages.to_vec();
+        let total = entries.len();
 
-        // Launch all entry searches concurrently
-        let futures: Vec<_> = entries
-            .iter()
-            .map(|entry| {
-                let title = entry.title.clone();
-                let client = client.clone();
-                let pages = pages_owned.clone();
+        // Launch entry searches with bounded concurrency to avoid rate limiting
+        let futures: Vec<_> = entries.iter().map(|entry| {
+            let title = entry.title.clone();
+            let client = client.clone();
+            let pages = pages_owned.clone();
 
-                async move {
-                    let groups = Self::group_pages_owned(&pages, 5);
-                    Self::locate_title_in_groups_static(&client, &title, &groups).await
-                }
-            })
-            .collect();
+            async move {
+                let groups = Self::group_pages_owned(&pages, 5);
+                Self::locate_title_in_groups_static(&client, &title, &groups).await
+            }
+        }).collect();
 
-        let results = join_all(futures).await;
+        let results: Vec<_> = stream::iter(futures)
+            .buffer_unordered(5)
+            .collect()
+            .await;
+
+        info!("Assigned pages for {}/{} entries", results.len(), total);
 
         // Write results back
         for (entry, result) in entries.iter_mut().zip(results.into_iter()) {

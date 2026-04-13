@@ -3,7 +3,7 @@
 
 //! Index repairer - fixes incorrect TOC entry page assignments.
 
-use futures::future::join_all;
+use futures::stream::{self, StreamExt};
 use tracing::{debug, info};
 
 use crate::config::LlmConfig;
@@ -63,7 +63,7 @@ impl IndexRepairer {
         Self::new(RepairerConfig::default())
     }
 
-    /// Repair incorrect entries concurrently.
+    /// Repair incorrect entries with bounded concurrency.
     pub async fn repair(
         &self,
         entries: &mut [TocEntry],
@@ -107,7 +107,10 @@ impl IndexRepairer {
             })
             .collect();
 
-        let results = join_all(tasks).await;
+        let results: Vec<_> = stream::iter(tasks)
+            .buffer_unordered(5)
+            .collect()
+            .await;
 
         // Apply repairs
         let mut repaired_count = 0;

@@ -7,7 +7,7 @@
 //! degradation: if one mode fails verification, it falls back to a lower-quality
 //! but more reliable mode.
 
-use futures::future::join_all;
+use futures::stream::{self, StreamExt};
 use tracing::{debug, info, warn};
 
 use crate::error::Result;
@@ -505,7 +505,10 @@ impl TocProcessor {
             })
             .collect();
 
-        let extraction_results = join_all(oversized_futures).await;
+        let extraction_results: Vec<_> = stream::iter(oversized_futures)
+            .buffer_unordered(3)
+            .collect()
+            .await;
 
         // Build a lookup from index → refined sub-entries
         let mut refined_map = std::collections::HashMap::new();
