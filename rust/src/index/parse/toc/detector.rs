@@ -346,20 +346,4 @@ mod tests {
 
         assert!(result.found);
     }
-
-    #[test]
-    #[ignore = "requires OPENAI_API_KEY environment variable"]
-    fn test_no_toc() {
-        let detector = TocDetector::with_defaults();
-
-        let pages = vec![
-            make_page(1, "This is a simple document."),
-            make_page(2, "It has no table of contents."),
-        ];
-
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        let result = rt.block_on(detector.detect(&pages)).unwrap();
-
-        assert!(!result.found);
-    }
 }

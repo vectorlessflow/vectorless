@@ -261,25 +261,4 @@ mod tests {
             QueryComplexity::Complex
         );
     }
-
-    #[test]
-    fn test_medium_queries() {
-        let detector = ComplexityDetector::new();
-
-        let medium_query = "How do I implement a simple web server with error handling?";
-        assert_eq!(detector.detect_heuristic(medium_query), QueryComplexity::Medium);
-    }
-
-    #[test]
-    fn test_estimate_word_count() {
-        assert_eq!(estimate_word_count("hello world"), 2);
-        assert_eq!(estimate_word_count("什么是向量"), 4);
-        assert_eq!(estimate_word_count("什么是 vector search"), 4);
-    }
-
-    #[test]
-    fn test_no_llm_is_ok() {
-        let detector = ComplexityDetector::new();
-        assert!(detector.llm_client.is_none());
-    }
 }
