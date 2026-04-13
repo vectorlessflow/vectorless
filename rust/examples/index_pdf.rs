@@ -49,8 +49,8 @@ async fn main() -> vectorless::Result<()> {
             std::process::exit(1);
         }
     };
-    let model = std::env::var("LLM_MODEL")
-        .unwrap_or_else(|_| "google/gemini-3-flash-preview".to_string());
+    let model =
+        std::env::var("LLM_MODEL").unwrap_or_else(|_| "google/gemini-3-flash-preview".to_string());
     let endpoint = std::env::var("LLM_ENDPOINT")
         .unwrap_or_else(|_| "http://localhost:4000/api/v1".to_string());
 
@@ -70,9 +70,7 @@ async fn main() -> vectorless::Result<()> {
         .await
         .map_err(|e| vectorless::Error::Config(e.to_string()))?;
 
-    let result = engine
-        .index(IndexContext::from_path(pdf_path))
-        .await?;
+    let result = engine.index(IndexContext::from_path(pdf_path)).await?;
 
     println!(
         "Indexed: {}, Failed: {}",

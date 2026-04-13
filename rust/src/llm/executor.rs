@@ -338,7 +338,8 @@ impl LlmExecutor {
 
         let api_key = self.config.api_key.clone().ok_or_else(|| {
             LlmError::Config(
-                "No API key configured. Call .with_key(\"sk-...\") when building the engine.".to_string(),
+                "No API key configured. Call .with_key(\"sk-...\") when building the engine."
+                    .to_string(),
             )
         })?;
 

@@ -180,16 +180,10 @@ impl TocProcessor {
             info!("No TOC found in document");
             ProcessingMode::NoToc
         } else if detection.has_page_numbers {
-            info!(
-                "TOC found on pages {:?}, has page numbers",
-                detection.pages
-            );
+            info!("TOC found on pages {:?}, has page numbers", detection.pages);
             ProcessingMode::TocWithPageNumbers
         } else {
-            info!(
-                "TOC found on pages {:?}, no page numbers",
-                detection.pages
-            );
+            info!("TOC found on pages {:?}, no page numbers", detection.pages);
             ProcessingMode::TocWithoutPageNumbers
         };
 
@@ -222,7 +216,8 @@ impl TocProcessor {
                     self.process_toc_with_page_numbers(detection, pages).await
                 }
                 ProcessingMode::TocWithoutPageNumbers => {
-                    self.process_toc_without_page_numbers(detection, pages).await
+                    self.process_toc_without_page_numbers(detection, pages)
+                        .await
                 }
                 ProcessingMode::NoToc => {
                     // NoToc always succeeds (produces some structure)
@@ -234,9 +229,7 @@ impl TocProcessor {
                 Ok(entries) if !entries.is_empty() => {
                     // Verify the entries
                     let mut mutable_entries = entries;
-                    let report = self
-                        .verify_and_repair(&mut mutable_entries, pages)
-                        .await?;
+                    let report = self.verify_and_repair(&mut mutable_entries, pages).await?;
 
                     if report.accuracy >= self.config.accuracy_threshold {
                         info!(
@@ -437,8 +430,7 @@ impl TocProcessor {
             .filter(|(i, entry)| {
                 let span = entry_page_span(entry, next_pages[*i], page_count);
                 let tokens = entry_token_count(entry, pages);
-                span > self.config.max_pages_per_entry
-                    && tokens > self.config.max_tokens_per_entry
+                span > self.config.max_pages_per_entry && tokens > self.config.max_tokens_per_entry
             })
             .map(|(i, entry)| {
                 let start = entry.physical_page.unwrap_or(1);
@@ -541,7 +533,11 @@ impl Default for TocProcessor {
 /// Calculate how many pages an entry spans.
 ///
 /// From its physical_page to the next entry's physical_page (or document end).
-fn entry_page_span(entry: &TocEntry, next_physical_page: Option<usize>, total_pages: usize) -> usize {
+fn entry_page_span(
+    entry: &TocEntry,
+    next_physical_page: Option<usize>,
+    total_pages: usize,
+) -> usize {
     let start = entry.physical_page.unwrap_or(1);
     let end = next_physical_page.unwrap_or(total_pages);
     end.saturating_sub(start)

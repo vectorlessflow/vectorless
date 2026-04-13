@@ -3,8 +3,8 @@
 
 //! Page assigner - assigns physical page numbers to TOC entries.
 
-use std::collections::HashMap;
 use futures::stream::{self, StreamExt};
+use std::collections::HashMap;
 use tracing::{debug, info};
 
 use crate::config::LlmConfig;
@@ -175,10 +175,7 @@ impl PageAssigner {
             })
             .collect();
 
-        let verified_offsets: Vec<_> = stream::iter(futures)
-            .buffer_unordered(5)
-            .collect()
-            .await;
+        let verified_offsets: Vec<_> = stream::iter(futures).buffer_unordered(5).collect().await;
 
         // Calculate the mode (most common offset)
         let successful: Vec<_> = verified_offsets
@@ -277,21 +274,21 @@ Reply in JSON format:
         let total = entries.len();
 
         // Launch entry searches with bounded concurrency to avoid rate limiting
-        let futures: Vec<_> = entries.iter().map(|entry| {
-            let title = entry.title.clone();
-            let client = client.clone();
-            let pages = pages_owned.clone();
+        let futures: Vec<_> = entries
+            .iter()
+            .map(|entry| {
+                let title = entry.title.clone();
+                let client = client.clone();
+                let pages = pages_owned.clone();
 
-            async move {
-                let groups = Self::group_pages_owned(&pages, 5);
-                Self::locate_title_in_groups_static(&client, &title, &groups).await
-            }
-        }).collect();
+                async move {
+                    let groups = Self::group_pages_owned(&pages, 5);
+                    Self::locate_title_in_groups_static(&client, &title, &groups).await
+                }
+            })
+            .collect();
 
-        let results: Vec<_> = stream::iter(futures)
-            .buffer_unordered(5)
-            .collect()
-            .await;
+        let results: Vec<_> = stream::iter(futures).buffer_unordered(5).collect().await;
 
         info!("Assigned pages for {}/{} entries", results.len(), total);
 

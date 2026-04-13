@@ -102,7 +102,8 @@ impl IndexStage for ParseStage {
                 ctx.name = name.clone();
 
                 // Parse content directly
-                crate::index::parse::parse_content(content, *format, self.llm_client.clone()).await?
+                crate::index::parse::parse_content(content, *format, self.llm_client.clone())
+                    .await?
             }
             IndexInput::Bytes { data, name, format } => {
                 // Set name

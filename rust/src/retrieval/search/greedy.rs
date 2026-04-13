@@ -1,91 +1,37 @@
 // Copyright (c) 2026 vectorless developers
 // SPDX-License-Identifier: Apache-2.0
 
-//! Greedy search algorithm with Pilot integration.
+//! Pure Pilot search — LLM-guided single-path tree navigation.
 //!
-//! Simple depth-first search that always follows the highest-scoring child.
-//! When a Pilot is provided, it can provide semantic guidance at decision points.
+//! At each layer, the Pilot scores all children and picks the top-1.
+//! This is the most accurate (but slowest) approach: one LLM call per layer.
+//! Falls back to NodeScorer when Pilot is unavailable.
 
 use async_trait::async_trait;
-use tracing::{debug, trace};
+use std::collections::HashSet;
+use tracing::debug;
 
 use super::super::RetrievalContext;
 use super::super::types::{NavigationDecision, NavigationStep, SearchPath};
-use super::scorer::{NodeScorer, ScoringContext};
+use super::pilot_scorer::{PilotDecisionCache, score_candidates};
 use super::{SearchConfig, SearchResult, SearchTree};
 use crate::document::{DocumentTree, NodeId};
-use crate::retrieval::pilot::{Pilot, SearchState};
+use crate::retrieval::pilot::Pilot;
 
-/// Greedy search - always follows the best single path.
+/// Pure Pilot search — Pilot picks the best child at each layer.
 ///
-/// Fast but may miss relevant content in other branches.
-/// When a Pilot is provided, it can guide the search at key decision points.
-pub struct GreedySearch;
+/// beam=1: at each level, Pilot evaluates all children and the search
+/// follows only the top-ranked one. When Pilot is unavailable,
+/// falls back to NodeScorer (keyword/BM25).
+pub struct PurePilotSearch;
 
-impl GreedySearch {
-    /// Create a new greedy search.
+impl PurePilotSearch {
+    /// Create a new Pure Pilot search.
     pub fn new() -> Self {
         Self
     }
 
-    /// Create a scorer for the given query.
-    fn create_scorer(&self, query: &str) -> NodeScorer {
-        NodeScorer::new(ScoringContext::new(query))
-    }
-
-    /// Score candidates using a query-specific scorer.
-    fn score_candidates_with_query(
-        &self,
-        tree: &DocumentTree,
-        candidates: &[NodeId],
-        query: &str,
-    ) -> Vec<(NodeId, f32)> {
-        let scorer = self.create_scorer(query);
-        scorer.score_and_sort(tree, candidates)
-    }
-
-    /// Merge algorithm scores with Pilot decision.
-    fn merge_with_pilot_decision(
-        &self,
-        tree: &DocumentTree,
-        candidates: &[NodeId],
-        pilot_decision: &crate::retrieval::pilot::PilotDecision,
-        query: &str,
-    ) -> Vec<(NodeId, f32)> {
-        let scorer = self.create_scorer(query);
-        let alpha = 0.4;
-        let beta = 0.6 * pilot_decision.confidence;
-
-        // Build a map from node_id to pilot score
-        let mut pilot_scores: std::collections::HashMap<NodeId, f32> =
-            std::collections::HashMap::new();
-        for ranked in &pilot_decision.ranked_candidates {
-            pilot_scores.insert(ranked.node_id, ranked.score);
-        }
-
-        // Merge scores
-        let mut merged: Vec<(NodeId, f32)> = candidates
-            .iter()
-            .map(|&node_id| {
-                let algo_score = scorer.score(tree, node_id);
-                let pilot_score = pilot_scores.get(&node_id).copied().unwrap_or(0.0);
-
-                let final_score = if beta > 0.0 {
-                    (alpha * algo_score + beta * pilot_score) / (alpha + beta)
-                } else {
-                    algo_score
-                };
-
-                (node_id, final_score)
-            })
-            .collect();
-
-        merged.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
-
-        merged
-    }
-
-    /// Core greedy search logic parameterized by start node.
+    /// Core search logic parameterized by start node.
     async fn search_impl(
         &self,
         tree: &DocumentTree,
@@ -97,24 +43,22 @@ impl GreedySearch {
         let mut result = SearchResult::default();
         let mut current_path = SearchPath::new();
         let mut current_node = start_node;
-        let mut visited: std::collections::HashSet<NodeId> = std::collections::HashSet::new();
+        let mut visited: HashSet<NodeId> = HashSet::new();
+        let cache = PilotDecisionCache::new();
 
         debug!(
-            "GreedySearch: query='{}', start_node={:?}, max_iterations={}, min_score={:.2}",
+            "PurePilotSearch: query='{}', start_node={:?}, max_iterations={}, min_score={:.2}",
             context.query, start_node, config.max_iterations, config.min_score
         );
 
-        // Track Pilot interventions
         let mut pilot_interventions = 0;
 
         for iteration in 0..config.max_iterations {
             result.iterations = iteration + 1;
 
-            // Get children of current node
             let children = tree.children(current_node);
 
             if children.is_empty() {
-                // Leaf node - add to results
                 current_path.leaf = Some(current_node);
                 if !config.leaf_only || tree.is_leaf(current_node) {
                     result.paths.push(current_path.clone());
@@ -122,48 +66,25 @@ impl GreedySearch {
                 break;
             }
 
-            // ========== Pilot Integration Point ==========
-            let scored_children = if let Some(p) = pilot {
-                let state = SearchState::new(
-                    tree,
-                    &context.query,
-                    &current_path.nodes,
-                    &children,
-                    &visited,
-                );
+            // Pilot as primary scorer (weight=1.0), NodeScorer as fallback.
+            // Always consult Pilot — no should_intervene guard.
+            let scored_children = score_candidates(
+                tree,
+                &children,
+                &context.query,
+                pilot,
+                &current_path.nodes,
+                &visited,
+                1.0, // PurePilot: Pilot weight = 1.0
+                Some(&cache),
+            )
+            .await;
 
-                if p.should_intervene(&state) {
-                    trace!(
-                        "Pilot intervening at greedy decision point with {} candidates",
-                        children.len()
-                    );
+            if pilot.is_some() {
+                pilot_interventions += 1;
+            }
 
-                    match p.decide(&state).await {
-                        decision => {
-                            pilot_interventions += 1;
-                            debug!(
-                                "Pilot decision: confidence={}, direction={:?}",
-                                decision.confidence,
-                                std::mem::discriminant(&decision.direction)
-                            );
-
-                            self.merge_with_pilot_decision(
-                                tree,
-                                &children,
-                                &decision,
-                                &context.query,
-                            )
-                        }
-                    }
-                } else {
-                    self.score_candidates_with_query(tree, &children, &context.query)
-                }
-            } else {
-                self.score_candidates_with_query(tree, &children, &context.query)
-            };
-            // ==============================================
-
-            // Find the best child that meets minimum score
+            // Take only top-1
             let mut best_child = None;
             let mut best_score = 0.0;
 
@@ -178,7 +99,6 @@ impl GreedySearch {
             if let Some(child_id) = best_child {
                 visited.insert(child_id);
 
-                // Record navigation step
                 let child_node = tree.get(child_id);
                 result.trace.push(NavigationStep {
                     node_id: format!("{:?}", child_id),
@@ -190,7 +110,6 @@ impl GreedySearch {
                     depth: child_node.map(|n| n.depth).unwrap_or(0),
                 });
 
-                // Update path
                 current_path = current_path.extend(child_id, best_score);
                 current_node = child_id;
                 result.nodes_visited += 1;
@@ -199,7 +118,6 @@ impl GreedySearch {
                     break;
                 }
             } else {
-                // No good children found - add current path as result
                 current_path.leaf = Some(current_node);
                 if current_path.score > 0.0 {
                     result.paths.push(current_path);
@@ -209,19 +127,18 @@ impl GreedySearch {
         }
 
         result.pilot_interventions = pilot_interventions;
-
         result
     }
 }
 
-impl Default for GreedySearch {
+impl Default for PurePilotSearch {
     fn default() -> Self {
         Self::new()
     }
 }
 
 #[async_trait]
-impl SearchTree for GreedySearch {
+impl SearchTree for PurePilotSearch {
     async fn search(
         &self,
         tree: &DocumentTree,
@@ -246,6 +163,22 @@ impl SearchTree for GreedySearch {
     }
 
     fn name(&self) -> &'static str {
-        "greedy"
+        "pure_pilot"
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_pure_pilot_creation() {
+        let _search = PurePilotSearch::new();
+    }
+
+    #[test]
+    fn test_pure_pilot_default() {
+        let search = PurePilotSearch::default();
+        assert_eq!(search.name(), "pure_pilot");
     }
 }

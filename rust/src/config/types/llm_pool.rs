@@ -11,15 +11,15 @@ use serde::{Deserialize, Serialize};
 /// Unified LLM configuration.
 ///
 /// Contains all settings for LLM operations including:
-/// - Pool of clients for different purposes (summary, retrieval, pilot)
+/// - Pool of clients for different purposes (index, retrieval, pilot)
 /// - Retry behavior
 /// - Throttle/rate limiting
 /// - Fallback strategy
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LlmPoolConfig {
-    /// Summary client configuration.
-    #[serde(default)]
-    pub summary: LlmClientConfig,
+    /// Index client configuration (used during document indexing).
+    #[serde(default, alias = "summary")]
+    pub index: LlmClientConfig,
 
     /// Retrieval client configuration.
     #[serde(default)]
@@ -32,6 +32,10 @@ pub struct LlmPoolConfig {
     /// Default API key (used if not specified per-client).
     #[serde(default)]
     pub api_key: Option<String>,
+
+    /// Default API endpoint (used if not specified per-client).
+    #[serde(default)]
+    pub endpoint: Option<String>,
 
     /// Retry configuration.
     #[serde(default)]
@@ -57,13 +61,14 @@ fn default_pilot_config() -> LlmClientConfig {
 impl Default for LlmPoolConfig {
     fn default() -> Self {
         Self {
-            summary: LlmClientConfig::default(),
+            index: LlmClientConfig::default(),
             retrieval: LlmClientConfig {
                 max_tokens: 100,
                 ..Default::default()
             },
             pilot: default_pilot_config(),
             api_key: None,
+            endpoint: None,
             retry: RetryConfig::default(),
             throttle: ThrottleConfig::default(),
             fallback: FallbackConfig::default(),
@@ -87,8 +92,8 @@ impl LlmPoolConfig {
     pub fn get_api_key_for(&self, client_key: Option<&str>) -> Option<String> {
         // First check client-specific key
         if let Some(key) = client_key {
-            if let Some(ref k) = self.summary.api_key {
-                if self.summary.model == key {
+            if let Some(ref k) = self.index.api_key {
+                if self.index.model == key {
                     return Some(k.clone());
                 }
             }
@@ -105,6 +110,20 @@ impl LlmPoolConfig {
         }
         // Fall back to default
         self.api_key.clone()
+    }
+
+    /// Resolve API key: client-specific first, then default.
+    pub fn resolved_api_key(&self, client: &LlmClientConfig) -> Option<String> {
+        client.api_key.clone().or_else(|| self.api_key.clone())
+    }
+
+    /// Resolve endpoint: client-specific first, then default.
+    pub fn resolved_endpoint(&self, client: &LlmClientConfig) -> String {
+        if !client.endpoint.is_empty() {
+            client.endpoint.clone()
+        } else {
+            self.endpoint.clone().unwrap_or_default()
+        }
     }
 }
 
@@ -410,7 +429,7 @@ mod tests {
     #[test]
     fn test_llm_pool_config_defaults() {
         let config = LlmPoolConfig::default();
-        assert!(config.summary.model.is_empty());
+        assert!(config.index.model.is_empty());
         assert!(config.retrieval.model.is_empty());
         assert!(config.pilot.model.is_empty());
         assert_eq!(config.retry.max_attempts, 3);

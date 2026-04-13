@@ -29,7 +29,7 @@ async fn main() -> vectorless::Result<()> {
     // The config file must include api_key and model.
     // If environment variables are set, they override the config file values.
     let mut builder = EngineBuilder::new().with_config_path("./config.toml");
-    
+
     // Override config with env vars if present
     if let Ok(api_key) = std::env::var("LLM_API_KEY") {
         builder = builder.with_key(&api_key);

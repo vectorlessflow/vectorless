@@ -13,9 +13,9 @@ use crate::throttle::ConcurrencyController;
 ///
 /// This provides a centralized way to access LLM clients
 /// configured for specific tasks:
-/// - **Summary** — Document summarization (fast, cheap model)
+/// - **Index** — Document indexing/summarization (fast, cheap model)
 /// - **Retrieval** — Document navigation (capable model)
-/// - **TOC** — Table of contents processing (fast, cheap model)
+/// - **Pilot** — Navigation guidance (fast model)
 ///
 /// # Example
 ///
@@ -26,8 +26,8 @@ use crate::throttle::ConcurrencyController;
 /// # async fn main() -> vectorless::llm::LlmResult<()> {
 /// let pool = LlmPool::from_defaults();
 ///
-/// // Use summary client for summarization
-/// let summary = pool.summary().complete(
+/// // Use index client for summarization
+/// let summary = pool.index().complete(
 ///     "You summarize text concisely.",
 ///     "Long text to summarize..."
 /// ).await?;
@@ -43,9 +43,9 @@ use crate::throttle::ConcurrencyController;
 /// ```
 #[derive(Debug, Clone)]
 pub struct LlmPool {
-    summary: Arc<LlmClient>,
+    index: Arc<LlmClient>,
     retrieval: Arc<LlmClient>,
-    toc: Arc<LlmClient>,
+    pilot: Arc<LlmClient>,
     concurrency: Option<Arc<ConcurrencyController>>,
 }
 
@@ -53,9 +53,9 @@ impl LlmPool {
     /// Create a new LLM pool from configurations.
     pub fn new(configs: LlmConfigs) -> Self {
         Self {
-            summary: Arc::new(LlmClient::new(configs.summary)),
+            index: Arc::new(LlmClient::new(configs.index)),
             retrieval: Arc::new(LlmClient::new(configs.retrieval)),
-            toc: Arc::new(LlmClient::new(configs.toc)),
+            pilot: Arc::new(LlmClient::new(configs.pilot)),
             concurrency: None,
         }
     }
@@ -92,14 +92,14 @@ impl LlmPool {
     pub fn with_concurrency(mut self, controller: ConcurrencyController) -> Self {
         let arc = Arc::new(controller);
         self.concurrency = Some(arc.clone());
-        self.summary = Arc::new(
-            LlmClient::new(self.summary.config().clone()).with_shared_concurrency(arc.clone()),
+        self.index = Arc::new(
+            LlmClient::new(self.index.config().clone()).with_shared_concurrency(arc.clone()),
         );
         self.retrieval = Arc::new(
             LlmClient::new(self.retrieval.config().clone()).with_shared_concurrency(arc.clone()),
         );
-        self.toc = Arc::new(
-            LlmClient::new(self.toc.config().clone()).with_shared_concurrency(arc.clone()),
+        self.pilot = Arc::new(
+            LlmClient::new(self.pilot.config().clone()).with_shared_concurrency(arc.clone()),
         );
         self
     }
@@ -107,16 +107,15 @@ impl LlmPool {
     /// Add concurrency control from an existing Arc.
     pub fn with_shared_concurrency(mut self, controller: Arc<ConcurrencyController>) -> Self {
         self.concurrency = Some(controller.clone());
-        self.summary = Arc::new(
-            LlmClient::new(self.summary.config().clone())
-                .with_shared_concurrency(controller.clone()),
+        self.index = Arc::new(
+            LlmClient::new(self.index.config().clone()).with_shared_concurrency(controller.clone()),
         );
         self.retrieval = Arc::new(
             LlmClient::new(self.retrieval.config().clone())
                 .with_shared_concurrency(controller.clone()),
         );
-        self.toc = Arc::new(
-            LlmClient::new(self.toc.config().clone()).with_shared_concurrency(controller.clone()),
+        self.pilot = Arc::new(
+            LlmClient::new(self.pilot.config().clone()).with_shared_concurrency(controller.clone()),
         );
         self
     }
@@ -126,12 +125,12 @@ impl LlmPool {
         self.concurrency.as_deref()
     }
 
-    /// Get the summary client.
+    /// Get the index client.
     ///
-    /// Used for generating summaries of document sections.
+    /// Used for document indexing and summarization.
     /// Typically uses a fast, cost-effective model.
-    pub fn summary(&self) -> &LlmClient {
-        &self.summary
+    pub fn index(&self) -> &LlmClient {
+        &self.index
     }
 
     /// Get the retrieval client.
@@ -142,28 +141,28 @@ impl LlmPool {
         &self.retrieval
     }
 
-    /// Get the TOC client.
+    /// Get the pilot client.
     ///
-    /// Used for TOC detection, parsing, and page assignment.
-    /// Typically uses a fast, cost-effective model.
-    pub fn toc(&self) -> &LlmClient {
-        &self.toc
+    /// Used for intelligent navigation guidance.
+    /// Typically uses a fast model for quick decisions.
+    pub fn pilot(&self) -> &LlmClient {
+        &self.pilot
     }
 
     /// Get a client for a specific purpose by name.
     ///
     /// # Arguments
     ///
-    /// * `purpose` - One of: "summary", "summarize", "retrieval", "retrieve", "navigate", "toc"
+    /// * `purpose` - One of: "index", "summary", "retrieval", "retrieve", "navigate", "pilot"
     ///
     /// # Returns
     ///
     /// Returns `None` if the purpose is not recognized.
     pub fn get(&self, purpose: &str) -> Option<&LlmClient> {
         match purpose {
-            "summary" | "summarize" => Some(&self.summary),
+            "index" | "summary" | "summarize" => Some(&self.index),
             "retrieval" | "retrieve" | "navigate" => Some(&self.retrieval),
-            "toc" => Some(&self.toc),
+            "pilot" => Some(&self.pilot),
             _ => None,
         }
     }
@@ -175,9 +174,9 @@ impl LlmPool {
         let config = super::config::LlmConfig::new(model);
         let client = Arc::new(LlmClient::new(config));
         Self {
-            summary: client.clone(),
+            index: client.clone(),
             retrieval: client.clone(),
-            toc: client,
+            pilot: client,
             concurrency: None,
         }
     }
@@ -198,9 +197,9 @@ mod tests {
         let pool = LlmPool::from_defaults();
 
         // Should have all clients
-        assert!(pool.get("summary").is_some());
+        assert!(pool.get("index").is_some());
         assert!(pool.get("retrieval").is_some());
-        assert!(pool.get("toc").is_some());
+        assert!(pool.get("pilot").is_some());
         assert!(pool.get("unknown").is_none());
     }
 
@@ -209,6 +208,7 @@ mod tests {
         let pool = LlmPool::from_defaults();
 
         // Test aliases
+        assert!(pool.get("summary").is_some());
         assert!(pool.get("summarize").is_some());
         assert!(pool.get("retrieve").is_some());
         assert!(pool.get("navigate").is_some());
@@ -219,9 +219,9 @@ mod tests {
         let pool = LlmPool::single_model("gpt-4o-mini");
 
         // All clients should use the same model
-        assert_eq!(pool.summary().config().model, "gpt-4o-mini");
+        assert_eq!(pool.index().config().model, "gpt-4o-mini");
         assert_eq!(pool.retrieval().config().model, "gpt-4o-mini");
-        assert_eq!(pool.toc().config().model, "gpt-4o-mini");
+        assert_eq!(pool.pilot().config().model, "gpt-4o-mini");
     }
 
     #[test]
@@ -233,8 +233,8 @@ mod tests {
 
         // All clients should have concurrency enabled
         assert!(pool.concurrency().is_some());
-        assert!(pool.summary().concurrency().is_some());
+        assert!(pool.index().concurrency().is_some());
         assert!(pool.retrieval().concurrency().is_some());
-        assert!(pool.toc().concurrency().is_some());
+        assert!(pool.pilot().concurrency().is_some());
     }
 }

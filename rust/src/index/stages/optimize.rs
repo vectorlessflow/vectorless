@@ -79,11 +79,12 @@ impl OptimizeStage {
                                     curr.content.push_str("\n\n");
                                 }
                                 // Prefix with heading to preserve boundary
-                                curr.content
-                                    .push_str(&format!("## {}\n{}", next_node.title, next_node.content));
+                                curr.content.push_str(&format!(
+                                    "## {}\n{}",
+                                    next_node.title, next_node.content
+                                ));
                             }
-                            curr.token_count =
-                                Some(curr.token_count.unwrap_or(0) + next_tokens);
+                            curr.token_count = Some(curr.token_count.unwrap_or(0) + next_tokens);
                         }
                     }
 

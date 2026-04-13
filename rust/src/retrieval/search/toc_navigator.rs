@@ -181,13 +181,10 @@ impl ToCNavigator {
 
         for &node_id in top_level_nodes {
             if let Some(node) = tree.get(node_id) {
-                let text = format!("{} {} {}", node.title, node.summary, node.content)
-                    .to_lowercase();
+                let text =
+                    format!("{} {} {}", node.title, node.summary, node.content).to_lowercase();
 
-                let match_count = query_words
-                    .iter()
-                    .filter(|w| text.contains(*w))
-                    .count();
+                let match_count = query_words.iter().filter(|w| text.contains(*w)).count();
 
                 let mut score = if query_words.is_empty() {
                     0.0
@@ -234,10 +231,7 @@ impl ToCNavigator {
             return Vec::new();
         }
 
-        scored.sort_by(|a, b| {
-            b.1.partial_cmp(&a.1)
-                .unwrap_or(std::cmp::Ordering::Equal)
-        });
+        scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
         scored.truncate(self.max_branches);
 
         if !scored.is_empty() {
@@ -367,7 +361,9 @@ Rules:
                 }
 
                 if cues.is_empty() {
-                    warn!("LLM refinement returned no valid candidates, falling back to summary matching");
+                    warn!(
+                        "LLM refinement returned no valid candidates, falling back to summary matching"
+                    );
                     let summary_cues = self.match_by_summary(query, tree, top_level_nodes);
                     if summary_cues.is_empty() {
                         return vec![SearchCue {
@@ -386,7 +382,10 @@ Rules:
                 cues
             }
             Err(e) => {
-                warn!("LLM refinement failed: {}, falling back to summary matching", e);
+                warn!(
+                    "LLM refinement failed: {}, falling back to summary matching",
+                    e
+                );
                 // Don't fall directly to root — try summary matching first
                 let summary_cues = self.match_by_summary(query, tree, top_level_nodes);
                 if summary_cues.is_empty() {

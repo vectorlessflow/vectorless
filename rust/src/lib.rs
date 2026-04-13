@@ -67,6 +67,9 @@ pub use client::{
     QueryResultItem,
 };
 
+// Retrieval types
+pub use retrieval::StrategyPreference;
+
 // Error types
 pub use error::{Error, Result};
 

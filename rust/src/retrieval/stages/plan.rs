@@ -5,7 +5,7 @@
 //!
 //! This stage selects:
 //! - Retrieval strategy (Keyword/Semantic/LLM)
-//! - Search algorithm (Greedy/Beam/MCTS)
+//! - Search algorithm (PurePilot/Beam/MCTS)
 //! - Search configuration
 
 use async_trait::async_trait;
@@ -121,17 +121,16 @@ impl PlanStage {
 
         let algorithm = match complexity {
             QueryComplexity::Simple => {
-                // Simple queries can use greedy search
-                SearchAlgorithm::Greedy
+                // Simple queries: PurePilot (beam=1, fast)
+                SearchAlgorithm::PurePilot
             }
             QueryComplexity::Medium => {
-                // Medium queries benefit from beam search
+                // Medium queries: Beam search
                 SearchAlgorithm::Beam
             }
             QueryComplexity::Complex => {
-                // Complex queries may benefit from MCTS
-                // But for now, use beam search as MCTS is more expensive
-                SearchAlgorithm::Beam
+                // Complex queries: MCTS for thorough exploration
+                SearchAlgorithm::Mcts
             }
         };
 
@@ -144,7 +143,7 @@ impl PlanStage {
         let complexity = ctx.complexity.unwrap_or(QueryComplexity::Medium);
 
         let (beam_width, max_depth) = match complexity {
-            QueryComplexity::Simple => (1, 5), // Greedy-like
+            QueryComplexity::Simple => (1, 5), // PurePilot-like
             QueryComplexity::Medium => (ctx.options.beam_width, 10),
             QueryComplexity::Complex => (ctx.options.beam_width + 2, 15),
         };
@@ -187,6 +186,20 @@ impl RetrievalStage for PlanStage {
 
         // 3. Build search config
         ctx.search_config = Some(self.build_search_config(ctx));
+
+        // 4. Build fallback chain: primary algorithm first, then alternatives
+        //    The chain determines which algorithms to try if the primary
+        //    doesn't produce results above min_score.
+        let primary = ctx.selected_algorithm.unwrap_or(SearchAlgorithm::Beam);
+        let mut chain = vec![primary];
+        for name in &ctx.options.fallback_chain {
+            if let Some(algo) = SearchAlgorithm::from_name(name) {
+                if algo != primary {
+                    chain.push(algo);
+                }
+            }
+        }
+        ctx.search_fallback_chain = chain;
 
         info!(
             "Plan complete: strategy={:?}, algorithm={:?}, beam_width={}",

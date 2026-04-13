@@ -107,8 +107,12 @@ impl PipelineRetriever {
             .with_max_backtracks(self.max_backtracks)
             .with_max_iterations(self.max_iterations);
 
-        // Add analyze stage
-        orchestrator = orchestrator.stage(AnalyzeStage::new());
+        // Add analyze stage (with LLM client for complexity detection)
+        let mut analyze_stage = AnalyzeStage::new();
+        if let Some(ref client) = self.llm_client {
+            analyze_stage = analyze_stage.with_llm_client(client.clone());
+        }
+        orchestrator = orchestrator.stage(analyze_stage);
 
         // Add plan stage
         let mut plan_stage = PlanStage::new();

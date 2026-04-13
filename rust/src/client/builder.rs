@@ -403,12 +403,12 @@ impl EngineBuilder {
 
         // Apply individual overrides
         if let Some(api_key) = self.api_key {
-            // Set API key for both retrieval and summary
+            // Set API key for both retrieval and index
             config.retrieval.api_key = Some(api_key.clone());
             config.summary.api_key = Some(api_key);
             // Also set LLM pool config
-            if config.llm.summary.api_key.is_none() {
-                config.llm.summary.api_key = config.summary.api_key.clone();
+            if config.llm.index.api_key.is_none() {
+                config.llm.index.api_key = config.summary.api_key.clone();
             }
             if config.llm.retrieval.api_key.is_none() {
                 config.llm.retrieval.api_key = config.summary.api_key.clone();
