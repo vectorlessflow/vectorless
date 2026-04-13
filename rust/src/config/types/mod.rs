@@ -160,7 +160,7 @@ impl Config {
             ));
         }
 
-        // Validate summary
+        // Validate summary (index)
         if self.summary.max_tokens == 0 {
             errors.push(ValidationError::error(
                 "summary.max_tokens",
@@ -360,14 +360,14 @@ mod tests {
         assert!(config.retrieval.model.is_empty());
         assert_eq!(config.concurrency.max_concurrent_requests, 10);
         // New fields
-        assert!(config.llm.summary.model.is_empty());
+        assert!(config.llm.index.model.is_empty());
         assert!(config.metrics.enabled);
     }
 
     #[test]
     fn test_llm_pool_config_defaults() {
         let config = LlmPoolConfig::default();
-        assert!(config.summary.model.is_empty());
+        assert!(config.index.model.is_empty());
         assert!(config.retrieval.model.is_empty());
         assert_eq!(config.retry.max_attempts, 3);
         assert_eq!(config.throttle.max_concurrent_requests, 10);

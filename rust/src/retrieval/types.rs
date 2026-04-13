@@ -125,6 +125,11 @@ pub struct RetrieveOptions {
 
     /// Cross-document graph for graph-aware retrieval boosting.
     pub document_graph: Option<std::sync::Arc<crate::graph::DocumentGraph>>,
+
+    /// Search fallback chain: algorithm names tried in order until min_score is met.
+    /// Options: "beam", "mcts", "pure_pilot".
+    /// Default: ["beam", "mcts", "pure_pilot"]
+    pub fallback_chain: Vec<String>,
 }
 
 impl Default for RetrieveOptions {
@@ -145,6 +150,7 @@ impl Default for RetrieveOptions {
             use_async_context: false,
             streaming: false,
             document_graph: None,
+            fallback_chain: vec!["beam".into(), "mcts".into(), "pure_pilot".into()],
         }
     }
 }
@@ -261,6 +267,16 @@ impl RetrieveOptions {
         graph: std::sync::Arc<crate::graph::DocumentGraph>,
     ) -> Self {
         self.document_graph = Some(graph);
+        self
+    }
+
+    /// Set the search fallback chain.
+    ///
+    /// Algorithm names: "beam", "mcts", "pure_pilot".
+    /// Primary algorithm is prepended automatically by the Plan stage.
+    #[must_use]
+    pub fn with_fallback_chain(mut self, chain: Vec<String>) -> Self {
+        self.fallback_chain = chain;
         self
     }
 }

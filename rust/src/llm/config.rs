@@ -200,20 +200,20 @@ impl LlmConfig {
 /// Pool of LLM configurations for different purposes.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LlmConfigs {
-    /// Configuration for summarization tasks.
-    #[serde(default = "default_summary_config")]
-    pub summary: LlmConfig,
+    /// Configuration for indexing tasks (document summarization, etc.).
+    #[serde(default = "default_index_config", alias = "summary")]
+    pub index: LlmConfig,
 
     /// Configuration for retrieval/navigation tasks.
     #[serde(default = "default_retrieval_config")]
     pub retrieval: LlmConfig,
 
-    /// Configuration for TOC processing tasks.
-    #[serde(default = "default_toc_config")]
-    pub toc: LlmConfig,
+    /// Configuration for Pilot navigation tasks.
+    #[serde(default = "default_pilot_config")]
+    pub pilot: LlmConfig,
 }
 
-fn default_summary_config() -> LlmConfig {
+fn default_index_config() -> LlmConfig {
     LlmConfig {
         max_tokens: 200,
         temperature: 0.0,
@@ -229,9 +229,9 @@ fn default_retrieval_config() -> LlmConfig {
     }
 }
 
-fn default_toc_config() -> LlmConfig {
+fn default_pilot_config() -> LlmConfig {
     LlmConfig {
-        max_tokens: 2000,
+        max_tokens: 300,
         temperature: 0.0,
         ..LlmConfig::default()
     }
@@ -240,9 +240,9 @@ fn default_toc_config() -> LlmConfig {
 impl Default for LlmConfigs {
     fn default() -> Self {
         Self {
-            summary: default_summary_config(),
+            index: default_index_config(),
             retrieval: default_retrieval_config(),
-            toc: default_toc_config(),
+            pilot: default_pilot_config(),
         }
     }
 }

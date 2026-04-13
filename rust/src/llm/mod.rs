@@ -4,9 +4,9 @@
 //! Unified LLM client module.
 //!
 //! This module provides a unified interface for all LLM operations across the codebase:
-//! - **Summarization** — Generating document summaries
+//! - **Index** — Document indexing and summarization
 //! - **Retrieval** — Document tree navigation
-//! - **TOC Processing** — Table of contents extraction
+//! - **Pilot** — Navigation guidance
 //!
 //! # Features
 //!
@@ -22,7 +22,7 @@
 //! │                        LlmPool                                   │
 //! │                                                                  │
 //! │   ┌─────────────┐  ┌─────────────┐  ┌─────────────┐            │
-//! │   │   summary   │  │  retrieval  │  │     toc     │            │
+//! │   │    index    │  │  retrieval  │  │    pilot    │            │
 //! │   │  LlmClient  │  │  LlmClient  │  │  LlmClient  │            │
 //! │   └──────┬──────┘  └──────┬──────┘  └──────┬──────┘            │
 //! │          │                │                │                   │
@@ -45,8 +45,8 @@
 //! // Create a pool with default configurations
 //! let pool = LlmPool::from_defaults();
 //!
-//! // Use summary client
-//! let summary = pool.summary().complete(
+//! // Use index client
+//! let summary = pool.index().complete(
 //!     "You summarize text concisely.",
 //!     "Long text to summarize..."
 //! ).await?;

@@ -46,6 +46,17 @@ impl SearchAlgorithm {
             Self::Mcts => "mcts",
         }
     }
+
+    /// Parse algorithm from config string.
+    /// Returns None for unrecognized names.
+    pub fn from_name(name: &str) -> Option<Self> {
+        match name {
+            "pure_pilot" | "greedy" => Some(Self::PurePilot),
+            "beam" => Some(Self::Beam),
+            "mcts" => Some(Self::Mcts),
+            _ => None,
+        }
+    }
 }
 
 /// Search configuration.

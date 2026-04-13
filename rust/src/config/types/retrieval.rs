@@ -135,6 +135,12 @@ pub struct SearchConfig {
     /// Minimum score to include a path.
     #[serde(default = "default_min_score")]
     pub min_score: f32,
+
+    /// Fallback chain: algorithms tried in order until min_score is met.
+    /// Options: "beam", "mcts", "pure_pilot".
+    /// Default: ["beam", "mcts", "pure_pilot"]
+    #[serde(default = "default_fallback_chain")]
+    pub fallback_chain: Vec<String>,
 }
 
 fn default_search_top_k() -> usize {
@@ -152,6 +158,9 @@ fn default_max_iterations() -> usize {
 fn default_min_score() -> f32 {
     0.1
 }
+fn default_fallback_chain() -> Vec<String> {
+    vec!["beam".into(), "mcts".into(), "pure_pilot".into()]
+}
 
 impl Default for SearchConfig {
     fn default() -> Self {
@@ -160,6 +169,7 @@ impl Default for SearchConfig {
             beam_width: default_beam_width(),
             max_iterations: default_max_iterations(),
             min_score: default_min_score(),
+            fallback_chain: default_fallback_chain(),
         }
     }
 }

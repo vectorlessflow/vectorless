@@ -191,16 +191,12 @@ impl RetrievalStage for PlanStage {
         //    The chain determines which algorithms to try if the primary
         //    doesn't produce results above min_score.
         let primary = ctx.selected_algorithm.unwrap_or(SearchAlgorithm::Beam);
-        let default_chain = vec![
-            SearchAlgorithm::Beam,
-            SearchAlgorithm::Mcts,
-            SearchAlgorithm::PurePilot,
-        ];
-        // Remove primary from default chain, prepend it
         let mut chain = vec![primary];
-        for algo in default_chain {
-            if algo != primary {
-                chain.push(algo);
+        for name in &ctx.options.fallback_chain {
+            if let Some(algo) = SearchAlgorithm::from_name(name) {
+                if algo != primary {
+                    chain.push(algo);
+                }
             }
         }
         ctx.search_fallback_chain = chain;
