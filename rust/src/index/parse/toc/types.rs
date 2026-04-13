@@ -266,6 +266,33 @@ impl VerificationReport {
     }
 }
 
+/// Processing mode for the TOC extraction pipeline.
+///
+/// Modes are ordered by quality: higher modes produce more accurate results
+/// when they succeed, but can degrade to lower modes on failure.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ProcessingMode {
+    /// TOC found with page numbers. Highest quality path.
+    TocWithPageNumbers,
+    /// TOC found without page numbers, or page-number accuracy was too low.
+    TocWithoutPageNumbers,
+    /// No TOC, or all TOC-based modes failed. LLM-driven structure extraction.
+    NoToc,
+}
+
+impl ProcessingMode {
+    /// Degrade to the next lower quality mode.
+    ///
+    /// Returns `None` if already at the lowest mode (`NoToc`).
+    pub fn degrade(self) -> Option<Self> {
+        match self {
+            Self::TocWithPageNumbers => Some(Self::TocWithoutPageNumbers),
+            Self::TocWithoutPageNumbers => Some(Self::NoToc),
+            Self::NoToc => None,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -306,5 +333,18 @@ mod tests {
             format!("{}", ErrorType::TitleNotFound),
             "Title not found on page"
         );
+    }
+
+    #[test]
+    fn test_processing_mode_degrade() {
+        assert_eq!(
+            ProcessingMode::TocWithPageNumbers.degrade(),
+            Some(ProcessingMode::TocWithoutPageNumbers)
+        );
+        assert_eq!(
+            ProcessingMode::TocWithoutPageNumbers.degrade(),
+            Some(ProcessingMode::NoToc)
+        );
+        assert_eq!(ProcessingMode::NoToc.degrade(), None);
     }
 }

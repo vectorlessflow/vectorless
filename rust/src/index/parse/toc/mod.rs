@@ -17,6 +17,7 @@ mod detector;
 mod parser;
 mod processor;
 mod repairer;
+mod structure_extractor;
 mod types;
 mod verifier;
 
