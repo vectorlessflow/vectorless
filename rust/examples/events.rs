@@ -11,6 +11,11 @@
 //! # Usage
 //!
 //! ```bash
+//! # Using environment variables for LLM config:
+//! LLM_API_KEY=sk-xxx LLM_MODEL=gpt-4o \
+//!   LLM_ENDPOINT=https://api.openai.com/v1 cargo run --example events
+//!
+//! # Or with defaults (edit the code to set your key/endpoint):
 //! cargo run --example events
 //! ```
 
@@ -90,12 +95,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("  ✓ Event handlers configured\n");
 
+    // Build engine with LLM configuration from environment or defaults.
+    // Adjust the defaults below to match your setup.
+    let api_key = std::env::var("LLM_API_KEY")
+        .unwrap_or_else(|_| "sk-...".to_string());
+    let model = std::env::var("LLM_MODEL")
+        .unwrap_or_else(|_| "gpt-4o".to_string());
+    let endpoint = std::env::var("LLM_ENDPOINT")
+        .unwrap_or_else(|_| "https://api.openai.com/v1".to_string());
+
     // 2. Create engine with events
     println!("Step 2: Creating engine with event emitter...");
     let engine = EngineBuilder::new()
         .with_workspace("./workspace_events_example")
-        .with_key("sk-...")
-        .with_model("gpt-4o")
+        .with_key(&api_key)
+        .with_model(&model)
+        .with_endpoint(&endpoint)
         .with_events(events)
         .build()
         .await

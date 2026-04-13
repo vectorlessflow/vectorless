@@ -4,6 +4,11 @@
 //! Incremental indexing example — re-index with change detection.
 //!
 //! ```bash
+//! # Using environment variables for LLM config:
+//! LLM_API_KEY=sk-xxx LLM_MODEL=google/gemini-3-flash-preview \
+//!   LLM_ENDPOINT=http://localhost:4000/api/v1 cargo run --example index_incremental
+//!
+//! # Or with defaults (edit the code to set your key/endpoint):
 //! cargo run --example index_incremental
 //! ```
 
@@ -11,11 +16,20 @@ use vectorless::{DocumentFormat, EngineBuilder, IndexContext, IndexMode};
 
 #[tokio::main]
 async fn main() -> vectorless::Result<()> {
+    // Build engine with LLM configuration from environment or defaults.
+    // Adjust the defaults below to match your setup.
+    let api_key = std::env::var("LLM_API_KEY")
+        .unwrap_or_else(|_| "sk-or-v1-...".to_string());
+    let model = std::env::var("LLM_MODEL")
+        .unwrap_or_else(|_| "google/gemini-3-flash-preview".to_string());
+    let endpoint = std::env::var("LLM_ENDPOINT")
+        .unwrap_or_else(|_| "http://localhost:4000/api/v1".to_string());
+
     let engine = EngineBuilder::new()
         .with_workspace("./workspace_incremental_example")
-        .with_key("sk-or-v1-...")
-        .with_model("google/gemini-3-flash-preview")
-        .with_endpoint("http://localhost:4000/api/v1")
+        .with_key(&api_key)
+        .with_model(&model)
+        .with_endpoint(&endpoint)
         .build()
         .await
         .map_err(|e| vectorless::Error::Config(e.to_string()))?;
