@@ -27,6 +27,9 @@ use vectorless::events::{EventEmitter, IndexEvent, QueryEvent};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Initialize tracing for debug output (set RUST_LOG=debug to see more)
+    tracing_subscriber::fmt::init();
+
     println!("=== Event Callbacks Example ===\n");
 
     // 1. Create event emitter with handlers
@@ -113,79 +116,43 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_endpoint(&endpoint)
         .with_events(events)
         .build()
-        .await
-        .map_err(|e: vectorless::BuildError| vectorless::Error::Config(e.to_string()))?;
+        .await?;
     println!("  ✓ Engine created\n");
 
-    // 3. Index a document (events will fire)
-    println!("Step 3: Indexing document (watch events)...\n");
-
-    let temp_dir = tempfile::tempdir()?;
-    let doc_content = r#"# Example Document
-
-## Introduction
-
-This is an example document for demonstrating event callbacks.
-
-## Features
-
-- Event monitoring for indexing
-- Event monitoring for queries
-- Progress tracking
-
-## Architecture
-
-The event system uses handlers that can be attached to the engine builder.
-"#;
-
-    let doc_path = temp_dir.path().join("example.md");
-    tokio::fs::write(&doc_path, doc_content).await?;
-
-    let index_result = engine.index(IndexContext::from_path(&doc_path)).await?;
-    let doc_id = index_result.doc_id().unwrap().to_string();
-    println!();
-
-    // 4. Query the document (events will fire)
-    println!("Step 4: Querying document (watch events)...\n");
-
+    // 3. Index a document with events
+    println!("Step 3: Indexing document (with events)...");
     let result = engine
-        .query(QueryContext::new("What features are available?").with_doc_id(&doc_id))
+        .index(IndexContext::from_path("../README.md"))
         .await?;
-    println!();
+    let doc_id = result.doc_id().unwrap().to_string();
+    println!("  ✓ Indexed: {doc_id}\n");
 
-    // 5. Show results
-    println!("Step 5: Query result:");
+    // 4. Query with events
+    println!("Step 4: Querying (with events)...");
+    let result = engine
+        .query(
+            QueryContext::new("What is vectorless?")
+                .with_doc_id(&doc_id)
+        )
+        .await?;
     if let Some(item) = result.single() {
-        println!("  - Score: {:.2}", item.score);
-        println!("  - Nodes: {}", item.node_ids.len());
+        println!("  ✓ Found result ({} chars)", item.content.len());
         if !item.content.is_empty() {
-            let preview: String = item.content.chars().take(100).collect();
-            println!("  - Content: {}...", preview);
+            let preview: String = item.content.chars().take(200).collect();
+            println!("  Preview: {}...", preview);
         }
     }
-    println!();
 
-    // 6. Show statistics
-    println!("Step 6: Event statistics:");
-    println!(
-        "  - Index events fired: {}",
-        index_count.load(Ordering::SeqCst)
-    );
-    println!(
-        "  - Query events fired: {}",
-        query_count.load(Ordering::SeqCst)
-    );
-    println!(
-        "  - Nodes visited: {}",
-        nodes_visited.load(Ordering::SeqCst)
-    );
-    println!();
+    // 5. Stats
+    println!("\n--- Stats ---");
+    println!("  Documents indexed: {}", index_count.load(Ordering::SeqCst));
+    println!("  Queries executed: {}", query_count.load(Ordering::SeqCst));
+    println!("  Nodes visited: {}", nodes_visited.load(Ordering::SeqCst));
 
-    // 7. Cleanup
-    println!("Step 7: Cleanup...");
+    // Cleanup
     engine.remove(&doc_id).await?;
-    println!("  ✓ Document removed\n");
+    println!("\n  Cleaned up");
 
-    println!("=== Example Complete ===");
+    println!("\n=== Done ===");
     Ok(())
 }

@@ -16,6 +16,9 @@ use vectorless::{DocumentFormat, EngineBuilder, IndexContext};
 
 #[tokio::main]
 async fn main() -> vectorless::Result<()> {
+    // Initialize tracing for debug output (set RUST_LOG=debug to see more)
+    tracing_subscriber::fmt::init();
+
     // Build engine with LLM configuration from environment or defaults.
     // Adjust the defaults below to match your setup.
     let api_key = std::env::var("LLM_API_KEY")

@@ -50,6 +50,14 @@ impl PageAssigner {
         Self { config, client }
     }
 
+    /// Create an assigner with an externally provided LLM client.
+    pub fn with_client(client: LlmClient) -> Self {
+        Self {
+            config: PageAssignerConfig::default(),
+            client,
+        }
+    }
+
     /// Create an assigner with default configuration.
     pub fn with_defaults() -> Self {
         Self::new(PageAssignerConfig::default())

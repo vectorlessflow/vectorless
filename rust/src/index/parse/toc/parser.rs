@@ -47,6 +47,14 @@ impl TocParser {
         Self { config, client }
     }
 
+    /// Create a parser with an externally provided LLM client.
+    pub fn with_client(client: LlmClient) -> Self {
+        Self {
+            config: TocParserConfig::default(),
+            client,
+        }
+    }
+
     /// Create a parser with default configuration.
     pub fn with_defaults() -> Self {
         Self::new(TocParserConfig::default())

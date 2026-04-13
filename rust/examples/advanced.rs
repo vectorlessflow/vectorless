@@ -20,6 +20,9 @@ use vectorless::{EngineBuilder, IndexContext, QueryContext};
 
 #[tokio::main]
 async fn main() -> vectorless::Result<()> {
+    // Initialize tracing for debug output (set RUST_LOG=debug to see more)
+    tracing_subscriber::fmt::init();
+
     println!("=== Vectorless Advanced Example (Config File) ===\n");
 
     // Load all settings from the specified config file.

@@ -1,7 +1,7 @@
 // Copyright (c) 2026 vectorless developers
 // SPDX-License-Identifier: Apache-2.0
 
-//! Batch indexing example — index multiple documents at once.
+//! Batch indexing example — index multiple documents via the vectorless engine.
 //!
 //! ```bash
 //! # Using environment variables for LLM config:
@@ -16,6 +16,9 @@ use vectorless::{EngineBuilder, IndexContext};
 
 #[tokio::main]
 async fn main() -> vectorless::Result<()> {
+    // Initialize tracing for debug output (set RUST_LOG=debug to see more)
+    tracing_subscriber::fmt::init();
+
     // Build engine with LLM configuration from environment or defaults.
     // Adjust the defaults below to match your setup.
     let api_key = std::env::var("LLM_API_KEY")
@@ -34,21 +37,20 @@ async fn main() -> vectorless::Result<()> {
         .await
         .map_err(|e| vectorless::Error::Config(e.to_string()))?;
 
-    // Index multiple files from different paths
+    // Index multiple documents in a single call.
+    // Paths are resolved relative to the workspace directory.
     let result = engine
-        .index(IndexContext::from_paths(&[
-            "../README.md",
-            "../CLAUDE.md",
-            "../LICENSE",
-        ]))
+        .index(
+            IndexContext::from_paths(&["../README.md", "../CLAUDE.md"]))
         .await?;
 
-    println!("indexed: {}, failed: {}", result.items.len(), result.failed.len());
+    println!("Indexed {} document(s)", result.items.len());
     for item in &result.items {
-        println!("  {} — doc_id: {}", item.name, item.doc_id);
-    }
-    for fail in &result.failed {
-        println!("  FAILED: {} — {}", fail.source, fail.error);
+        println!("  - {} ({})", item.name, item.doc_id);
+        if let Some(metrics) = &item.metrics {
+            println!("    Time: {}ms", metrics.total_time_ms());
+            println!("    Nodes: {}", metrics.nodes_processed);
+        }
     }
 
     // Cleanup

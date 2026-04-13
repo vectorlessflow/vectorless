@@ -50,6 +50,14 @@ impl IndexRepairer {
         Self { config, client }
     }
 
+    /// Create a repairer with an externally provided LLM client.
+    pub fn with_client(client: LlmClient) -> Self {
+        Self {
+            config: RepairerConfig::default(),
+            client,
+        }
+    }
+
     /// Create a repairer with default configuration.
     pub fn with_defaults() -> Self {
         Self::new(RepairerConfig::default())

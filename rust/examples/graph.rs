@@ -22,6 +22,9 @@ use vectorless::{EngineBuilder, IndexContext};
 
 #[tokio::main]
 async fn main() -> vectorless::Result<()> {
+    // Initialize tracing for debug output (set RUST_LOG=debug to see more)
+    tracing_subscriber::fmt::init();
+
     println!("=== Document Graph Example ===\n");
 
     // Build engine with LLM configuration from environment or defaults.

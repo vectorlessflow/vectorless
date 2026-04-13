@@ -50,6 +50,14 @@ impl IndexVerifier {
         Self { config, client }
     }
 
+    /// Create a verifier with an externally provided LLM client.
+    pub fn with_client(client: LlmClient) -> Self {
+        Self {
+            config: VerifierConfig::default(),
+            client,
+        }
+    }
+
     /// Create a verifier with default configuration.
     pub fn with_defaults() -> Self {
         Self::new(VerifierConfig::default())

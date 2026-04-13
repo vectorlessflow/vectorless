@@ -18,6 +18,10 @@ use vectorless::{EngineBuilder, IndexContext};
 
 #[tokio::main]
 async fn main() -> vectorless::Result<()> {
+    // Initialize tracing so we can see pipeline logs.
+    // Set RUST_LOG=info or RUST_LOG=debug for more detail.
+    tracing_subscriber::fmt::init();
+
     let args: Vec<String> = std::env::args().collect();
 
     let pdf_path = args.get(1).map(|s| s.as_str()).unwrap_or_else(|| {
@@ -33,13 +37,19 @@ async fn main() -> vectorless::Result<()> {
     println!("=== Indexing PDF: {} ===\n", pdf_path);
 
     // Build engine with LLM configuration from environment or defaults.
-    // Adjust the defaults below to match your setup.
     let api_key = std::env::var("LLM_API_KEY")
         .unwrap_or_else(|_| "sk-or-v1-...".to_string());
     let model = std::env::var("LLM_MODEL")
         .unwrap_or_else(|_| "google/gemini-3-flash-preview".to_string());
     let endpoint = std::env::var("LLM_ENDPOINT")
         .unwrap_or_else(|_| "http://localhost:4000/api/v1".to_string());
+
+    tracing::info!(
+        "LLM config — key: {}..., model: {}, endpoint: {}",
+        &api_key[..api_key.len().min(8)],
+        model,
+        endpoint
+    );
 
     let engine = EngineBuilder::new()
         .with_workspace("./workspace_pdf_example")
@@ -50,13 +60,6 @@ async fn main() -> vectorless::Result<()> {
         .await
         .map_err(|e| vectorless::Error::Config(e.to_string()))?;
 
-    // Index the PDF — format is auto-detected from the .pdf extension.
-    // The engine will:
-    //   1. Extract text from every page
-    //   2. Detect and parse the Table of Contents
-    //   3. Build a hierarchical document tree
-    //   4. Generate summaries for each node (LLM)
-    //   5. Build a reasoning index for retrieval
     let result = engine
         .index(IndexContext::from_path(pdf_path))
         .await?;
@@ -84,6 +87,13 @@ async fn main() -> vectorless::Result<()> {
             println!("  tokens:        {}", metrics.total_tokens_generated);
             println!("  topics:        {}", metrics.topics_indexed);
             println!("  keywords:      {}", metrics.keywords_indexed);
+
+            if metrics.llm_calls == 0 {
+                println!("\n  *** WARNING: No LLM calls were made. ***");
+                println!("  Set RUST_LOG=info to see pipeline logs:");
+                println!("    RUST_LOG=info cargo run --example index_pdf -- <path>");
+                println!("  Check LLM_API_KEY, LLM_MODEL, and LLM_ENDPOINT are valid.");
+            }
         }
     }
 
@@ -91,7 +101,7 @@ async fn main() -> vectorless::Result<()> {
         eprintln!("FAILED: {} — {}", fail.source, fail.error);
     }
 
-    // Cleanup workspace
+    // Cleanup workspace (uncomment to clean up after run)
     for doc in engine.list().await? {
         engine.remove(&doc.id).await?;
     }

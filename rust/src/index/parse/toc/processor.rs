@@ -12,6 +12,7 @@ use tracing::{debug, info, warn};
 
 use crate::error::Result;
 use crate::index::parse::pdf::PdfPage;
+use crate::llm::LlmClient;
 
 use super::assigner::{PageAssigner, PageAssignerConfig};
 use super::detector::{TocDetector, TocDetectorConfig};
@@ -118,6 +119,8 @@ pub struct TocProcessor {
     assigner: PageAssigner,
     verifier: IndexVerifier,
     repairer: IndexRepairer,
+    /// Optional LLM client for StructureExtractor (no-TOC mode and refinement).
+    llm_client: Option<LlmClient>,
 }
 
 impl TocProcessor {
@@ -126,14 +129,34 @@ impl TocProcessor {
         Self::with_config(TocProcessorConfig::default())
     }
 
+    /// Create a TOC processor with an externally provided LLM client.
+    ///
+    /// All sub-components (detector, parser, assigner, verifier, repairer)
+    /// will use this client instead of creating their own from default config.
+    pub fn with_llm_client(client: LlmClient) -> Self {
+        info!("TocProcessor: created with external LLM client");
+        let config = TocProcessorConfig::default();
+        Self {
+            detector: TocDetector::with_client(config.detector.clone(), client.clone()),
+            parser: TocParser::with_client(client.clone()),
+            assigner: PageAssigner::with_client(client.clone()),
+            verifier: IndexVerifier::with_client(client.clone()),
+            repairer: IndexRepairer::with_client(client.clone()),
+            llm_client: Some(client),
+            config,
+        }
+    }
+
     /// Create a TOC processor with custom configuration.
     pub fn with_config(config: TocProcessorConfig) -> Self {
+        info!("TocProcessor: created with config (no external LLM client)");
         Self {
             detector: TocDetector::new(config.detector.clone()),
             parser: TocParser::new(config.parser.clone()),
             assigner: PageAssigner::new(config.assigner.clone()),
             verifier: IndexVerifier::new(config.verifier.clone()),
             repairer: IndexRepairer::new(config.repairer.clone()),
+            llm_client: None,
             config,
         }
     }
@@ -328,7 +351,12 @@ impl TocProcessor {
     async fn process_without_toc(&self, pages: &[PdfPage]) -> Result<Vec<TocEntry>> {
         info!("Extracting structure from page content (no TOC available)");
 
-        let extractor = StructureExtractor::new(StructureExtractorConfig::default());
+        let extractor = match &self.llm_client {
+            Some(client) => {
+                StructureExtractor::with_client(StructureExtractorConfig::default(), client.clone())
+            }
+            None => StructureExtractor::new(StructureExtractorConfig::default()),
+        };
         extractor.extract(pages).await
     }
 
@@ -402,6 +430,7 @@ impl TocProcessor {
             .collect();
 
         // Identify oversized entries and launch extractions concurrently
+        let llm_client = self.llm_client.clone();
         let oversized_futures: Vec<_> = entries
             .iter()
             .enumerate()
@@ -422,6 +451,7 @@ impl TocProcessor {
 
                 let entry_title = entry.title.clone();
                 let entry_level = entry.level;
+                let llm_client = llm_client.clone();
 
                 async move {
                     if sub_pages.is_empty() {
@@ -431,8 +461,13 @@ impl TocProcessor {
                         "Refining oversized entry '{}' (pages {}-{})",
                         entry_title, start, end
                     );
-                    let extractor =
-                        StructureExtractor::new(StructureExtractorConfig::default());
+                    let extractor = match &llm_client {
+                        Some(client) => StructureExtractor::with_client(
+                            StructureExtractorConfig::default(),
+                            client.clone(),
+                        ),
+                        None => StructureExtractor::new(StructureExtractorConfig::default()),
+                    };
                     match extractor.extract(&sub_pages).await {
                         Ok(sub_entries) => {
                             let skip = if sub_entries

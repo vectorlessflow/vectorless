@@ -66,6 +66,11 @@ impl StructureExtractor {
         Self { config, client }
     }
 
+    /// Create a structure extractor with an externally provided LLM client.
+    pub fn with_client(config: StructureExtractorConfig, client: LlmClient) -> Self {
+        Self { config, client }
+    }
+
     /// Create an extractor with default configuration.
     pub fn with_defaults() -> Self {
         Self::new(StructureExtractorConfig::default())

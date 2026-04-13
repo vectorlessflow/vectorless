@@ -15,14 +15,16 @@ use tracing::{info, warn};
 use crate::Error;
 use crate::error::Result;
 use crate::index::parse::toc::TocProcessor;
+use crate::llm::LlmClient;
 
 use super::types::{PdfMetadata, PdfPage, PdfParseResult};
 use crate::index::parse::{DocumentFormat, DocumentMeta, ParseResult, RawNode};
 
 /// PDF document parser.
-#[derive(Debug, Clone)]
 pub struct PdfParser {
     config: PdfParserConfig,
+    /// Optional LLM client for TOC extraction and structure analysis.
+    llm_client: Option<LlmClient>,
 }
 
 /// PDF parser configuration.
@@ -50,17 +52,31 @@ impl PdfParser {
         Self::default()
     }
 
+    /// Create a PDF parser with an externally provided LLM client.
+    pub fn with_llm_client(client: LlmClient) -> Self {
+        Self {
+            config: PdfParserConfig::default(),
+            llm_client: Some(client),
+        }
+    }
+
     /// Create a parser with custom configuration.
     pub fn with_config(config: PdfParserConfig) -> Self {
-        Self { config }
+        Self {
+            config,
+            llm_client: None,
+        }
     }
 
     /// Create a parser without TOC extraction.
     pub fn without_toc() -> Self {
-        Self::with_config(PdfParserConfig {
-            extract_toc: false,
-            ..Default::default()
-        })
+        Self {
+            config: PdfParserConfig {
+                extract_toc: false,
+                ..Default::default()
+            },
+            llm_client: None,
+        }
     }
 
     /// Parse PDF from bytes and return raw pages.
@@ -274,7 +290,16 @@ impl PdfParser {
         let nodes = if self.config.extract_toc {
             info!("Extracting TOC from PDF with {} pages", page_count);
 
-            let processor = TocProcessor::new();
+            let processor = match &self.llm_client {
+                Some(client) => {
+                    info!("PdfParser: creating TocProcessor with LLM client");
+                    TocProcessor::with_llm_client(client.clone())
+                }
+                None => {
+                    info!("PdfParser: creating TocProcessor without LLM client (no key configured)");
+                    TocProcessor::new()
+                }
+            };
             match processor.process(&result.pages).await {
                 Ok(entries) if !entries.is_empty() => {
                     info!("Extracted {} TOC entries", entries.len());
