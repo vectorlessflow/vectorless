@@ -56,7 +56,7 @@ impl PurePilotSearch {
         for iteration in 0..config.max_iterations {
             result.iterations = iteration + 1;
 
-            let children = tree.children(current_node);
+            let children = tree.children_with_refs(current_node);
 
             if children.is_empty() {
                 current_path.leaf = Some(current_node);

@@ -15,6 +15,7 @@ use crate::document::{
     TopicEntry,
 };
 use crate::error::Result;
+use crate::llm::LlmClient;
 use crate::retrieval::scoring::extract_keywords;
 
 use super::async_trait;
@@ -165,6 +166,76 @@ impl ReasoningIndexStage {
         section_map
     }
 
+    /// Expand keywords with LLM-generated synonyms.
+    ///
+    /// For each existing keyword in `topic_paths`, ask the LLM for synonymous
+    /// search terms. Synonym entries inherit the same node mappings but with
+    /// a reduced weight (0.6x) to reflect the indirect match.
+    async fn expand_synonyms(
+        topic_paths: &mut std::collections::HashMap<String, Vec<TopicEntry>>,
+        llm_client: &LlmClient,
+        max_keywords: usize,
+    ) -> usize {
+        use std::collections::HashSet;
+
+        let existing_keys: HashSet<String> = topic_paths.keys().cloned().collect();
+        // Pick top keywords by entry count for synonym expansion
+        let mut ranked: Vec<(String, usize)> = topic_paths
+            .iter()
+            .map(|(k, v)| (k.clone(), v.len()))
+            .collect();
+        ranked.sort_by(|a, b| b.1.cmp(&a.1));
+        ranked.truncate(max_keywords);
+
+        let mut synonym_count = 0;
+
+        for (keyword, _) in &ranked {
+            let prompt = format!(
+                "List up to 5 synonyms or related search terms for \"{}\". \
+                 Return only the terms separated by commas, no numbering, no explanation.",
+                keyword
+            );
+
+            match llm_client
+                .complete(
+                    "You are a thesaurus assistant. Return only comma-separated synonyms.",
+                    &prompt,
+                )
+                .await
+            {
+                Ok(response) => {
+                    let synonyms: Vec<String> = response
+                        .to_lowercase()
+                        .split(',')
+                        .map(|s| s.trim().to_string())
+                        .filter(|s| !s.is_empty() && s.len() >= 2 && !existing_keys.contains(s))
+                        .collect();
+
+                    if let Some(entries) = topic_paths.get(keyword) {
+                        let source_entries = entries.clone();
+                        for syn in synonyms {
+                            let synonym_entries: Vec<TopicEntry> = source_entries
+                                .iter()
+                                .map(|e| TopicEntry {
+                                    node_id: e.node_id,
+                                    weight: e.weight * 0.6,
+                                    depth: e.depth,
+                                })
+                                .collect();
+                            topic_paths.insert(syn, synonym_entries);
+                            synonym_count += 1;
+                        }
+                    }
+                }
+                Err(e) => {
+                    tracing::warn!("Synonym expansion failed for '{}': {}", keyword, e);
+                }
+            }
+        }
+
+        synonym_count
+    }
+
     /// Build summary shortcut from root and depth-1 nodes.
     fn build_summary_shortcut(tree: &crate::document::DocumentTree) -> Option<SummaryShortcut> {
         let root = tree.root();
@@ -257,12 +328,27 @@ impl IndexStage for ReasoningIndexStage {
         info!("Building reasoning index...");
 
         // 1. Build topic-to-path mapping
-        let (topic_paths, keyword_count) = Self::build_topic_paths(tree, config);
+        let (mut topic_paths, keyword_count) = Self::build_topic_paths(tree, config);
         let topic_count: usize = topic_paths.values().map(|v| v.len()).sum();
         info!(
             "Built topic paths: {} keywords, {} topic entries",
             keyword_count, topic_count
         );
+
+        // 1b. Optional: expand keywords with LLM-generated synonyms
+        let synonym_count = if config.enable_synonym_expansion {
+            if let Some(ref llm_client) = ctx.llm_client {
+                let max_kw = (keyword_count / 4).max(20).min(100);
+                let count = Self::expand_synonyms(&mut topic_paths, llm_client, max_kw).await;
+                info!("Expanded {} synonym keywords", count);
+                count
+            } else {
+                info!("Synonym expansion enabled but no LLM client available");
+                0
+            }
+        } else {
+            0
+        };
 
         // 2. Build section map
         let section_map = Self::build_section_map(tree);
@@ -301,11 +387,12 @@ impl IndexStage for ReasoningIndexStage {
             .record_reasoning_index(duration, topic_count, keyword_count);
 
         info!(
-            "Reasoning index built in {}ms ({} keywords, {} topic entries, {} sections)",
+            "Reasoning index built in {}ms ({} keywords, {} topic entries, {} sections, {} synonyms)",
             duration,
             keyword_count,
             topic_count,
             reasoning_index.section_count(),
+            synonym_count,
         );
 
         ctx.reasoning_index = Some(reasoning_index);
@@ -319,6 +406,9 @@ impl IndexStage for ReasoningIndexStage {
         stage_result
             .metadata
             .insert("topics_indexed".to_string(), serde_json::json!(topic_count));
+        stage_result
+            .metadata
+            .insert("synonyms_expanded".to_string(), serde_json::json!(synonym_count));
 
         Ok(stage_result)
     }

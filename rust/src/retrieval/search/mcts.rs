@@ -89,7 +89,7 @@ impl MctsSearch {
         cache: &PilotDecisionCache,
         visited: &HashSet<NodeId>,
     ) -> Option<(NodeId, f32)> {
-        let children = tree.children(node_id);
+        let children = tree.children_with_refs(node_id);
         if children.is_empty() {
             return None;
         }
@@ -160,7 +160,7 @@ impl MctsSearch {
         count += 1;
 
         while depth < max_depth {
-            let children = tree.children(current);
+            let children = tree.children_with_refs(current);
             if children.is_empty() {
                 break;
             }
@@ -312,7 +312,7 @@ impl MctsSearch {
         top_k: usize,
         result: &mut SearchResult,
     ) {
-        let root_children = tree.children(root);
+        let root_children = tree.children_with_refs(root);
         let mut scored_children: Vec<_> = root_children
             .iter()
             .filter_map(|&child_id| {

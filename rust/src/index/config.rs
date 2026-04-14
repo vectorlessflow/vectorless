@@ -158,7 +158,7 @@ impl Default for SplitConfig {
     fn default() -> Self {
         Self {
             enabled: true,
-            max_tokens_per_node: 8000,
+            max_tokens_per_node: 4000,
             pattern_split: true,
         }
     }

@@ -359,6 +359,26 @@ impl DocumentTree {
         self.children_iter(id).collect()
     }
 
+    /// Get the children of a node plus any resolved cross-reference targets.
+    ///
+    /// In addition to direct children, this collects `NodeId`s pointed to by
+    /// resolved references (`node.references[i].target_node`) on the given node.
+    /// Duplicate node IDs (e.g. a reference that happens to be a child) are
+    /// de-duplicated so the caller never sees the same node twice.
+    pub fn children_with_refs(&self, id: NodeId) -> Vec<NodeId> {
+        let mut result: Vec<NodeId> = self.children_iter(id).collect();
+        if let Some(node) = self.get(id) {
+            for r#ref in &node.references {
+                if let Some(target) = r#ref.target_node {
+                    if !result.contains(&target) {
+                        result.push(target);
+                    }
+                }
+            }
+        }
+        result
+    }
+
     /// Get the parent of a node.
     ///
     /// Returns None if the node is the root or doesn't have a parent.

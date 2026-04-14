@@ -265,6 +265,11 @@ pub struct ReasoningIndexConfig {
     pub min_keyword_length: usize,
     /// Whether to build the summary shortcut.
     pub build_summary_shortcut: bool,
+    /// Whether to expand keywords with LLM-generated synonyms.
+    /// When enabled, the indexing stage calls the LLM to generate
+    /// synonym terms for each keyword, improving recall for queries
+    /// that use different wording than the document.
+    pub enable_synonym_expansion: bool,
 }
 
 impl Default for ReasoningIndexConfig {
@@ -276,6 +281,7 @@ impl Default for ReasoningIndexConfig {
             max_keyword_entries: 5000,
             min_keyword_length: 2,
             build_summary_shortcut: true,
+            enable_synonym_expansion: true,
         }
     }
 }
@@ -303,6 +309,12 @@ impl ReasoningIndexConfig {
     /// Set whether to build the summary shortcut.
     pub fn with_summary_shortcut(mut self, build: bool) -> Self {
         self.build_summary_shortcut = build;
+        self
+    }
+
+    /// Enable or disable synonym expansion.
+    pub fn with_synonym_expansion(mut self, enable: bool) -> Self {
+        self.enable_synonym_expansion = enable;
         self
     }
 }
