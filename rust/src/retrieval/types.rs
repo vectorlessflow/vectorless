@@ -447,7 +447,7 @@ pub struct NavigationStep {
 }
 
 /// Navigation decision at each step.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum NavigationDecision {
     /// Go to the specified child.
     GoToChild(usize),
@@ -460,6 +460,10 @@ pub enum NavigationDecision {
 
     /// Skip this branch.
     Skip,
+
+    /// Backtrack from a dead-end node to a previously shelved alternative.
+    /// Contains the title of the dead-end node being abandoned.
+    BacktrackFrom(String),
 }
 
 /// Pipeline stage name for reasoning chain provenance.

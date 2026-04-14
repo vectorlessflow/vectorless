@@ -320,6 +320,8 @@ impl SearchStage {
             max_iterations: config.max_iterations,
             min_score: config.min_score,
             leaf_only: false,
+            max_backtracks: config.beam_width,
+            fallback_score_ratio: 0.5,
         };
 
         let pilot_ref: Option<&dyn Pilot> = self.pilot.as_deref();
