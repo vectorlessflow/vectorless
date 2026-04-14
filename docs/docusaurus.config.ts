@@ -82,37 +82,53 @@ const config: Config = {
       style: 'light',
       links: [
         {
-          title: 'Docs',
+          title: 'Product',
           items: [
             {
               label: 'Getting Started',
               to: '/docs/intro',
             },
-          ],
-        },
-        {
-          title: 'Packages',
-          items: [
             {
-              label: 'Rust (crates.io)',
-              href: 'https://crates.io/crates/vectorless',
+              label: 'Documentation',
+              to: '/docs/intro',
             },
-            {
-              label: 'Python (PyPI)',
-              href: 'https://pypi.org/project/vectorless/',
-            },
-          ],
-        },
-        {
-          title: 'More',
-          items: [
             {
               label: 'Blog',
               to: '/blog',
             },
+          ],
+        },
+        {
+          title: 'Integrations',
+          items: [
+            {
+              label: 'Python SDK',
+              href: 'https://pypi.org/project/vectorless/',
+            },
+            {
+              label: 'Rust Crate',
+              href: 'https://crates.io/crates/vectorless',
+            },
+            {
+              label: 'API Reference',
+              href: 'https://docs.rs/vectorless',
+            },
+          ],
+        },
+        {
+          title: 'Community',
+          items: [
             {
               label: 'GitHub',
               href: 'https://github.com/vectorlessflow/vectorless',
+            },
+            {
+              label: 'Report a Bug',
+              href: 'https://github.com/vectorlessflow/vectorless/issues',
+            },
+            {
+              label: 'Apache 2.0 License',
+              href: 'https://github.com/vectorlessflow/vectorless/blob/main/LICENSE',
             },
           ],
         },

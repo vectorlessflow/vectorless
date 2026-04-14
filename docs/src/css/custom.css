@@ -47,7 +47,46 @@
   background-color: var(--ifm-background-color) !important;
 }
 
-/* Footer: transparent */
+/* ===== Footer ===== */
 .footer {
   background-color: transparent !important;
+  padding: 3rem 1.5rem 2rem;
+}
+
+/* Column titles */
+.footer__title {
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text);
+  margin-bottom: 0.75rem;
+}
+
+/* Link items */
+.footer__link-item {
+  font-size: 0.88rem;
+  color: var(--text-light);
+  line-height: 1.8;
+  transition: color 0.15s;
+}
+
+.footer__link-item:hover {
+  color: var(--primary);
+}
+
+/* Hide external-link icons */
+.footer__link-item svg {
+  display: none;
+}
+
+/* Copyright */
+.footer__copyright {
+  text-align: center;
+  font-size: 0.8rem;
+  color: var(--text-light);
+  letter-spacing: 0.03em;
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border);
 }
