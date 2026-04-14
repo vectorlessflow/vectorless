@@ -64,6 +64,7 @@ pub use pipeline::{IndexInput, IndexMetrics, PipelineExecutor, PipelineResult};
 
 // Re-export config types
 pub use config::{IndexMode, PipelineOptions, ThinningConfig};
+pub use crate::document::ReasoningIndexConfig;
 
 // Re-export summary
 pub use summary::SummaryStrategy;

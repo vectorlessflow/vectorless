@@ -622,6 +622,13 @@ impl DocumentTree {
         }
     }
 
+    /// Set the references for a node.
+    pub fn set_references(&mut self, id: NodeId, references: Vec<super::reference::NodeReference>) {
+        if let Some(node) = self.get_mut(id) {
+            node.references = references;
+        }
+    }
+
     /// Export the tree structure to JSON format.
     pub fn to_structure_json(&self, doc_name: &str) -> DocumentStructure {
         let structure = self.build_structure_nodes(self.root_id);
@@ -793,5 +800,90 @@ impl DocumentTree {
 impl Default for DocumentTree {
     fn default() -> Self {
         Self::new("Root", "")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::document::reference::{NodeReference, RefType};
+
+    #[test]
+    fn test_children_with_refs_no_references() {
+        let mut tree = DocumentTree::new("Root", "root content");
+        let child1 = tree.add_child(tree.root(), "Section 1", "content 1");
+        let child2 = tree.add_child(tree.root(), "Section 2", "content 2");
+
+        let children = tree.children_with_refs(tree.root());
+        assert_eq!(children.len(), 2);
+        assert!(children.contains(&child1));
+        assert!(children.contains(&child2));
+    }
+
+    #[test]
+    fn test_children_with_refs_includes_resolved_references() {
+        let mut tree = DocumentTree::new("Root", "root content");
+        let section1 = tree.add_child(tree.root(), "Section 1", "content 1");
+        let section2 = tree.add_child(tree.root(), "Section 2", "content 2");
+        let appendix = tree.add_child(tree.root(), "Appendix A", "appendix content");
+
+        // Add a resolved reference from Section 1 to Appendix A
+        let refs = vec![NodeReference::resolved(
+            "see Appendix A".to_string(),
+            "A".to_string(),
+            RefType::Appendix,
+            10,
+            appendix,
+            0.9,
+        )];
+        tree.set_references(section1, refs);
+
+        // section1's children_with_refs should include appendix as a reference target
+        let children = tree.children_with_refs(section1);
+        // section1 has no direct children, but has a resolved reference to appendix
+        assert_eq!(children.len(), 1);
+        assert!(children.contains(&appendix));
+    }
+
+    #[test]
+    fn test_children_with_refs_deduplicates() {
+        let mut tree = DocumentTree::new("Root", "root content");
+        let child = tree.add_child(tree.root(), "Section 1", "content 1");
+
+        // Add a reference that points to the same node as an existing child
+        let refs = vec![NodeReference::resolved(
+            "see Section 1".to_string(),
+            "1".to_string(),
+            RefType::Section,
+            5,
+            child,
+            0.8,
+        )];
+        tree.set_references(tree.root(), refs);
+
+        let children = tree.children_with_refs(tree.root());
+        // Should not duplicate
+        assert_eq!(children.len(), 1);
+        assert!(children.contains(&child));
+    }
+
+    #[test]
+    fn test_children_with_refs_unresolved_ignored() {
+        let mut tree = DocumentTree::new("Root", "root content");
+        let child = tree.add_child(tree.root(), "Section 1", "content 1");
+
+        // Add an unresolved reference (target_node = None)
+        let refs = vec![NodeReference::new(
+            "see Section 5".to_string(),
+            "5".to_string(),
+            RefType::Section,
+            5,
+        )];
+        tree.set_references(tree.root(), refs);
+
+        let children = tree.children_with_refs(tree.root());
+        // Unresolved reference should not be included
+        assert_eq!(children.len(), 1);
+        assert!(children.contains(&child));
     }
 }
