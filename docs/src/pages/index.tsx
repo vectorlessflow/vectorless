@@ -4,6 +4,7 @@ import Layout from '@theme/Layout';
 import Heading from '@theme/Heading';
 import Link from '@docusaurus/Link';
 import useBaseUrl from '@docusaurus/useBaseUrl';
+import {Highlight, themes} from 'prism-react-renderer';
 
 import styles from './index.module.css';
 
@@ -43,8 +44,7 @@ function HomepageHeader() {
             </span>
             <span className={styles.codeLang}>Python</span>
           </div>
-          <pre className={styles.codeBlock}>
-            <code>{`import asyncio
+          <Highlight theme={themes.dracula} code={`import asyncio
 from vectorless import Engine, IndexContext
 
 async def main():
@@ -66,8 +66,21 @@ async def main():
     )
     print(result.single().content)
 
-asyncio.run(main())`}</code>
-          </pre>
+asyncio.run(main())`} language="python">
+            {({tokens, getLineProps, getTokenProps}) => (
+              <pre className={styles.codeBlock}>
+                <code>
+                  {tokens.map((line, i) => (
+                    <div key={i} {...getLineProps({line})}>
+                      {line.map((token, key) => (
+                        <span key={key} {...getTokenProps({token})} />
+                      ))}
+                    </div>
+                  ))}
+                </code>
+              </pre>
+            )}
+          </Highlight>
         </div>
       </div>
     </header>

@@ -51,8 +51,8 @@
 
 /* -- Right column: code preview -- */
 .codePreview {
-  flex: 0 0 440px;
-  max-width: 440px;
+  flex: 1 1 520px;
+  max-width: 560px;
   border-radius: 12px;
   overflow: hidden;
   border: 1px solid var(--border);
