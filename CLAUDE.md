@@ -4,28 +4,43 @@ A hierarchical, reasoning-native document intelligence engine written in Rust.
 
 ## Project Structure
 
-- `src/` - Source code
-  - `client/` - Client API
-  - `core/` - Core types and traits
-  - `document/` - Document parsers (Markdown, PDF, DOCX)
-  - `indexer/` - Index building
-  - `retriever/` - Retrievers (beam search, MCTS, hybrid)
-  - `storage/` - Storage layer
-  - `summarizer/` - Summary generation
-  - `llm/` - LLM client
-- `benches/` - Benchmarks
-- `tests/` - Integration tests
-- `docs/` - Design documents
+- `rust/` - Rust core engine
+  - `src/client/` - Client API (EngineBuilder, Engine)
+  - `src/config/` - Configuration types
+  - `src/document/` - Document parsers (Markdown, PDF)
+  - `src/index/` - Index building and pipeline
+  - `src/retrieval/` - Retrieval engine (beam search, MCTS, greedy, hybrid strategies)
+  - `src/storage/` - Storage layer
+  - `src/llm/` - LLM client abstraction
+  - `src/graph/` - Cross-document relationship graph
+  - `src/memo/` - Caching and reasoning memo
+  - `src/metrics/` - Metrics and usage tracking
+  - `src/events/` - Event system for progress monitoring
+  - `src/throttle/` - Rate limiting
+  - `src/utils/` - Utility functions
+  - `examples/` - Rust examples (flow, indexing, pdf, batch, etc.)
+- `python/` - Python SDK (PyO3 bindings)
+- `docs/` - Docusaurus documentation site
 - `samples/` - Sample files
 
 ## Build Commands
 
 ```bash
+# Rust core
+cd rust
 cargo build          # Build
 cargo test           # Run tests
-cargo bench          # Run benchmarks
 cargo clippy         # Lint
 cargo fmt            # Format code
+
+# Python SDK
+cd python
+pip install -e .     # Install in editable mode
+
+# Docs site
+cd docs
+pnpm install         # Install dependencies
+pnpm build           # Build static site
 ```
 
 ## Code Conventions
@@ -107,6 +122,7 @@ When uncertain whether an operation is safe, **default to asking user confirmati
 
 ## Common Development Workflow
 
-1. **Adding features**: Implement in appropriate `src/` module, add tests
+1. **Adding features**: Implement in appropriate `rust/src/` module, add tests
 2. **Fixing bugs**: Add failing test case first, fix and ensure tests pass
-3. **Committing code**: Use semantic commit messages, format: `type(scope): description`
+3. **Python bindings**: Update `python/src/lib.rs` (PyO3) when Rust APIs change
+4. **Committing code**: Use semantic commit messages, format: `type(scope): description`
