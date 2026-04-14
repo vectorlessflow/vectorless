@@ -35,6 +35,7 @@ mod builder;
 mod complexity;
 mod config;
 mod decision;
+mod decision_scorer;
 mod fallback;
 mod feedback;
 mod llm_pilot;
@@ -43,10 +44,12 @@ mod noop;
 mod parser;
 mod prompts;
 mod r#trait;
+mod scorer;
 
 pub use complexity::detect_with_llm;
 pub use config::PilotConfig;
 pub use decision::{InterventionPoint, PilotDecision};
-
+pub use decision_scorer::{PilotDecisionCache, score_candidates};
 pub use llm_pilot::LlmPilot;
 pub use r#trait::{Pilot, SearchState};
+pub use scorer::{NodeScorer, ScoringContext};

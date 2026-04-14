@@ -16,7 +16,7 @@ use crate::document::DocumentTree;
 use crate::document::NodeId;
 use crate::llm::LlmClient;
 use crate::memo::MemoStore;
-use crate::retrieval::search::scorer::NodeScorer;
+use crate::retrieval::pilot::NodeScorer;
 
 /// A navigation cue produced by the ToCNavigator.
 #[derive(Debug, Clone)]

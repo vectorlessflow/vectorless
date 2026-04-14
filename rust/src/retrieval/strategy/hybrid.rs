@@ -12,7 +12,7 @@ use async_trait::async_trait;
 use super::r#trait::{NodeEvaluation, RetrievalStrategy, StrategyCapabilities};
 use crate::document::{DocumentTree, NodeId};
 use crate::retrieval::RetrievalContext;
-use crate::retrieval::search::{Bm25Engine, FieldDocument};
+use crate::retrieval::scoring::{Bm25Engine, FieldDocument};
 use crate::retrieval::types::{NavigationDecision, QueryComplexity};
 
 /// Configuration for hybrid retrieval.

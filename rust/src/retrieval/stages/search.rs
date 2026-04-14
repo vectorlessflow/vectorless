@@ -21,7 +21,7 @@ use crate::retrieval::pilot::Pilot;
 use crate::retrieval::pipeline::{
     CandidateNode, FailurePolicy, PipelineContext, RetrievalStage, SearchAlgorithm, StageOutcome,
 };
-use crate::retrieval::search::extract_keywords;
+use crate::retrieval::scoring::extract_keywords;
 use crate::retrieval::search::{
     BeamSearch, MctsSearch, PurePilotSearch, SearchConfig as SearchAlgConfig, SearchCue,
     SearchTree, ToCNavigator,

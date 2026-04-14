@@ -60,6 +60,7 @@ pub mod complexity;
 pub mod content;
 pub mod pilot;
 pub mod pipeline;
+pub mod scoring;
 pub mod search;
 pub mod stages;
 pub mod strategy;

@@ -15,7 +15,7 @@ use crate::document::{
     TopicEntry,
 };
 use crate::error::Result;
-use crate::retrieval::search::extract_keywords;
+use crate::retrieval::scoring::extract_keywords;
 
 use super::async_trait;
 use super::{AccessPattern, IndexStage, StageResult};
