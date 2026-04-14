@@ -7,7 +7,7 @@ use super::async_trait;
 use std::time::Instant;
 use tracing::info;
 
-use crate::document::{DocumentTree, NodeId, RefType, ReferenceExtractor, TocView};
+use crate::document::{DocumentTree, NodeId, ReferenceExtractor, TocView};
 use crate::error::Result;
 
 use super::{AccessPattern, IndexStage, StageResult};
@@ -105,7 +105,10 @@ impl EnrichStage {
         let mut total_resolved = 0;
 
         for node_id in node_ids {
-            let content = tree.get(node_id).map(|n| n.content.clone()).unwrap_or_default();
+            let content = tree
+                .get(node_id)
+                .map(|n| n.content.clone())
+                .unwrap_or_default();
             if content.is_empty() {
                 continue;
             }
@@ -204,9 +207,10 @@ impl IndexStage for EnrichStage {
         stage_result
             .metadata
             .insert("node_count".to_string(), serde_json::json!(node_count));
-        stage_result
-            .metadata
-            .insert("resolved_references".to_string(), serde_json::json!(resolved_refs));
+        stage_result.metadata.insert(
+            "resolved_references".to_string(),
+            serde_json::json!(resolved_refs),
+        );
 
         Ok(stage_result)
     }
@@ -215,13 +219,18 @@ impl IndexStage for EnrichStage {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::document::RefType;
 
     #[test]
     fn test_resolve_references_section_ref() {
         let mut tree = DocumentTree::new("Root", "root content");
         let s1 = tree.add_child(tree.root(), "Introduction", "Introduction text.");
         tree.set_structure(s1, "1");
-        let s2 = tree.add_child(tree.root(), "Details", "For details, see Section 1 for more info");
+        let s2 = tree.add_child(
+            tree.root(),
+            "Details",
+            "For details, see Section 1 for more info",
+        );
         tree.set_structure(s2, "2");
 
         let resolved = EnrichStage::resolve_references(&mut tree);

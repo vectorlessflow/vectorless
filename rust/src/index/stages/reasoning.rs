@@ -406,9 +406,10 @@ impl IndexStage for ReasoningIndexStage {
         stage_result
             .metadata
             .insert("topics_indexed".to_string(), serde_json::json!(topic_count));
-        stage_result
-            .metadata
-            .insert("synonyms_expanded".to_string(), serde_json::json!(synonym_count));
+        stage_result.metadata.insert(
+            "synonyms_expanded".to_string(),
+            serde_json::json!(synonym_count),
+        );
 
         Ok(stage_result)
     }

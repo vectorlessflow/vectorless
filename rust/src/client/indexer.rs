@@ -28,7 +28,9 @@ use uuid::Uuid;
 
 use crate::error::{Error, Result};
 use crate::index::parse::DocumentFormat;
-use crate::index::{IndexInput, IndexMode, PipelineExecutor, PipelineOptions, ReasoningIndexConfig, SummaryStrategy};
+use crate::index::{
+    IndexInput, IndexMode, PipelineExecutor, PipelineOptions, ReasoningIndexConfig, SummaryStrategy,
+};
 use crate::llm::LlmClient;
 use crate::storage::{DocumentMeta, PersistedDocument};
 

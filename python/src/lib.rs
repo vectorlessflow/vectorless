@@ -3,19 +3,19 @@
 
 //! Python bindings for vectorless.
 
-use pyo3::prelude::*;
 use pyo3::exceptions::PyException;
+use pyo3::prelude::*;
 use pyo3_async_runtimes::tokio::future_into_py;
 use std::sync::Arc;
 use tokio::runtime::Runtime;
 
+use ::vectorless::StrategyPreference;
 use ::vectorless::client::{
     DocumentFormat, DocumentInfo, Engine, EngineBuilder, FailedItem, IndexContext, IndexItem,
     IndexMode, IndexOptions, IndexResult, QueryContext, QueryResult, QueryResultItem,
 };
 use ::vectorless::error::Error as RustError;
 use ::vectorless::metrics::IndexMetrics;
-use ::vectorless::StrategyPreference;
 
 // ============================================================
 // Error Types
@@ -135,9 +135,12 @@ impl PyIndexOptions {
             "incremental" => opts = opts.with_mode(IndexMode::Incremental),
             _ => {
                 return Err(PyErr::from(VectorlessError::new(
-                    format!("Unknown mode: {}. Supported: default, force, incremental", mode),
+                    format!(
+                        "Unknown mode: {}. Supported: default, force, incremental",
+                        mode
+                    ),
                     "config",
-                )))
+                )));
             }
         }
         opts.generate_summaries = generate_summaries;
@@ -259,9 +262,12 @@ impl PyIndexContext {
             "incremental" => IndexMode::Incremental,
             _ => {
                 return Err(PyErr::from(VectorlessError::new(
-                    format!("Unknown mode: {}. Supported: default, force, incremental", mode),
+                    format!(
+                        "Unknown mode: {}. Supported: default, force, incremental",
+                        mode
+                    ),
                     "config",
-                )))
+                )));
             }
         };
         let ctx = self.inner.clone().with_mode(m);
@@ -529,17 +535,15 @@ impl PyQueryResult {
         self.inner
             .items
             .iter()
-            .map(|i| PyQueryResultItem {
-                inner: i.clone(),
-            })
+            .map(|i| PyQueryResultItem { inner: i.clone() })
             .collect()
     }
 
     /// Get the first (single-doc) result item.
     fn single(&self) -> Option<PyQueryResultItem> {
-        self.inner.single().map(|i| PyQueryResultItem {
-            inner: i.clone(),
-        })
+        self.inner
+            .single()
+            .map(|i| PyQueryResultItem { inner: i.clone() })
     }
 
     /// Number of result items.
@@ -700,7 +704,10 @@ impl PyIndexItem {
     /// Indexing pipeline metrics (timing, LLM usage, etc.).
     #[getter]
     fn metrics(&self) -> Option<PyIndexMetrics> {
-        self.inner.metrics.as_ref().map(|m| PyIndexMetrics { inner: m.clone() })
+        self.inner
+            .metrics
+            .as_ref()
+            .map(|m| PyIndexMetrics { inner: m.clone() })
     }
 
     fn __repr__(&self) -> String {
@@ -823,7 +830,9 @@ impl PyDocumentInfo {
 // DocumentGraph types
 // ============================================================
 
-use ::vectorless::graph::{DocumentGraph, DocumentGraphNode, EdgeEvidence, GraphEdge, WeightedKeyword};
+use ::vectorless::graph::{
+    DocumentGraph, DocumentGraphNode, EdgeEvidence, GraphEdge, WeightedKeyword,
+};
 
 /// A keyword with weight from document analysis.
 #[pyclass(name = "WeightedKeyword")]
@@ -844,7 +853,10 @@ impl PyWeightedKeyword {
     }
 
     fn __repr__(&self) -> String {
-        format!("WeightedKeyword('{}', weight={:.2})", self.inner.keyword, self.inner.weight)
+        format!(
+            "WeightedKeyword('{}', weight={:.2})",
+            self.inner.keyword, self.inner.weight
+        )
     }
 }
 
@@ -956,9 +968,7 @@ impl PyDocumentGraphNode {
         self.inner
             .top_keywords
             .iter()
-            .map(|kw| PyWeightedKeyword {
-                inner: kw.clone(),
-            })
+            .map(|kw| PyWeightedKeyword { inner: kw.clone() })
             .collect()
     }
 
@@ -993,9 +1003,9 @@ impl PyDocumentGraph {
 
     /// Get a document node by ID.
     fn get_node(&self, doc_id: String) -> Option<PyDocumentGraphNode> {
-        self.inner.get_node(&doc_id).map(|n| PyDocumentGraphNode {
-            inner: n.clone(),
-        })
+        self.inner
+            .get_node(&doc_id)
+            .map(|n| PyDocumentGraphNode { inner: n.clone() })
     }
 
     /// Get all document IDs in the graph.
@@ -1008,9 +1018,7 @@ impl PyDocumentGraph {
         self.inner
             .get_neighbors(&doc_id)
             .iter()
-            .map(|e| PyGraphEdge {
-                inner: e.clone(),
-            })
+            .map(|e| PyGraphEdge { inner: e.clone() })
             .collect()
     }
 
@@ -1186,11 +1194,7 @@ impl PyEngine {
     ///
     /// Raises:
     ///     VectorlessError: If query fails.
-    fn query<'py>(
-        &self,
-        py: Python<'py>,
-        ctx: &PyQueryContext,
-    ) -> PyResult<Bound<'py, PyAny>> {
+    fn query<'py>(&self, py: Python<'py>, ctx: &PyQueryContext) -> PyResult<Bound<'py, PyAny>> {
         let engine = Arc::clone(&self.inner);
         let query_ctx = ctx.inner.clone();
         future_into_py(py, run_query(engine, query_ctx))
