@@ -596,6 +596,11 @@ impl ReasoningChain {
 }
 
 /// Search path for multi-path algorithms.
+///
+/// Tracks the sequence of nodes visited, along with the reasoning
+/// for each navigation step. This reasoning is fed back into the
+/// LLM context so the Pilot can understand how it arrived at the
+/// current position and avoid repeating mistakes.
 #[derive(Debug, Clone)]
 pub struct SearchPath {
     /// Nodes in the path.
@@ -606,6 +611,13 @@ pub struct SearchPath {
 
     /// Leaf node (if path ends at leaf).
     pub leaf: Option<NodeId>,
+
+    /// Per-step reasoning for why each node was chosen.
+    ///
+    /// Same length as `nodes`. Each entry is the reason the
+    /// corresponding node was selected. `None` means no reason
+    /// was captured (e.g., algorithm-only fallback).
+    pub step_reasons: Vec<Option<String>>,
 }
 
 impl SearchPath {
@@ -616,6 +628,7 @@ impl SearchPath {
             nodes: Vec::new(),
             score: 0.0,
             leaf: None,
+            step_reasons: Vec::new(),
         }
     }
 
@@ -626,18 +639,37 @@ impl SearchPath {
             nodes: vec![node_id],
             score,
             leaf: Some(node_id),
+            step_reasons: vec![None],
         }
     }
 
-    /// Extend the path with a new node.
+    /// Extend the path with a new node and optional reason.
     #[must_use]
     pub fn extend(&self, node_id: NodeId, score: f32) -> Self {
         let mut nodes = self.nodes.clone();
+        let mut step_reasons = self.step_reasons.clone();
         nodes.push(node_id);
+        step_reasons.push(None);
         Self {
             nodes,
             score: self.score + score,
             leaf: Some(node_id),
+            step_reasons,
+        }
+    }
+
+    /// Extend the path with a new node and a reason for choosing it.
+    #[must_use]
+    pub fn extend_with_reason(&self, node_id: NodeId, score: f32, reason: impl Into<String>) -> Self {
+        let mut nodes = self.nodes.clone();
+        let mut step_reasons = self.step_reasons.clone();
+        nodes.push(node_id);
+        step_reasons.push(Some(reason.into()));
+        Self {
+            nodes,
+            score: self.score + score,
+            leaf: Some(node_id),
+            step_reasons,
         }
     }
 }

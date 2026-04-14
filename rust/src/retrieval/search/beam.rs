@@ -20,7 +20,7 @@ use tracing::debug;
 
 use super::super::RetrievalContext;
 use super::super::types::{NavigationDecision, NavigationStep, SearchPath};
-use crate::retrieval::pilot::{PilotDecisionCache, score_candidates};
+use crate::retrieval::pilot::{PilotDecisionCache, score_candidates, score_candidates_detailed};
 use super::{SearchConfig, SearchResult, SearchTree};
 use crate::document::{DocumentTree, NodeId};
 use crate::retrieval::pilot::{Pilot, SearchState};
@@ -180,6 +180,7 @@ impl BeamSearch {
                     iteration: result.iterations,
                     best_score: result.paths.iter().map(|p| p.score).fold(0.0f32, f32::max),
                     is_backtracking: true,
+                    step_reasons: Some(&entry.path.step_reasons),
                 };
 
                 if let Some(decision) = p.guide_backtrack(&state).await {
@@ -251,7 +252,7 @@ impl BeamSearch {
         let start_children = tree.children(start_node);
         debug!("Start node has {} children", start_children.len());
 
-        let initial_candidates = score_candidates(
+        let initial_candidates = score_candidates_detailed(
             tree,
             &start_children,
             &context.query,
@@ -260,6 +261,7 @@ impl BeamSearch {
             &visited,
             0.7, // Beam: Pilot weight = 0.7
             Some(&cache),
+            None, // No reasoning history at start
         )
         .await;
 
@@ -270,7 +272,14 @@ impl BeamSearch {
         // Split initial candidates into beam and fallback
         let mut sorted_initial: Vec<_> = initial_candidates
             .into_iter()
-            .map(|(node_id, score)| SearchPath::from_node(node_id, score))
+            .map(|s| {
+                let mut path = SearchPath::from_node(s.node_id, s.score);
+                // Record reason for initial selection
+                if let Some(reason) = s.reason {
+                    path.step_reasons = vec![Some(reason)];
+                }
+                path
+            })
             .collect();
         sorted_initial.sort_by(|a, b| {
             b.score
@@ -362,7 +371,7 @@ impl BeamSearch {
                     // Expand this path
                     let children = tree.children(leaf_id);
 
-                    let scored_children = score_candidates(
+                    let scored_children = score_candidates_detailed(
                         tree,
                         &children,
                         &context.query,
@@ -371,6 +380,7 @@ impl BeamSearch {
                         &visited,
                         0.7, // Beam: Pilot weight = 0.7
                         Some(&cache),
+                        Some(&path.step_reasons),
                     )
                     .await;
 
@@ -378,16 +388,20 @@ impl BeamSearch {
                         pilot_interventions += 1;
                     }
 
-                    for (child_id, child_score) in scored_children.into_iter().take(beam_width) {
-                        let new_path = path.extend(child_id, child_score);
+                    for sc in scored_children.into_iter().take(beam_width) {
+                        let new_path = if let Some(ref reason) = sc.reason {
+                            path.extend_with_reason(sc.node_id, sc.score, reason)
+                        } else {
+                            path.extend(sc.node_id, sc.score)
+                        };
 
-                        let child_node = tree.get(child_id);
+                        let child_node = tree.get(sc.node_id);
                         result.trace.push(NavigationStep {
-                            node_id: format!("{:?}", child_id),
+                            node_id: format!("{:?}", sc.node_id),
                             title: child_node.map(|n| n.title.clone()).unwrap_or_default(),
-                            score: child_score,
+                            score: sc.score,
                             decision: NavigationDecision::GoToChild(
-                                children.iter().position(|&c| c == child_id).unwrap_or(0),
+                                children.iter().position(|&c| c == sc.node_id).unwrap_or(0),
                             ),
                             depth: child_node.map(|n| n.depth).unwrap_or(0),
                         });
@@ -450,6 +464,7 @@ impl BeamSearch {
                 &visited,
                 0.7,
                 None,
+                None, // No reasoning history for fallback
             )
             .await;
             for (node_id, score) in fallback.into_iter().take(config.top_k) {

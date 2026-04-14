@@ -77,6 +77,7 @@ impl PurePilotSearch {
                 &visited,
                 1.0, // PurePilot: Pilot weight = 1.0
                 Some(&cache),
+                None, // No reasoning history tracked
             )
             .await;
 

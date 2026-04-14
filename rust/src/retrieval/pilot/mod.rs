@@ -49,7 +49,7 @@ mod scorer;
 pub use complexity::detect_with_llm;
 pub use config::PilotConfig;
 pub use decision::{InterventionPoint, PilotDecision};
-pub use decision_scorer::{PilotDecisionCache, score_candidates};
+pub use decision_scorer::{PilotDecisionCache, ScoredCandidate, score_candidates, score_candidates_detailed};
 pub use llm_pilot::LlmPilot;
 pub use r#trait::{Pilot, SearchState};
 pub use scorer::{NodeScorer, ScoringContext};

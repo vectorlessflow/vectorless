@@ -107,6 +107,7 @@ impl MctsSearch {
             visited,
             0.5, // MCTS prior: balanced Pilot/Scorer
             Some(cache),
+            None, // No reasoning history tracked
         )
         .await;
 
@@ -174,6 +175,7 @@ impl MctsSearch {
                 visited,
                 0.5, // MCTS simulation: balanced
                 Some(cache),
+                None, // No reasoning history tracked
             )
             .await;
 

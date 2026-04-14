@@ -395,7 +395,7 @@ impl ContextBuilder {
         ctx.estimated_tokens += self.estimate_tokens(&ctx.query_section);
 
         // Build path section
-        ctx.path_section = self.build_path_section(state.tree, state.path);
+        ctx.path_section = self.build_path_section(state.tree, state.path, state.step_reasons);
         ctx.estimated_tokens += self.estimate_tokens(&ctx.path_section);
 
         // Build candidates section
@@ -439,7 +439,7 @@ impl ContextBuilder {
         // Show failed path
         ctx.path_section = format!(
             "Failed path:\n{}",
-            self.build_path_section(state.tree, failed_path)
+            self.build_path_section(state.tree, failed_path, None)
         );
         ctx.estimated_tokens += self.estimate_tokens(&ctx.path_section);
 
@@ -463,35 +463,67 @@ impl ContextBuilder {
         format!("User Query:\n{}\n", truncated)
     }
 
-    /// Build current path section.
-    fn build_path_section(&self, tree: &DocumentTree, path: &[NodeId]) -> String {
+    /// Build current path section with optional per-step reasoning.
+    fn build_path_section(
+        &self,
+        tree: &DocumentTree,
+        path: &[NodeId],
+        step_reasons: Option<&[Option<String>]>,
+    ) -> String {
         if path.is_empty() {
             return "Current Position: Root\n".to_string();
         }
 
-        let mut result = String::from("Current Path:\n");
-        result.push_str("Root");
+        let has_reasons = step_reasons
+            .map(|r| r.iter().any(|x| x.is_some()))
+            .unwrap_or(false);
 
-        // Limit depth shown
-        let max_depth = self.effective_max_path_depth();
-        let start = if path.len() > max_depth {
-            path.len() - max_depth
-        } else {
-            0
-        };
+        if !has_reasons {
+            // Original breadcrumb format when no reasoning available
+            let mut result = String::from("Current Path:\n");
+            result.push_str("Root");
 
-        if start > 0 {
-            result.push_str(" → ...");
+            let max_depth = self.effective_max_path_depth();
+            let start = if path.len() > max_depth {
+                path.len() - max_depth
+            } else {
+                0
+            };
+
+            if start > 0 {
+                result.push_str(" → ...");
+            }
+
+            for node_id in path.iter().skip(start) {
+                if let Some(node) = tree.get(*node_id) {
+                    result.push_str(" → ");
+                    result.push_str(&node.title);
+                }
+            }
+
+            result.push('\n');
+            return result;
         }
 
-        for node_id in path.iter().skip(start) {
+        // Enhanced format with per-step reasoning
+        let mut result = String::from("Navigation History:\n");
+        let reasons = step_reasons.unwrap();
+
+        for (i, node_id) in path.iter().enumerate() {
             if let Some(node) = tree.get(*node_id) {
-                result.push_str(" → ");
-                result.push_str(&node.title);
+                let reason = reasons
+                    .get(i)
+                    .and_then(|r| r.as_deref())
+                    .unwrap_or("(automatic selection)");
+                result.push_str(&format!(
+                    "  Step {}: {} — because: {}\n",
+                    i + 1,
+                    node.title,
+                    reason
+                ));
             }
         }
 
-        result.push('\n');
         result
     }
 

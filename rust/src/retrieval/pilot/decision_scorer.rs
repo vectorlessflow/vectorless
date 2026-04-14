@@ -86,18 +86,54 @@ pub async fn score_candidates(
     visited: &HashSet<NodeId>,
     pilot_weight: f32,
     cache: Option<&PilotDecisionCache>,
+    step_reasons: Option<&[Option<String>]>,
 ) -> Vec<(NodeId, f32)> {
+    let scored = score_candidates_detailed(
+        tree, candidates, query, pilot, path, visited, pilot_weight, cache, step_reasons,
+    )
+    .await;
+    scored.into_iter().map(|s| (s.node_id, s.score)).collect()
+}
+
+/// A scored candidate with optional reasoning from the Pilot.
+#[derive(Debug, Clone)]
+pub struct ScoredCandidate {
+    /// The node ID.
+    pub node_id: NodeId,
+    /// Relevance score (0.0 - 1.0).
+    pub score: f32,
+    /// Reason the Pilot chose this node, if available.
+    pub reason: Option<String>,
+}
+
+/// Score child candidates and return detailed results with reasons.
+///
+/// Like [`score_candidates`] but preserves per-candidate reasoning
+/// from the Pilot. Use this when the search algorithm needs to
+/// record why each path step was taken (e.g., for beam search
+/// reasoning history).
+pub async fn score_candidates_detailed(
+    tree: &DocumentTree,
+    candidates: &[NodeId],
+    query: &str,
+    pilot: Option<&dyn Pilot>,
+    path: &[NodeId],
+    visited: &HashSet<NodeId>,
+    pilot_weight: f32,
+    cache: Option<&PilotDecisionCache>,
+    step_reasons: Option<&[Option<String>]>,
+) -> Vec<ScoredCandidate> {
     if candidates.is_empty() {
         return Vec::new();
     }
 
-    // If no Pilot, pure NodeScorer
+    // If no Pilot, pure NodeScorer (no reasons available)
     let Some(p) = pilot else {
-        return score_with_scorer(tree, candidates, query);
+        return score_with_scorer_detailed(tree, candidates, query);
     };
 
     if !p.is_active() {
-        return score_with_scorer(tree, candidates, query);
+        return score_with_scorer_detailed(tree, candidates, query);
     }
 
     // Determine parent node (last in path) for cache key
@@ -109,20 +145,22 @@ pub async fn score_candidates(
             tracing::trace!("Pilot cache hit for parent={:?}", parent);
             cached
         } else {
-            let state = SearchState::new(tree, query, path, candidates, visited);
+            let mut state = SearchState::new(tree, query, path, candidates, visited);
+            state.step_reasons = step_reasons;
             let d = p.decide(&state).await;
             c.put(query, parent, &d).await;
             d
         }
     } else {
-        let state = SearchState::new(tree, query, path, candidates, visited);
+        let mut state = SearchState::new(tree, query, path, candidates, visited);
+        state.step_reasons = step_reasons;
         p.decide(&state).await
     };
 
-    // Build Pilot score map
-    let mut pilot_scores: HashMap<NodeId, f32> = HashMap::new();
+    // Build Pilot score + reason map
+    let mut pilot_data: HashMap<NodeId, (f32, Option<String>)> = HashMap::new();
     for ranked in &decision.ranked_candidates {
-        pilot_scores.insert(ranked.node_id, ranked.score);
+        pilot_data.insert(ranked.node_id, (ranked.score, ranked.reason.clone()));
     }
 
     // Compute NodeScorer fallback scores
@@ -132,24 +170,26 @@ pub async fn score_candidates(
 
     let scorer = NodeScorer::new(ScoringContext::new(query));
 
-    let mut scored: Vec<(NodeId, f32)> = candidates
+    let mut scored: Vec<ScoredCandidate> = candidates
         .iter()
         .map(|&node_id| {
             let algo_score = scorer.score(tree, node_id);
-            let p_score = pilot_scores.get(&node_id).copied().unwrap_or(0.0);
+            let (p_score, reason) = pilot_data.get(&node_id)
+                .map(|(s, r)| (*s, r.clone()))
+                .unwrap_or((0.0, None));
 
-            let final_score = if effective_pilot > 0.0 && pilot_scores.contains_key(&node_id) {
+            let final_score = if effective_pilot > 0.0 && pilot_data.contains_key(&node_id) {
                 (effective_pilot * p_score + scorer_weight * algo_score)
                     / (effective_pilot + scorer_weight)
             } else {
                 algo_score
             };
 
-            (node_id, final_score)
+            ScoredCandidate { node_id, score: final_score, reason }
         })
         .collect();
 
-    scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+    scored.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
     scored
 }
 
@@ -161,6 +201,20 @@ fn score_with_scorer(
 ) -> Vec<(NodeId, f32)> {
     let scorer = NodeScorer::new(ScoringContext::new(query));
     scorer.score_and_sort(tree, candidates)
+}
+
+/// Pure NodeScorer fallback returning detailed results (no reasons).
+fn score_with_scorer_detailed(
+    tree: &DocumentTree,
+    candidates: &[NodeId],
+    query: &str,
+) -> Vec<ScoredCandidate> {
+    let scorer = NodeScorer::new(ScoringContext::new(query));
+    scorer
+        .score_and_sort(tree, candidates)
+        .into_iter()
+        .map(|(node_id, score)| ScoredCandidate { node_id, score, reason: None })
+        .collect()
 }
 
 #[cfg(test)]
