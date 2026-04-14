@@ -20,8 +20,7 @@ use tracing::debug;
 
 use super::super::RetrievalContext;
 use super::super::types::{NavigationDecision, NavigationStep, SearchPath};
-use super::pilot_scorer::{PilotDecisionCache, score_candidates};
-use super::scorer::{NodeScorer, ScoringContext};
+use crate::retrieval::pilot::{PilotDecisionCache, score_candidates, NodeScorer, ScoringContext};
 use super::{SearchConfig, SearchResult, SearchTree};
 use crate::document::{DocumentTree, NodeId};
 use crate::retrieval::pilot::Pilot;
@@ -108,6 +107,7 @@ impl MctsSearch {
             visited,
             0.5, // MCTS prior: balanced Pilot/Scorer
             Some(cache),
+            None, // No reasoning history tracked
         )
         .await;
 
@@ -175,6 +175,7 @@ impl MctsSearch {
                 visited,
                 0.5, // MCTS simulation: balanced
                 Some(cache),
+                None, // No reasoning history tracked
             )
             .await;
 

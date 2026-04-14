@@ -10,10 +10,10 @@ use std::collections::HashMap;
 
 use crate::document::{DocumentTree, NodeId};
 
-use super::bm25::Bm25Params;
+use crate::retrieval::scoring::bm25::Bm25Params;
 
 // Re-export extract_keywords for other modules to use
-pub use super::bm25::extract_keywords;
+pub use crate::retrieval::scoring::bm25::extract_keywords;
 
 /// Scoring strategy to use.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]

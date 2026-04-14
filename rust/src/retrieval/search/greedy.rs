@@ -13,7 +13,7 @@ use tracing::debug;
 
 use super::super::RetrievalContext;
 use super::super::types::{NavigationDecision, NavigationStep, SearchPath};
-use super::pilot_scorer::{PilotDecisionCache, score_candidates};
+use crate::retrieval::pilot::{PilotDecisionCache, score_candidates};
 use super::{SearchConfig, SearchResult, SearchTree};
 use crate::document::{DocumentTree, NodeId};
 use crate::retrieval::pilot::Pilot;
@@ -77,6 +77,7 @@ impl PurePilotSearch {
                 &visited,
                 1.0, // PurePilot: Pilot weight = 1.0
                 Some(&cache),
+                None, // No reasoning history tracked
             )
             .await;
 

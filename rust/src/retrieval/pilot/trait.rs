@@ -42,6 +42,11 @@ pub struct SearchState<'a> {
     pub best_score: f32,
     /// Whether the search is currently backtracking.
     pub is_backtracking: bool,
+    /// Per-step reasoning for why each node in `path` was chosen.
+    ///
+    /// Same length as `path` when present. `None` means no reasoning
+    /// history is available (e.g. first iteration, algorithm-only mode).
+    pub step_reasons: Option<&'a [Option<String>]>,
 }
 
 impl<'a> SearchState<'a> {
@@ -63,6 +68,7 @@ impl<'a> SearchState<'a> {
             iteration: 0,
             best_score: 0.0,
             is_backtracking: false,
+            step_reasons: None,
         }
     }
 
@@ -78,6 +84,7 @@ impl<'a> SearchState<'a> {
             iteration: 0,
             best_score: 0.0,
             is_backtracking: false,
+            step_reasons: None,
         }
     }
 

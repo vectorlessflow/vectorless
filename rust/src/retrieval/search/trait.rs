@@ -50,6 +50,20 @@ pub struct SearchConfig {
     pub min_score: f32,
     /// Whether to include leaf nodes only.
     pub leaf_only: bool,
+    /// Maximum number of backtracking attempts per search.
+    ///
+    /// When the main beam exhausts all paths without finding enough
+    /// results, the search can pop entries from the fallback stack
+    /// and try alternative branches. This limits how many times
+    /// that happens. Default: equal to `beam_width`.
+    pub max_backtracks: usize,
+    /// Minimum score ratio for a path to be eligible for the fallback stack.
+    ///
+    /// Expressed as a fraction of `min_score`. Paths truncated from the
+    /// beam with a score above `min_score * fallback_score_ratio` are
+    /// kept in the fallback stack for potential backtracking.
+    /// Default: 0.5.
+    pub fallback_score_ratio: f32,
 }
 
 impl Default for SearchConfig {
@@ -60,6 +74,8 @@ impl Default for SearchConfig {
             max_iterations: 10,
             min_score: 0.1,
             leaf_only: false,
+            max_backtracks: 3,
+            fallback_score_ratio: 0.5,
         }
     }
 }

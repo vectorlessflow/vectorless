@@ -2,18 +2,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! Search algorithms for tree traversal.
+//!
+//! This module contains only tree traversal strategies (Beam, MCTS, Greedy).
+//! All scoring intelligence lives in the `pilot` module.
+//! BM25 and keyword utilities live in the `scoring` module.
 
 mod beam;
-mod bm25;
 mod greedy;
 mod mcts;
-mod pilot_scorer;
-mod scorer;
 mod toc_navigator;
 mod r#trait;
 
 pub use beam::BeamSearch;
-pub use bm25::{Bm25Engine, Bm25Params, FieldDocument, STOPWORDS, extract_keywords};
 pub use greedy::PurePilotSearch;
 pub use mcts::MctsSearch;
 pub use toc_navigator::{SearchCue, ToCNavigator};
