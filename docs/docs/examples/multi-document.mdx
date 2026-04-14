@@ -1,0 +1,88 @@
+---
+sidebar_position: 2
+---
+
+# Multi-Document Retrieval
+
+Query across multiple indexed documents using the cross-document strategy with graph-based score boosting.
+
+## Python
+
+```python
+import asyncio
+from vectorless import (
+    Engine, IndexContext, QueryContext,
+    IndexOptions, StrategyPreference
+)
+
+async def main():
+    engine = Engine(
+        workspace="./workspace",
+        api_key="sk-...",
+        model="gpt-4o",
+    )
+
+    # Index multiple documents
+    docs = ["./report-q1.pdf", "./report-q2.pdf", "./report-q3.pdf"]
+    doc_ids = []
+
+    for path in docs:
+        result = await engine.index(IndexContext.from_path(path))
+        doc_ids.append(result.doc_id)
+        print(f"Indexed: {path} → {result.doc_id}")
+
+    # Check the cross-document graph
+    graph = await engine.get_graph()
+    if graph:
+        print(f"\nGraph: {graph.node_count()} docs, {graph.edge_count()} edges")
+        for doc_id in doc_ids:
+            neighbors = graph.get_neighbors(doc_id)
+            for edge in neighbors:
+                print(f"  {doc_id[:8]}... → {edge.target_doc_id[:8]}... ({edge.weight:.2f})")
+
+    # Query across all documents
+    result = await engine.query(
+        QueryContext("Compare quarterly revenue trends")
+        .with_doc_ids(doc_ids)
+        .with_strategy(StrategyPreference.CROSS_DOCUMENT)
+    )
+
+    for item in result.items:
+        print(f"\n[{item.doc_id[:8]}...] Score: {item.score:.2f}")
+        print(item.content[:300])
+
+    # Or query entire workspace
+    result = await engine.query(
+        QueryContext("What documents discuss risk factors?")
+        .with_workspace()
+    )
+
+    print(f"\nFound in {len(result.items)} document(s)")
+
+    # Cleanup
+    for doc_id in doc_ids:
+        await engine.remove(doc_id)
+
+asyncio.run(main())
+```
+
+## Key Concepts
+
+### Document Graph
+
+After indexing, documents are connected in a graph based on shared keywords. The graph enables:
+
+- **Score boosting** — High-confidence results in one document boost neighbor documents
+- **Relationship discovery** — Automatically find related documents
+- **Cross-referencing** — Results from connected documents are surfaced together
+
+### Merge Strategies
+
+The cross-document strategy supports multiple merge modes:
+
+| Strategy | Description |
+|----------|-------------|
+| **TopK** | Return top-K results across all documents |
+| **BestPerDocument** | Best result from each document |
+| **WeightedByRelevance** | Weight by each document's best score |
+| **GraphBoosted** | Use graph connections to boost scores |

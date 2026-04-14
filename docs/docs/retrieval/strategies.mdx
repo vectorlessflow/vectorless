@@ -1,0 +1,81 @@
+---
+sidebar_position: 2
+---
+
+# Retrieval Strategies
+
+Vectorless provides five retrieval strategies, each designed for different query types and accuracy/speed trade-offs.
+
+## Strategy Overview
+
+| Strategy | LLM Calls | Speed | Accuracy | Best For |
+|----------|-----------|-------|----------|----------|
+| **Keyword** | 0 (search) | Fastest | Good | Simple keyword matches |
+| **LLM** | High | Slowest | Best | Complex reasoning queries |
+| **Hybrid** | Medium | Medium | High | General purpose (recommended) |
+| **Cross-Document** | Varies | Medium | High | Multi-document queries |
+| **Page Range** | 0 (search) | Fast | Good | PDF page-scoped queries |
+
+## Keyword Strategy
+
+Fast TF-IDF/BM25 matching against the pre-computed reasoning index. No LLM calls during search.
+
+```python
+from vectorless import QueryContext, StrategyPreference
+
+ctx = QueryContext("revenue").with_doc_id(doc_id).with_strategy(
+    StrategyPreference.KEYWORD
+)
+```
+
+Use when:
+- The query contains exact terms from the document
+- Speed is the priority
+- You want zero additional LLM token cost
+
+## LLM Strategy
+
+LLM-powered tree navigation with full contextual understanding. The LLM sees the table of contents, node summaries, and makes navigation decisions at each level.
+
+```python
+ctx = QueryContext("Explain the relationship between architecture and performance").with_doc_id(doc_id).with_strategy(
+    StrategyPreference.LLM
+)
+```
+
+Use when:
+- The query requires multi-hop reasoning
+- Synonyms or paraphrases are likely
+- Accuracy is more important than speed
+
+## Hybrid Strategy (Recommended)
+
+Two-phase retrieval: BM25 pre-filter followed by LLM refinement. Combines the speed of keyword matching with the accuracy of LLM reasoning.
+
+```python
+ctx = QueryContext("What are the growth trends?").with_doc_id(doc_id).with_strategy(
+    StrategyPreference.HYBRID
+)
+```
+
+The recommended default for most queries. Fast pre-filtering reduces the number of nodes sent to the LLM, keeping token costs manageable while maintaining high accuracy.
+
+## Cross-Document Strategy
+
+Searches across multiple indexed documents and aggregates results. Uses the cross-document relationship graph for score boosting.
+
+```python
+ctx = QueryContext("Compare the architectures").with_strategy(
+    StrategyPreference.CROSS_DOCUMENT
+)
+```
+
+When a high-confidence result is found in one document, neighbor documents in the graph receive a score boost, surfacing related content across the workspace.
+
+## Auto Selection
+
+When using `StrategyPreference.AUTO` (default), the engine analyzes query complexity and selects the appropriate strategy:
+
+- Simple keyword queries → Keyword strategy
+- Complex reasoning queries → Hybrid strategy
+- Multi-document scope → Cross-Document strategy

@@ -1,0 +1,79 @@
+---
+sidebar_position: 3
+---
+
+# Search Algorithms
+
+Search algorithms determine how the tree is traversed during retrieval. Each algorithm has different trade-offs between accuracy, speed, and token cost.
+
+## Algorithm Overview
+
+| Algorithm | Paths Explored | Backtracking | Token Cost | Use Case |
+|-----------|---------------|-------------|------------|----------|
+| **Beam Search** | Top-K (beam width) | Yes | Medium | General purpose |
+| **MCTS** | Statistical sampling | Yes | High | Complex multi-hop |
+| **Pure Pilot** | Single best path | No | High | High-accuracy single-path |
+| **ToC Navigator** | ToC-guided | No | Low | Broad overview queries |
+
+## Beam Search
+
+Explores multiple paths simultaneously, keeping the top-K candidates at each level. Supports backtracking when paths yield low scores.
+
+```text
+Root
+├── A (score: 0.9) ──▶ explore children
+├── B (score: 0.7) ──▶ explore children
+└── C (score: 0.3) ──▶ discard (below beam width)
+```
+
+- **Beam width** controls how many paths are kept (default: 3)
+- **Fallback stack** preserves truncated paths for backtracking
+- Pilot weight: 0.7 (blended with NodeScorer at 0.3)
+
+This is the **recommended algorithm** for most use cases.
+
+## MCTS (Monte Carlo Tree Search)
+
+Uses Upper Confidence Bound for Trees (UCT) to balance exploration vs. exploitation. Runs multiple simulations to statistically identify the best path.
+
+```text
+         Root (100 visits)
+        /      \
+   A (60v)    B (40v)
+   /    \        \
+ C (35v) D (25v)  E (40v)
+```
+
+- Best for complex queries requiring multi-hop reasoning
+- Pilot provides priors for UCT selection
+- Higher iteration count improves accuracy
+
+## Pure Pilot
+
+Greedy single-path search where the Pilot picks the best child at each level. The most token-expensive approach since it makes an LLM call at every tree level.
+
+- Pilot weight: 1.0 (no algorithm fallback)
+- Best for queries where the correct path is unambiguous
+- Fast for shallow trees, expensive for deep ones
+
+## ToC Navigator
+
+Uses the document's table of contents to locate relevant top-level sections before running a search algorithm. Works in two modes:
+
+- **Keyword mode** — Matches query keywords against ToC entries
+- **LLM mode** — Sends the ToC to the LLM for semantic matching
+
+The ToC Navigator is typically the first step in the search pipeline, narrowing the search space before running Beam Search or MCTS within the located subtree.
+
+## Configuration
+
+```python
+from vectorless import QueryContext
+
+ctx = (
+    QueryContext("complex multi-hop question")
+    .with_doc_id(doc_id)
+    .with_depth_limit(10)      # Max tree traversal depth
+    .with_max_tokens(4000)     # Max tokens in result
+)
+```

@@ -1,0 +1,98 @@
+---
+sidebar_position: 1
+---
+
+# Indexing Overview
+
+The indexing pipeline transforms documents into searchable hierarchical trees. This page describes each stage and how they work together.
+
+## Pipeline Stages
+
+### Parse (Priority 10)
+
+Parses raw documents into a list of `RawNode` structures:
+
+- **Markdown** — Splits by headings (`#`, `##`, `###`), preserving hierarchy
+- **PDF** — Extracts text per page, groups into sections by layout analysis
+
+### Build (Priority 20)
+
+Constructs an arena-based `DocumentTree` from raw nodes:
+
+- Creates parent-child relationships based on heading levels
+- Applies **thinning** — merges single-child chains to reduce tree depth
+- Merges content from nodes that don't add structural value
+
+### Validate (Priority 22)
+
+Checks tree integrity:
+
+- No orphaned nodes
+- Consistent depth values
+- Valid parent-child relationships
+
+### Split (Priority 25)
+
+Splits oversized leaf nodes that exceed the token threshold (default: 4000 tokens):
+
+- Finds paragraph or heading boundaries for clean splits
+- Preserves semantic coherence within each split
+
+### Enhance (Priority 30)
+
+Generates LLM summaries for tree nodes:
+
+- **Full** — Summarize every node (default)
+- **Selective** — Only branch nodes above a token threshold
+- **Lazy** — Generate summaries on-demand at query time
+
+Branch nodes get navigation-oriented summaries ("what does this section cover"), while leaf nodes get content-oriented summaries ("what does this section say").
+
+### Enrich (Priority 40)
+
+Adds metadata to the tree:
+
+- **Page ranges** — Propagates page boundaries from leaves to parents
+- **Token statistics** — Calculates total tokens and node counts
+- **Cross-reference resolution** — Parses "see Section 2.1", "Appendix G" references and resolves them to actual `NodeId`s in the tree
+- **Document description** — Generates a description from the root summary
+
+### Reasoning Index (Priority 45)
+
+Builds a pre-computed index for fast retrieval:
+
+- **Topic paths** — Maps keywords to nodes with weights (title: 2.0x, summary: 1.5x, content: 1.0x)
+- **Synonym expansion** — Expands top keywords with LLM-generated synonyms (0.6x weight)
+- **Summary shortcut** — Pre-computed document overview for "what is this about" queries
+- **Section map** — Depth-1 section titles for fast ToC lookup
+
+### Optimize (Priority 60)
+
+Final tree optimization:
+
+- Removes redundant metadata
+- Compacts tree structure for efficient storage
+
+## Pipeline Options
+
+```python
+from vectorless import IndexOptions
+
+# Default options (synonym expansion enabled)
+opts = IndexOptions()
+
+# Force re-indexing
+opts = IndexOptions(mode="force")
+
+# Disable summaries for speed
+opts = IndexOptions(generate_summaries=False)
+```
+
+## Incremental Indexing
+
+When indexing with `mode="incremental"`, the pipeline:
+
+1. Computes a content fingerprint (hash) of the input
+2. Compares against the previously stored fingerprint
+3. Skips reprocessing if the content hasn't changed
+4. Reuses existing summaries and reasoning index data for unchanged nodes

@@ -11,8 +11,8 @@ It transforms documents into hierarchical semantic trees and uses LLMs to naviga
 ## How It Works
 
 1. **Parse** — Documents (Markdown, PDF) are parsed into hierarchical semantic trees, preserving structure and relationships between sections.
-2. **Index** — Trees are stored with metadata, keywords, and optional summaries. Incremental indexing skips unchanged files via content fingerprinting.
-3. **Query** — An LLM navigates the tree to find the most relevant sections. No embeddings, no similarity search — just structural reasoning.
+2. **Index** — Trees are stored with metadata, keywords, and summaries. The pipeline resolves cross-references ("see Section 2.1") and expands keywords with LLM-generated synonyms for improved recall. Incremental indexing skips unchanged files via content fingerprinting.
+3. **Query** — An LLM navigates the tree to find the most relevant sections. Multiple search algorithms (Beam Search, MCTS, Greedy) are available, and the Pilot component provides LLM-guided navigation at key decision points.
 
 ## Quick Start
 
@@ -77,7 +77,10 @@ async fn main() -> vectorless::Result<()> {
 
 - **Hierarchical Semantic Trees** — Preserves document structure, not flat chunks
 - **LLM-Powered Retrieval** — Structural reasoning over the tree, not vector similarity
+- **Cross-Reference Navigation** — Automatically resolves "see Section 2.1", "Appendix G" references and follows them during retrieval
+- **Synonym Expansion** — LLM-generated synonyms for indexed keywords improve recall for differently-worded queries
+- **Multi-Algorithm Search** — Beam Search, MCTS, Greedy, and ToC Navigator with LLM Pilot guidance
+- **Cross-Document Graph** — Automatic relationship discovery between documents via shared keywords
 - **Incremental Indexing** — Content fingerprinting skips unchanged files
-- **Cross-Document Graph** — Automatic relationship discovery between documents
 - **Multi-Format** — Markdown and PDF support
 - **Zero Infrastructure** — No vector DB, no embedding models, just an LLM API key

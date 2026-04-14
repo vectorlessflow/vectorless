@@ -1,0 +1,175 @@
+---
+sidebar_position: 1
+---
+
+# Python SDK
+
+The Python SDK provides an async API built on PyO3 for high-performance integration with Python applications.
+
+## Installation
+
+```bash
+pip install vectorless
+```
+
+## Engine
+
+The `Engine` is the main entry point. It requires an LLM API key and model name.
+
+```python
+from vectorless import Engine
+
+engine = Engine(
+    workspace="./data",    # Local directory for indexed data
+    api_key="sk-...",      # LLM API key
+    model="gpt-4o",        # LLM model name
+    endpoint=None,         # Optional: custom API endpoint
+)
+```
+
+## Indexing
+
+### From a File
+
+```python
+from vectorless import IndexContext, IndexOptions
+
+result = await engine.index(IndexContext.from_path("./report.pdf"))
+print(result.doc_id)  # Document ID for querying
+```
+
+### From Multiple Files
+
+```python
+result = await engine.index(IndexContext.from_paths(["./a.pdf", "./b.md"]))
+```
+
+### From a Directory
+
+```python
+result = await engine.index(IndexContext.from_dir("./documents/"))
+```
+
+### From Text Content
+
+```python
+result = await engine.index(
+    IndexContext.from_content("# Title\n\nContent...", "markdown").with_name("my-doc")
+)
+```
+
+### With Options
+
+```python
+result = await engine.index(
+    IndexContext.from_path("./report.pdf").with_options(
+        IndexOptions(
+            mode="force",
+            generate_summaries=True,
+            enable_synonym_expansion=True,
+        )
+    )
+)
+```
+
+## Querying
+
+### Single Document
+
+```python
+from vectorless import QueryContext, StrategyPreference
+
+answer = await engine.query(
+    QueryContext("What is the total revenue?")
+    .with_doc_id(doc_id)
+    .with_strategy(StrategyPreference.HYBRID)
+)
+
+if answer.single():
+    print(answer.single().content)
+    print(f"Score: {answer.single().score}")
+```
+
+### Multiple Documents
+
+```python
+answer = await engine.query(
+    QueryContext("Compare the approaches")
+    .with_doc_ids(["doc-1", "doc-2"])
+)
+```
+
+### Workspace Query
+
+```python
+answer = await engine.query(
+    QueryContext("What documents discuss performance?")
+    .with_workspace()
+)
+```
+
+### Query Options
+
+```python
+answer = await engine.query(
+    QueryContext("Explain the architecture")
+    .with_doc_id(doc_id)
+    .with_max_tokens(4000)              # Max tokens in result
+    .with_include_reasoning(True)       # Include reasoning chain
+    .with_depth_limit(10)               # Max traversal depth
+    .with_strategy(StrategyPreference.LLM)
+)
+```
+
+## Document Management
+
+```python
+# List all indexed documents
+docs = await engine.list()
+for doc in docs:
+    print(f"{doc.id}: {doc.name} ({doc.format})")
+
+# Check if a document exists
+exists = await engine.exists(doc_id)
+
+# Remove a document
+removed = await engine.remove(doc_id)
+
+# Remove all documents
+count = await engine.clear()
+```
+
+## Document Graph
+
+```python
+graph = await engine.get_graph()
+if graph:
+    print(f"Nodes: {graph.node_count()}, Edges: {graph.edge_count()}")
+    neighbors = graph.get_neighbors(doc_id)
+    for edge in neighbors:
+        print(f"  → {edge.target_doc_id} (weight: {edge.weight:.2f})")
+```
+
+## API Reference
+
+### IndexOptions
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `mode` | `str` | `"default"` | Indexing mode |
+| `generate_summaries` | `bool` | `True` | Generate LLM summaries |
+| `generate_description` | `bool` | `False` | Generate document description |
+| `include_text` | `bool` | `True` | Include node text |
+| `generate_ids` | `bool` | `True` | Generate node IDs |
+| `enable_synonym_expansion` | `bool` | `True` | LLM synonym expansion |
+
+### StrategyPreference
+
+| Constant | Description |
+|----------|-------------|
+| `StrategyPreference.AUTO` | Auto-select based on query complexity |
+| `StrategyPreference.KEYWORD` | Fast keyword matching |
+| `StrategyPreference.LLM` | LLM-guided navigation |
+| `StrategyPreference.HYBRID` | BM25 + LLM refinement |
+| `StrategyPreference.CROSS_DOCUMENT` | Multi-document retrieval |
+| `StrategyPreference.PAGE_RANGE` | Page-scoped retrieval |

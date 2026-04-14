@@ -1,0 +1,127 @@
+---
+sidebar_position: 2
+---
+
+# Rust Crate
+
+The Rust crate provides the core engine with full control over the indexing and retrieval pipeline.
+
+## Installation
+
+```toml
+[dependencies]
+vectorless = "0.1"
+```
+
+## Engine
+
+```rust
+use vectorless::client::{Engine, EngineBuilder};
+
+let engine = EngineBuilder::new()
+    .with_workspace("./data")
+    .with_key("sk-...")
+    .with_model("gpt-4o")
+    .with_endpoint("https://api.openai.com/v1") // optional
+    .build()
+    .await?;
+```
+
+## Indexing
+
+```rust
+use vectorless::client::{IndexContext, IndexOptions, IndexMode};
+
+// From a file
+let result = engine.index(IndexContext::from_path("./report.pdf")).await?;
+let doc_id = result.doc_id().unwrap();
+
+// From content
+let result = engine.index(
+    IndexContext::from_content("# Title\n\nContent...", DocumentFormat::Markdown)
+).await?;
+
+// With options
+let opts = IndexOptions::new()
+    .with_mode(IndexMode::Force);
+let result = engine.index(
+    IndexContext::from_path("./report.pdf").with_options(opts)
+).await?;
+```
+
+## Querying
+
+```rust
+use vectorless::client::QueryContext;
+use vectorless::StrategyPreference;
+
+let result = engine.query(
+    QueryContext::new("What is the total revenue?")
+        .with_doc_id(doc_id)
+        .with_strategy(StrategyPreference::ForceHybrid)
+        .with_max_tokens(4000)
+        .with_include_reasoning(true)
+).await?;
+
+if let Some(item) = result.single() {
+    println!("Score: {:.2}", item.score);
+    println!("Content: {}", item.content);
+}
+```
+
+## Document Management
+
+```rust
+// List documents
+for doc in engine.list().await? {
+    println!("{}: {} ({})", doc.id, doc.name, doc.format);
+}
+
+// Check existence
+let exists = engine.exists(&doc_id).await?;
+
+// Remove
+let removed = engine.remove(&doc_id).await?;
+
+// Clear all
+let count = engine.clear().await?;
+```
+
+## Document Graph
+
+```rust
+if let Some(graph) = engine.get_graph().await? {
+    println!("Nodes: {}", graph.node_count());
+    println!("Edges: {}", graph.edge_count());
+
+    for edge in graph.get_neighbors(&doc_id) {
+        println!("→ {} (weight: {:.2})", edge.target_doc_id, edge.weight);
+    }
+}
+```
+
+## Advanced Configuration
+
+### Summary Strategy
+
+```rust
+use vectorless::index::summary::SummaryStrategy;
+
+// Full summaries (default)
+let strategy = SummaryStrategy::full();
+
+// Selective — only branch nodes with >= 100 tokens
+let strategy = SummaryStrategy::selective(100, true);
+
+// Lazy — generate at query time
+let strategy = SummaryStrategy::lazy(true);
+```
+
+### Pipeline Options
+
+```rust
+use vectorless::index::PipelineOptions;
+
+let options = PipelineOptions::default();
+// Pass to indexer via the engine builder or context
+```
