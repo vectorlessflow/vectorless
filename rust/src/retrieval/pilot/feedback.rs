@@ -180,6 +180,7 @@ impl InterventionStats {
             InterventionPoint::Fork => &self.fork,
             InterventionPoint::Backtrack => &self.backtrack,
             InterventionPoint::Evaluate => &self.evaluate,
+            InterventionPoint::Prune => &self.fork, // Prune reuses fork stats
         }
     }
 
@@ -190,6 +191,7 @@ impl InterventionStats {
             InterventionPoint::Fork => &mut self.fork,
             InterventionPoint::Backtrack => &mut self.backtrack,
             InterventionPoint::Evaluate => &mut self.evaluate,
+            InterventionPoint::Prune => &mut self.fork, // Prune reuses fork stats
         }
     }
 }

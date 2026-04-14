@@ -27,6 +27,10 @@ pub struct PilotConfig {
     pub guide_at_backtrack: bool,
     /// Optional path to custom prompt templates.
     pub prompt_template_path: Option<String>,
+    /// Pre-filtering configuration for reducing candidates before Pilot.
+    pub prefilter: PrefilterConfig,
+    /// Binary pruning configuration for quick relevance filtering.
+    pub prune: PruneConfig,
 }
 
 impl Default for PilotConfig {
@@ -38,6 +42,8 @@ impl Default for PilotConfig {
             guide_at_start: true,
             guide_at_backtrack: true,
             prompt_template_path: None,
+            prefilter: PrefilterConfig::default(),
+            prune: PruneConfig::default(),
         }
     }
 }
@@ -51,7 +57,7 @@ impl PilotConfig {
         }
     }
 
-    /// Create a high-quality config (more LLM calls).
+    /// Create a high-quality config (more LLM calls, generous pre-filter).
     pub fn high_quality() -> Self {
         Self {
             mode: PilotMode::Aggressive,
@@ -71,10 +77,20 @@ impl PilotConfig {
             guide_at_start: true,
             guide_at_backtrack: true,
             prompt_template_path: None,
+            prefilter: PrefilterConfig {
+                threshold: 20,
+                max_to_pilot: 20,
+                enabled: true,
+            },
+            prune: PruneConfig {
+                enabled: true,
+                threshold: 25,
+                min_keep: 5,
+            },
         }
     }
 
-    /// Create a low-cost config (fewer LLM calls).
+    /// Create a low-cost config (fewer LLM calls, aggressive pre-filter).
     pub fn low_cost() -> Self {
         Self {
             mode: PilotMode::Conservative,
@@ -94,6 +110,16 @@ impl PilotConfig {
             guide_at_start: false,
             guide_at_backtrack: true,
             prompt_template_path: None,
+            prefilter: PrefilterConfig {
+                threshold: 8,
+                max_to_pilot: 8,
+                enabled: true,
+            },
+            prune: PruneConfig {
+                enabled: true,
+                threshold: 12,
+                min_keep: 2,
+            },
         }
     }
 
@@ -101,6 +127,16 @@ impl PilotConfig {
     pub fn algorithm_only() -> Self {
         Self {
             mode: PilotMode::AlgorithmOnly,
+            prefilter: PrefilterConfig {
+                threshold: 15,
+                max_to_pilot: 15,
+                enabled: false,
+            },
+            prune: PruneConfig {
+                enabled: false,
+                threshold: 20,
+                min_keep: 3,
+            },
             ..Default::default()
         }
     }
@@ -228,6 +264,88 @@ impl InterventionConfig {
     }
 }
 
+/// Configuration for NodeScorer-based pre-filtering before Pilot scoring.
+///
+/// When a node has many children, sending all to the LLM is wasteful.
+/// Pre-filtering uses cheap NodeScorer (keyword/BM25) to narrow the
+/// candidate set before expensive Pilot (LLM) scoring.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PrefilterConfig {
+    /// Minimum number of candidates to trigger pre-filtering.
+    ///
+    /// When `candidates.len()` exceeds this threshold, NodeScorer
+    /// pre-filters before sending to Pilot.
+    /// Default: 15.
+    pub threshold: usize,
+
+    /// Maximum number of candidates passed to Pilot after pre-filtering.
+    ///
+    /// NodeScorer's top-N are kept; the rest get NodeScorer-only scores.
+    /// Default: 15.
+    pub max_to_pilot: usize,
+
+    /// Whether pre-filtering is enabled.
+    /// Default: true.
+    pub enabled: bool,
+}
+
+impl Default for PrefilterConfig {
+    fn default() -> Self {
+        Self {
+            threshold: 15,
+            max_to_pilot: 15,
+            enabled: true,
+        }
+    }
+}
+
+impl PrefilterConfig {
+    /// Check if pre-filtering should be applied given the candidate count.
+    pub fn should_prefilter(&self, candidate_count: usize) -> bool {
+        self.enabled && candidate_count > self.threshold
+    }
+}
+
+/// Configuration for binary pruning before full Pilot scoring.
+///
+/// After P2 pre-filtering, if candidates still exceed this threshold,
+/// a lightweight LLM call asks "which are relevant?" before the full
+/// scoring call. This reduces the number of candidates that receive
+/// expensive detailed scoring.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PruneConfig {
+    /// Whether binary pruning is enabled.
+    /// Default: true.
+    pub enabled: bool,
+
+    /// Trigger threshold — binary prune activates when the candidate
+    /// count (after P2 pre-filtering) exceeds this value.
+    /// Default: 20.
+    pub threshold: usize,
+
+    /// Minimum candidates to keep after pruning, even if LLM says
+    /// fewer are relevant. Prevents over-aggressive pruning.
+    /// Default: 3.
+    pub min_keep: usize,
+}
+
+impl Default for PruneConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            threshold: 20,
+            min_keep: 3,
+        }
+    }
+}
+
+impl PruneConfig {
+    /// Check if binary pruning should be applied given the candidate count.
+    pub fn should_prune(&self, candidate_count: usize) -> bool {
+        self.enabled && candidate_count > self.threshold
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -269,11 +387,68 @@ mod tests {
     fn test_pilot_config_presets() {
         let high = PilotConfig::high_quality();
         assert_eq!(high.mode, PilotMode::Aggressive);
+        assert!(high.prefilter.enabled);
+        assert_eq!(high.prefilter.threshold, 20);
 
         let low = PilotConfig::low_cost();
         assert_eq!(low.mode, PilotMode::Conservative);
+        assert!(low.prefilter.enabled);
+        assert_eq!(low.prefilter.threshold, 8);
 
         let algo = PilotConfig::algorithm_only();
         assert_eq!(algo.mode, PilotMode::AlgorithmOnly);
+        assert!(!algo.prefilter.enabled);
+    }
+
+    #[test]
+    fn test_prefilter_config_default() {
+        let cfg = PrefilterConfig::default();
+        assert!(cfg.enabled);
+        assert_eq!(cfg.threshold, 15);
+        assert_eq!(cfg.max_to_pilot, 15);
+    }
+
+    #[test]
+    fn test_prefilter_should_prefilter() {
+        let cfg = PrefilterConfig::default();
+        assert!(!cfg.should_prefilter(15)); // at threshold
+        assert!(!cfg.should_prefilter(10)); // below
+        assert!(cfg.should_prefilter(16));  // above
+
+        let disabled = PrefilterConfig { enabled: false, ..Default::default() };
+        assert!(!disabled.should_prefilter(100));
+    }
+
+    #[test]
+    fn test_prune_config_default() {
+        let cfg = PruneConfig::default();
+        assert!(cfg.enabled);
+        assert_eq!(cfg.threshold, 20);
+        assert_eq!(cfg.min_keep, 3);
+    }
+
+    #[test]
+    fn test_prune_should_prune() {
+        let cfg = PruneConfig::default();
+        assert!(!cfg.should_prune(20)); // at threshold
+        assert!(!cfg.should_prune(15)); // below
+        assert!(cfg.should_prune(21));  // above
+
+        let disabled = PruneConfig { enabled: false, ..Default::default() };
+        assert!(!disabled.should_prune(100));
+    }
+
+    #[test]
+    fn test_pilot_config_presets_prune() {
+        let high = PilotConfig::high_quality();
+        assert!(high.prune.enabled);
+        assert_eq!(high.prune.threshold, 25);
+
+        let low = PilotConfig::low_cost();
+        assert!(low.prune.enabled);
+        assert_eq!(low.prune.threshold, 12);
+
+        let algo = PilotConfig::algorithm_only();
+        assert!(!algo.prune.enabled);
     }
 }

@@ -81,6 +81,7 @@ impl PromptBuilder {
             InterventionPoint::Fork => self.build_fork(context),
             InterventionPoint::Backtrack => self.build_backtrack(context),
             InterventionPoint::Evaluate => self.build_evaluate(context),
+            InterventionPoint::Prune => self.build_fork(context), // Prune reuses fork template
         }
     }
 
@@ -175,6 +176,7 @@ impl PromptBuilder {
             InterventionPoint::Fork => &self.fork_template,
             InterventionPoint::Backtrack => &self.backtrack_template,
             InterventionPoint::Evaluate => &self.evaluate_template,
+            InterventionPoint::Prune => &self.fork_template, // Prune reuses fork template
         }
     }
 
@@ -213,6 +215,13 @@ impl PromptBuilder {
   "relevance_score": 0.0-1.0,
   "is_answer": true|false,
   "direction": "go_deeper|found_answer",
+  "confidence": 0.0-1.0,
+  "reasoning": "explanation"
+}"#
+            }
+            InterventionPoint::Prune => {
+                r#"{
+  "relevant_indices": [0, 2, 5],
   "confidence": 0.0-1.0,
   "reasoning": "explanation"
 }"#

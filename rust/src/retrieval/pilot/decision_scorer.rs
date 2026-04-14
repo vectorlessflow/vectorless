@@ -112,6 +112,14 @@ pub struct ScoredCandidate {
 /// from the Pilot. Use this when the search algorithm needs to
 /// record why each path step was taken (e.g., for beam search
 /// reasoning history).
+///
+/// # Pre-filtering
+///
+/// When a node has many children (exceeding `prefilter.threshold`),
+/// NodeScorer pre-filters candidates before sending to Pilot. This
+/// reduces LLM token cost and latency. Candidates filtered out still
+/// receive NodeScorer-only scores in the final merge, so no results
+/// are lost.
 pub async fn score_candidates_detailed(
     tree: &DocumentTree,
     candidates: &[NodeId],
@@ -139,20 +147,88 @@ pub async fn score_candidates_detailed(
     // Determine parent node (last in path) for cache key
     let parent = path.last().copied().unwrap_or(tree.root());
 
+    // === PRE-FILTERING ===
+    // When candidates exceed the threshold, use NodeScorer to narrow
+    // the set before sending to Pilot (LLM). Filtered-out candidates
+    // still get NodeScorer-only scores in the final merge below.
+    let prefilter_cfg = &p.config().prefilter;
+    let pilot_candidates: Vec<NodeId> = if prefilter_cfg.should_prefilter(candidates.len()) {
+        let scorer = NodeScorer::new(ScoringContext::new(query));
+        let mut sorted = scorer.score_and_sort(tree, candidates);
+        let pilot_max = prefilter_cfg.max_to_pilot.min(candidates.len());
+        sorted.truncate(pilot_max);
+        let ids: Vec<NodeId> = sorted.into_iter().map(|(id, _)| id).collect();
+        tracing::debug!(
+            "Pre-filtered: {} candidates -> {} to Pilot (threshold={})",
+            candidates.len(),
+            ids.len(),
+            prefilter_cfg.threshold,
+        );
+        ids
+    } else {
+        candidates.to_vec()
+    };
+
+    // === BINARY PRUNING ===
+    // After P2 pre-filtering, if candidates still exceed the prune
+    // threshold, ask Pilot for a quick yes/no filter before the
+    // expensive full-scoring call.
+    let prune_cfg = &p.config().prune;
+    let pilot_candidates = if prune_cfg.should_prune(pilot_candidates.len()) {
+        let mut prune_state = SearchState::new(
+            tree, query, path, &pilot_candidates, visited,
+        );
+        prune_state.step_reasons = step_reasons;
+
+        if let Some(relevant_ids) = p.binary_prune(&prune_state).await {
+            let relevant_set: HashSet<NodeId> = relevant_ids.iter().copied().collect();
+            let mut pruned: Vec<NodeId> = pilot_candidates
+                .iter()
+                .filter(|id| relevant_set.contains(id))
+                .copied()
+                .collect();
+
+            // Enforce min_keep to prevent over-aggressive pruning
+            if pruned.len() < prune_cfg.min_keep {
+                // Fill from the top of pilot_candidates that weren't pruned
+                for id in &pilot_candidates {
+                    if pruned.len() >= prune_cfg.min_keep {
+                        break;
+                    }
+                    if !relevant_set.contains(id) {
+                        pruned.push(*id);
+                    }
+                }
+            }
+
+            tracing::debug!(
+                "Binary prune: {} candidates -> {} relevant (min_keep={})",
+                pilot_candidates.len(),
+                pruned.len(),
+                prune_cfg.min_keep,
+            );
+            pruned
+        } else {
+            pilot_candidates
+        }
+    } else {
+        pilot_candidates
+    };
+
     // Check cache first
     let decision = if let Some(c) = cache {
         if let Some(cached) = c.get(query, parent).await {
             tracing::trace!("Pilot cache hit for parent={:?}", parent);
             cached
         } else {
-            let mut state = SearchState::new(tree, query, path, candidates, visited);
+            let mut state = SearchState::new(tree, query, path, &pilot_candidates, visited);
             state.step_reasons = step_reasons;
             let d = p.decide(&state).await;
             c.put(query, parent, &d).await;
             d
         }
     } else {
-        let mut state = SearchState::new(tree, query, path, candidates, visited);
+        let mut state = SearchState::new(tree, query, path, &pilot_candidates, visited);
         state.step_reasons = step_reasons;
         p.decide(&state).await
     };
@@ -163,7 +239,7 @@ pub async fn score_candidates_detailed(
         pilot_data.insert(ranked.node_id, (ranked.score, ranked.reason.clone()));
     }
 
-    // Compute NodeScorer fallback scores
+    // Compute NodeScorer fallback scores for ALL original candidates
     let scorer_weight = 1.0 - pilot_weight;
     let confidence = decision.confidence;
     let effective_pilot = pilot_weight * confidence;

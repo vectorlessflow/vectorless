@@ -52,6 +52,12 @@ pub struct LlmResponse {
     /// Reasoning for the decision.
     #[serde(default)]
     pub reasoning: String,
+    /// Relevant candidate indices from PRUNE response (binary yes/no).
+    #[serde(default)]
+    pub relevant_indices: Vec<usize>,
+    /// Alternative field name some LLMs use for relevant indices.
+    #[serde(default)]
+    pub relevant: Vec<usize>,
 }
 
 /// Custom deserializer for confidence that accepts both float and string.
@@ -659,6 +665,42 @@ impl ResponseParser {
                             );
                         }
                         break;
+                    }
+                }
+            }
+        }
+
+        // Handle PRUNE response format: relevant_indices
+        if ranked_candidates.is_empty() {
+            let indices: Vec<usize> = if !llm_response.relevant_indices.is_empty() {
+                llm_response.relevant_indices.clone()
+            } else if !llm_response.relevant.is_empty() {
+                llm_response.relevant.clone()
+            } else {
+                Vec::new()
+            };
+
+            for idx in &indices {
+                if *idx < candidates.len() {
+                    ranked_candidates.push(RankedCandidate {
+                        node_id: candidates[*idx].node_id,
+                        score: 1.0, // Relevant = high score
+                        reason: Some(format!("Marked relevant (index {})", idx)),
+                    });
+                }
+            }
+
+            // Non-relevant candidates get low score (for completeness)
+            if !ranked_candidates.is_empty() {
+                let relevant_ids: std::collections::HashSet<NodeId> =
+                    ranked_candidates.iter().map(|rc| rc.node_id).collect();
+                for candidate in candidates {
+                    if !relevant_ids.contains(&candidate.node_id) {
+                        ranked_candidates.push(RankedCandidate {
+                            node_id: candidate.node_id,
+                            score: 0.1, // Not relevant
+                            reason: None,
+                        });
                     }
                 }
             }

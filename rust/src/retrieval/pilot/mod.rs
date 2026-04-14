@@ -47,7 +47,7 @@ mod r#trait;
 mod scorer;
 
 pub use complexity::detect_with_llm;
-pub use config::PilotConfig;
+pub use config::{PilotConfig, PrefilterConfig, PruneConfig};
 pub use decision::{InterventionPoint, PilotDecision};
 pub use decision_scorer::{PilotDecisionCache, ScoredCandidate, score_candidates, score_candidates_detailed};
 pub use llm_pilot::LlmPilot;

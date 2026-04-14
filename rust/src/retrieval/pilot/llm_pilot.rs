@@ -700,6 +700,53 @@ impl Pilot for LlmPilot {
         )
     }
 
+    async fn binary_prune(&self, state: &SearchState<'_>) -> Option<Vec<NodeId>> {
+        if !self.has_budget() {
+            debug!("Budget exhausted, cannot binary prune");
+            return None;
+        }
+
+        let context = self.context_builder.build(state);
+
+        let candidate_info: Vec<super::parser::CandidateInfo> = state
+            .candidates
+            .iter()
+            .enumerate()
+            .filter_map(|(i, &node_id)| {
+                state.tree.get(node_id).map(|node| super::parser::CandidateInfo {
+                    node_id,
+                    title: node.title.clone(),
+                    index: i,
+                })
+            })
+            .collect();
+
+        let decision = self
+            .call_llm(InterventionPoint::Prune, &context, &candidate_info)
+            .await;
+
+        // Extract relevant node IDs from ranked candidates (score > 0.5 means relevant)
+        let relevant: Vec<NodeId> = decision
+            .ranked_candidates
+            .iter()
+            .filter(|c| c.score > 0.5)
+            .map(|c| c.node_id)
+            .collect();
+
+        if relevant.is_empty() {
+            debug!("Binary prune: LLM marked no candidates as relevant");
+            return None;
+        }
+
+        debug!(
+            "Binary prune: {} of {} candidates marked relevant",
+            relevant.len(),
+            state.candidates.len()
+        );
+
+        Some(relevant)
+    }
+
     fn config(&self) -> &PilotConfig {
         &self.config
     }
