@@ -434,7 +434,7 @@ fn collect_tree_entries(
         entries.push((node.title.clone(), summary));
         node_ids.push(node_id);
 
-        for child_id in tree.children(node_id) {
+        for child_id in tree.children_with_refs(node_id) {
             collect_tree_entries(tree, child_id, entries, node_ids, depth + 1, max_depth);
         }
     }

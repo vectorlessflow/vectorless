@@ -18,6 +18,7 @@ mod llm;
 mod page_range;
 mod r#trait;
 
+pub use cross_document::{CrossDocumentConfig, CrossDocumentStrategy, DocumentEntry};
 pub use hybrid::{HybridConfig, HybridStrategy};
 pub use keyword::KeywordStrategy;
 pub use llm::LlmStrategy;
