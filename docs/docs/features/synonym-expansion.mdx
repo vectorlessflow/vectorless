@@ -1,0 +1,71 @@
+---
+sidebar_position: 2
+---
+
+# Synonym Expansion
+
+When users query with different wording than the document, keyword-based retrieval can miss relevant content. Synonym expansion addresses this by generating alternative search terms during indexing.
+
+## The Problem
+
+A document might use "revenue" throughout, but a user queries for "income" or "earnings". Without synonym expansion, the keyword strategy would miss these connections entirely.
+
+## How It Works
+
+During the reasoning index stage, the system:
+
+1. Selects the top-N keywords by frequency (capped at 20-100 keywords)
+2. For each keyword, calls the LLM to generate up to 5 synonyms or related terms
+3. Adds synonym entries to the topic index with **0.6x weight** (lower than direct keyword matches)
+
+```text
+Keyword: "revenue" (weight: 1.0)
+  └── Synonym: "income" (weight: 0.6)
+  └── Synonym: "earnings" (weight: 0.6)
+  └── Synonym: "turnover" (weight: 0.6)
+```
+
+The lower weight ensures that direct keyword matches are always preferred over synonym matches, while still surfacing relevant content that would otherwise be missed.
+
+## Enabling Synonym Expansion
+
+### Python
+
+```python
+from vectorless import IndexOptions
+
+# Enabled by default
+opts = IndexOptions(enable_synonym_expansion=True)
+
+# Disable for faster indexing (at the cost of recall)
+opts = IndexOptions(enable_synonym_expansion=False)
+```
+
+### Rust
+
+The synonym expansion is controlled via `ReasoningIndexConfig`:
+
+```rust
+use vectorless::document::ReasoningIndexConfig;
+
+let config = ReasoningIndexConfig::default()
+    .with_synonym_expansion(true);
+```
+
+## Cost Impact
+
+Synonym expansion adds LLM calls during indexing (one per top keyword). For a typical document:
+
+- **Additional LLM calls**: 20-100 (depending on keyword count)
+- **Additional tokens**: ~500-2000 (short prompt + response per keyword)
+- **Indexing time increase**: 10-30 seconds
+
+The cost is paid once at index time. At query time, synonyms are already in the topic index, so there is **zero additional cost** during retrieval.
+
+## When to Disable
+
+Consider disabling synonym expansion when:
+
+- Your documents use highly domain-specific terminology with no common synonyms
+- You need the fastest possible indexing time
+- Your queries always use the same terminology as the documents

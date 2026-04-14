@@ -256,8 +256,8 @@ impl BeamSearch {
         // Fallback stack holds viable paths truncated from the beam
         let mut fallback_stack: Vec<FallbackEntry> = Vec::new();
 
-        // Initialize with start_node's children
-        let start_children = tree.children(start_node);
+        // Initialize with start_node's children (includes resolved cross-references)
+        let start_children = tree.children_with_refs(start_node);
         debug!("Start node has {} children", start_children.len());
 
         let initial_candidates = score_candidates_detailed(
@@ -373,8 +373,8 @@ impl BeamSearch {
                         continue;
                     }
 
-                    // Expand this path
-                    let children = tree.children(leaf_id);
+                    // Expand this path (includes resolved cross-references)
+                    let children = tree.children_with_refs(leaf_id);
 
                     let scored_children = score_candidates_detailed(
                         tree,
@@ -457,7 +457,7 @@ impl BeamSearch {
         // Fallback: if no results found, add best candidates regardless of score
         if result.paths.is_empty() && config.min_score > 0.0 {
             debug!("No results above min_score, adding best candidates as fallback");
-            let all_children = tree.children(start_node);
+            let all_children = tree.children_with_refs(start_node);
             let fallback = score_candidates(
                 tree,
                 &all_children,

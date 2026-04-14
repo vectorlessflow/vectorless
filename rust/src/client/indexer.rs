@@ -28,7 +28,7 @@ use uuid::Uuid;
 
 use crate::error::{Error, Result};
 use crate::index::parse::DocumentFormat;
-use crate::index::{IndexInput, IndexMode, PipelineExecutor, PipelineOptions, SummaryStrategy};
+use crate::index::{IndexInput, IndexMode, PipelineExecutor, PipelineOptions, ReasoningIndexConfig, SummaryStrategy};
 use crate::llm::LlmClient;
 use crate::storage::{DocumentMeta, PersistedDocument};
 
@@ -285,6 +285,10 @@ impl IndexerClient {
                 SummaryStrategy::none()
             },
             generate_description: options.generate_description,
+            reasoning_index: ReasoningIndexConfig {
+                enable_synonym_expansion: options.enable_synonym_expansion,
+                ..ReasoningIndexConfig::default()
+            },
             existing_tree,
             ..Default::default()
         }

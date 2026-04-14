@@ -27,7 +27,8 @@ use crate::retrieval::search::{
     SearchTree, ToCNavigator,
 };
 use crate::retrieval::strategy::{
-    HybridConfig, HybridStrategy, KeywordStrategy, LlmStrategy, RetrievalStrategy,
+    CrossDocumentConfig, CrossDocumentStrategy, DocumentEntry, HybridConfig, HybridStrategy,
+    KeywordStrategy, LlmStrategy, RetrievalStrategy,
 };
 use crate::retrieval::types::{
     NavigationDecision, ReasoningCandidate, ReasoningStep, StageName, StrategyPreference,
@@ -152,14 +153,35 @@ impl SearchStage {
                     Arc::new(self.keyword_strategy.clone())
                 }
             }
-            StrategyPreference::ForceCrossDocument | StrategyPreference::ForcePageRange => {
+            StrategyPreference::ForceCrossDocument => {
+                // Build a CrossDocumentStrategy with graph-based boosting
+                let inner: Box<dyn RetrievalStrategy> =
+                    Box::new(self.keyword_strategy.clone());
+
+                let cross_doc =
+                    CrossDocumentStrategy::new(inner).with_config(CrossDocumentConfig::default());
+
+                // Attach graph for GraphBoosted merge if available.
+                // Multi-document trees are collected at the orchestrator level.
+                let cross_doc = if let Some(ref graph) = ctx.document_graph {
+                    cross_doc.with_graph(graph.clone())
+                } else {
+                    cross_doc
+                };
+
+                info!(
+                    "Using CrossDocument strategy (graph={})",
+                    ctx.document_graph.is_some()
+                );
+                Arc::new(cross_doc)
+            }
+            StrategyPreference::ForcePageRange => {
                 if let Some(ref strategy) = self.hybrid_strategy {
-                    info!("Using Hybrid strategy as fallback for {:?})", preference);
+                    info!("Using Hybrid strategy as fallback for ForcePageRange");
                     strategy.clone()
                 } else {
                     warn!(
-                        "{:?} requires special configuration, falling back to Keyword",
-                        preference
+                        "ForcePageRange requires special configuration, falling back to Keyword"
                     );
                     Arc::new(self.keyword_strategy.clone())
                 }

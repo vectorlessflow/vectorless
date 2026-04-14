@@ -206,6 +206,11 @@ pub struct IndexOptions {
 
     /// Whether to generate document description.
     pub generate_description: bool,
+
+    /// Whether to expand keywords with LLM-generated synonyms
+    /// during reasoning index construction. Improves recall for
+    /// queries that use different wording than the document.
+    pub enable_synonym_expansion: bool,
 }
 
 impl Default for IndexOptions {
@@ -216,6 +221,7 @@ impl Default for IndexOptions {
             include_text: true,
             generate_ids: true,
             generate_description: false,
+            enable_synonym_expansion: true,
         }
     }
 }

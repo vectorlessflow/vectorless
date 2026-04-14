@@ -1,0 +1,51 @@
+---
+sidebar_position: 1
+---
+
+# Retrieval Overview
+
+The retrieval pipeline transforms a user query into relevant document content by navigating the hierarchical tree structure with LLM-guided reasoning.
+
+## Pipeline Phases
+
+```text
+Query ──▶ Analyze ──▶ Plan ──▶ Search ──▶ Evaluate ──▶ Result
+            │           │         │           │
+            ▼           ▼         ▼           ▼
+        Keywords    Strategy   Algorithm    Score &
+        Complexity  Selection  Execution    Dedup
+```
+
+### Analyze
+
+- Extract keywords from the query
+- Detect query complexity (simple keyword match vs. multi-hop reasoning)
+- Decompose complex queries into sub-queries when needed
+
+### Plan
+
+- Select the retrieval strategy (Keyword, LLM, Hybrid, Cross-Document)
+- Select the search algorithm (Beam Search, MCTS, Pure Pilot)
+- Configure beam width, depth limits, and iteration budgets
+
+### Search
+
+- Use the ToC Navigator to locate relevant subtrees
+- Execute the selected search algorithm from located subtrees
+- The Pilot provides LLM guidance at key decision points
+
+### Evaluate
+
+- Score and rank candidate nodes
+- Deduplicate overlapping results
+- Aggregate content within the token budget
+
+## Quick Selection Guide
+
+| Use Case | Strategy | Algorithm |
+|----------|----------|-----------|
+| Simple keyword lookup | Keyword | Beam Search |
+| Complex question requiring reasoning | Hybrid | Beam Search |
+| Multi-hop reasoning across sections | LLM | MCTS |
+| Multiple documents | Cross-Document | Beam Search |
+| Fast overview of document | Keyword | ToC Navigator |

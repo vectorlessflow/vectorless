@@ -1,0 +1,88 @@
+---
+sidebar_position: 3
+---
+
+# Architecture
+
+Vectorless transforms documents into hierarchical semantic trees and uses LLM-powered reasoning to navigate them. This page describes the end-to-end pipeline.
+
+## High-Level Flow
+
+```text
+┌──────────────┐     ┌──────────────┐     ┌──────────────┐
+│   Document   │────▶│    Index     │────▶│   Storage    │
+│  (PDF/MD)    │     │   Pipeline   │     │   (Disk)     │
+└──────────────┘     └──────────────┘     └──────┬───────┘
+                                                  │
+                     ┌──────────────┐     ┌──────▼───────┐
+                     │    Result    │◀────│   Retrieval  │
+                     │   (Answer)   │     │   Pipeline   │
+                     └──────────────┘     └──────────────┘
+```
+
+## Index Pipeline
+
+The indexing pipeline processes documents through ordered stages:
+
+| Stage | Priority | Description |
+|-------|----------|-------------|
+| **Parse** | 10 | Parse document into raw nodes (Markdown headings, PDF pages) |
+| **Build** | 20 | Construct arena-based tree with thinning and content merge |
+| **Validate** | 22 | Tree integrity checks |
+| **Split** | 25 | Split oversized leaf nodes (>4000 tokens) |
+| **Enhance** | 30 | Generate LLM summaries (Full, Selective, or Lazy strategy) |
+| **Enrich** | 40 | Calculate metadata, page ranges, resolve cross-references |
+| **Reasoning Index** | 45 | Build keyword-to-node mappings, synonym expansion, summary shortcuts |
+| **Optimize** | 60 | Final tree optimization |
+
+Each stage is independently configurable. The pipeline supports incremental re-indexing via content fingerprinting.
+
+## Tree Structure
+
+Each node in the tree contains:
+
+```text
+TreeNode
+├── title          — Section heading
+├── content        — Raw text (leaf nodes)
+├── summary        — LLM-generated summary
+├── structure      — Hierarchical index (e.g., "1.2.3")
+├── depth          — Tree depth (root = 0)
+├── references[]   — Resolved cross-references ("see Section 2.1" → NodeId)
+├── token_count    — Estimated token count
+└── page_range     — Start/end page (PDF)
+```
+
+## Retrieval Pipeline
+
+The retrieval pipeline consists of four phases:
+
+1. **Analyze** — Detect query complexity, extract keywords, decompose complex queries
+2. **Plan** — Select retrieval strategy and search algorithm
+3. **Search** — Execute tree traversal with Pilot guidance
+4. **Evaluate** — Score, deduplicate, and aggregate results
+
+### Pilot
+
+The Pilot is the core intelligence component. It provides LLM-guided navigation at key decision points:
+
+- **Fork points** — When multiple children exist, Pilot evaluates which path to follow
+- **Backtracking** — When a path yields insufficient results, Pilot suggests alternatives
+- **Binary pruning** — Quick relevance filter for nodes with many children
+
+### Search Algorithms
+
+| Algorithm | Description | Use Case |
+|-----------|-------------|----------|
+| **Beam Search** | Explores multiple paths with backtracking | General purpose (recommended) |
+| **MCTS** | Monte Carlo Tree Search with UCT selection | Complex multi-hop queries |
+| **Pure Pilot** | Greedy single-path, Pilot at every level | High-accuracy, higher token cost |
+| **ToC Navigator** | Table-of-contents based location | Broad queries ("what is this about?") |
+
+## Cross-Document Graph
+
+When multiple documents are indexed, Vectorless automatically builds a relationship graph based on shared keywords and Jaccard similarity. This graph enables cross-document retrieval with score boosting.
+
+## Zero Infrastructure
+
+The entire system requires only an LLM API key. No vector database, no embedding models, no additional infrastructure. Trees and metadata are persisted to the local filesystem in the workspace directory.

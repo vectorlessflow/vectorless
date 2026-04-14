@@ -1,0 +1,65 @@
+---
+sidebar_position: 1
+---
+
+# Summary Strategies
+
+Summaries are critical for retrieval quality. The Pilot uses summaries to evaluate candidate nodes during tree navigation. Without summaries, the Pilot can only use node titles for decision-making, which significantly reduces accuracy.
+
+## Available Strategies
+
+### Full (Default)
+
+Generates summaries for every node in the tree. Branch nodes get navigation-oriented summaries ("what does this section cover"), while leaf nodes get content-oriented summaries ("what does this section say").
+
+```rust
+use vectorless::index::summary::SummaryStrategy;
+
+let strategy = SummaryStrategy::full();
+```
+
+**Trade-off**: Highest token cost during indexing, but best retrieval quality. Recommended for production use.
+
+### Selective
+
+Only generates summaries for branch nodes (non-leaves) that exceed a token threshold. Useful when indexing large document sets on a budget.
+
+```rust
+let strategy = SummaryStrategy::selective(100, true);
+//                           min_tokens ↑    ↑ branch_only
+```
+
+- `min_tokens` — Minimum content tokens to generate a summary (default: 100)
+- `branch_only` — Only generate for non-leaf nodes (default: true)
+
+**Trade-off**: Lower indexing cost, but leaf nodes lack summaries. The Pilot falls back to title-only evaluation at leaf level.
+
+### Lazy
+
+Defers summary generation to query time. Summaries are generated on-demand when a node is first accessed during retrieval.
+
+```rust
+let strategy = SummaryStrategy::lazy(true);
+//                          ↑ persist to disk
+```
+
+**Trade-off**: Zero indexing cost for summaries, but adds latency to the first query that touches each node. Subsequent queries benefit from cached summaries.
+
+## Choosing a Strategy
+
+| Scenario | Recommended Strategy |
+|----------|---------------------|
+| Production, accuracy matters | **Full** |
+| Large document set, budget-constrained | **Selective** (min_tokens=100) |
+| One-time queries, minimal indexing time | **Lazy** |
+| Batch indexing with later queries | **Full** (index once, query many times) |
+
+## How Summaries Are Used
+
+During retrieval, the Pilot builds context for each candidate node:
+
+1. **Title** — Always available, highest priority signal
+2. **Summary** — Used for semantic evaluation at fork points
+3. **Content** — Used for BM25 scoring and final result
+
+When a node has no summary, the Pilot's decision quality degrades. This is why **Full** is the default — it ensures the Pilot always has summaries to work with.
