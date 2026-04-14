@@ -89,7 +89,15 @@ pub async fn score_candidates(
     step_reasons: Option<&[Option<String>]>,
 ) -> Vec<(NodeId, f32)> {
     let scored = score_candidates_detailed(
-        tree, candidates, query, pilot, path, visited, pilot_weight, cache, step_reasons,
+        tree,
+        candidates,
+        query,
+        pilot,
+        path,
+        visited,
+        pilot_weight,
+        cache,
+        step_reasons,
     )
     .await;
     scored.into_iter().map(|s| (s.node_id, s.score)).collect()
@@ -175,9 +183,7 @@ pub async fn score_candidates_detailed(
     // expensive full-scoring call.
     let prune_cfg = &p.config().prune;
     let pilot_candidates = if prune_cfg.should_prune(pilot_candidates.len()) {
-        let mut prune_state = SearchState::new(
-            tree, query, path, &pilot_candidates, visited,
-        );
+        let mut prune_state = SearchState::new(tree, query, path, &pilot_candidates, visited);
         prune_state.step_reasons = step_reasons;
 
         if let Some(relevant_ids) = p.binary_prune(&prune_state).await {
@@ -250,7 +256,8 @@ pub async fn score_candidates_detailed(
         .iter()
         .map(|&node_id| {
             let algo_score = scorer.score(tree, node_id);
-            let (p_score, reason) = pilot_data.get(&node_id)
+            let (p_score, reason) = pilot_data
+                .get(&node_id)
                 .map(|(s, r)| (*s, r.clone()))
                 .unwrap_or((0.0, None));
 
@@ -261,11 +268,19 @@ pub async fn score_candidates_detailed(
                 algo_score
             };
 
-            ScoredCandidate { node_id, score: final_score, reason }
+            ScoredCandidate {
+                node_id,
+                score: final_score,
+                reason,
+            }
         })
         .collect();
 
-    scored.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+    scored.sort_by(|a, b| {
+        b.score
+            .partial_cmp(&a.score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
     scored
 }
 
@@ -289,7 +304,11 @@ fn score_with_scorer_detailed(
     scorer
         .score_and_sort(tree, candidates)
         .into_iter()
-        .map(|(node_id, score)| ScoredCandidate { node_id, score, reason: None })
+        .map(|(node_id, score)| ScoredCandidate {
+            node_id,
+            score,
+            reason: None,
+        })
         .collect()
 }
 

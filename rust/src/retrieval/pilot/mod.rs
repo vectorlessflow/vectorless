@@ -43,13 +43,13 @@ mod metrics;
 mod noop;
 mod parser;
 mod prompts;
-mod r#trait;
 mod scorer;
+mod r#trait;
 
 pub use complexity::detect_with_llm;
-pub use config::{PilotConfig, PrefilterConfig, PruneConfig};
+pub use config::PilotConfig;
 pub use decision::{InterventionPoint, PilotDecision};
-pub use decision_scorer::{PilotDecisionCache, ScoredCandidate, score_candidates, score_candidates_detailed};
+pub use decision_scorer::{PilotDecisionCache, score_candidates, score_candidates_detailed};
 pub use llm_pilot::LlmPilot;
-pub use r#trait::{Pilot, SearchState};
 pub use scorer::{NodeScorer, ScoringContext};
+pub use r#trait::{Pilot, SearchState};

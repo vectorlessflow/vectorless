@@ -25,10 +25,7 @@ const USER_PROMPT: &str = include_str!("prompts/user_complexity.txt");
 /// Detect query complexity using LLM.
 ///
 /// Returns `None` if the LLM call fails (caller should fall back to heuristic).
-pub async fn detect_with_llm(
-    client: &LlmClient,
-    query: &str,
-) -> Option<QueryComplexity> {
+pub async fn detect_with_llm(client: &LlmClient, query: &str) -> Option<QueryComplexity> {
     let user = USER_PROMPT.replace("{query}", query);
 
     let resp: ComplexityResponse = client

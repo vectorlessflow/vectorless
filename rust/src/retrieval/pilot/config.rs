@@ -413,9 +413,12 @@ mod tests {
         let cfg = PrefilterConfig::default();
         assert!(!cfg.should_prefilter(15)); // at threshold
         assert!(!cfg.should_prefilter(10)); // below
-        assert!(cfg.should_prefilter(16));  // above
+        assert!(cfg.should_prefilter(16)); // above
 
-        let disabled = PrefilterConfig { enabled: false, ..Default::default() };
+        let disabled = PrefilterConfig {
+            enabled: false,
+            ..Default::default()
+        };
         assert!(!disabled.should_prefilter(100));
     }
 
@@ -432,9 +435,12 @@ mod tests {
         let cfg = PruneConfig::default();
         assert!(!cfg.should_prune(20)); // at threshold
         assert!(!cfg.should_prune(15)); // below
-        assert!(cfg.should_prune(21));  // above
+        assert!(cfg.should_prune(21)); // above
 
-        let disabled = PruneConfig { enabled: false, ..Default::default() };
+        let disabled = PruneConfig {
+            enabled: false,
+            ..Default::default()
+        };
         assert!(!disabled.should_prune(100));
     }
 

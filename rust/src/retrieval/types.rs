@@ -660,7 +660,12 @@ impl SearchPath {
 
     /// Extend the path with a new node and a reason for choosing it.
     #[must_use]
-    pub fn extend_with_reason(&self, node_id: NodeId, score: f32, reason: impl Into<String>) -> Self {
+    pub fn extend_with_reason(
+        &self,
+        node_id: NodeId,
+        score: f32,
+        reason: impl Into<String>,
+    ) -> Self {
         let mut nodes = self.nodes.clone();
         let mut step_reasons = self.step_reasons.clone();
         nodes.push(node_id);
