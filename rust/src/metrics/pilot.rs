@@ -18,6 +18,8 @@ pub enum InterventionPoint {
     Backtrack,
     /// Evaluating content sufficiency.
     Evaluate,
+    /// Binary pruning for wide nodes.
+    Prune,
 }
 
 /// Helper to store f64 as u64 bits for atomic operations.
@@ -87,7 +89,7 @@ impl PilotMetrics {
             InterventionPoint::Start => {
                 self.start_guidance_calls.fetch_add(1, Ordering::Relaxed);
             }
-            InterventionPoint::Fork => {
+            InterventionPoint::Fork | InterventionPoint::Prune => {
                 self.fork_decisions.fetch_add(1, Ordering::Relaxed);
             }
             InterventionPoint::Backtrack => {

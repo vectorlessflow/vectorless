@@ -220,6 +220,8 @@ pub enum InterventionPoint {
     Backtrack,
     /// Evaluating a specific node for relevance.
     Evaluate,
+    /// Binary pruning — quick yes/no relevance filter for wide nodes.
+    Prune,
 }
 
 impl InterventionPoint {
@@ -230,6 +232,7 @@ impl InterventionPoint {
             Self::Fork => "fork",
             Self::Backtrack => "backtrack",
             Self::Evaluate => "evaluate",
+            Self::Prune => "prune",
         }
     }
 }

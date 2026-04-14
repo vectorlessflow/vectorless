@@ -232,7 +232,7 @@ impl MetricsCollector {
             InterventionPoint::Start => {
                 self.start_interventions.fetch_add(1, Ordering::Relaxed);
             }
-            InterventionPoint::Fork => {
+            InterventionPoint::Fork | InterventionPoint::Prune => {
                 self.fork_interventions.fetch_add(1, Ordering::Relaxed);
             }
             InterventionPoint::Backtrack => {

@@ -194,6 +194,17 @@ pub trait Pilot: Send + Sync {
     /// Returns `None` if no guidance is available.
     async fn guide_backtrack(&self, state: &SearchState<'_>) -> Option<PilotDecision>;
 
+    /// Binary prune — quick relevance filter for wide nodes.
+    ///
+    /// Called after P2 pre-filtering when candidates still exceed the
+    /// prune threshold. Asks the LLM a simple yes/no question per
+    /// candidate instead of full scoring. Returns the subset of
+    /// candidate node IDs deemed relevant.
+    ///
+    /// Returns `None` if no pruning guidance is available (e.g. budget
+    /// exhausted, not supported).
+    async fn binary_prune(&self, state: &SearchState<'_>) -> Option<Vec<NodeId>>;
+
     /// Get the current configuration.
     fn config(&self) -> &PilotConfig;
 

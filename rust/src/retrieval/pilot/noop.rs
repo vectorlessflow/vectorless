@@ -84,6 +84,11 @@ impl Pilot for NoopPilot {
         None
     }
 
+    async fn binary_prune(&self, _state: &SearchState<'_>) -> Option<Vec<NodeId>> {
+        // NoopPilot does not support binary pruning
+        None
+    }
+
     fn config(&self) -> &PilotConfig {
         &self.config
     }
