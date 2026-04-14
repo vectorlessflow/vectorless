@@ -75,9 +75,7 @@ pub enum SummaryStrategy {
 
 impl Default for SummaryStrategy {
     fn default() -> Self {
-        Self::Selective {
-            min_tokens: 100,
-            branch_only: true,
+        Self::Full {
             config: SummaryStrategyConfig::default(),
         }
     }
