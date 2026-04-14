@@ -147,8 +147,7 @@ impl AnalyzeStage {
     /// Enable query decomposition and LLM-based complexity detection.
     pub fn with_llm_client(mut self, client: crate::llm::LlmClient) -> Self {
         // Use LLM client for complexity detection
-        self.complexity_detector =
-            ComplexityDetector::with_llm_client(client.clone());
+        self.complexity_detector = ComplexityDetector::with_llm_client(client.clone());
         // Also enable query decomposition
         if self.query_decomposer.is_none() {
             self.query_decomposer =

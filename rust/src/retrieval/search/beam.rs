@@ -20,10 +20,10 @@ use tracing::debug;
 
 use super::super::RetrievalContext;
 use super::super::types::{NavigationDecision, NavigationStep, SearchPath};
-use crate::retrieval::pilot::{PilotDecisionCache, score_candidates, score_candidates_detailed};
 use super::{SearchConfig, SearchResult, SearchTree};
 use crate::document::{DocumentTree, NodeId};
 use crate::retrieval::pilot::{Pilot, SearchState};
+use crate::retrieval::pilot::{PilotDecisionCache, score_candidates, score_candidates_detailed};
 
 /// Maximum entries in the fallback stack relative to beam width.
 const FALLBACK_STACK_MULTIPLIER: usize = 3;
@@ -91,7 +91,11 @@ impl BeamSearch {
             if let Some(min_idx) = fallback_stack
                 .iter()
                 .enumerate()
-                .min_by(|(_, a), (_, b)| a.score.partial_cmp(&b.score).unwrap_or(std::cmp::Ordering::Equal))
+                .min_by(|(_, a), (_, b)| {
+                    a.score
+                        .partial_cmp(&b.score)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                })
                 .map(|(i, _)| i)
             {
                 if entry.score > fallback_stack[min_idx].score {
@@ -114,7 +118,11 @@ impl BeamSearch {
         let max_idx = fallback_stack
             .iter()
             .enumerate()
-            .max_by(|(_, a), (_, b)| a.score.partial_cmp(&b.score).unwrap_or(std::cmp::Ordering::Equal))
+            .max_by(|(_, a), (_, b)| {
+                a.score
+                    .partial_cmp(&b.score)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
             .map(|(i, _)| i)?;
         Some(fallback_stack.swap_remove(max_idx))
     }
@@ -287,11 +295,8 @@ impl BeamSearch {
                 .unwrap_or(std::cmp::Ordering::Equal)
         });
 
-        let mut current_beam: Vec<SearchPath> = sorted_initial
-            .iter()
-            .take(beam_width)
-            .cloned()
-            .collect();
+        let mut current_beam: Vec<SearchPath> =
+            sorted_initial.iter().take(beam_width).cloned().collect();
 
         // Remaining candidates go to fallback stack
         for path in sorted_initial.iter().skip(beam_width) {
@@ -421,16 +426,14 @@ impl BeamSearch {
 
             // Keep top beam_width in the beam, shelve the rest
             let mut beam_candidates = next_beam;
-            let overflow: Vec<SearchPath> = beam_candidates.split_off(beam_width.min(beam_candidates.len()));
+            let overflow: Vec<SearchPath> =
+                beam_candidates.split_off(beam_width.min(beam_candidates.len()));
 
             for path in overflow {
                 let score = path.score;
                 Self::push_fallback(
                     &mut fallback_stack,
-                    FallbackEntry {
-                        path,
-                        score,
-                    },
+                    FallbackEntry { path, score },
                     config.min_score,
                     config.fallback_score_ratio,
                     max_fallback_size,
@@ -566,18 +569,33 @@ mod tests {
 
         BeamSearch::push_fallback(
             &mut stack,
-            FallbackEntry { path: SearchPath::from_node(id0, 0.3), score: 0.3 },
-            0.1, 0.5, 100,
+            FallbackEntry {
+                path: SearchPath::from_node(id0, 0.3),
+                score: 0.3,
+            },
+            0.1,
+            0.5,
+            100,
         );
         BeamSearch::push_fallback(
             &mut stack,
-            FallbackEntry { path: SearchPath::from_node(id1, 0.7), score: 0.7 },
-            0.1, 0.5, 100,
+            FallbackEntry {
+                path: SearchPath::from_node(id1, 0.7),
+                score: 0.7,
+            },
+            0.1,
+            0.5,
+            100,
         );
         BeamSearch::push_fallback(
             &mut stack,
-            FallbackEntry { path: SearchPath::from_node(id2, 0.5), score: 0.5 },
-            0.1, 0.5, 100,
+            FallbackEntry {
+                path: SearchPath::from_node(id2, 0.5),
+                score: 0.5,
+            },
+            0.1,
+            0.5,
+            100,
         );
 
         assert_eq!(stack.len(), 3);
@@ -603,16 +621,26 @@ mod tests {
         // Score 0.01 with threshold 0.1 * 0.5 = 0.05 → should be rejected
         BeamSearch::push_fallback(
             &mut stack,
-            FallbackEntry { path: SearchPath::from_node(id0, 0.01), score: 0.01 },
-            0.1, 0.5, 100,
+            FallbackEntry {
+                path: SearchPath::from_node(id0, 0.01),
+                score: 0.01,
+            },
+            0.1,
+            0.5,
+            100,
         );
         assert_eq!(stack.len(), 0, "Score below threshold should be rejected");
 
         // Score 0.06 with threshold 0.05 → should be accepted
         BeamSearch::push_fallback(
             &mut stack,
-            FallbackEntry { path: SearchPath::from_node(id1, 0.06), score: 0.06 },
-            0.1, 0.5, 100,
+            FallbackEntry {
+                path: SearchPath::from_node(id1, 0.06),
+                score: 0.06,
+            },
+            0.1,
+            0.5,
+            100,
         );
         assert_eq!(stack.len(), 1, "Score above threshold should be accepted");
     }
@@ -628,21 +656,36 @@ mod tests {
         // Fill to capacity (max_size=2)
         BeamSearch::push_fallback(
             &mut stack,
-            FallbackEntry { path: SearchPath::from_node(id0, 0.3), score: 0.3 },
-            0.1, 0.5, 2,
+            FallbackEntry {
+                path: SearchPath::from_node(id0, 0.3),
+                score: 0.3,
+            },
+            0.1,
+            0.5,
+            2,
         );
         BeamSearch::push_fallback(
             &mut stack,
-            FallbackEntry { path: SearchPath::from_node(id1, 0.5), score: 0.5 },
-            0.1, 0.5, 2,
+            FallbackEntry {
+                path: SearchPath::from_node(id1, 0.5),
+                score: 0.5,
+            },
+            0.1,
+            0.5,
+            2,
         );
         assert_eq!(stack.len(), 2);
 
         // Push a higher-score entry → should evict the lowest (0.3)
         BeamSearch::push_fallback(
             &mut stack,
-            FallbackEntry { path: SearchPath::from_node(id2, 0.8), score: 0.8 },
-            0.1, 0.5, 2,
+            FallbackEntry {
+                path: SearchPath::from_node(id2, 0.8),
+                score: 0.8,
+            },
+            0.1,
+            0.5,
+            2,
         );
         assert_eq!(stack.len(), 2);
 

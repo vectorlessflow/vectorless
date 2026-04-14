@@ -713,11 +713,14 @@ impl Pilot for LlmPilot {
             .iter()
             .enumerate()
             .filter_map(|(i, &node_id)| {
-                state.tree.get(node_id).map(|node| super::parser::CandidateInfo {
-                    node_id,
-                    title: node.title.clone(),
-                    index: i,
-                })
+                state
+                    .tree
+                    .get(node_id)
+                    .map(|node| super::parser::CandidateInfo {
+                        node_id,
+                        title: node.title.clone(),
+                        index: i,
+                    })
             })
             .collect();
 

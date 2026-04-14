@@ -20,10 +20,10 @@ use tracing::debug;
 
 use super::super::RetrievalContext;
 use super::super::types::{NavigationDecision, NavigationStep, SearchPath};
-use crate::retrieval::pilot::{PilotDecisionCache, score_candidates, NodeScorer, ScoringContext};
 use super::{SearchConfig, SearchResult, SearchTree};
 use crate::document::{DocumentTree, NodeId};
 use crate::retrieval::pilot::Pilot;
+use crate::retrieval::pilot::{NodeScorer, PilotDecisionCache, ScoringContext, score_candidates};
 
 /// Statistics for a node in MCTS.
 #[derive(Debug, Clone, Default)]
