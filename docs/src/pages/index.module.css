@@ -1,42 +1,402 @@
 /**
- * CSS files with the .module.css suffix will be treated as CSS modules
- * and scoped locally.
+ * Homepage styles for Vectorless.
+ * Color tokens come from src/css/custom.css (--primary, --text, etc.)
+ *
+ * NOTE: Do NOT use bare class ".container" — it collides with Docusaurus'
+ * built-in container. Use scoped names like .heroInner / .sectionInner instead.
  */
 
+/* ===== Hero ===== */
 .heroBanner {
-  padding: 4rem 0;
-  text-align: center;
+  padding: 5rem 1.5rem 4rem;
   position: relative;
   overflow: hidden;
   background: linear-gradient(180deg, var(--bg-secondary) 0%, var(--bg) 100%);
 }
 
-.heroBanner h1 {
-  font-size: 52px;
-  font-weight: 700;
-  line-height: 1.15;
-  background: linear-gradient(135deg, var(--text) 0%, var(--primary) 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+.heroInner {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 3rem;
 }
 
-.heroBanner p {
+/* -- Left column -- */
+.heroContent {
+  flex: 1;
+  min-width: 0;
+}
+
+.heroLogo {
+  display: block;
+  max-width: 320px;
+  width: 100%;
+  height: auto;
+  margin-bottom: 1.5rem;
+}
+
+.heroTagline {
   color: var(--text-light);
-  font-size: 20px;
+  font-size: 1.15rem;
   line-height: 1.7;
+  margin: 0 0 1.75rem;
 }
 
+.heroActions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+/* -- Right column: code preview -- */
+.codePreview {
+  flex: 0 0 440px;
+  max-width: 440px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: #1e1e2e;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+}
+
+.codeHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.55rem 1rem;
+  background: #181825;
+}
+
+.codeDots {
+  display: flex;
+  gap: 6px;
+}
+
+.codeDots span {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.codeDots span:nth-child(1) { background: #f38ba8; }
+.codeDots span:nth-child(2) { background: #f9e2af; }
+.codeDots span:nth-child(3) { background: #a6e3a1; }
+
+.codeLang {
+  font-size: 0.7rem;
+  color: #6c7086;
+  font-weight: 500;
+}
+
+.codeBlock {
+  margin: 0;
+  padding: 1rem 1.25rem;
+  font-size: 0.78rem;
+  line-height: 1.7;
+  color: #cdd6f4;
+  overflow-x: auto;
+  background: transparent;
+}
+
+.codeBlock code {
+  font-family: 'SF Mono', 'Fira Code', 'JetBrains Mono', monospace;
+  font-size: 0.76rem;
+}
+
+/* ===== Buttons ===== */
+.buttonPrimary {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.65rem 1.6rem;
+  font-size: 0.92rem;
+  font-weight: 600;
+  border-radius: 8px;
+  background-color: var(--primary);
+  color: #fff;
+  text-decoration: none;
+  transition: background-color 0.2s, transform 0.1s;
+}
+
+.buttonPrimary:hover {
+  background-color: var(--primary-dark);
+  color: #fff;
+  text-decoration: none;
+  transform: translateY(-1px);
+}
+
+.buttonSecondary {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.65rem 1.6rem;
+  font-size: 0.92rem;
+  font-weight: 600;
+  border-radius: 8px;
+  background-color: transparent;
+  color: var(--text);
+  border: 1.5px solid var(--border);
+  text-decoration: none;
+  transition: border-color 0.2s, transform 0.1s;
+}
+
+.buttonSecondary:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+  text-decoration: none;
+  transform: translateY(-1px);
+}
+
+/* ===== Sections ===== */
+.section {
+  padding: 5rem 1.5rem;
+}
+
+.sectionAlt {
+  background-color: var(--bg-secondary);
+}
+
+.sectionInner {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.sectionTitle {
+  font-size: 2rem;
+  font-weight: 700;
+  text-align: center;
+  margin: 0 0 0.5rem;
+  color: var(--text);
+}
+
+.sectionSubtitle {
+  text-align: center;
+  font-size: 1.1rem;
+  color: var(--text-light);
+  margin: 0 0 3rem;
+}
+
+/* ===== Feature Grid ===== */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.5rem;
+}
+
+.card {
+  padding: 1.75rem;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.card:hover {
+  border-color: var(--primary-light);
+  box-shadow: 0 4px 20px rgba(175, 120, 139, 0.08);
+}
+
+.cardIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  font-size: 1.35rem;
+  border-radius: 10px;
+  background: var(--bg-secondary);
+  margin-bottom: 1rem;
+}
+
+.cardTitle {
+  font-size: 1.05rem;
+  font-weight: 600;
+  margin: 0 0 0.5rem;
+  color: var(--text);
+}
+
+.cardDesc {
+  font-size: 0.88rem;
+  line-height: 1.65;
+  color: var(--text-light);
+  margin: 0;
+}
+
+/* ===== How It Works ===== */
+.steps {
+  display: flex;
+  gap: 2rem;
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+.step {
+  flex: 1;
+  text-align: center;
+}
+
+.stepNum {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--primary);
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 700;
+  margin-bottom: 1.25rem;
+}
+
+.stepTitle {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin: 0 0 0.5rem;
+  color: var(--text);
+}
+
+.stepDesc {
+  font-size: 0.88rem;
+  line-height: 1.65;
+  color: var(--text-light);
+  margin: 0;
+}
+
+/* ===== CTA ===== */
+.ctaBox {
+  text-align: center;
+  padding: 4rem 2rem;
+  border-radius: 16px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+}
+
+.ctaTitle {
+  font-size: 2rem;
+  font-weight: 700;
+  margin: 0 0 0.75rem;
+  color: var(--text);
+}
+
+.ctaDesc {
+  font-size: 1.1rem;
+  color: var(--text-light);
+  margin: 0 0 2rem;
+}
+
+.ctaDesc code {
+  padding: 0.2em 0.5em;
+  border-radius: 4px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  font-size: 0.95rem;
+  color: var(--primary-dark);
+}
+
+.ctaActions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+/* ===== Dark theme overrides ===== */
+[data-theme='dark'] .codePreview {
+  border-color: #313244;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+[data-theme='dark'] .card {
+  background: #181825;
+  border-color: #313244;
+}
+
+[data-theme='dark'] .card:hover {
+  border-color: var(--primary);
+}
+
+[data-theme='dark'] .cardIcon {
+  background: #1e1e2e;
+}
+
+[data-theme='dark'] .ctaBox {
+  background: #181825;
+  border-color: #313244;
+}
+
+[data-theme='dark'] .ctaDesc code {
+  background: #1e1e2e;
+  border-color: #313244;
+}
+
+/* ===== Responsive ===== */
 @media screen and (max-width: 996px) {
   .heroBanner {
-    padding: 2rem;
+    padding: 3rem 1.5rem 2.5rem;
   }
 
-  .heroBanner h1 {
-    font-size: 34px;
+  .heroInner {
+    flex-direction: column;
+    gap: 2.5rem;
   }
 
-  .heroBanner p {
-    font-size: 16px;
+  .heroLogo {
+    max-width: 240px;
+  }
+
+  .heroTagline {
+    font-size: 1rem;
+  }
+
+  .codePreview {
+    flex: none;
+    max-width: 100%;
+    width: 100%;
+  }
+
+  .grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .steps {
+    flex-direction: column;
+    gap: 2.5rem;
+  }
+
+  .section {
+    padding: 3.5rem 1.5rem;
+  }
+}
+
+@media screen and (max-width: 600px) {
+  .heroBanner {
+    padding: 2rem 1rem 1.5rem;
+  }
+
+  .heroLogo {
+    max-width: 200px;
+  }
+
+  .heroActions {
+    flex-direction: column;
+  }
+
+  .buttonPrimary,
+  .buttonSecondary {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ctaActions {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .sectionTitle {
+    font-size: 1.5rem;
   }
 }
