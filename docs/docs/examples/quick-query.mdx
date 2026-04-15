@@ -10,12 +10,11 @@ This example demonstrates the basic index-and-query workflow with both Python an
 
 ```python
 import asyncio
-from vectorless import Engine, IndexContext, QueryContext, StrategyPreference
+from vectorless import Engine, IndexContext, QueryContext
 
 async def main():
     # 1. Create engine
     engine = Engine(
-        workspace="./data",
         api_key="sk-...",
         model="gpt-4o",
     )
@@ -29,7 +28,6 @@ async def main():
     answer = await engine.query(
         QueryContext("revenue")
         .with_doc_ids([doc_id])
-        .with_strategy(StrategyPreference.KEYWORD)
     )
     print(f"Keyword result: {answer.single().content[:200]}")
 
@@ -37,7 +35,6 @@ async def main():
     answer = await engine.query(
         QueryContext("What are the main factors affecting performance?")
         .with_doc_ids([doc_id])
-        .with_strategy(StrategyPreference.HYBRID)
     )
     print(f"Score: {answer.single().score:.2f}")
     print(f"Hybrid result: {answer.single().content[:200]}")
@@ -58,7 +55,6 @@ use vectorless::StrategyPreference;
 async fn main() -> vectorless::Result<()> {
     // 1. Create engine
     let engine = EngineBuilder::new()
-        .with_workspace("./data")
         .with_key("sk-...")
         .with_model("gpt-4o")
         .build()

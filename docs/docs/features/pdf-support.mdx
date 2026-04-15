@@ -11,7 +11,7 @@ Vectorless supports PDF documents with full page-level tracking and hierarchical
 ```python
 from vectorless import Engine, IndexContext
 
-engine = Engine(workspace="./data", api_key="sk-...", model="gpt-4o")
+engine = Engine(api_key="sk-...", model="gpt-4o")
 
 # Index a PDF
 result = await engine.index(IndexContext.from_path("./report.pdf"))

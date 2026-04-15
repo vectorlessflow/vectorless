@@ -19,7 +19,6 @@ vectorless = "0.1"
 use vectorless::client::{Engine, EngineBuilder};
 
 let engine = EngineBuilder::new()
-    .with_workspace("./data")
     .with_key("sk-...")
     .with_model("gpt-4o")
     .with_endpoint("https://api.openai.com/v1") // optional

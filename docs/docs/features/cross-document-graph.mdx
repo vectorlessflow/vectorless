@@ -40,15 +40,13 @@ When using the cross-document strategy, the graph boosts scores for connected do
 4. Re-rank the merged result set
 
 ```python
-from vectorless import Engine, QueryContext, StrategyPreference
+from vectorless import Engine, QueryContext
 
-engine = Engine(workspace="./data", api_key="sk-...", model="gpt-4o")
+engine = Engine(api_key="sk-...", model="gpt-4o")
 
 # Query across all documents with graph boosting
 result = await engine.query(
-    QueryContext("Compare the approaches").with_strategy(
-        StrategyPreference.CROSS_DOCUMENT
-    )
+    QueryContext("Compare the approaches")
 )
 ```
 
