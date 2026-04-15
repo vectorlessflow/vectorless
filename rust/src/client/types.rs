@@ -37,9 +37,6 @@ pub struct IndexedDocument {
     /// Page count (for PDFs).
     pub page_count: Option<usize>,
 
-    /// Line count (for text files).
-    pub line_count: Option<usize>,
-
     /// The document tree structure.
     pub tree: Option<DocumentTree>,
 
@@ -63,7 +60,6 @@ impl IndexedDocument {
             description: None,
             source_path: None,
             page_count: None,
-            line_count: None,
             tree: None,
             pages: Vec::new(),
             metrics: None,
@@ -95,12 +91,6 @@ impl IndexedDocument {
         self
     }
 
-    /// Set the line count.
-    pub fn with_line_count(mut self, count: usize) -> Self {
-        self.line_count = Some(count);
-        self
-    }
-
     /// Set the document tree.
     pub fn with_tree(mut self, tree: DocumentTree) -> Self {
         self.tree = Some(tree);
@@ -111,19 +101,6 @@ impl IndexedDocument {
     pub fn with_metrics(mut self, metrics: IndexMetrics) -> Self {
         self.metrics = Some(metrics);
         self
-    }
-
-    /// Add a page content.
-    pub fn add_page(&mut self, page: usize, content: impl Into<String>) {
-        self.pages.push(PageContent {
-            page,
-            content: content.into(),
-        });
-    }
-
-    /// Check if the tree is loaded.
-    pub fn is_loaded(&self) -> bool {
-        self.tree.is_some()
     }
 }
 

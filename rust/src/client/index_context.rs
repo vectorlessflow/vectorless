@@ -65,23 +65,6 @@ pub(crate) enum IndexSource {
     },
 }
 
-impl IndexSource {
-    /// Check if this is a path source.
-    pub fn is_path(&self) -> bool {
-        matches!(self, IndexSource::Path(_))
-    }
-
-    /// Check if this is a content source.
-    pub fn is_content(&self) -> bool {
-        matches!(self, IndexSource::Content { .. })
-    }
-
-    /// Check if this is a bytes source.
-    pub fn is_bytes(&self) -> bool {
-        matches!(self, IndexSource::Bytes { .. })
-    }
-}
-
 // ============================================================
 // Index Context
 // ============================================================
