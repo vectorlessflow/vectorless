@@ -33,7 +33,6 @@ from vectorless import Engine, IndexContext
 async def main():
     # Create engine — api_key and model are required
     engine = Engine(
-        workspace="./data",
         api_key="sk-...",
         model="gpt-4o",
     )
@@ -63,7 +62,6 @@ use vectorless::client::{EngineBuilder, IndexContext, QueryContext};
 #[tokio::main]
 async fn main() -> vectorless::Result<()> {
     let engine = EngineBuilder::new()
-        .with_workspace("./data")
         .with_key("sk-...")
         .with_model("gpt-4o")
         .build()

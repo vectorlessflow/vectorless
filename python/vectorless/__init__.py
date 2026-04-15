@@ -8,7 +8,7 @@ Quick Start:
     from vectorless import Engine, IndexContext, QueryContext
 
     # Create engine
-    engine = Engine(workspace="./data", api_key="sk-...", model="gpt-4o")
+    engine = Engine(api_key="sk-...", model="gpt-4o")
 
     # Index a document
     ctx = IndexContext.from_path("./report.pdf")
