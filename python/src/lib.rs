@@ -283,8 +283,18 @@ impl PyIndexContext {
         Ok(Self { inner: ctx })
     }
 
+    /// Number of document sources.
+    fn __len__(&self) -> usize {
+        self.inner.len()
+    }
+
+    /// Whether no sources are present.
+    fn is_empty(&self) -> bool {
+        self.inner.is_empty()
+    }
+
     fn __repr__(&self) -> String {
-        "IndexContext(...)".to_string()
+        format!("IndexContext(sources={})", self.inner.len())
     }
 }
 
