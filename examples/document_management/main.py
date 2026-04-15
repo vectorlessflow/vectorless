@@ -95,7 +95,7 @@ async def main() -> None:
     # ---- Query a specific document ----
     print("--- query(doc_id_a) ---")
     answer = await engine.query(
-        QueryContext("What storage engines does Alpha support?").with_doc_id(doc_id_a)
+        QueryContext("What storage engines does Alpha support?").with_doc_ids([doc_id_a])
     )
     item = answer.single()
     if item:

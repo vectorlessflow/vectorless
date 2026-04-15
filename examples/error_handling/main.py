@@ -54,7 +54,7 @@ async def main() -> None:
     print("--- Query non-existent document ---")
     try:
         await engine.query(
-            QueryContext("What is this?").with_doc_id("does-not-exist")
+            QueryContext("What is this?").with_doc_ids(["does-not-exist"])
         )
     except VectorlessError as e:
         print(f"  Caught VectorlessError:")

@@ -19,7 +19,7 @@ doc_id = result.doc_id
 
 # Query the PDF
 answer = await engine.query(
-    QueryContext("What is discussed on page 5?").with_doc_id(doc_id)
+    QueryContext("What is discussed on page 5?").with_doc_ids([doc_id])
 )
 print(answer.single().content)
 ```

@@ -81,7 +81,7 @@ from vectorless import QueryContext, StrategyPreference
 
 answer = await engine.query(
     QueryContext("What is the total revenue?")
-    .with_doc_id(doc_id)
+    .with_doc_ids([doc_id])
     .with_strategy(StrategyPreference.HYBRID)
 )
 
@@ -113,7 +113,7 @@ answer = await engine.query(
 ```python
 answer = await engine.query(
     QueryContext("Explain the architecture")
-    .with_doc_id(doc_id)
+    .with_doc_ids([doc_id])
     .with_max_tokens(4000)              # Max tokens in result
     .with_include_reasoning(True)       # Include reasoning chain
     .with_depth_limit(10)               # Max traversal depth

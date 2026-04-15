@@ -105,7 +105,7 @@ async def main() -> None:
     print_separator("Query")
 
     answer = await engine.query(
-        QueryContext("What is this document about?").with_doc_id(doc_id)
+        QueryContext("What is this document about?").with_doc_ids([doc_id])
     )
     item = answer.single()
     if item:

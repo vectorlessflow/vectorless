@@ -28,7 +28,7 @@ async def main():
     # 3. Simple keyword query
     answer = await engine.query(
         QueryContext("revenue")
-        .with_doc_id(doc_id)
+        .with_doc_ids([doc_id])
         .with_strategy(StrategyPreference.KEYWORD)
     )
     print(f"Keyword result: {answer.single().content[:200]}")
@@ -36,7 +36,7 @@ async def main():
     # 4. Complex reasoning query
     answer = await engine.query(
         QueryContext("What are the main factors affecting performance?")
-        .with_doc_id(doc_id)
+        .with_doc_ids([doc_id])
         .with_strategy(StrategyPreference.HYBRID)
     )
     print(f"Score: {answer.single().score:.2f}")
@@ -72,7 +72,7 @@ async fn main() -> vectorless::Result<()> {
     // 3. Query with hybrid strategy
     let answer = engine.query(
         QueryContext::new("What are the main factors affecting performance?")
-            .with_doc_id(&doc_id)
+            .with_doc_ids(vec![doc_id.clone()])
     ).await?;
 
     if let Some(item) = answer.single() {

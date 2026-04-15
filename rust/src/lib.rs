@@ -57,11 +57,6 @@ pub use client::{
     QueryResultItem,
 };
 
-// Retrieval types
-pub use retrieval::StrategyPreference;
-pub use retrieval::pipeline::SearchAlgorithm;
-pub use retrieval::QueryComplexity;
-
 // Error types
 pub use error::{Error, Result};
 

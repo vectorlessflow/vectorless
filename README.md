@@ -75,7 +75,7 @@ async fn main() -> vectorless::Result<()> {
 
     // Query
     let result = engine.query(
-        QueryContext::new("What is the total revenue?").with_doc_id(doc_id)
+        QueryContext::new("What is the total revenue?").with_doc_ids(vec![doc_id.to_string()])
     ).await?;
     println!("Answer: {}", result.content);
 

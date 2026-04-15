@@ -38,7 +38,7 @@ async def main():
 
     # Query the document
     answer = await engine.query(
-        QueryContext("What is the total revenue?").with_doc_id(doc_id)
+        QueryContext("What is the total revenue?").with_doc_ids([doc_id])
     )
     print(answer.single().content)
 
@@ -85,7 +85,7 @@ async fn main() -> vectorless::Result<()> {
     let doc_id = result.doc_id().unwrap();
 
     let result = engine.query(
-        QueryContext::new("What is the total revenue?").with_doc_id(doc_id)
+        QueryContext::new("What is the total revenue?").with_doc_ids(vec![doc_id.to_string()])
     ).await?;
 
     if let Some(item) = result.single() {

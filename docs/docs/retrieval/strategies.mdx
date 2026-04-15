@@ -23,7 +23,7 @@ Fast TF-IDF/BM25 matching against the pre-computed reasoning index. No LLM calls
 ```python
 from vectorless import QueryContext, StrategyPreference
 
-ctx = QueryContext("revenue").with_doc_id(doc_id).with_strategy(
+ctx = QueryContext("revenue").with_doc_ids([doc_id]).with_strategy(
     StrategyPreference.KEYWORD
 )
 ```
@@ -38,7 +38,7 @@ Use when:
 LLM-powered tree navigation with full contextual understanding. The LLM sees the table of contents, node summaries, and makes navigation decisions at each level.
 
 ```python
-ctx = QueryContext("Explain the relationship between architecture and performance").with_doc_id(doc_id).with_strategy(
+ctx = QueryContext("Explain the relationship between architecture and performance").with_doc_ids([doc_id]).with_strategy(
     StrategyPreference.LLM
 )
 ```
@@ -53,7 +53,7 @@ Use when:
 Two-phase retrieval: BM25 pre-filter followed by LLM refinement. Combines the speed of keyword matching with the accuracy of LLM reasoning.
 
 ```python
-ctx = QueryContext("What are the growth trends?").with_doc_id(doc_id).with_strategy(
+ctx = QueryContext("What are the growth trends?").with_doc_ids([doc_id]).with_strategy(
     StrategyPreference.HYBRID
 )
 ```
