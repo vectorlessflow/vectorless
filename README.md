@@ -28,7 +28,7 @@ pip install vectorless
 
 ```python
 import asyncio
-from vectorless import Engine, IndexContext
+from vectorless import Engine, IndexContext, QueryContext
 
 async def main():
     # Create engine — api_key and model are required
@@ -38,11 +38,13 @@ async def main():
     )
 
     # Index a document (PDF or Markdown)
-    result = await engine.index(IndexContext.from_file("./report.pdf"))
+    result = await engine.index(IndexContext.from_path("./report.pdf"))
     doc_id = result.doc_id
 
     # Query
-    result = await engine.query(doc_id, "What is the total revenue?")
+    result = await engine.query(
+        QueryContext("What is the total revenue?").with_doc_ids([doc_id])
+    )
     print(result.single().content)
 
 asyncio.run(main())
