@@ -104,7 +104,7 @@ impl ContentAggregator {
         tree: &DocumentTree,
         query: &str,
     ) -> AggregationResult {
-        let start = std::time::Instant::now();
+        let _start = std::time::Instant::now();
 
         // Step 1: Collect all content chunks from candidates and their descendants
         let chunks = self.collect_chunks(candidates, tree);

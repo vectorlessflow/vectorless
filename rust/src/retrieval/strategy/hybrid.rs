@@ -353,7 +353,7 @@ impl RetrievalStrategy for HybridStrategy {
 
             // Map LLM results back with combined scores
             let mut llm_iter = llm_results.into_iter();
-            for (idx, node_id, bm25_score) in &needs_llm {
+            for (idx, _node_id, bm25_score) in &needs_llm {
                 if candidate_indices.contains(idx) {
                     if let Some(llm_eval) = llm_iter.next() {
                         let combined_score = self.combine_scores(*bm25_score, llm_eval.score);

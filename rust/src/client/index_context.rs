@@ -29,7 +29,11 @@
 //! ```rust,no_run
 //! use vectorless::client::IndexContext;
 //!
+//! // Non-recursive (top-level only)
 //! let ctx = IndexContext::from_dir("./documents");
+//!
+//! // Recursive (includes subdirectories)
+//! let ctx = IndexContext::from_dir_recursive("./documents");
 //! ```
 
 use std::path::PathBuf;
@@ -149,27 +153,58 @@ impl IndexContext {
     /// Create from a directory path.
     ///
     /// Indexes all supported files in the directory (non-recursive).
-    /// Supported extensions: `.md`, `.pdf`, `.txt`.
+    /// Supported extensions: `.md`, `.pdf`.
     pub fn from_dir(dir: impl Into<PathBuf>) -> Self {
+        Self::scan_dir(dir, false)
+    }
+
+    /// Create from a directory path with recursive scanning.
+    ///
+    /// Recursively indexes all supported files in the directory and its
+    /// subdirectories. Supported extensions: `.md`, `.pdf`.
+    pub fn from_dir_recursive(dir: impl Into<PathBuf>) -> Self {
+        Self::scan_dir(dir, true)
+    }
+
+    /// Internal: scan a directory for supported document files.
+    fn scan_dir(dir: impl Into<PathBuf>, recursive: bool) -> Self {
         let dir = dir.into();
-        let supported_extensions = ["md", "markdown", "pdf", "txt"];
+        let supported_extensions = ["md", "pdf"];
 
         let mut sources = Vec::new();
-        if let Ok(entries) = std::fs::read_dir(&dir) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
-                    if supported_extensions.contains(&ext.to_lowercase().as_str()) {
-                        sources.push(IndexSource::Path(path));
-                    }
-                }
-            }
-        }
+        Self::collect_files(&dir, &supported_extensions, recursive, &mut sources);
 
         Self {
             sources,
             name: None,
             options: IndexOptions::default(),
+        }
+    }
+
+    /// Recursively or non-recursively collect supported files.
+    fn collect_files(
+        dir: &std::path::Path,
+        extensions: &[&str],
+        recursive: bool,
+        sources: &mut Vec<IndexSource>,
+    ) {
+        if let Ok(entries) = std::fs::read_dir(dir) {
+            let mut subdirs = Vec::new();
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    if recursive {
+                        subdirs.push(path);
+                    }
+                } else if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+                    if extensions.contains(&ext.to_lowercase().as_str()) {
+                        sources.push(IndexSource::Path(path));
+                    }
+                }
+            }
+            for subdir in subdirs {
+                Self::collect_files(&subdir, extensions, recursive, sources);
+            }
         }
     }
 
@@ -315,5 +350,33 @@ mod tests {
     fn test_from_path_trait() {
         let ctx = IndexContext::from(PathBuf::from("./test.md"));
         assert_eq!(ctx.len(), 1);
+    }
+
+    #[test]
+    fn test_from_dir_recursive() {
+        // Create a temp directory structure:
+        //   tmp/
+        //     a.md
+        //     sub/
+        //       b.md
+        //       deep/
+        //         c.pdf
+        let tmp = std::env::temp_dir().join("vectorless_test_dir_recursive");
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(tmp.join("sub/deep")).unwrap();
+        std::fs::write(tmp.join("a.md"), "# A").unwrap();
+        std::fs::write(tmp.join("sub/b.md"), "# B").unwrap();
+        std::fs::write(tmp.join("sub/deep/c.pdf"), b"%PDF").unwrap();
+        std::fs::write(tmp.join("sub/deep/ignore.dat"), b"xxx").unwrap();
+
+        // Non-recursive: only top-level
+        let ctx = IndexContext::from_dir(&tmp);
+        assert_eq!(ctx.len(), 1); // only a.md
+
+        // Recursive: all levels
+        let ctx = IndexContext::from_dir_recursive(&tmp);
+        assert_eq!(ctx.len(), 3); // a.md, b.md, c.pdf
+
+        let _ = std::fs::remove_dir_all(&tmp);
     }
 }

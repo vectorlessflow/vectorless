@@ -135,7 +135,7 @@ impl EventEmitter {
         for handler in &inner.index_handlers {
             handler(&event);
         }
-        for handler in &inner.async_handlers {
+        for _handler in &inner.async_handlers {
             // For sync context, we just log async handlers
             let event = Event::Index(event.clone());
             info!("Async event: {:?}", event);

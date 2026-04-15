@@ -353,7 +353,7 @@ impl LlmExecutor {
         let truncated = self.truncate_prompt(user);
 
         // Build request based on whether max_tokens is specified
-        let request = if let Some(tokens) = max_tokens {
+        let request = if let Some(_tokens) = max_tokens {
             CreateChatCompletionRequestArgs::default()
                 .model(model)
                 .messages([

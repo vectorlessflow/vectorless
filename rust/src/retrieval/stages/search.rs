@@ -27,8 +27,8 @@ use crate::retrieval::search::{
     SearchTree, ToCNavigator,
 };
 use crate::retrieval::strategy::{
-    CrossDocumentConfig, CrossDocumentStrategy, DocumentEntry, HybridConfig, HybridStrategy,
-    KeywordStrategy, LlmStrategy, RetrievalStrategy,
+    CrossDocumentConfig, CrossDocumentStrategy, HybridConfig, HybridStrategy, KeywordStrategy,
+    LlmStrategy, RetrievalStrategy,
 };
 use crate::retrieval::types::{
     NavigationDecision, ReasoningCandidate, ReasoningStep, StageName, StrategyPreference,
@@ -155,8 +155,7 @@ impl SearchStage {
             }
             StrategyPreference::ForceCrossDocument => {
                 // Build a CrossDocumentStrategy with graph-based boosting
-                let inner: Box<dyn RetrievalStrategy> =
-                    Box::new(self.keyword_strategy.clone());
+                let inner: Box<dyn RetrievalStrategy> = Box::new(self.keyword_strategy.clone());
 
                 let cross_doc =
                     CrossDocumentStrategy::new(inner).with_config(CrossDocumentConfig::default());
@@ -180,9 +179,7 @@ impl SearchStage {
                     info!("Using Hybrid strategy as fallback for ForcePageRange");
                     strategy.clone()
                 } else {
-                    warn!(
-                        "ForcePageRange requires special configuration, falling back to Keyword"
-                    );
+                    warn!("ForcePageRange requires special configuration, falling back to Keyword");
                     Arc::new(self.keyword_strategy.clone())
                 }
             }

@@ -104,7 +104,7 @@ impl Default for ThresholdChecker {
 }
 
 impl SufficiencyChecker for ThresholdChecker {
-    fn check(&self, query: &str, content: &str, token_count: usize) -> SufficiencyLevel {
+    fn check(&self, _query: &str, content: &str, token_count: usize) -> SufficiencyLevel {
         let estimated_tokens = if token_count == 0 {
             self.estimate_tokens(content)
         } else {
