@@ -1,6 +1,6 @@
-# Vectorless Python Bindings
+# Vectorless Python SDK
 
-Python bindings for [vectorless](https://github.com/vectorlessflow/vectorless) - a hierarchical document intelligence engine.
+Python bindings for [vectorless](https://github.com/vectorlessflow/vectorless) — a reasoning-native document intelligence engine for AI.
 
 ## Installation
 
@@ -12,7 +12,7 @@ pip install vectorless
 
 ```python
 import asyncio
-from vectorless import Engine, IndexContext
+from vectorless import Engine, IndexContext, QueryContext
 
 async def main():
     # Create engine — api_key and model are required
@@ -22,12 +22,14 @@ async def main():
     )
 
     # Index a document
-    result = await engine.index(IndexContext.from_file("./report.pdf"))
+    result = await engine.index(IndexContext.from_path("./report.pdf"))
     doc_id = result.doc_id
     print(f"Indexed: {doc_id}")
 
     # Query the document
-    result = await engine.query(doc_id, "What is the total revenue?")
+    result = await engine.query(
+        QueryContext("What is the total revenue?").with_doc_ids([doc_id])
+    )
     item = result.single()
     print(f"Answer: {item.content}")
     print(f"Score: {item.score:.2f}")
@@ -52,7 +54,6 @@ The main entry point for vectorless.
 class Engine:
     def __init__(
         self,
-        workspace: str | None = None,
         config_path: str | None = None,
         api_key: str | None = None,
         model: str | None = None,
@@ -60,7 +61,7 @@ class Engine:
     ): ...
 
     async def index(self, ctx: IndexContext) -> IndexResult: ...
-    async def query(self, doc_id: str | list[str], question: str) -> QueryResult: ...
+    async def query(self, ctx: QueryContext) -> QueryResult: ...
     async def list(self) -> list[DocumentInfo]: ...
     async def remove(self, doc_id: str) -> bool: ...
     async def clear(self) -> int: ...
@@ -75,13 +76,13 @@ Context for indexing documents.
 ```python
 class IndexContext:
     @staticmethod
-    def from_file(path: str, name: str | None = None) -> IndexContext: ...
+    def from_path(path: str, name: str | None = None) -> IndexContext: ...
 
     @staticmethod
-    def from_files(paths: list[str]) -> IndexContext: ...
+    def from_paths(paths: list[str]) -> IndexContext: ...
 
     @staticmethod
-    def from_dir(path: str) -> IndexContext: ...
+    def from_dir(path: str, recursive: bool = True) -> IndexContext: ...
 
     @staticmethod
     def from_content(
@@ -105,16 +106,19 @@ class IndexContext:
 - `"markdown"` / `"md"` - Markdown content
 - `"pdf"` - PDF documents
 
-### IndexOptions
+### QueryContext
+
+Context for querying documents.
 
 ```python
-class IndexOptions:
-    def __init__(
-        self,
-        mode: str = "default",
-        summaries: bool = False,
-        description: bool = False,
-    ): ...
+class QueryContext:
+    def __init__(self, query: str): ...
+
+    def with_doc_ids(self, doc_ids: list[str]) -> QueryContext: ...
+    def with_workspace(self) -> QueryContext: ...
+    def with_max_tokens(self, tokens: int) -> QueryContext: ...
+    def with_include_reasoning(self, include: bool) -> QueryContext: ...
+    def with_depth_limit(self, depth: int) -> QueryContext: ...
 ```
 
 ### IndexResult
@@ -159,6 +163,26 @@ class QueryResultItem:
     def node_ids(self) -> list[str]: ...
 ```
 
+### IndexItem
+
+```python
+class IndexItem:
+    @property
+    def doc_id(self) -> str: ...
+    @property
+    def name(self) -> str: ...
+    @property
+    def format(self) -> str: ...
+    @property
+    def description(self) -> str | None: ...
+    @property
+    def source_path(self) -> str | None: ...
+    @property
+    def page_count(self) -> int | None: ...
+    @property
+    def metrics(self) -> IndexMetrics | None: ...
+```
+
 ### DocumentInfo
 
 ```python
@@ -171,6 +195,8 @@ class DocumentInfo:
     def format(self) -> str: ...
     @property
     def description(self) -> str | None: ...
+    @property
+    def source_path(self) -> str | None: ...
     @property
     def page_count(self) -> int | None: ...
     @property
@@ -195,8 +221,7 @@ class VectorlessError(Exception):
 # Install maturin
 pip install maturin
 
-# Build and install
-cd python
+# Build and install (from project root)
 maturin develop
 
 # Run tests

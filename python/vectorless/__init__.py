@@ -1,8 +1,9 @@
 """
-Vectorless - Hierarchical document intelligence without vectors.
+Vectorless - Reasoning-native document intelligence engine for AI.
 
-A document intelligence engine that uses tree-based understanding
-instead of vector databases for accurate, explainable retrieval.
+An ultra-performant reasoning-native document intelligence engine
+that transforms documents into rich semantic trees and uses LLMs to
+intelligently traverse the hierarchy for accurate, explainable retrieval.
 
 Quick Start:
     from vectorless import Engine, IndexContext, QueryContext
