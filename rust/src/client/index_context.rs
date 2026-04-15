@@ -154,6 +154,10 @@ impl IndexContext {
         let dir = dir.into();
         let supported_extensions = ["md", "pdf"];
 
+        if !dir.exists() {
+            tracing::warn!("Directory not found: {}", dir.display());
+        }
+
         let mut sources = Vec::new();
         Self::collect_files(&dir, &supported_extensions, recursive, &mut sources);
 

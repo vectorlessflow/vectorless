@@ -49,32 +49,6 @@ pub(crate) struct IndexerClient {
 
     /// Event emitter.
     events: EventEmitter,
-
-    /// Configuration.
-    config: IndexerConfig,
-}
-
-/// Indexer configuration.
-#[derive(Debug, Clone)]
-pub struct IndexerConfig {
-    /// Minimum content tokens required to generate a summary.
-    pub min_summary_tokens: usize,
-
-    /// Whether to generate IDs by default.
-    pub generate_ids: bool,
-
-    /// Whether to generate descriptions by default.
-    pub generate_descriptions: bool,
-}
-
-impl Default for IndexerConfig {
-    fn default() -> Self {
-        Self {
-            min_summary_tokens: 20,
-            generate_ids: true,
-            generate_descriptions: false,
-        }
-    }
 }
 
 impl IndexerClient {
@@ -83,7 +57,6 @@ impl IndexerClient {
         Self {
             executor_factory: Arc::new(PipelineExecutor::new),
             events: EventEmitter::new(),
-            config: IndexerConfig::default(),
         }
     }
 
@@ -93,7 +66,6 @@ impl IndexerClient {
         Self {
             executor_factory: Arc::new(move || PipelineExecutor::with_llm((*client).clone())),
             events: EventEmitter::new(),
-            config: IndexerConfig::default(),
         }
     }
 
@@ -101,25 +73,6 @@ impl IndexerClient {
     pub fn with_events(mut self, events: EventEmitter) -> Self {
         self.events = events;
         self
-    }
-
-    /// Create with configuration.
-    pub fn with_config(mut self, config: IndexerConfig) -> Self {
-        self.config = config;
-        self
-    }
-
-    /// Create from an executor factory function.
-    pub(crate) fn from_factory(
-        factory: Arc<dyn Fn() -> PipelineExecutor + Send + Sync>,
-        events: EventEmitter,
-        config: IndexerConfig,
-    ) -> Self {
-        Self {
-            executor_factory: factory,
-            events,
-            config,
-        }
     }
 
     /// Index a document from an index context.
@@ -166,8 +119,15 @@ impl IndexerClient {
     ) -> Result<IndexedDocument> {
         let path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
 
-        if !path.exists() {
-            return Err(Error::Parse(format!("File not found: {}", path.display())));
+        // Validate file before indexing
+        let validation = crate::utils::validate_file(&path)?;
+        if !validation.valid {
+            return Err(Error::Parse(
+                validation.errors.first().cloned().unwrap_or_else(|| "Invalid file".to_string()),
+            ));
+        }
+        for warning in &validation.warnings {
+            tracing::warn!("{}", warning);
         }
 
         // Emit start event
@@ -206,6 +166,14 @@ impl IndexerClient {
         options: &IndexOptions,
         existing_tree: Option<&crate::DocumentTree>,
     ) -> Result<IndexedDocument> {
+        // Validate content before indexing
+        let validation = crate::utils::validate_content(content, format);
+        if !validation.valid {
+            return Err(Error::Parse(
+                validation.errors.first().cloned().unwrap_or_else(|| "Invalid content".to_string()),
+            ));
+        }
+
         self.events.emit_index(IndexEvent::Started {
             path: name.unwrap_or("content").to_string(),
         });
@@ -235,6 +203,14 @@ impl IndexerClient {
         options: &IndexOptions,
         existing_tree: Option<&crate::DocumentTree>,
     ) -> Result<IndexedDocument> {
+        // Validate bytes before indexing
+        let validation = crate::utils::validate_bytes(bytes, format);
+        if !validation.valid {
+            return Err(Error::Parse(
+                validation.errors.first().cloned().unwrap_or_else(|| "Invalid bytes".to_string()),
+            ));
+        }
+
         self.events.emit_index(IndexEvent::Started {
             path: name.unwrap_or("bytes").to_string(),
         });
@@ -257,15 +233,6 @@ impl IndexerClient {
         let result = executor.execute(input, pipeline_options).await?;
 
         self.build_indexed_document(doc_id, result, format, name, None)
-    }
-
-    /// Build pipeline options from client options.
-    fn build_pipeline_options(
-        &self,
-        options: &IndexOptions,
-        format: DocumentFormat,
-    ) -> PipelineOptions {
-        self.build_pipeline_options_with_existing(options, format, None)
     }
 
     /// Build pipeline options with optional existing tree for incremental updates.
@@ -352,63 +319,6 @@ impl IndexerClient {
             .ok_or_else(|| Error::Parse(format!("Unsupported format: {}", ext)))
     }
 
-    /// Validate a document before indexing.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the file doesn't exist or is not readable.
-    pub fn validate(&self, path: impl AsRef<Path>) -> Result<ValidationResult> {
-        let path = path.as_ref();
-
-        if !path.exists() {
-            return Ok(ValidationResult {
-                valid: false,
-                errors: vec![format!("File not found: {}", path.display())],
-                warnings: vec![],
-                format: None,
-                estimated_size: 0,
-            });
-        }
-
-        let metadata = std::fs::metadata(path)
-            .map_err(|e| Error::Parse(format!("Cannot read file metadata: {}", e)))?;
-
-        let estimated_size = metadata.len() as usize;
-        let mut warnings = Vec::new();
-
-        // Check file size
-        if estimated_size > 100 * 1024 * 1024 {
-            warnings.push("Large file (>100MB) may take longer to index".to_string());
-        }
-
-        // Detect format
-        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
-        let format = DocumentFormat::from_extension(ext);
-
-        if format.is_none() {
-            return Ok(ValidationResult {
-                valid: false,
-                errors: vec![format!("Unsupported format: {}", ext)],
-                warnings,
-                format: None,
-                estimated_size,
-            });
-        }
-
-        Ok(ValidationResult {
-            valid: true,
-            errors: vec![],
-            warnings,
-            format,
-            estimated_size,
-        })
-    }
-
-    /// Convert IndexedDocument to PersistedDocument for storage.
-    pub fn to_persisted(&self, doc: IndexedDocument) -> PersistedDocument {
-        self.to_persisted_with_options(doc, &PipelineOptions::default())
-    }
-
     /// Convert IndexedDocument to PersistedDocument, storing fingerprints from pipeline options.
     pub fn to_persisted_with_options(
         &self,
@@ -466,28 +376,8 @@ impl Clone for IndexerClient {
         Self {
             executor_factory: Arc::clone(&self.executor_factory),
             events: self.events.clone(),
-            config: self.config.clone(),
         }
     }
-}
-
-/// Document validation result.
-#[derive(Debug, Clone)]
-pub(crate) struct ValidationResult {
-    /// Whether the document is valid for indexing.
-    pub valid: bool,
-
-    /// Validation errors (prevents indexing).
-    pub errors: Vec<String>,
-
-    /// Validation warnings (non-blocking).
-    pub warnings: Vec<String>,
-
-    /// Detected document format.
-    pub format: Option<DocumentFormat>,
-
-    /// Estimated file size in bytes.
-    pub estimated_size: usize,
 }
 
 #[cfg(test)]
@@ -498,16 +388,6 @@ mod tests {
     fn test_indexer_client_creation() {
         let executor = PipelineExecutor::new();
         let client = IndexerClient::new(executor);
-        assert_eq!(client.config.min_summary_tokens, 20);
-    }
-
-    #[test]
-    fn test_validate_missing_file() {
-        let executor = PipelineExecutor::new();
-        let client = IndexerClient::new(executor);
-
-        let result = client.validate("./nonexistent.md").unwrap();
-        assert!(!result.valid);
-        assert!(!result.errors.is_empty());
+        let _ = client;
     }
 }
