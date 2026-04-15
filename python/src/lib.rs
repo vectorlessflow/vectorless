@@ -9,7 +9,6 @@ use pyo3_async_runtimes::tokio::future_into_py;
 use std::sync::Arc;
 use tokio::runtime::Runtime;
 
-use ::vectorless::StrategyPreference;
 use ::vectorless::client::{
     DocumentFormat, DocumentInfo, Engine, EngineBuilder, FailedItem, IndexContext, IndexItem,
     IndexMode, IndexOptions, IndexResult, QueryContext, QueryResult, QueryResultItem,
@@ -226,11 +225,7 @@ impl PyIndexContext {
     #[staticmethod]
     #[pyo3(signature = (path, recursive=false))]
     fn from_dir(path: String, recursive: bool) -> Self {
-        let inner = if recursive {
-            IndexContext::from_dir_recursive(&path)
-        } else {
-            IndexContext::from_dir(&path)
-        };
+        let inner = IndexContext::from_dir(&path, recursive);
         Self { inner }
     }
 
@@ -299,83 +294,6 @@ impl PyIndexContext {
 }
 
 // ============================================================
-// StrategyPreference
-// ============================================================
-
-/// Retrieval strategy preference.
-///
-/// Controls how the engine searches the document tree.
-///
-/// ```python
-/// from vectorless import QueryContext, StrategyPreference
-///
-/// # Force keyword-only (fastest, no LLM calls during search)
-/// ctx = QueryContext("revenue").with_doc_id(doc_id).with_strategy(StrategyPreference.KEYWORD)
-///
-/// # Force LLM-guided navigation (most accurate, uses more tokens)
-/// ctx = QueryContext("explain the architecture").with_doc_id(doc_id).with_strategy(StrategyPreference.LLM)
-///
-/// # Force hybrid (BM25 + LLM refinement)
-/// ctx = QueryContext("growth trends").with_doc_id(doc_id).with_strategy(StrategyPreference.HYBRID)
-/// ```
-#[pyclass(name = "StrategyPreference", skip_from_py_object)]
-#[derive(Clone)]
-pub struct PyStrategyPreference {
-    inner: StrategyPreference,
-}
-
-#[pymethods]
-impl PyStrategyPreference {
-    /// Auto-select based on query complexity (default).
-    #[classattr]
-    const AUTO: PyStrategyPreference = PyStrategyPreference {
-        inner: StrategyPreference::Auto,
-    };
-
-    /// Force keyword-based strategy (fast, no LLM during search).
-    #[classattr]
-    const KEYWORD: PyStrategyPreference = PyStrategyPreference {
-        inner: StrategyPreference::ForceKeyword,
-    };
-
-    /// Force LLM-guided navigation (deep reasoning).
-    #[classattr]
-    const LLM: PyStrategyPreference = PyStrategyPreference {
-        inner: StrategyPreference::ForceLlm,
-    };
-
-    /// Force hybrid strategy (BM25 + LLM refinement).
-    #[classattr]
-    const HYBRID: PyStrategyPreference = PyStrategyPreference {
-        inner: StrategyPreference::ForceHybrid,
-    };
-
-    /// Force cross-document strategy (multi-document retrieval).
-    #[classattr]
-    const CROSS_DOCUMENT: PyStrategyPreference = PyStrategyPreference {
-        inner: StrategyPreference::ForceCrossDocument,
-    };
-
-    /// Force page-range strategy (filter by page range).
-    #[classattr]
-    const PAGE_RANGE: PyStrategyPreference = PyStrategyPreference {
-        inner: StrategyPreference::ForcePageRange,
-    };
-
-    fn __repr__(&self) -> String {
-        let name = match self.inner {
-            StrategyPreference::Auto => "AUTO",
-            StrategyPreference::ForceKeyword => "KEYWORD",
-            StrategyPreference::ForceLlm => "LLM",
-            StrategyPreference::ForceHybrid => "HYBRID",
-            StrategyPreference::ForceCrossDocument => "CROSS_DOCUMENT",
-            StrategyPreference::ForcePageRange => "PAGE_RANGE",
-        };
-        format!("StrategyPreference.{}", name)
-    }
-}
-
-// ============================================================
 // QueryContext
 // ============================================================
 
@@ -384,8 +302,8 @@ impl PyStrategyPreference {
 /// ```python
 /// from vectorless import QueryContext
 ///
-/// # Query a single document
-/// ctx = QueryContext("What is the total revenue?").with_doc_id(doc_id)
+/// # Query specific documents
+/// ctx = QueryContext("What is the total revenue?").with_doc_ids([doc_id])
 ///
 /// # Query multiple documents
 /// ctx = QueryContext("What is the architecture?").with_doc_ids(["doc-1", "doc-2"])
@@ -408,13 +326,7 @@ impl PyQueryContext {
         }
     }
 
-    /// Set scope to a single document.
-    fn with_doc_id(&self, doc_id: String) -> Self {
-        let ctx = self.inner.clone().with_doc_id(&doc_id);
-        Self { inner: ctx }
-    }
-
-    /// Set scope to multiple documents.
+    /// Set scope to specific documents.
     fn with_doc_ids(&self, doc_ids: Vec<String>) -> Self {
         let ctx = self.inner.clone().with_doc_ids(doc_ids);
         Self { inner: ctx }
@@ -441,15 +353,6 @@ impl PyQueryContext {
     /// Set the maximum tree traversal depth.
     fn with_depth_limit(&self, depth: usize) -> Self {
         let ctx = self.inner.clone().with_depth_limit(depth);
-        Self { inner: ctx }
-    }
-
-    /// Set the retrieval strategy.
-    ///
-    /// Args:
-    ///     strategy: A StrategyPreference constant, e.g. StrategyPreference.LLM.
-    fn with_strategy(&self, strategy: &PyStrategyPreference) -> Self {
-        let ctx = self.inner.clone().with_strategy(strategy.inner);
         Self { inner: ctx }
     }
 
@@ -1088,6 +991,11 @@ impl PyIndexItem {
     }
 
     #[getter]
+    fn source_path(&self) -> Option<&str> {
+        self.inner.source_path.as_deref()
+    }
+
+    #[getter]
     fn page_count(&self) -> Option<usize> {
         self.inner.page_count
     }
@@ -1197,6 +1105,11 @@ impl PyDocumentInfo {
     #[getter]
     fn description(&self) -> Option<&str> {
         self.inner.description.as_deref()
+    }
+
+    #[getter]
+    fn source_path(&self) -> Option<&str> {
+        self.inner.source_path.as_deref()
     }
 
     #[getter]
@@ -1484,7 +1397,6 @@ fn run_metrics_report(engine: Arc<Engine>) -> PyMetricsReport {
 /// from vectorless import Engine, IndexContext, QueryContext
 ///
 /// engine = Engine(
-///     workspace="./data",
 ///     api_key="sk-...",
 ///     model="gpt-4o",
 /// )
@@ -1494,7 +1406,7 @@ fn run_metrics_report(engine: Arc<Engine>) -> PyMetricsReport {
 /// doc_id = result.doc_id
 ///
 /// # Query
-/// answer = await engine.query(QueryContext("What is the revenue?").with_doc_id(doc_id))
+/// answer = await engine.query(QueryContext("What is the revenue?").with_doc_ids([doc_id]))
 /// print(answer.single().content)
 /// ```
 #[pyclass(name = "Engine")]
@@ -1507,7 +1419,6 @@ impl PyEngine {
     /// Create a new Engine.
     ///
     /// Args:
-    ///     workspace: Path to the workspace directory.
     ///     config_path: Path to configuration file (optional).
     ///     api_key: **Required**. LLM API key.
     ///     model: **Required**. LLM model name.
@@ -1516,9 +1427,8 @@ impl PyEngine {
     /// Raises:
     ///     VectorlessError: If engine creation fails.
     #[new]
-    #[pyo3(signature = (workspace=None, config_path=None, api_key=None, model=None, endpoint=None))]
+    #[pyo3(signature = (config_path=None, api_key=None, model=None, endpoint=None))]
     fn new(
-        workspace: Option<String>,
         config_path: Option<String>,
         api_key: Option<String>,
         model: Option<String>,
@@ -1536,9 +1446,6 @@ impl PyEngine {
 
             if let Some(path) = &config_path {
                 builder = builder.with_config_path(path);
-            }
-            if let Some(ws) = &workspace {
-                builder = builder.with_workspace(ws);
             }
             if let Some(m) = &model {
                 builder = builder.with_model(m);
@@ -1661,9 +1568,9 @@ impl PyEngine {
 /// ```python
 /// from vectorless import Engine, IndexContext, QueryContext
 ///
-/// engine = Engine(workspace="./data", api_key="sk-...", model="gpt-4o")
+/// engine = Engine(api_key="sk-...", model="gpt-4o")
 /// result = await engine.index(IndexContext.from_path("./report.pdf"))
-/// answer = await engine.query(QueryContext("What is the revenue?").with_doc_id(result.doc_id))
+/// answer = await engine.query(QueryContext("What is the revenue?").with_doc_ids([result.doc_id]))
 /// print(answer.single().content)
 /// ```
 #[pymodule]
@@ -1671,7 +1578,6 @@ fn _vectorless(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<VectorlessError>()?;
     m.add_class::<PyIndexOptions>()?;
     m.add_class::<PyIndexContext>()?;
-    m.add_class::<PyStrategyPreference>()?;
     m.add_class::<PyQueryContext>()?;
     m.add_class::<PyIndexResult>()?;
     m.add_class::<PyIndexItem>()?;

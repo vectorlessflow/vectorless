@@ -18,7 +18,8 @@
 //! # async fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! // Create a client with default settings
 //! let client = EngineBuilder::new()
-//!     .with_workspace("./my_workspace")
+//!     .with_key("sk-...")
+//!     .with_model("gpt-4o")
 //!     .build()
 //!     .await?;
 //!
@@ -28,7 +29,7 @@
 //!
 //! // Query the document
 //! let result = client.query(
-//!     QueryContext::new("What is this?").with_doc_id(doc_id)
+//!     QueryContext::new("What is this?").with_doc_ids(vec![doc_id.to_string()])
 //! ).await?;
 //! if let Some(item) = result.single() {
 //!     println!("{}", item.content);
@@ -66,7 +67,6 @@
 
 mod builder;
 mod engine;
-pub mod events;
 mod index_context;
 mod indexer;
 mod query_context;
@@ -87,12 +87,6 @@ pub use engine::Engine;
 
 pub use index_context::IndexContext;
 pub use query_context::QueryContext;
-
-// ============================================================
-// Events
-// ============================================================
-
-pub use events::EventEmitter;
 
 // ============================================================
 // Result & Info Types

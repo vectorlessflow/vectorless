@@ -14,6 +14,6 @@ mod validator;
 pub(crate) use loader::ConfigLoader;
 pub(crate) use types::{
     CacheConfig, CompressionAlgorithm, ConcurrencyConfig, Config, FallbackBehavior, FallbackConfig,
-    IndexerConfig, LlmConfig, LlmMetricsConfig, MetricsConfig, OnAllFailedBehavior,
+    IndexerConfig, LlmClientConfig, LlmConfig, LlmMetricsConfig, LlmPoolConfig, MetricsConfig, OnAllFailedBehavior,
     PilotMetricsConfig, RetrievalConfig, RetrievalMetricsConfig, SufficiencyConfig, SummaryConfig,
 };

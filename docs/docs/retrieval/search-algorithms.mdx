@@ -72,7 +72,7 @@ from vectorless import QueryContext
 
 ctx = (
     QueryContext("complex multi-hop question")
-    .with_doc_id(doc_id)
+    .with_doc_ids([doc_id])
     .with_depth_limit(10)      # Max tree traversal depth
     .with_max_tokens(4000)     # Max tokens in result
 )

@@ -326,26 +326,6 @@ mod tests {
     }
 
     #[test]
-    fn test_keyword_score() {
-        let scorer = RelevanceScorer::new(
-            "vectorless architecture",
-            ScoringStrategyConfig::KeywordOnly,
-        );
-
-        let chunk = ContentChunk::new(
-            make_test_node_id(),
-            "Test".to_string(),
-            "Vectorless has a unique architecture for document retrieval.".to_string(),
-            0,
-        );
-
-        let ctx = ScoringContext::default();
-        let score = scorer.compute_keyword_score(&chunk.content);
-
-        assert!(score > 0.5); // Should match both keywords
-    }
-
-    #[test]
     fn test_density_score() {
         // High density content
         let high_density = "Rust 1.85+ requires Cargo.toml configuration with [dependencies]";

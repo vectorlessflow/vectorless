@@ -30,7 +30,7 @@ use tracing::{debug, info};
 use crate::error::Result;
 use crate::storage::{PersistedDocument, Workspace};
 
-use super::events::{EventEmitter, WorkspaceEvent};
+use crate::events::{EventEmitter, WorkspaceEvent};
 use super::types::DocumentInfo;
 
 /// Workspace management client.
@@ -49,28 +49,6 @@ pub(crate) struct WorkspaceClient {
 
     /// Event emitter.
     events: EventEmitter,
-
-    /// Configuration.
-    config: WorkspaceClientConfig,
-}
-
-/// Workspace client configuration.
-#[derive(Debug, Clone)]
-pub(crate) struct WorkspaceClientConfig {
-    /// Auto-save interval in seconds (None = disabled).
-    pub auto_save_interval: Option<u64>,
-
-    /// Enable verbose logging.
-    pub verbose: bool,
-}
-
-impl Default for WorkspaceClientConfig {
-    fn default() -> Self {
-        Self {
-            auto_save_interval: None,
-            verbose: false,
-        }
-    }
 }
 
 impl WorkspaceClient {
@@ -79,7 +57,6 @@ impl WorkspaceClient {
         Self {
             workspace: Arc::new(workspace),
             events: EventEmitter::new(),
-            config: WorkspaceClientConfig::default(),
         }
     }
 
@@ -87,21 +64,6 @@ impl WorkspaceClient {
     pub fn with_events(mut self, events: EventEmitter) -> Self {
         self.events = events;
         self
-    }
-
-    /// Create with configuration.
-    pub fn with_config(mut self, config: WorkspaceClientConfig) -> Self {
-        self.config = config;
-        self
-    }
-
-    /// Create from an existing workspace Arc.
-    pub(crate) fn from_arc(workspace: Arc<Workspace>, events: EventEmitter) -> Self {
-        Self {
-            workspace,
-            events,
-            config: WorkspaceClientConfig::default(),
-        }
     }
 
     /// Save a document to the workspace.
@@ -192,6 +154,7 @@ impl WorkspaceClient {
                     name: meta.doc_name,
                     format: meta.doc_type,
                     description: meta.doc_description,
+                    source_path: meta.path,
                     page_count: meta.page_count,
                     line_count: meta.line_count,
                 });
@@ -216,35 +179,10 @@ impl WorkspaceClient {
                 name: meta.doc_name,
                 format: meta.doc_type,
                 description: meta.doc_description,
+                source_path: meta.path,
                 page_count: meta.page_count,
                 line_count: meta.line_count,
             }))
-    }
-
-    /// Remove multiple documents from the workspace.
-    ///
-    /// Returns the number of documents successfully removed.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the workspace write fails.
-    pub async fn batch_remove(&self, doc_ids: &[&str]) -> Result<usize> {
-        let mut removed = 0;
-
-        for doc_id in doc_ids {
-            if self.workspace.remove(doc_id).await? {
-                removed += 1;
-                self.events.emit_workspace(WorkspaceEvent::Removed {
-                    doc_id: doc_id.to_string(),
-                });
-            }
-        }
-
-        if removed > 0 {
-            info!("Batch removed {} documents", removed);
-        }
-
-        Ok(removed)
     }
 
     /// Clear all documents from the workspace.
@@ -271,23 +209,6 @@ impl WorkspaceClient {
         Ok(count)
     }
 
-    /// Get workspace statistics.
-    pub async fn stats(&self) -> Result<WorkspaceStats> {
-        Ok(WorkspaceStats {
-            document_count: self.workspace.len().await,
-        })
-    }
-
-    /// Get the number of documents in the workspace.
-    pub async fn len(&self) -> usize {
-        self.workspace.len().await
-    }
-
-    /// Check if the workspace is empty.
-    pub async fn is_empty(&self) -> bool {
-        self.workspace.is_empty().await
-    }
-
     /// Get the underlying workspace Arc (for advanced use).
     pub(crate) fn inner(&self) -> Arc<Workspace> {
         Arc::clone(&self.workspace)
@@ -309,11 +230,4 @@ impl WorkspaceClient {
     pub async fn set_graph(&self, graph: &crate::graph::DocumentGraph) -> Result<()> {
         self.workspace.set_graph(graph).await
     }
-}
-
-/// Workspace statistics.
-#[derive(Debug, Clone)]
-pub(crate) struct WorkspaceStats {
-    /// Number of documents in the workspace.
-    pub document_count: usize,
 }

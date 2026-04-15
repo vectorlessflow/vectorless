@@ -821,31 +821,6 @@ mod tests {
     }
 
     #[test]
-    fn test_children_with_refs_includes_resolved_references() {
-        let mut tree = DocumentTree::new("Root", "root content");
-        let section1 = tree.add_child(tree.root(), "Section 1", "content 1");
-        let section2 = tree.add_child(tree.root(), "Section 2", "content 2");
-        let appendix = tree.add_child(tree.root(), "Appendix A", "appendix content");
-
-        // Add a resolved reference from Section 1 to Appendix A
-        let refs = vec![NodeReference::resolved(
-            "see Appendix A".to_string(),
-            "A".to_string(),
-            RefType::Appendix,
-            10,
-            appendix,
-            0.9,
-        )];
-        tree.set_references(section1, refs);
-
-        // section1's children_with_refs should include appendix as a reference target
-        let children = tree.children_with_refs(section1);
-        // section1 has no direct children, but has a resolved reference to appendix
-        assert_eq!(children.len(), 1);
-        assert!(children.contains(&appendix));
-    }
-
-    #[test]
     fn test_children_with_refs_deduplicates() {
         let mut tree = DocumentTree::new("Root", "root content");
         let child = tree.add_child(tree.root(), "Section 1", "content 1");

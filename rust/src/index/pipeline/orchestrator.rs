@@ -31,6 +31,7 @@ use crate::error::Result;
 
 use super::super::PipelineOptions;
 use super::super::stages::IndexStage;
+use super::checkpoint::{CheckpointContextData, CheckpointManager, PipelineCheckpoint};
 use super::context::{IndexContext, IndexInput, PipelineResult, StageResult};
 use super::policy::FailurePolicy;
 
@@ -93,6 +94,8 @@ pub struct ExecutionGroup {
 pub struct PipelineOrchestrator {
     /// Registered stages with metadata.
     stages: Vec<StageEntry>,
+    /// Shared LLM client injected into pipeline context.
+    llm_client: Option<crate::llm::LlmClient>,
 }
 
 impl Default for PipelineOrchestrator {
@@ -104,7 +107,16 @@ impl Default for PipelineOrchestrator {
 impl PipelineOrchestrator {
     /// Create a new empty orchestrator.
     pub fn new() -> Self {
-        Self { stages: Vec::new() }
+        Self {
+            stages: Vec::new(),
+            llm_client: None,
+        }
+    }
+
+    /// Set the shared LLM client (injected into pipeline context).
+    pub fn with_llm_client(mut self, client: crate::llm::LlmClient) -> Self {
+        self.llm_client = Some(client);
+        self
     }
 
     /// Add a stage with default priority (100).
@@ -452,8 +464,46 @@ impl PipelineOrchestrator {
         let mut opts = options;
         let existing_tree = opts.existing_tree.take();
         let mut ctx = IndexContext::new(input, opts);
+        // Inject shared LLM client into context for stages that need it (e.g. ReasoningIndexStage)
+        if let Some(client) = self.llm_client.take() {
+            ctx = ctx.with_llm_client(client);
+        }
         if let Some(tree) = existing_tree {
             ctx = ctx.with_existing_tree(tree);
+        }
+
+        // Try to resume from checkpoint
+        if let Some(ref checkpoint_dir) = ctx.options.checkpoint_dir {
+            let manager = CheckpointManager::new(checkpoint_dir);
+            if let Some(checkpoint) = manager.load(&ctx.doc_id) {
+                if CheckpointManager::is_valid_for_resume(
+                    &checkpoint,
+                    &ctx.source_hash,
+                    ctx.options.processing_version,
+                    &ctx.options.logic_fingerprint().to_string(),
+                ) {
+                    info!(
+                        "Resuming from checkpoint: {} stages already completed",
+                        checkpoint.completed_stages.len()
+                    );
+                    // Restore context data from checkpoint
+                    ctx.raw_nodes = checkpoint.context_data.raw_nodes;
+                    if let Some(tree) = checkpoint.context_data.tree {
+                        ctx.tree = Some(tree);
+                    }
+                    ctx.metrics = checkpoint.context_data.metrics;
+                    ctx.page_count = checkpoint.context_data.page_count;
+                    ctx.line_count = checkpoint.context_data.line_count;
+                    ctx.description = checkpoint.context_data.description;
+                    // Mark completed stages as done
+                    for stage_name in &checkpoint.completed_stages {
+                        ctx.stage_results
+                            .insert(stage_name.clone(), StageResult::success(stage_name));
+                    }
+                } else {
+                    info!("Checkpoint exists but invalid, starting fresh");
+                }
+            }
         }
 
         // Execute each group
@@ -472,6 +522,19 @@ impl PipelineOrchestrator {
             }
 
             if group.parallel && group.stage_indices.len() == 2 {
+                // Check if all stages in this group are already completed (from checkpoint)
+                let all_completed = group.stage_indices.iter().all(|&idx| {
+                    let name = self.stages[idx].stage.name();
+                    ctx.stage_results.contains_key(name)
+                });
+                if all_completed {
+                    let names: Vec<&str> = group.stage_indices.iter()
+                        .map(|&i| self.stages[i].stage.name())
+                        .collect();
+                    info!("Skipping already completed parallel group: {:?}", names);
+                    continue;
+                }
+
                 // === Parallel execution for 2-stage groups ===
                 // One stage gets the main ctx (mutates tree), the other
                 // gets a cloned snapshot (read-only). Results are merged back.
@@ -566,6 +629,13 @@ impl PipelineOrchestrator {
                 for &idx in &group.stage_indices {
                     let entry = &mut self.stages[idx];
                     let stage_name = entry.stage.name().to_string();
+
+                    // Skip stages already completed (from checkpoint resume)
+                    if ctx.stage_results.contains_key(&stage_name) {
+                        info!("Skipping already completed stage: {}", stage_name);
+                        continue;
+                    }
+
                     let policy = entry.stage.failure_policy();
 
                     info!(
@@ -589,12 +659,17 @@ impl PipelineOrchestrator {
                                 );
                             } else {
                                 error!("Stage {} failed, stopping pipeline: {}", stage_name, e);
+                                // Save checkpoint before returning error
+                                Self::save_checkpoint(&ctx);
                                 return Err(e);
                             }
                         }
                     }
                 }
             }
+
+            // Save checkpoint after each group completes
+            Self::save_checkpoint(&ctx);
         }
 
         let total_duration = total_start.elapsed().as_millis() as u64;
@@ -603,8 +678,47 @@ impl PipelineOrchestrator {
             total_duration, ctx.name
         );
 
+        // Clear checkpoint on successful completion
+        if let Some(ref checkpoint_dir) = ctx.options.checkpoint_dir {
+            let manager = CheckpointManager::new(checkpoint_dir);
+            if let Err(e) = manager.clear(&ctx.doc_id) {
+                warn!("Failed to clear checkpoint for {}: {}", ctx.doc_id, e);
+            }
+        }
+
         // Finalize result
         Ok(ctx.finalize())
+    }
+
+    /// Save a checkpoint of the current pipeline state.
+    fn save_checkpoint(ctx: &IndexContext) {
+        let checkpoint_dir = match ctx.options.checkpoint_dir {
+            Some(ref dir) => dir.clone(),
+            None => return,
+        };
+
+        let completed_stages: Vec<String> = ctx.stage_results.keys().cloned().collect();
+        let checkpoint = PipelineCheckpoint {
+            doc_id: ctx.doc_id.clone(),
+            source_hash: ctx.source_hash.clone(),
+            processing_version: ctx.options.processing_version,
+            config_fingerprint: ctx.options.logic_fingerprint().to_string(),
+            completed_stages,
+            context_data: CheckpointContextData {
+                raw_nodes: ctx.raw_nodes.clone(),
+                tree: ctx.tree.clone(),
+                metrics: ctx.metrics.clone(),
+                page_count: ctx.page_count,
+                line_count: ctx.line_count,
+                description: ctx.description.clone(),
+            },
+            timestamp: chrono::Utc::now(),
+        };
+
+        let manager = CheckpointManager::new(checkpoint_dir);
+        if let Err(e) = manager.save(&ctx.doc_id, &checkpoint) {
+            warn!("Failed to save checkpoint for {}: {}", ctx.doc_id, e);
+        }
     }
 
     /// Get list of stage names in execution order.

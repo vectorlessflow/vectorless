@@ -21,11 +21,9 @@ Vectorless provides five retrieval strategies, each designed for different query
 Fast TF-IDF/BM25 matching against the pre-computed reasoning index. No LLM calls during search.
 
 ```python
-from vectorless import QueryContext, StrategyPreference
+from vectorless import QueryContext
 
-ctx = QueryContext("revenue").with_doc_id(doc_id).with_strategy(
-    StrategyPreference.KEYWORD
-)
+ctx = QueryContext("revenue").with_doc_ids([doc_id])
 ```
 
 Use when:
@@ -38,9 +36,7 @@ Use when:
 LLM-powered tree navigation with full contextual understanding. The LLM sees the table of contents, node summaries, and makes navigation decisions at each level.
 
 ```python
-ctx = QueryContext("Explain the relationship between architecture and performance").with_doc_id(doc_id).with_strategy(
-    StrategyPreference.LLM
-)
+ctx = QueryContext("Explain the relationship between architecture and performance").with_doc_ids([doc_id])
 ```
 
 Use when:
@@ -53,9 +49,7 @@ Use when:
 Two-phase retrieval: BM25 pre-filter followed by LLM refinement. Combines the speed of keyword matching with the accuracy of LLM reasoning.
 
 ```python
-ctx = QueryContext("What are the growth trends?").with_doc_id(doc_id).with_strategy(
-    StrategyPreference.HYBRID
-)
+ctx = QueryContext("What are the growth trends?").with_doc_ids([doc_id])
 ```
 
 The recommended default for most queries. Fast pre-filtering reduces the number of nodes sent to the LLM, keeping token costs manageable while maintaining high accuracy.
@@ -65,16 +59,14 @@ The recommended default for most queries. Fast pre-filtering reduces the number 
 Searches across multiple indexed documents and aggregates results. Uses the cross-document relationship graph for score boosting.
 
 ```python
-ctx = QueryContext("Compare the architectures").with_strategy(
-    StrategyPreference.CROSS_DOCUMENT
-)
+ctx = QueryContext("Compare the architectures")
 ```
 
 When a high-confidence result is found in one document, neighbor documents in the graph receive a score boost, surfacing related content across the workspace.
 
 ## Auto Selection
 
-When using `StrategyPreference.AUTO` (default), the engine analyzes query complexity and selects the appropriate strategy:
+By default, the engine analyzes query complexity and automatically selects the appropriate strategy:
 
 - Simple keyword queries → Keyword strategy
 - Complex reasoning queries → Hybrid strategy

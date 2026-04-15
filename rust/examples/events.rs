@@ -108,7 +108,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 2. Create engine with events
     println!("Step 2: Creating engine with event emitter...");
     let engine = EngineBuilder::new()
-        .with_workspace("./workspace_events_example")
         .with_key(&api_key)
         .with_model(&model)
         .with_endpoint(&endpoint)
@@ -128,7 +127,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 4. Query with events
     println!("Step 4: Querying (with events)...");
     let result = engine
-        .query(QueryContext::new("What is vectorless?").with_doc_id(&doc_id))
+        .query(QueryContext::new("What is vectorless?").with_doc_ids(vec![doc_id.clone()]))
         .await?;
     if let Some(item) = result.single() {
         println!("  ✓ Found result ({} chars)", item.content.len());

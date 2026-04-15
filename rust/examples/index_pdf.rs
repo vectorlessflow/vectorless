@@ -62,7 +62,6 @@ async fn main() -> vectorless::Result<()> {
     );
 
     let engine = EngineBuilder::new()
-        .with_workspace("./workspace_pdf_example")
         .with_key(&api_key)
         .with_model(&model)
         .with_endpoint(&endpoint)

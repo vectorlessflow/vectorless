@@ -38,7 +38,6 @@ async fn main() -> vectorless::Result<()> {
         .unwrap_or_else(|_| "http://localhost:4000/api/v1".to_string());
 
     let engine = EngineBuilder::new()
-        .with_workspace("./workspace_directory_example")
         .with_key(&api_key)
         .with_model(&model)
         .with_endpoint(&endpoint)
@@ -47,13 +46,8 @@ async fn main() -> vectorless::Result<()> {
         .map_err(|e| vectorless::Error::Config(e.to_string()))?;
 
     // Index directory
-    let ctx = if recursive {
-        println!("Recursively indexing: {}", dir);
-        IndexContext::from_dir_recursive(dir)
-    } else {
-        println!("Indexing top-level files in: {}", dir);
-        IndexContext::from_dir(dir)
-    };
+    println!("{}indexing: {}", if recursive { "Recursively " } else { "" }, dir);
+    let ctx = IndexContext::from_dir(dir, recursive);
 
     if ctx.is_empty() {
         println!("No supported files found in: {}", dir);

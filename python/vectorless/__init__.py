@@ -1,14 +1,15 @@
 """
-Vectorless - Hierarchical document intelligence without vectors.
+Vectorless - Reasoning-native document intelligence engine for AI.
 
-A document intelligence engine that uses tree-based understanding
-instead of vector databases for accurate, explainable retrieval.
+An ultra-performant reasoning-native document intelligence engine
+that transforms documents into rich semantic trees and uses LLMs to
+intelligently traverse the hierarchy for accurate, explainable retrieval.
 
 Quick Start:
     from vectorless import Engine, IndexContext, QueryContext
 
     # Create engine
-    engine = Engine(workspace="./data", api_key="sk-...", model="gpt-4o")
+    engine = Engine(api_key="sk-...", model="gpt-4o")
 
     # Index a document
     ctx = IndexContext.from_path("./report.pdf")
@@ -16,7 +17,7 @@ Quick Start:
     doc_id = result.doc_id
 
     # Query
-    answer = await engine.query(QueryContext("What is the revenue?").with_doc_id(doc_id))
+    answer = await engine.query(QueryContext("What is the revenue?").with_doc_ids([doc_id]))
     print(answer.single().content)
 """
 
@@ -30,7 +31,6 @@ from vectorless._vectorless import (
     QueryContext,
     QueryResult,
     QueryResultItem,
-    StrategyPreference,
     DocumentInfo,
     DocumentGraph,
     DocumentGraphNode,
@@ -52,7 +52,6 @@ __all__ = [
     "QueryContext",
     "QueryResult",
     "QueryResultItem",
-    "StrategyPreference",
     "DocumentInfo",
     "DocumentGraph",
     "DocumentGraphNode",

@@ -69,7 +69,6 @@ async fn main() -> vectorless::Result<()> {
     println!("Step 1: Creating Vectorless client...");
 
     let engine = EngineBuilder::new()
-        .with_workspace("./workspace_flow_example")
         .with_key(&api_key)
         .with_model(&model)
         .with_endpoint(&endpoint)
@@ -112,7 +111,7 @@ async fn main() -> vectorless::Result<()> {
         println!("  Query: \"{}\"", query);
 
         match engine
-            .query(QueryContext::new(query).with_doc_id(&doc_id))
+            .query(QueryContext::new(query).with_doc_ids(vec![doc_id.clone()]))
             .await
         {
             Ok(result) => {

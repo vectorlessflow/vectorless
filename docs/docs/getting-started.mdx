@@ -26,7 +26,6 @@ from vectorless import Engine, IndexContext, QueryContext
 async def main():
     # Create an engine
     engine = Engine(
-        workspace="./data",
         api_key="sk-...",
         model="gpt-4o",
     )
@@ -38,7 +37,7 @@ async def main():
 
     # Query the document
     answer = await engine.query(
-        QueryContext("What is the total revenue?").with_doc_id(doc_id)
+        QueryContext("What is the total revenue?").with_doc_ids([doc_id])
     )
     print(answer.single().content)
 
@@ -49,7 +48,6 @@ asyncio.run(main())
 
 ```python
 engine = Engine(
-    workspace="./data",
     api_key="sk-...",
     model="gpt-4o",
     endpoint="https://api.your-provider.com/v1",
@@ -75,7 +73,6 @@ use vectorless::{EngineBuilder, IndexContext, QueryContext};
 #[tokio::main]
 async fn main() -> vectorless::Result<()> {
     let engine = EngineBuilder::new()
-        .with_workspace("./data")
         .with_key("sk-...")
         .with_model("gpt-4o")
         .build()
@@ -85,7 +82,7 @@ async fn main() -> vectorless::Result<()> {
     let doc_id = result.doc_id().unwrap();
 
     let result = engine.query(
-        QueryContext::new("What is the total revenue?").with_doc_id(doc_id)
+        QueryContext::new("What is the total revenue?").with_doc_ids(vec![doc_id.to_string()])
     ).await?;
 
     if let Some(item) = result.single() {

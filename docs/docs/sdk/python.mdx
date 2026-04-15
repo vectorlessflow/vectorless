@@ -20,7 +20,6 @@ The `Engine` is the main entry point. It requires an LLM API key and model name.
 from vectorless import Engine
 
 engine = Engine(
-    workspace="./data",    # Local directory for indexed data
     api_key="sk-...",      # LLM API key
     model="gpt-4o",        # LLM model name
     endpoint=None,         # Optional: custom API endpoint
@@ -77,12 +76,11 @@ result = await engine.index(
 ### Single Document
 
 ```python
-from vectorless import QueryContext, StrategyPreference
+from vectorless import QueryContext
 
 answer = await engine.query(
     QueryContext("What is the total revenue?")
-    .with_doc_id(doc_id)
-    .with_strategy(StrategyPreference.HYBRID)
+    .with_doc_ids([doc_id])
 )
 
 if answer.single():
@@ -104,7 +102,6 @@ answer = await engine.query(
 ```python
 answer = await engine.query(
     QueryContext("What documents discuss performance?")
-    .with_workspace()
 )
 ```
 
@@ -113,11 +110,10 @@ answer = await engine.query(
 ```python
 answer = await engine.query(
     QueryContext("Explain the architecture")
-    .with_doc_id(doc_id)
+    .with_doc_ids([doc_id])
     .with_max_tokens(4000)              # Max tokens in result
     .with_include_reasoning(True)       # Include reasoning chain
     .with_depth_limit(10)               # Max traversal depth
-    .with_strategy(StrategyPreference.LLM)
 )
 ```
 
@@ -162,14 +158,3 @@ if graph:
 | `include_text` | `bool` | `True` | Include node text |
 | `generate_ids` | `bool` | `True` | Generate node IDs |
 | `enable_synonym_expansion` | `bool` | `True` | LLM synonym expansion |
-
-### StrategyPreference
-
-| Constant | Description |
-|----------|-------------|
-| `StrategyPreference.AUTO` | Auto-select based on query complexity |
-| `StrategyPreference.KEYWORD` | Fast keyword matching |
-| `StrategyPreference.LLM` | LLM-guided navigation |
-| `StrategyPreference.HYBRID` | BM25 + LLM refinement |
-| `StrategyPreference.CROSS_DOCUMENT` | Multi-document retrieval |
-| `StrategyPreference.PAGE_RANGE` | Page-scoped retrieval |

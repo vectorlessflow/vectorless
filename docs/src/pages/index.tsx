@@ -49,7 +49,6 @@ from vectorless import Engine, IndexContext
 
 async def main():
     engine = Engine(
-        workspace="./data",
         api_key="sk-...",
         model="gpt-4o",
     )

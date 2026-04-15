@@ -12,12 +12,11 @@ Query across multiple indexed documents using the cross-document strategy with g
 import asyncio
 from vectorless import (
     Engine, IndexContext, QueryContext,
-    IndexOptions, StrategyPreference
+    IndexOptions,
 )
 
 async def main():
     engine = Engine(
-        workspace="./workspace",
         api_key="sk-...",
         model="gpt-4o",
     )
@@ -44,7 +43,6 @@ async def main():
     result = await engine.query(
         QueryContext("Compare quarterly revenue trends")
         .with_doc_ids(doc_ids)
-        .with_strategy(StrategyPreference.CROSS_DOCUMENT)
     )
 
     for item in result.items:
@@ -54,7 +52,6 @@ async def main():
     # Or query entire workspace
     result = await engine.query(
         QueryContext("What documents discuss risk factors?")
-        .with_workspace()
     )
 
     print(f"\nFound in {len(result.items)} document(s)")

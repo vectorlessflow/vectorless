@@ -34,7 +34,6 @@ async def main():
     endpoint = os.environ.get("LLM_ENDPOINT", "http://localhost:4000/api/v1")
 
     engine = Engine(
-        workspace="./workspace_directory_example",
         api_key=api_key,
         model=model,
         endpoint=endpoint,

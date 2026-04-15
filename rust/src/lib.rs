@@ -1,12 +1,6 @@
 // Copyright (c) 2026 vectorless developers
 // SPDX-License-Identifier: Apache-2.0
-
-//! # Vectorless
-
-// Clippy: allow specific lints that are too noisy for this project
-#![allow(clippy::iter_over_hash_type)]
-#![allow(clippy::large_enum_variant)]
-#![allow(clippy::manual_unwrap_or_default)]
+#![allow(dead_code)]
 
 //! # Vectorless
 //!
@@ -24,7 +18,6 @@
 //! #[tokio::main]
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {
 //!     let client = EngineBuilder::new()
-//!         .with_workspace("./workspace")
 //!         .with_key("sk-...")
 //!         .with_model("gpt-4o")
 //!         .build()
@@ -34,7 +27,7 @@
 //!     let doc_id = result.doc_id().unwrap();
 //!
 //!     let result = client.query(
-//!         QueryContext::new("What is this about?").with_doc_id(doc_id)
+//!         QueryContext::new("What is this about?").with_doc_ids(vec![doc_id.to_string()])
 //!     ).await?;
 //!     println!("{}", result.content);
 //!
@@ -64,11 +57,6 @@ pub use client::{
     QueryResultItem,
 };
 
-// Retrieval types
-pub use retrieval::StrategyPreference;
-pub use retrieval::pipeline::SearchAlgorithm;
-pub use retrieval::QueryComplexity;
-
 // Error types
 pub use error::{Error, Result};
 
@@ -84,8 +72,5 @@ pub use graph::DocumentGraph;
 // Event types
 pub use events::{EventEmitter, IndexEvent, QueryEvent, WorkspaceEvent};
 
-// Index metrics
-pub use metrics::IndexMetrics;
-
 // Runtime metrics reports
-pub use metrics::{LlmMetricsReport, MetricsReport, PilotMetricsReport, RetrievalMetricsReport};
+pub use metrics::{IndexMetrics, LlmMetricsReport, MetricsReport, PilotMetricsReport, RetrievalMetricsReport};

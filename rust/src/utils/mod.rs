@@ -5,13 +5,13 @@
 //!
 //! This module provides common utilities used across the codebase:
 //!
-//! - **Token estimation** — Fast and accurate token counting
-//! - **Timing** — Performance measurement utilities
-//! - **Format** — Text and number formatting utilities
+//! - **Token estimation** — Fast and accurate token counting (tiktoken-based)
+//! - **Fingerprint** — BLAKE2b content hashing for change detection
+//! - **Validation** — Pre-index source validation (file, content, bytes)
 
 pub mod fingerprint;
-mod format;
-mod timing;
 mod token;
+pub mod validation;
 
 pub use token::estimate_tokens;
+pub use validation::{validate_bytes, validate_content, validate_file};

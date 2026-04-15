@@ -166,20 +166,6 @@ impl LlmPool {
             _ => None,
         }
     }
-
-    /// Create a pool with a single model for all purposes.
-    ///
-    /// Useful for testing or simple deployments.
-    pub fn single_model(model: impl Into<String>) -> Self {
-        let config = super::config::LlmConfig::new(model);
-        let client = Arc::new(LlmClient::new(config));
-        Self {
-            index: client.clone(),
-            retrieval: client.clone(),
-            pilot: client,
-            concurrency: None,
-        }
-    }
 }
 
 impl Default for LlmPool {
@@ -212,16 +198,6 @@ mod tests {
         assert!(pool.get("summarize").is_some());
         assert!(pool.get("retrieve").is_some());
         assert!(pool.get("navigate").is_some());
-    }
-
-    #[test]
-    fn test_single_model_pool() {
-        let pool = LlmPool::single_model("gpt-4o-mini");
-
-        // All clients should use the same model
-        assert_eq!(pool.index().config().model, "gpt-4o-mini");
-        assert_eq!(pool.retrieval().config().model, "gpt-4o-mini");
-        assert_eq!(pool.pilot().config().model, "gpt-4o-mini");
     }
 
     #[test]

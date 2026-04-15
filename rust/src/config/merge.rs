@@ -217,9 +217,7 @@ impl Merge for ContentAggregatorConfig {
 
 impl Merge for StorageConfig {
     fn merge(&mut self, other: &Self, strategy: MergeStrategy) {
-        if strategy == MergeStrategy::Replace
-            || self.workspace_dir == std::path::PathBuf::from("./workspace")
-        {
+        if strategy == MergeStrategy::Replace {
             self.workspace_dir = other.workspace_dir.clone();
         }
     }

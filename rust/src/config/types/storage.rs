@@ -36,7 +36,50 @@ pub struct StorageConfig {
 }
 
 fn default_workspace_dir() -> PathBuf {
-    PathBuf::from("./workspace")
+    default_workspace_path_for_cwd()
+}
+
+/// Compute the default workspace path for the current working directory.
+///
+/// Returns a platform-appropriate path:
+/// - **Linux/macOS**: `~/.vectorless/workspaces/{cwd_hash}/`
+/// - **Windows**: `%APPDATA%\vectorless\workspaces\{cwd_hash}\`
+///
+/// where `cwd_hash` is a 12-hex-char hash derived from the current working
+/// directory. This ensures different projects automatically get isolated
+/// workspaces.
+///
+/// # Environment variable resolution order
+///
+/// | Platform | Primary         | Fallback            | Last resort |
+/// |----------|-----------------|---------------------|-------------|
+/// | Unix     | `$HOME`         | —                   | `"."`       |
+/// | Windows  | `%LOCALAPPDATA%`| `%APPDATA%`         | `"."`       |
+pub fn default_workspace_path_for_cwd() -> PathBuf {
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+
+    let base_dir = if cfg!(windows) {
+        // Windows: prefer %LOCALAPPDATA% (e.g. C:\Users\xxx\AppData\Local)
+        // then %APPDATA% (e.g. C:\Users\xxx\AppData\Roaming)
+        std::env::var("LOCALAPPDATA")
+            .or_else(|_| std::env::var("APPDATA"))
+            .map(PathBuf::from)
+            .unwrap_or_else(|_| PathBuf::from("."))
+    } else {
+        // Unix (Linux, macOS): use $HOME
+        std::env::var("HOME")
+            .map(PathBuf::from)
+            .unwrap_or_else(|_| PathBuf::from("."))
+    };
+
+    let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+
+    let mut hasher = DefaultHasher::new();
+    cwd.to_string_lossy().hash(&mut hasher);
+    let hash = format!("{:012x}", hasher.finish());
+
+    base_dir.join(".vectorless").join("workspaces").join(hash)
 }
 
 fn default_cache_size() -> usize {
@@ -580,7 +623,22 @@ mod tests {
     #[test]
     fn test_storage_config_defaults() {
         let config = StorageConfig::default();
-        assert_eq!(config.workspace_dir, PathBuf::from("./workspace"));
+        // Default workspace should be under .vectorless/workspaces/ (Unix)
+        // or vectorless/workspaces/ (Windows via AppData)
+        let path_str = config.workspace_dir.to_string_lossy();
+        if cfg!(windows) {
+            assert!(
+                path_str.contains("vectorless"),
+                "expected ...\\vectorless\\workspaces\\..., got {:?}",
+                config.workspace_dir,
+            );
+        } else {
+            assert!(
+                path_str.contains(".vectorless"),
+                "expected ~/.vectorless/workspaces/..., got {:?}",
+                config.workspace_dir,
+            );
+        }
         assert_eq!(config.cache_size, 100);
         assert!(config.atomic_writes);
         assert!(config.file_lock);

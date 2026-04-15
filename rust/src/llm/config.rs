@@ -248,8 +248,41 @@ impl Default for LlmConfigs {
 }
 
 // ============================================================================
-// Conversion from old config types (for backward compatibility)
+// Conversion from config types
 // ============================================================================
+
+impl From<crate::config::LlmPoolConfig> for LlmConfigs {
+    fn from(pool: crate::config::LlmPoolConfig) -> Self {
+        // Resolve shared values before moving individual client configs
+        let default_api_key = pool.api_key.clone();
+        let default_endpoint = pool.endpoint.clone();
+
+        fn to_llm_config(
+            client: crate::config::LlmClientConfig,
+            default_api_key: &Option<String>,
+            default_endpoint: &Option<String>,
+        ) -> LlmConfig {
+            LlmConfig {
+                model: client.model,
+                endpoint: if client.endpoint.is_empty() {
+                    default_endpoint.clone().unwrap_or_default()
+                } else {
+                    client.endpoint
+                },
+                api_key: client.api_key.or_else(|| default_api_key.clone()),
+                max_tokens: client.max_tokens,
+                temperature: client.temperature,
+                retry: RetryConfig::default(),
+            }
+        }
+
+        Self {
+            index: to_llm_config(pool.index, &default_api_key, &default_endpoint),
+            retrieval: to_llm_config(pool.retrieval, &default_api_key, &default_endpoint),
+            pilot: to_llm_config(pool.pilot, &default_api_key, &default_endpoint),
+        }
+    }
+}
 
 impl From<crate::config::LlmConfig> for LlmConfig {
     fn from(old: crate::config::LlmConfig) -> Self {

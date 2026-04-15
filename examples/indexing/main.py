@@ -16,13 +16,11 @@ from vectorless import Engine, IndexContext, IndexOptions, QueryContext
 # Replace with your own credentials
 API_KEY = "sk-..."
 MODEL = "gpt-4o"
-WORKSPACE = "./workspace"
 
 
 async def main():
     # --- 1. Create engine ---
     engine = Engine(
-        workspace=WORKSPACE,
         api_key=API_KEY,
         model=MODEL,
     )
@@ -94,7 +92,7 @@ Projected Q1 revenue is $13.5M based on current pipeline.
     # --- 5. Query ---
     print("--- Query ---")
     answer = await engine.query(
-        QueryContext("What was the total revenue?").with_doc_id(file_doc_id)
+        QueryContext("What was the total revenue?").with_doc_ids([file_doc_id])
     )
     item = answer.single()
     if item:
