@@ -2,13 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! # Vectorless
-
-// Clippy: allow specific lints that are too noisy for this project
-#![allow(clippy::iter_over_hash_type)]
-#![allow(clippy::large_enum_variant)]
-#![allow(clippy::manual_unwrap_or_default)]
-
-//! # Vectorless
 //!
 //! An ultra-performant reasoning-native document intelligence engine for AI.
 //!
