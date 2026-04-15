@@ -135,7 +135,7 @@ impl WorkspaceClient {
         let doc = self.workspace.load_and_cache(doc_id).await?;
         let cache_hit = doc.is_some();
 
-        if let Some(ref doc) = doc {
+        if let Some(ref _doc) = doc {
             debug!("Loaded document: {} (cache={})", doc_id, cache_hit);
         }
 

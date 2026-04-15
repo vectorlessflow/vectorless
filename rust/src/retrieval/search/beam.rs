@@ -134,7 +134,7 @@ impl BeamSearch {
         tree: &DocumentTree,
         context: &RetrievalContext,
         pilot: Option<&dyn Pilot>,
-        cache: &PilotDecisionCache,
+        _cache: &PilotDecisionCache,
         visited: &HashSet<NodeId>,
         fallback_stack: &mut Vec<FallbackEntry>,
         result: &mut SearchResult,

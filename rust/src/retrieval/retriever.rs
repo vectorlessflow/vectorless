@@ -81,7 +81,7 @@ pub trait Retriever: Send + Sync {
     ///
     /// Returns an estimated number of LLM calls or tokens that will be used.
     /// Useful for cost-aware strategy selection.
-    fn estimate_cost(&self, tree: &DocumentTree, options: &RetrieveOptions) -> CostEstimate {
+    fn estimate_cost(&self, tree: &DocumentTree, _options: &RetrieveOptions) -> CostEstimate {
         let node_count = tree.node_count();
         CostEstimate {
             llm_calls: node_count / 2, // Rough estimate

@@ -220,7 +220,7 @@ impl ReferenceFollower {
         };
 
         // Use pre-extracted references if available, otherwise extract
-        let refs = if !node.references.is_empty() {
+        let _refs = if !node.references.is_empty() {
             node.references.clone()
         } else {
             ReferenceExtractor::extract(&node.content)
@@ -325,7 +325,7 @@ impl ReferenceFollower {
 
             // Get references from this node
             if let Some(node) = tree.get(node_id) {
-                let refs = if !node.references.is_empty() {
+                let _refs = if !node.references.is_empty() {
                     node.references.clone()
                 } else {
                     ReferenceExtractor::extract(&node.content)

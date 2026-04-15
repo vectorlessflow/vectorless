@@ -269,9 +269,9 @@ impl LlmPilot {
     fn compute_cache_key(
         &self,
         context: &super::builder::PilotContext,
-        point: InterventionPoint,
+        _point: InterventionPoint,
     ) -> Option<MemoKey> {
-        let store = self.memo_store.as_ref()?;
+        let _store = self.memo_store.as_ref()?;
 
         // Build a fingerprint from the context using available methods
         let context_str = context.to_string();

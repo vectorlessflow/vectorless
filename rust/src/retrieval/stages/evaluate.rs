@@ -410,7 +410,7 @@ impl RetrievalStage for EvaluateStage {
             let doc_key = format!("{:?}", ctx.tree.root());
             for candidate in ctx.candidates.iter().take(3) {
                 if let Some(node) = ctx.tree.get(candidate.node_id) {
-                    let path = format!("{}", node.depth);
+                    let _path = format!("{}", node.depth);
                     // Use the node title as path identifier for L2
                     ctx.reasoning_cache
                         .l2_record(&doc_key, &node.title, candidate.score);

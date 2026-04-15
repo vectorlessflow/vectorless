@@ -3,10 +3,7 @@
 
 //! # Vectorless
 
-// Clippy: allow some pedantic lints that are too noisy for early-stage project
-#![allow(clippy::all)]
-#![allow(dead_code)]
-#![allow(unused_variables)]
+// Clippy: allow specific lints that are too noisy for this project
 #![allow(clippy::iter_over_hash_type)]
 #![allow(clippy::large_enum_variant)]
 #![allow(clippy::manual_unwrap_or_default)]
@@ -69,14 +66,16 @@ pub use client::{
 
 // Retrieval types
 pub use retrieval::StrategyPreference;
+pub use retrieval::pipeline::SearchAlgorithm;
+pub use retrieval::QueryComplexity;
 
 // Error types
 pub use error::{Error, Result};
 
 // Document types
 pub use document::{
-    DocumentStructure, DocumentTree, NodeId, StructureNode, TocConfig, TocEntry, TocNode, TocView,
-    TreeNode,
+    DocumentStructure, DocumentTree, NodeId, ReasoningIndexConfig, StructureNode, TocConfig,
+    TocEntry, TocNode, TocView, TreeNode,
 };
 
 // Graph types
