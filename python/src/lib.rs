@@ -9,7 +9,6 @@ use pyo3_async_runtimes::tokio::future_into_py;
 use std::sync::Arc;
 use tokio::runtime::Runtime;
 
-use ::vectorless::StrategyPreference;
 use ::vectorless::client::{
     DocumentFormat, DocumentInfo, Engine, EngineBuilder, FailedItem, IndexContext, IndexItem,
     IndexMode, IndexOptions, IndexResult, QueryContext, QueryResult, QueryResultItem,
@@ -295,83 +294,6 @@ impl PyIndexContext {
 }
 
 // ============================================================
-// StrategyPreference
-// ============================================================
-
-/// Retrieval strategy preference.
-///
-/// Controls how the engine searches the document tree.
-///
-/// ```python
-/// from vectorless import QueryContext, StrategyPreference
-///
-/// # Force keyword-only (fastest, no LLM calls during search)
-/// ctx = QueryContext("revenue").with_doc_ids([doc_id]).with_strategy(StrategyPreference.KEYWORD)
-///
-/// # Force LLM-guided navigation (most accurate, uses more tokens)
-/// ctx = QueryContext("explain the architecture").with_doc_ids([doc_id]).with_strategy(StrategyPreference.LLM)
-///
-/// # Force hybrid (BM25 + LLM refinement)
-/// ctx = QueryContext("growth trends").with_doc_ids([doc_id]).with_strategy(StrategyPreference.HYBRID)
-/// ```
-#[pyclass(name = "StrategyPreference", skip_from_py_object)]
-#[derive(Clone)]
-pub struct PyStrategyPreference {
-    inner: StrategyPreference,
-}
-
-#[pymethods]
-impl PyStrategyPreference {
-    /// Auto-select based on query complexity (default).
-    #[classattr]
-    const AUTO: PyStrategyPreference = PyStrategyPreference {
-        inner: StrategyPreference::Auto,
-    };
-
-    /// Force keyword-based strategy (fast, no LLM during search).
-    #[classattr]
-    const KEYWORD: PyStrategyPreference = PyStrategyPreference {
-        inner: StrategyPreference::ForceKeyword,
-    };
-
-    /// Force LLM-guided navigation (deep reasoning).
-    #[classattr]
-    const LLM: PyStrategyPreference = PyStrategyPreference {
-        inner: StrategyPreference::ForceLlm,
-    };
-
-    /// Force hybrid strategy (BM25 + LLM refinement).
-    #[classattr]
-    const HYBRID: PyStrategyPreference = PyStrategyPreference {
-        inner: StrategyPreference::ForceHybrid,
-    };
-
-    /// Force cross-document strategy (multi-document retrieval).
-    #[classattr]
-    const CROSS_DOCUMENT: PyStrategyPreference = PyStrategyPreference {
-        inner: StrategyPreference::ForceCrossDocument,
-    };
-
-    /// Force page-range strategy (filter by page range).
-    #[classattr]
-    const PAGE_RANGE: PyStrategyPreference = PyStrategyPreference {
-        inner: StrategyPreference::ForcePageRange,
-    };
-
-    fn __repr__(&self) -> String {
-        let name = match self.inner {
-            StrategyPreference::Auto => "AUTO",
-            StrategyPreference::ForceKeyword => "KEYWORD",
-            StrategyPreference::ForceLlm => "LLM",
-            StrategyPreference::ForceHybrid => "HYBRID",
-            StrategyPreference::ForceCrossDocument => "CROSS_DOCUMENT",
-            StrategyPreference::ForcePageRange => "PAGE_RANGE",
-        };
-        format!("StrategyPreference.{}", name)
-    }
-}
-
-// ============================================================
 // QueryContext
 // ============================================================
 
@@ -431,15 +353,6 @@ impl PyQueryContext {
     /// Set the maximum tree traversal depth.
     fn with_depth_limit(&self, depth: usize) -> Self {
         let ctx = self.inner.clone().with_depth_limit(depth);
-        Self { inner: ctx }
-    }
-
-    /// Set the retrieval strategy.
-    ///
-    /// Args:
-    ///     strategy: A StrategyPreference constant, e.g. StrategyPreference.LLM.
-    fn with_strategy(&self, strategy: &PyStrategyPreference) -> Self {
-        let ctx = self.inner.clone().with_strategy(strategy.inner);
         Self { inner: ctx }
     }
 
@@ -1665,7 +1578,6 @@ fn _vectorless(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<VectorlessError>()?;
     m.add_class::<PyIndexOptions>()?;
     m.add_class::<PyIndexContext>()?;
-    m.add_class::<PyStrategyPreference>()?;
     m.add_class::<PyQueryContext>()?;
     m.add_class::<PyIndexResult>()?;
     m.add_class::<PyIndexItem>()?;
