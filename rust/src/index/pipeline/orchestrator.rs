@@ -93,6 +93,8 @@ pub struct ExecutionGroup {
 pub struct PipelineOrchestrator {
     /// Registered stages with metadata.
     stages: Vec<StageEntry>,
+    /// Shared LLM client injected into pipeline context.
+    llm_client: Option<crate::llm::LlmClient>,
 }
 
 impl Default for PipelineOrchestrator {
@@ -104,7 +106,16 @@ impl Default for PipelineOrchestrator {
 impl PipelineOrchestrator {
     /// Create a new empty orchestrator.
     pub fn new() -> Self {
-        Self { stages: Vec::new() }
+        Self {
+            stages: Vec::new(),
+            llm_client: None,
+        }
+    }
+
+    /// Set the shared LLM client (injected into pipeline context).
+    pub fn with_llm_client(mut self, client: crate::llm::LlmClient) -> Self {
+        self.llm_client = Some(client);
+        self
     }
 
     /// Add a stage with default priority (100).
@@ -452,6 +463,10 @@ impl PipelineOrchestrator {
         let mut opts = options;
         let existing_tree = opts.existing_tree.take();
         let mut ctx = IndexContext::new(input, opts);
+        // Inject shared LLM client into context for stages that need it (e.g. ReasoningIndexStage)
+        if let Some(client) = self.llm_client.take() {
+            ctx = ctx.with_llm_client(client);
+        }
         if let Some(tree) = existing_tree {
             ctx = ctx.with_existing_tree(tree);
         }
