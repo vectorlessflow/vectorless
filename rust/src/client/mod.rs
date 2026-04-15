@@ -89,12 +89,6 @@ pub use index_context::IndexContext;
 pub use query_context::QueryContext;
 
 // ============================================================
-// Events (re-export from crate::events)
-// ============================================================
-
-pub use crate::events::EventEmitter;
-
-// ============================================================
 // Result & Info Types
 // ============================================================
 
