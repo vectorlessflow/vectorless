@@ -28,6 +28,8 @@
 //! }
 //! ```
 
+#![allow(dead_code)] // Allow unused code in this module for now
+
 use base64::prelude::*;
 use blake2::digest::typenum;
 use blake2::{Blake2b, Digest};
