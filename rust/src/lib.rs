@@ -77,8 +77,5 @@ pub use graph::DocumentGraph;
 // Event types
 pub use events::{EventEmitter, IndexEvent, QueryEvent, WorkspaceEvent};
 
-// Index metrics
-pub use metrics::IndexMetrics;
-
 // Runtime metrics reports
-pub use metrics::{LlmMetricsReport, MetricsReport, PilotMetricsReport, RetrievalMetricsReport};
+pub use metrics::{IndexMetrics, LlmMetricsReport, MetricsReport, PilotMetricsReport, RetrievalMetricsReport};

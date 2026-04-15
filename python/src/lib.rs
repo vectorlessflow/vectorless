@@ -226,11 +226,7 @@ impl PyIndexContext {
     #[staticmethod]
     #[pyo3(signature = (path, recursive=false))]
     fn from_dir(path: String, recursive: bool) -> Self {
-        let inner = if recursive {
-            IndexContext::from_dir_recursive(&path)
-        } else {
-            IndexContext::from_dir(&path)
-        };
+        let inner = IndexContext::from_dir(&path, recursive);
         Self { inner }
     }
 

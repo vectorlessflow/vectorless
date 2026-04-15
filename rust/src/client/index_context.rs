@@ -30,10 +30,10 @@
 //! use vectorless::client::IndexContext;
 //!
 //! // Non-recursive (top-level only)
-//! let ctx = IndexContext::from_dir("./documents");
+//! let ctx = IndexContext::from_dir("./documents", false);
 //!
 //! // Recursive (includes subdirectories)
-//! let ctx = IndexContext::from_dir_recursive("./documents");
+//! let ctx = IndexContext::from_dir("./documents", true);
 //! ```
 
 use std::path::PathBuf;
@@ -93,7 +93,7 @@ pub(crate) enum IndexSource {
 /// ).await?;
 ///
 /// // Entire directory
-/// let result = engine.index(IndexContext::from_dir("./docs")).await?;
+/// let result = engine.index(IndexContext::from_dir("./docs", false)).await?;
 /// # Ok(())
 /// # }
 /// ```
@@ -135,18 +135,12 @@ impl IndexContext {
 
     /// Create from a directory path.
     ///
-    /// Indexes all supported files in the directory (non-recursive).
+    /// Indexes all supported files in the directory.
     /// Supported extensions: `.md`, `.pdf`.
-    pub fn from_dir(dir: impl Into<PathBuf>) -> Self {
-        Self::scan_dir(dir, false)
-    }
-
-    /// Create from a directory path with recursive scanning.
     ///
-    /// Recursively indexes all supported files in the directory and its
-    /// subdirectories. Supported extensions: `.md`, `.pdf`.
-    pub fn from_dir_recursive(dir: impl Into<PathBuf>) -> Self {
-        Self::scan_dir(dir, true)
+    /// Set `recursive` to `true` to include subdirectories.
+    pub fn from_dir(dir: impl Into<PathBuf>, recursive: bool) -> Self {
+        Self::scan_dir(dir, recursive)
     }
 
     /// Internal: scan a directory for supported document files.
@@ -340,7 +334,7 @@ mod tests {
     }
 
     #[test]
-    fn test_from_dir_recursive() {
+    fn test_from_dir_with_recursive() {
         // Create a temp directory structure:
         //   tmp/
         //     a.md
@@ -357,11 +351,11 @@ mod tests {
         std::fs::write(tmp.join("sub/deep/ignore.dat"), b"xxx").unwrap();
 
         // Non-recursive: only top-level
-        let ctx = IndexContext::from_dir(&tmp);
+        let ctx = IndexContext::from_dir(&tmp, false);
         assert_eq!(ctx.len(), 1); // only a.md
 
         // Recursive: all levels
-        let ctx = IndexContext::from_dir_recursive(&tmp);
+        let ctx = IndexContext::from_dir(&tmp, true);
         assert_eq!(ctx.len(), 3); // a.md, b.md, c.pdf
 
         let _ = std::fs::remove_dir_all(&tmp);

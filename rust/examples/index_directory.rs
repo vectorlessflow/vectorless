@@ -46,13 +46,8 @@ async fn main() -> vectorless::Result<()> {
         .map_err(|e| vectorless::Error::Config(e.to_string()))?;
 
     // Index directory
-    let ctx = if recursive {
-        println!("Recursively indexing: {}", dir);
-        IndexContext::from_dir_recursive(dir)
-    } else {
-        println!("Indexing top-level files in: {}", dir);
-        IndexContext::from_dir(dir)
-    };
+    println!("{}indexing: {}", if recursive { "Recursively " } else { "" }, dir);
+    let ctx = IndexContext::from_dir(dir, recursive);
 
     if ctx.is_empty() {
         println!("No supported files found in: {}", dir);
