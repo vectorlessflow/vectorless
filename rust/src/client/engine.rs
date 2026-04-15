@@ -435,6 +435,7 @@ impl Engine {
         let mut items = Vec::with_capacity(doc_ids.len());
         let mut failed = Vec::new();
 
+        // TODO: if doc_ids.len() > 1, consider parallelizing queries across documents (with concurrency limit)
         for doc_id in doc_ids {
             let (tree, reasoning_index) = match self.get_structure(&doc_id).await {
                 Ok((t, ri)) => (t, ri),
