@@ -303,6 +303,8 @@ pub struct IndexItem {
     pub format: DocumentFormat,
     /// Document description (from root summary).
     pub description: Option<String>,
+    /// Source file path (if indexed from a file).
+    pub source_path: Option<String>,
     /// Page count (for PDFs).
     pub page_count: Option<usize>,
     /// Indexing pipeline metrics (timing, LLM usage, node stats).
@@ -323,9 +325,16 @@ impl IndexItem {
             name: name.into(),
             format,
             description,
+            source_path: None,
             page_count,
             metrics: None,
         }
+    }
+
+    /// Set the source file path.
+    pub fn with_source_path(mut self, path: impl Into<String>) -> Self {
+        self.source_path = Some(path.into());
+        self
     }
 
     /// Set the indexing metrics.
@@ -443,6 +452,9 @@ pub struct DocumentInfo {
     /// Document description.
     pub description: Option<String>,
 
+    /// Source file path.
+    pub source_path: Option<String>,
+
     /// Page count (for PDFs).
     pub page_count: Option<usize>,
 
@@ -458,6 +470,7 @@ impl DocumentInfo {
             name: name.into(),
             format: String::new(),
             description: None,
+            source_path: None,
             page_count: None,
             line_count: None,
         }

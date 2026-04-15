@@ -154,6 +154,7 @@ impl WorkspaceClient {
                     name: meta.doc_name,
                     format: meta.doc_type,
                     description: meta.doc_description,
+                    source_path: meta.path,
                     page_count: meta.page_count,
                     line_count: meta.line_count,
                 });
@@ -178,6 +179,7 @@ impl WorkspaceClient {
                 name: meta.doc_name,
                 format: meta.doc_type,
                 description: meta.doc_description,
+                source_path: meta.path,
                 page_count: meta.page_count,
                 line_count: meta.line_count,
             }))

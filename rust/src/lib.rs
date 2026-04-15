@@ -27,7 +27,7 @@
 //!     let doc_id = result.doc_id().unwrap();
 //!
 //!     let result = client.query(
-//!         QueryContext::new("What is this about?").with_doc_id(doc_id)
+//!         QueryContext::new("What is this about?").with_doc_ids(vec![doc_id.to_string()])
 //!     ).await?;
 //!     println!("{}", result.content);
 //!

@@ -28,7 +28,7 @@
 //!
 //! // Query
 //! let result = engine.query(
-//!     QueryContext::new("What is this?").with_doc_id(doc_id)
+//!     QueryContext::new("What is this?").with_doc_ids(vec![doc_id.to_string()])
 //! ).await?;
 //!
 //! println!("Found: {}", result.content);
@@ -277,6 +277,12 @@ impl Engine {
                             doc.description.clone(),
                             doc.page_count,
                         )
+                        .with_source_path(
+                            doc.source_path
+                                .as_ref()
+                                .map(|p| p.to_string_lossy().to_string())
+                                .unwrap_or_default(),
+                        )
                         .with_metrics_opt(metrics);
                         let persisted = self
                             .indexer
@@ -327,6 +333,12 @@ impl Engine {
                             doc.format.clone(),
                             doc.description.clone(),
                             doc.page_count,
+                        )
+                        .with_source_path(
+                            doc.source_path
+                                .as_ref()
+                                .map(|p| p.to_string_lossy().to_string())
+                                .unwrap_or_default(),
                         )
                         .with_metrics_opt(metrics);
                         let persisted = self
@@ -390,7 +402,7 @@ impl Engine {
     /// // Single document
     /// let result = engine.query(
     ///     QueryContext::new("What is the total revenue?")
-    ///         .with_doc_id("doc-123")
+    ///         .with_doc_ids(vec!["doc-123".to_string()])
     /// ).await?;
     ///
     /// if let Some(item) = result.single() {
@@ -470,13 +482,13 @@ impl Engine {
     /// Returns a [`RetrieveEventReceiver`] that yields [`RetrieveEvent`](crate::retrieval::RetrieveEvent)s
     /// as the retrieval pipeline progresses through each stage.
     ///
-    /// Only supports single-document scope (via `with_doc_id`).
+    /// Only supports single-document scope (via `with_doc_ids` with one ID).
     pub async fn query_stream(&self, ctx: QueryContext) -> Result<RetrieveEventReceiver> {
         let doc_id = match &ctx.scope {
-            QueryScope::Single(id) => id.clone(),
+            QueryScope::Documents(ids) if ids.len() == 1 => ids[0].clone(),
             _ => {
                 return Err(Error::Config(
-                    "query_stream requires a single doc_id".to_string(),
+                    "query_stream requires a single doc_id via with_doc_ids".to_string(),
                 ));
             }
         };
@@ -584,8 +596,7 @@ impl Engine {
     /// Resolve QueryScope into a list of document IDs.
     async fn resolve_scope(&self, scope: &QueryScope) -> Result<Vec<String>> {
         match scope {
-            QueryScope::Single(id) => Ok(vec![id.clone()]),
-            QueryScope::Multiple(ids) => Ok(ids.clone()),
+            QueryScope::Documents(ids) => Ok(ids.clone()),
             QueryScope::Workspace => {
                 let docs = self.list().await?;
                 if docs.is_empty() {

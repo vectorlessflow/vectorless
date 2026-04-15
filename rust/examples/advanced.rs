@@ -55,7 +55,7 @@ async fn main() -> vectorless::Result<()> {
 
     // Query
     let result = client
-        .query(QueryContext::new("What features does Vectorless provide?").with_doc_id(&doc_id))
+        .query(QueryContext::new("What features does Vectorless provide?").with_doc_ids(vec![doc_id.clone()]))
         .await?;
     println!("Query: What features does Vectorless provide?");
     if let Some(item) = result.single() {

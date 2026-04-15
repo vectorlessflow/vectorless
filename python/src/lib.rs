@@ -306,13 +306,13 @@ impl PyIndexContext {
 /// from vectorless import QueryContext, StrategyPreference
 ///
 /// # Force keyword-only (fastest, no LLM calls during search)
-/// ctx = QueryContext("revenue").with_doc_id(doc_id).with_strategy(StrategyPreference.KEYWORD)
+/// ctx = QueryContext("revenue").with_doc_ids([doc_id]).with_strategy(StrategyPreference.KEYWORD)
 ///
 /// # Force LLM-guided navigation (most accurate, uses more tokens)
-/// ctx = QueryContext("explain the architecture").with_doc_id(doc_id).with_strategy(StrategyPreference.LLM)
+/// ctx = QueryContext("explain the architecture").with_doc_ids([doc_id]).with_strategy(StrategyPreference.LLM)
 ///
 /// # Force hybrid (BM25 + LLM refinement)
-/// ctx = QueryContext("growth trends").with_doc_id(doc_id).with_strategy(StrategyPreference.HYBRID)
+/// ctx = QueryContext("growth trends").with_doc_ids([doc_id]).with_strategy(StrategyPreference.HYBRID)
 /// ```
 #[pyclass(name = "StrategyPreference", skip_from_py_object)]
 #[derive(Clone)]
@@ -380,8 +380,8 @@ impl PyStrategyPreference {
 /// ```python
 /// from vectorless import QueryContext
 ///
-/// # Query a single document
-/// ctx = QueryContext("What is the total revenue?").with_doc_id(doc_id)
+/// # Query specific documents
+/// ctx = QueryContext("What is the total revenue?").with_doc_ids([doc_id])
 ///
 /// # Query multiple documents
 /// ctx = QueryContext("What is the architecture?").with_doc_ids(["doc-1", "doc-2"])
@@ -404,13 +404,7 @@ impl PyQueryContext {
         }
     }
 
-    /// Set scope to a single document.
-    fn with_doc_id(&self, doc_id: String) -> Self {
-        let ctx = self.inner.clone().with_doc_id(&doc_id);
-        Self { inner: ctx }
-    }
-
-    /// Set scope to multiple documents.
+    /// Set scope to specific documents.
     fn with_doc_ids(&self, doc_ids: Vec<String>) -> Self {
         let ctx = self.inner.clone().with_doc_ids(doc_ids);
         Self { inner: ctx }
@@ -1084,6 +1078,11 @@ impl PyIndexItem {
     }
 
     #[getter]
+    fn source_path(&self) -> Option<&str> {
+        self.inner.source_path.as_deref()
+    }
+
+    #[getter]
     fn page_count(&self) -> Option<usize> {
         self.inner.page_count
     }
@@ -1193,6 +1192,11 @@ impl PyDocumentInfo {
     #[getter]
     fn description(&self) -> Option<&str> {
         self.inner.description.as_deref()
+    }
+
+    #[getter]
+    fn source_path(&self) -> Option<&str> {
+        self.inner.source_path.as_deref()
     }
 
     #[getter]
@@ -1489,7 +1493,7 @@ fn run_metrics_report(engine: Arc<Engine>) -> PyMetricsReport {
 /// doc_id = result.doc_id
 ///
 /// # Query
-/// answer = await engine.query(QueryContext("What is the revenue?").with_doc_id(doc_id))
+/// answer = await engine.query(QueryContext("What is the revenue?").with_doc_ids([doc_id]))
 /// print(answer.single().content)
 /// ```
 #[pyclass(name = "Engine")]
@@ -1653,7 +1657,7 @@ impl PyEngine {
 ///
 /// engine = Engine(api_key="sk-...", model="gpt-4o")
 /// result = await engine.index(IndexContext.from_path("./report.pdf"))
-/// answer = await engine.query(QueryContext("What is the revenue?").with_doc_id(result.doc_id))
+/// answer = await engine.query(QueryContext("What is the revenue?").with_doc_ids([result.doc_id]))
 /// print(answer.single().content)
 /// ```
 #[pymodule]

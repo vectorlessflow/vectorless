@@ -29,7 +29,7 @@
 //!
 //! // Query the document
 //! let result = client.query(
-//!     QueryContext::new("What is this?").with_doc_id(doc_id)
+//!     QueryContext::new("What is this?").with_doc_ids(vec![doc_id.to_string()])
 //! ).await?;
 //! if let Some(item) = result.single() {
 //!     println!("{}", item.content);

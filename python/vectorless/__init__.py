@@ -16,7 +16,7 @@ Quick Start:
     doc_id = result.doc_id
 
     # Query
-    answer = await engine.query(QueryContext("What is the revenue?").with_doc_id(doc_id))
+    answer = await engine.query(QueryContext("What is the revenue?").with_doc_ids([doc_id]))
     print(answer.single().content)
 """
 

@@ -4,20 +4,16 @@
 //! Query context for the Engine API.
 //!
 //! [`QueryContext`] encapsulates all parameters for a query operation,
-//! supporting single document, multiple documents, or entire workspace queries.
+//! supporting specific documents or entire workspace queries.
 //!
 //! # Example
 //!
 //! ```rust
 //! use vectorless::client::QueryContext;
 //!
-//! // Query a single document
+//! // Query specific documents
 //! let ctx = QueryContext::new("What is the total revenue?")
-//!     .with_doc_id("doc-abc123");
-//!
-//! // Query multiple documents
-//! let ctx = QueryContext::new("What is the architecture?")
-//!     .with_doc_ids(vec!["doc-1", "doc-2"]);
+//!     .with_doc_ids(vec!["doc-1".to_string()]);
 //!
 //! // Query entire workspace
 //! let ctx = QueryContext::new("Explain the algorithm");
@@ -29,19 +25,16 @@ use crate::retrieval::{RetrieveOptions, StrategyPreference};
 /// Query scope — determines which documents to search.
 #[derive(Debug, Clone)]
 pub(crate) enum QueryScope {
-    /// Query a single document.
-    Single(String),
-    /// Query multiple specific documents.
-    Multiple(Vec<String>),
+    /// Query specific documents.
+    Documents(Vec<String>),
     /// Query all documents in the workspace.
     Workspace,
 }
 
 /// Context for a query operation.
 ///
-/// Supports three scopes:
-/// - **Single document** — via `with_doc_id()`
-/// - **Multiple documents** — via `with_doc_ids()`
+/// Supports two scopes:
+/// - **Specific documents** — via `with_doc_ids()`
 /// - **Entire workspace** — default when no scope is set
 ///
 /// # Convenience
@@ -82,15 +75,12 @@ impl QueryContext {
         }
     }
 
-    /// Set scope to a single document.
-    pub fn with_doc_id(mut self, doc_id: impl Into<String>) -> Self {
-        self.scope = QueryScope::Single(doc_id.into());
-        self
-    }
-
-    /// Set scope to multiple documents.
+    /// Set scope to specific documents.
+    ///
+    /// Pass a single ID or multiple IDs to restrict the query
+    /// to those documents only.
     pub fn with_doc_ids(mut self, doc_ids: Vec<String>) -> Self {
-        self.scope = QueryScope::Multiple(doc_ids);
+        self.scope = QueryScope::Documents(doc_ids);
         self
     }
 
@@ -180,14 +170,14 @@ mod tests {
 
     #[test]
     fn test_single_doc_scope() {
-        let ctx = QueryContext::new("test").with_doc_id("doc-1");
-        assert!(matches!(ctx.scope, QueryScope::Single(ref id) if id == "doc-1"));
+        let ctx = QueryContext::new("test").with_doc_ids(vec!["doc-1".to_string()]);
+        assert!(matches!(ctx.scope, QueryScope::Documents(ref ids) if ids == &["doc-1".to_string()]));
     }
 
     #[test]
     fn test_multi_doc_scope() {
         let ctx = QueryContext::new("test").with_doc_ids(vec!["a".into(), "b".into()]);
-        assert!(matches!(ctx.scope, QueryScope::Multiple(ref ids) if ids.len() == 2));
+        assert!(matches!(ctx.scope, QueryScope::Documents(ref ids) if ids.len() == 2));
     }
 
     #[test]
@@ -199,7 +189,7 @@ mod tests {
     #[test]
     fn test_builder_options() {
         let ctx = QueryContext::new("test")
-            .with_doc_id("doc-1")
+            .with_doc_ids(vec!["doc-1".to_string()])
             .with_max_tokens(4000)
             .with_include_reasoning(false)
             .with_depth_limit(5);

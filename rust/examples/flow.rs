@@ -111,7 +111,7 @@ async fn main() -> vectorless::Result<()> {
         println!("  Query: \"{}\"", query);
 
         match engine
-            .query(QueryContext::new(query).with_doc_id(&doc_id))
+            .query(QueryContext::new(query).with_doc_ids(vec![doc_id.clone()]))
             .await
         {
             Ok(result) => {
