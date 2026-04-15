@@ -219,11 +219,19 @@ impl PyIndexContext {
     }
 
     /// Create an IndexContext from all supported files in a directory.
+    ///
+    /// Args:
+    ///     path: Directory path to scan.
+    ///     recursive: If True, scan subdirectories recursively. Default: False.
     #[staticmethod]
-    fn from_dir(path: String) -> Self {
-        Self {
-            inner: IndexContext::from_dir(&path),
-        }
+    #[pyo3(signature = (path, recursive=false))]
+    fn from_dir(path: String, recursive: bool) -> Self {
+        let inner = if recursive {
+            IndexContext::from_dir_recursive(&path)
+        } else {
+            IndexContext::from_dir(&path)
+        };
+        Self { inner }
     }
 
     /// Create an IndexContext from text content.
