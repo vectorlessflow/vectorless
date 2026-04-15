@@ -364,24 +364,31 @@ impl EngineBuilder {
             config.retrieval = retrieval_config;
         }
 
-        // Apply individual overrides
+        // Apply individual overrides to LlmPoolConfig (primary) + legacy config (compat)
         if let Some(api_key) = self.api_key {
-            // Set API key for both retrieval and index
+            config.llm.api_key = Some(api_key.clone());
+            // Legacy compat
             config.retrieval.api_key = Some(api_key.clone());
             config.summary.api_key = Some(api_key);
-            // Also set LLM pool config
-            if config.llm.index.api_key.is_none() {
-                config.llm.index.api_key = config.summary.api_key.clone();
-            }
-            if config.llm.retrieval.api_key.is_none() {
-                config.llm.retrieval.api_key = config.summary.api_key.clone();
-            }
         }
         if let Some(model) = self.model {
+            // Apply model to pool slots
+            if config.llm.index.model.is_empty() {
+                config.llm.index.model = model.clone();
+            }
+            if config.llm.retrieval.model.is_empty() {
+                config.llm.retrieval.model = model.clone();
+            }
+            if config.llm.pilot.model.is_empty() {
+                config.llm.pilot.model = model.clone();
+            }
+            // Legacy compat
             config.retrieval.model = model.clone();
             config.summary.model = model;
         }
         if let Some(endpoint) = self.endpoint {
+            config.llm.endpoint = Some(endpoint.clone());
+            // Legacy compat
             config.retrieval.endpoint = endpoint.clone();
             config.summary.endpoint = endpoint;
         }
@@ -398,10 +405,22 @@ impl EngineBuilder {
         }
 
         // Validate required settings
-        if config.summary.api_key.is_none() && config.retrieval.api_key.is_none() {
+        let resolved_key = config
+            .llm
+            .api_key
+            .as_ref()
+            .or_else(|| config.llm.retrieval.api_key.as_ref())
+            .or_else(|| config.summary.api_key.as_ref())
+            .or_else(|| config.retrieval.api_key.as_ref());
+        if resolved_key.is_none() {
             return Err(BuildError::MissingApiKey);
         }
-        if config.retrieval.model.is_empty() {
+        let retrieval_model = if config.llm.retrieval.model.is_empty() {
+            &config.retrieval.model
+        } else {
+            &config.llm.retrieval.model
+        };
+        if retrieval_model.is_empty() {
             return Err(BuildError::MissingModel);
         }
 
@@ -410,38 +429,27 @@ impl EngineBuilder {
             .await
             .map_err(|e| BuildError::Workspace(e.to_string()))?;
 
-        // Create indexer client with LLM-enabled factory if API key is available
-        let indexer = if let Some(api_key) = config.summary.api_key.clone() {
-            let llm_config = crate::llm::LlmConfig::new(&config.summary.model)
-                .with_endpoint(config.summary.endpoint.clone())
-                .with_api_key(api_key)
-                .with_max_tokens(config.summary.max_tokens)
-                .with_temperature(config.summary.temperature);
-
-            let llm_client = crate::llm::LlmClient::new(llm_config);
-            crate::client::indexer::IndexerClient::with_llm(llm_client)
-        } else {
-            crate::client::indexer::IndexerClient::new(crate::index::PipelineExecutor::new())
+        // Build LlmPool from config.llm — centralizes all LLM client creation
+        let llm_configs: crate::llm::LlmConfigs = config.llm.clone().into();
+        let pool = {
+            let controller = crate::throttle::ConcurrencyController::new(
+                crate::throttle::ConcurrencyConfig::new()
+                    .with_max_concurrent_requests(config.concurrency.max_concurrent_requests)
+                    .with_requests_per_minute(config.concurrency.requests_per_minute)
+                    .with_enabled(config.concurrency.enabled),
+            );
+            crate::llm::LlmPool::new(llm_configs).with_concurrency(controller)
         };
 
-        // Create pipeline retriever with config
+        // Indexer uses pool.index()
+        let indexer =
+            crate::client::indexer::IndexerClient::with_llm(pool.index().clone());
+
+        // Retriever uses pool.retrieval()
         let retrieval_config = config.retrieval.clone();
         let mut retriever =
             PipelineRetriever::new().with_max_iterations(retrieval_config.search.max_iterations);
-
-        // Resolve API key: retrieval config first, then summary config
-        let retrieval_api_key = retrieval_config
-            .api_key
-            .clone()
-            .or_else(|| config.summary.api_key.clone())
-            .ok_or(BuildError::MissingApiKey)?;
-
-        let llm_config = crate::llm::LlmConfig::new(&retrieval_config.model)
-            .with_endpoint(retrieval_config.endpoint.clone())
-            .with_api_key(retrieval_api_key)
-            .with_temperature(retrieval_config.temperature);
-        let llm_client = crate::llm::LlmClient::new(llm_config);
-        retriever = retriever.with_llm_client(llm_client);
+        retriever = retriever.with_llm_client(pool.retrieval().clone());
 
         // Configure content aggregator if enabled
         if retrieval_config.content.enabled {
@@ -455,7 +463,7 @@ impl EngineBuilder {
         } else {
             // Create default memo store with model from config
             let memo_store = MemoStore::new()
-                .with_model(&retrieval_config.model)
+                .with_model(retrieval_model)
                 .with_version(1);
             retriever = retriever.with_memo_store(memo_store);
         }

@@ -1,5 +1,6 @@
 // Copyright (c) 2026 vectorless developers
 // SPDX-License-Identifier: Apache-2.0
+#![allow(dead_code)]
 
 //! # Vectorless
 //!

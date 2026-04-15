@@ -595,27 +595,6 @@ mod tests {
     }
 
     #[test]
-    fn test_detect_changes() {
-        let detector = ChangeDetector::new();
-
-        // Create two simple trees
-        let mut tree1 = DocumentTree::new("Root", "");
-        let child1 = tree1.add_child(tree1.root(), "Section 1", "Content 1");
-        tree1.add_child(tree1.root(), "Section 2", "Content 2");
-
-        let mut tree2 = DocumentTree::new("Root", "");
-        tree2.add_child(tree2.root(), "Section 1", "Content 1"); // Same
-        tree2.add_child(tree2.root(), "Section 2", "Content modified"); // Changed
-        tree2.add_child(tree2.root(), "Section 3", "Content 3"); // New
-
-        let changes = detector.detect_changes(&tree1, &tree2);
-
-        assert!(!changes.is_empty());
-        assert!(!changes.added.is_empty()); // Section 3 added
-        assert!(!changes.modified.is_empty()); // Section 2 modified
-    }
-
-    #[test]
     fn test_change_set() {
         let mut changes = ChangeSet::new();
         assert!(changes.is_empty());

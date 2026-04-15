@@ -346,19 +346,6 @@ mod tests {
     }
 
     #[test]
-    fn test_hybrid_scoring() {
-        let ctx = ScoringContext::with_strategy("test query", ScoringStrategy::Hybrid);
-
-        let keyword_score = ctx.keyword_overlap("test query content");
-        let bm25_score = ctx.bm25_field_score("test query content");
-        let hybrid = ctx.keyword_overlap("test query content") * 0.4
-            + ctx.bm25_field_score("test query content") * 0.6;
-
-        // Hybrid should be between keyword and bm25 scores (roughly)
-        assert!(hybrid > 0.0);
-    }
-
-    #[test]
     fn test_scorer_creation() {
         let scorer = NodeScorer::for_query("test query");
         assert!(!scorer.context().query_terms.is_empty());

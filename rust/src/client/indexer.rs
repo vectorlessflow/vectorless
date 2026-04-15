@@ -52,14 +52,6 @@ pub(crate) struct IndexerClient {
 }
 
 impl IndexerClient {
-    /// Create a new indexer client with a default pipeline executor.
-    pub fn new(_executor: PipelineExecutor) -> Self {
-        Self {
-            executor_factory: Arc::new(PipelineExecutor::new),
-            events: EventEmitter::new(),
-        }
-    }
-
     /// Create with an LLM-enabled pipeline.
     pub fn with_llm(client: LlmClient) -> Self {
         let client = Arc::new(client);
@@ -377,17 +369,5 @@ impl Clone for IndexerClient {
             executor_factory: Arc::clone(&self.executor_factory),
             events: self.events.clone(),
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_indexer_client_creation() {
-        let executor = PipelineExecutor::new();
-        let client = IndexerClient::new(executor);
-        let _ = client;
     }
 }

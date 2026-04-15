@@ -72,6 +72,7 @@ mod pool;
 mod retry;
 
 pub use client::LlmClient;
-pub use config::LlmConfig;
+pub use config::LlmConfigs;
 pub use error::LlmResult;
 pub use executor::LlmExecutor;
+pub use pool::LlmPool;
