@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "vectorless"
-version = "0.1.6"
+version = "0.1.7"
 description = "Reasoning-native document intelligence engine for AI"
 readme = "README.md"
 requires-python = ">=3.9"
