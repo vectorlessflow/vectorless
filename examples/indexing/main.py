@@ -16,13 +16,11 @@ from vectorless import Engine, IndexContext, IndexOptions, QueryContext
 # Replace with your own credentials
 API_KEY = "sk-..."
 MODEL = "gpt-4o"
-WORKSPACE = "./workspace"
 
 
 async def main():
     # --- 1. Create engine ---
     engine = Engine(
-        workspace=WORKSPACE,
         api_key=API_KEY,
         model=MODEL,
     )

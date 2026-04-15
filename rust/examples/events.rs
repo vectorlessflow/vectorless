@@ -108,7 +108,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 2. Create engine with events
     println!("Step 2: Creating engine with event emitter...");
     let engine = EngineBuilder::new()
-        .with_workspace("./workspace_events_example")
         .with_key(&api_key)
         .with_model(&model)
         .with_endpoint(&endpoint)

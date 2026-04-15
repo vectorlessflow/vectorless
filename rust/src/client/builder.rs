@@ -24,7 +24,6 @@
 //! # #[tokio::main]
 //! # async fn main() -> Result<(), vectorless::BuildError> {
 //! let engine = EngineBuilder::new()
-//!     .with_workspace("./data")
 //!     .with_key("sk-...")
 //!     .with_model("gpt-4o")
 //!     .build()
@@ -41,7 +40,6 @@
 //! # #[tokio::main]
 //! # async fn main() -> Result<(), vectorless::BuildError> {
 //! let engine = EngineBuilder::new()
-//!     .with_workspace("./data")
 //!     .with_key("sk-...")
 //!     .with_model("deepseek-chat")
 //!     .with_endpoint("https://api.deepseek.com/v1")
@@ -50,8 +48,6 @@
 //! # Ok(())
 //! # }
 //! ```
-
-use std::path::PathBuf;
 
 use crate::config::{Config, ConfigLoader, RetrievalConfig};
 use crate::memo::MemoStore;
@@ -74,7 +70,6 @@ use super::events::EventEmitter;
 /// # #[tokio::main]
 /// # async fn main() -> Result<(), vectorless::BuildError> {
 /// let client = EngineBuilder::new()
-///     .with_workspace("./my_workspace")
 ///     .with_key("sk-...")
 ///     .with_model("gpt-4o")
 ///     .build()
@@ -84,11 +79,8 @@ use super::events::EventEmitter;
 /// ```
 #[derive(Debug)]
 pub struct EngineBuilder {
-    /// Workspace path.
-    workspace: Option<PathBuf>,
-
     /// Configuration file path.
-    config_path: Option<PathBuf>,
+    config_path: Option<std::path::PathBuf>,
 
     /// Custom configuration.
     config: Option<Config>,
@@ -126,7 +118,6 @@ impl EngineBuilder {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            workspace: None,
             config_path: None,
             config: None,
             retrieval_config: None,
@@ -145,36 +136,11 @@ impl EngineBuilder {
     // Basic Configuration
     // ============================================================
 
-    /// Set the workspace path for document persistence.
-    ///
-    /// The workspace stores indexed documents and metadata.
-    /// If not set, defaults to `./workspace` or the value in config.
-    ///
-    /// # Example
-    ///
-    /// ```rust,no_run
-    /// use vectorless::client::EngineBuilder;
-    ///
-    /// # #[tokio::main]
-    /// # async fn main() -> Result<(), vectorless::BuildError> {
-    /// let engine = EngineBuilder::new()
-    ///     .with_workspace("./data")
-    ///     .build()
-    ///     .await?;
-    /// # Ok(())
-    /// # }
-    /// ```
-    #[must_use]
-    pub fn with_workspace(mut self, path: impl Into<PathBuf>) -> Self {
-        self.workspace = Some(path.into());
-        self
-    }
-
     /// Set the configuration file path.
     ///
     /// The file must be a valid TOML configuration. No auto-detection is performed.
     #[must_use]
-    pub fn with_config_path(mut self, path: impl Into<PathBuf>) -> Self {
+    pub fn with_config_path(mut self, path: impl Into<std::path::PathBuf>) -> Self {
         self.config_path = Some(path.into());
         self
     }
@@ -222,7 +188,8 @@ impl EngineBuilder {
     ///     .with_model("gpt-4o");
     ///
     /// let engine = EngineBuilder::new()
-    ///     .with_workspace("./data")
+    ///     .with_key("sk-...")
+    ///     .with_model("gpt-4o")
     ///     .with_memo_store(memo_store)
     ///     .build()
     ///     .await?;
@@ -249,7 +216,6 @@ impl EngineBuilder {
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), vectorless::BuildError> {
     /// let engine = EngineBuilder::new()
-    ///     .with_workspace("./data")
     ///     .with_key("sk-...")
     ///     .build()
     ///     .await?;
@@ -274,7 +240,6 @@ impl EngineBuilder {
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), vectorless::BuildError> {
     /// let engine = EngineBuilder::new()
-    ///     .with_workspace("./data")
     ///     .with_model("gpt-4o-mini")
     ///     .build()
     ///     .await?;
@@ -299,7 +264,6 @@ impl EngineBuilder {
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), vectorless::BuildError> {
     /// let engine = EngineBuilder::new()
-    ///     .with_workspace("./data")
     ///     .with_model("deepseek-chat")
     ///     .with_endpoint("https://api.deepseek.com/v1")
     ///     .build()
@@ -375,7 +339,6 @@ impl EngineBuilder {
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), vectorless::BuildError> {
     /// let engine = EngineBuilder::new()
-    ///     .with_workspace("./data")
     ///     .with_key("sk-...")
     ///     .with_model("gpt-4o")
     ///     .build()
@@ -442,13 +405,8 @@ impl EngineBuilder {
             return Err(BuildError::MissingModel);
         }
 
-        // Open workspace: prefer explicit path, fallback to config
-        let workspace_path = self
-            .workspace
-            .as_ref()
-            .unwrap_or(&config.storage.workspace_dir);
-
-        let workspace = Workspace::new(workspace_path)
+        // Open workspace from config
+        let workspace = Workspace::new(&config.storage.workspace_dir)
             .await
             .map_err(|e| BuildError::Workspace(e.to_string()))?;
 
@@ -547,16 +505,8 @@ mod tests {
     #[test]
     fn test_builder_defaults() {
         let builder = EngineBuilder::new();
-        assert!(builder.workspace.is_none());
         assert!(!builder.fast_mode);
         assert!(!builder.precise_mode);
-    }
-
-    #[test]
-    fn test_builder_with_workspace() {
-        let builder = EngineBuilder::new().with_workspace("./test_workspace");
-
-        assert_eq!(builder.workspace, Some(PathBuf::from("./test_workspace")));
     }
 
     #[test]

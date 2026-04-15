@@ -1484,7 +1484,6 @@ fn run_metrics_report(engine: Arc<Engine>) -> PyMetricsReport {
 /// from vectorless import Engine, IndexContext, QueryContext
 ///
 /// engine = Engine(
-///     workspace="./data",
 ///     api_key="sk-...",
 ///     model="gpt-4o",
 /// )
@@ -1507,7 +1506,6 @@ impl PyEngine {
     /// Create a new Engine.
     ///
     /// Args:
-    ///     workspace: Path to the workspace directory.
     ///     config_path: Path to configuration file (optional).
     ///     api_key: **Required**. LLM API key.
     ///     model: **Required**. LLM model name.
@@ -1516,9 +1514,8 @@ impl PyEngine {
     /// Raises:
     ///     VectorlessError: If engine creation fails.
     #[new]
-    #[pyo3(signature = (workspace=None, config_path=None, api_key=None, model=None, endpoint=None))]
+    #[pyo3(signature = (config_path=None, api_key=None, model=None, endpoint=None))]
     fn new(
-        workspace: Option<String>,
         config_path: Option<String>,
         api_key: Option<String>,
         model: Option<String>,
@@ -1536,9 +1533,6 @@ impl PyEngine {
 
             if let Some(path) = &config_path {
                 builder = builder.with_config_path(path);
-            }
-            if let Some(ws) = &workspace {
-                builder = builder.with_workspace(ws);
             }
             if let Some(m) = &model {
                 builder = builder.with_model(m);
@@ -1661,7 +1655,7 @@ impl PyEngine {
 /// ```python
 /// from vectorless import Engine, IndexContext, QueryContext
 ///
-/// engine = Engine(workspace="./data", api_key="sk-...", model="gpt-4o")
+/// engine = Engine(api_key="sk-...", model="gpt-4o")
 /// result = await engine.index(IndexContext.from_path("./report.pdf"))
 /// answer = await engine.query(QueryContext("What is the revenue?").with_doc_id(result.doc_id))
 /// print(answer.single().content)

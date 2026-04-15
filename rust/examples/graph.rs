@@ -34,7 +34,6 @@ async fn main() -> vectorless::Result<()> {
 
     // 1. Create engine
     let engine = EngineBuilder::new()
-        .with_workspace("./workspace_graph_example")
         .with_key(&api_key)
         .with_model(&model)
         .build()

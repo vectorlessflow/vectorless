@@ -17,7 +17,8 @@
 //! # #[tokio::main]
 //! # async fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! let engine = EngineBuilder::new()
-//!     .with_workspace("./data")
+//!     .with_key("sk-...")
+//!     .with_model("gpt-4o")
 //!     .build()
 //!     .await?;
 //!
@@ -147,7 +148,8 @@ impl Engine {
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let engine = EngineBuilder::new()
-    ///     .with_workspace("./data")
+    ///     .with_key("sk-...")
+    ///     .with_model("gpt-4o")
     ///     .build()
     ///     .await?;
     ///
@@ -380,7 +382,8 @@ impl Engine {
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let engine = EngineBuilder::new()
-    ///     .with_workspace("./data")
+    ///     .with_key("sk-...")
+    ///     .with_model("gpt-4o")
     ///     .build()
     ///     .await?;
     ///

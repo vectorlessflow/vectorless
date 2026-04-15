@@ -21,8 +21,6 @@ from vectorless import (
 API_KEY = os.environ.get("VECTORLESS_API_KEY", "sk-...")
 MODEL = os.environ.get("VECTORLESS_MODEL", "gpt-4o")
 ENDPOINT = os.environ.get("VECTORLESS_ENDPOINT", None)
-WORKSPACE = "./workspace"
-
 # Sample documents
 SAMPLE_A = """\
 # Project Alpha
@@ -57,7 +55,6 @@ It uses WebSocket-based communication and server-side rendering.
 
 async def main() -> None:
     engine = Engine(
-        workspace=WORKSPACE,
         api_key=API_KEY,
         model=MODEL,
         endpoint=ENDPOINT,

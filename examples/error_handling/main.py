@@ -21,12 +21,9 @@ from vectorless import (
 API_KEY = os.environ.get("VECTORLESS_API_KEY", "sk-...")
 MODEL = os.environ.get("VECTORLESS_MODEL", "gpt-4o")
 ENDPOINT = os.environ.get("VECTORLESS_ENDPOINT", None)
-WORKSPACE = "./workspace"
-
 
 async def main() -> None:
     engine = Engine(
-        workspace=WORKSPACE,
         api_key=API_KEY,
         model=MODEL,
         endpoint=ENDPOINT,
@@ -88,7 +85,6 @@ async def main() -> None:
     print("--- Engine with invalid credentials ---")
     try:
         bad_engine = Engine(
-            workspace=WORKSPACE + "_bad",
             api_key="sk-invalid-key-12345",
             model="gpt-4o",
         )

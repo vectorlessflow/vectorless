@@ -18,7 +18,8 @@
 //! # async fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! // Create a client with default settings
 //! let client = EngineBuilder::new()
-//!     .with_workspace("./my_workspace")
+//!     .with_key("sk-...")
+//!     .with_model("gpt-4o")
 //!     .build()
 //!     .await?;
 //!

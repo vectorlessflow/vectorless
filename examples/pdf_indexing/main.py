@@ -26,8 +26,6 @@ from vectorless import (
 API_KEY = os.environ.get("VECTORLESS_API_KEY", "sk-...")
 MODEL = os.environ.get("VECTORLESS_MODEL", "gpt-4o")
 ENDPOINT = os.environ.get("VECTORLESS_ENDPOINT", None)
-WORKSPACE = "./workspace"
-
 # Resolve the sample PDF path relative to the repo root
 SAMPLE_PDF = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
@@ -70,7 +68,6 @@ async def main() -> None:
         sys.exit(1)
 
     engine = Engine(
-        workspace=WORKSPACE,
         api_key=API_KEY,
         model=MODEL,
         endpoint=ENDPOINT,

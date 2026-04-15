@@ -38,7 +38,6 @@ async fn main() -> vectorless::Result<()> {
         .unwrap_or_else(|_| "http://localhost:4000/api/v1".to_string());
 
     let engine = EngineBuilder::new()
-        .with_workspace("./workspace_directory_example")
         .with_key(&api_key)
         .with_model(&model)
         .with_endpoint(&endpoint)

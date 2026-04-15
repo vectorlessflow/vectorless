@@ -69,7 +69,6 @@ async fn main() -> vectorless::Result<()> {
     println!("Step 1: Creating Vectorless client...");
 
     let engine = EngineBuilder::new()
-        .with_workspace("./workspace_flow_example")
         .with_key(&api_key)
         .with_model(&model)
         .with_endpoint(&endpoint)
