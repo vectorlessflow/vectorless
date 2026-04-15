@@ -55,4 +55,8 @@ mod llm;
 mod pilot;
 mod retrieval;
 
+pub use hub::{MetricsHub, MetricsReport};
 pub use index::IndexMetrics;
+pub use llm::LlmMetricsReport;
+pub use pilot::PilotMetricsReport;
+pub use retrieval::RetrievalMetricsReport;

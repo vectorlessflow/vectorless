@@ -86,3 +86,6 @@ pub use events::{EventEmitter, IndexEvent, QueryEvent, WorkspaceEvent};
 
 // Index metrics
 pub use metrics::IndexMetrics;
+
+// Runtime metrics reports
+pub use metrics::{LlmMetricsReport, MetricsReport, PilotMetricsReport, RetrievalMetricsReport};

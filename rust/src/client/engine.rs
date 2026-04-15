@@ -45,6 +45,7 @@ use crate::config::Config;
 use crate::error::Result;
 use crate::index::PipelineOptions;
 use crate::index::incremental::{self, IndexAction};
+use crate::metrics::MetricsHub;
 use crate::retrieval::{PipelineRetriever, RetrieveEventReceiver};
 use crate::storage::{PersistedDocument, Workspace};
 use crate::{DocumentTree, Error};
@@ -85,6 +86,9 @@ pub struct Engine {
 
     /// Event emitter.
     events: EventEmitter,
+
+    /// Central metrics hub for unified collection.
+    metrics_hub: Arc<MetricsHub>,
 }
 
 impl Engine {
@@ -120,6 +124,7 @@ impl Engine {
             retriever,
             workspace: Some(workspace_client),
             events,
+            metrics_hub: Arc::new(MetricsHub::with_defaults()),
         })
     }
 
@@ -543,6 +548,14 @@ impl Engine {
         workspace.get_graph().await
     }
 
+    /// Generate a complete metrics report.
+    ///
+    /// Returns a [`MetricsReport`](crate::metrics::MetricsReport) containing
+    /// LLM usage, pilot decision, and retrieval operation metrics.
+    pub fn metrics_report(&self) -> crate::metrics::MetricsReport {
+        self.metrics_hub.generate_report()
+    }
+
     // ============================================================
     // Internal
     // ============================================================
@@ -727,6 +740,7 @@ impl Clone for Engine {
             retriever: self.retriever.clone(),
             workspace: self.workspace.clone(),
             events: self.events.clone(),
+            metrics_hub: Arc::clone(&self.metrics_hub),
         }
     }
 }
