@@ -30,7 +30,7 @@ use tracing::{debug, info};
 use crate::error::Result;
 use crate::storage::{PersistedDocument, Workspace};
 
-use super::events::{EventEmitter, WorkspaceEvent};
+use crate::events::{EventEmitter, WorkspaceEvent};
 use super::types::DocumentInfo;
 
 /// Workspace management client.

@@ -55,7 +55,7 @@ use crate::retrieval::PipelineRetriever;
 use crate::storage::Workspace;
 
 use super::engine::Engine;
-use super::events::EventEmitter;
+use crate::events::EventEmitter;
 
 /// Builder for creating a [`Engine`] client.
 ///

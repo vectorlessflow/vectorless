@@ -21,7 +21,7 @@ use std::sync::Arc;
 
 use tracing::info;
 
-use super::events::{EventEmitter, QueryEvent};
+use crate::events::{EventEmitter, QueryEvent};
 use super::types::QueryResultItem;
 use crate::config::Config;
 use crate::document::{DocumentTree, ReasoningIndex};

@@ -51,7 +51,7 @@ use crate::retrieval::{PipelineRetriever, RetrieveEventReceiver};
 use crate::storage::{PersistedDocument, Workspace};
 use crate::{DocumentTree, Error};
 
-use super::events::EventEmitter;
+use crate::events::EventEmitter;
 use super::index_context::{IndexContext, IndexSource};
 use super::indexer::IndexerClient;
 use super::query_context::{QueryContext, QueryScope};

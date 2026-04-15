@@ -34,7 +34,7 @@ use crate::index::{
 use crate::llm::LlmClient;
 use crate::storage::{DocumentMeta, PersistedDocument};
 
-use super::events::{EventEmitter, IndexEvent};
+use crate::events::{EventEmitter, IndexEvent};
 use super::index_context::IndexSource;
 use super::types::{IndexOptions, IndexedDocument};
 

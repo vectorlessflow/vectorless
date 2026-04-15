@@ -67,7 +67,6 @@
 
 mod builder;
 mod engine;
-pub mod events;
 mod index_context;
 mod indexer;
 mod query_context;
@@ -90,10 +89,10 @@ pub use index_context::IndexContext;
 pub use query_context::QueryContext;
 
 // ============================================================
-// Events
+// Events (re-export from crate::events)
 // ============================================================
 
-pub use events::EventEmitter;
+pub use crate::events::EventEmitter;
 
 // ============================================================
 // Result & Info Types
