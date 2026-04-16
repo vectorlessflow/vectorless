@@ -4,7 +4,7 @@
 //! Error types for the vectorless library.
 //!
 //! This module provides a comprehensive error type hierarchy for all operations.
-//! All errors are consolidated into [`Error`] with specific variants for each category.
+//! All errors are consolidated into [`enum@Error`] with specific variants for each category.
 
 use thiserror::Error;
 

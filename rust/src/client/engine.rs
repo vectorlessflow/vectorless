@@ -485,7 +485,7 @@ impl Engine {
 
     /// Query a document with streaming results.
     ///
-    /// Returns a [`RetrieveEventReceiver`] that yields [`RetrieveEvent`](crate::retrieval::RetrieveEvent)s
+    /// Returns a receiver that yields retrieval events
     /// as the retrieval pipeline progresses through each stage.
     ///
     /// Only supports single-document scope (via `with_doc_ids` with one ID).
