@@ -93,7 +93,7 @@ const PYTHON_CODE = `import asyncio
 from vectorless import Engine, IndexContext, QueryContext
 
 async def main():
-    engine = Engine(api_key="sk-...", model="gpt-4o")
+    engine = Engine(api_key="sk-...", model="gpt-4o", endpoint="https://api.openai.com/v1")
 
     # Index a document
     result = await engine.index(IndexContext.from_path("./report.pdf"))
@@ -114,6 +114,7 @@ async fn main() -> vectorless::Result<()> {
     let engine = EngineBuilder::new()
         .with_key("sk-...")
         .with_model("gpt-4o")
+        .with_endpoint("https://api.openai.com/v1")
         .build()
         .await?;
 

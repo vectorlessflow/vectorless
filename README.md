@@ -44,6 +44,7 @@ async fn main() -> vectorless::Result<()> {
     let engine = EngineBuilder::new()
         .with_key("sk-...")
         .with_model("gpt-4o")
+        .with_endpoint("https://api.openai.com/v1")
         .build()
         .await?;
 
@@ -73,7 +74,7 @@ import asyncio
 from vectorless import Engine, IndexContext, QueryContext
 
 async def main():
-    engine = Engine(api_key="sk-...", model="gpt-4o")
+    engine = Engine(api_key="sk-...", model="gpt-4o", endpoint="https://api.openai.com/v1")
 
     # Index a document
     result = await engine.index(IndexContext.from_path("./report.pdf"))
@@ -126,7 +127,7 @@ result = await engine.query(
 Indexed documents are stored in a workspace — there's no need to reprocess files between sessions:
 
 ```python
-engine = Engine(api_key="sk-...", model="gpt-4o")
+engine = Engine(api_key="sk-...", model="gpt-4o", endpoint="https://api.openai.com/v1")
 
 # List all indexed documents
 docs = await engine.list()

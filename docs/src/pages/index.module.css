@@ -32,7 +32,7 @@
 }
 
 .heroTitleEmphasis {
-  color: var(--primary-dark);
+  color: var(--text);
 }
 
 .heroTitleLight {
