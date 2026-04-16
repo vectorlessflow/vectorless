@@ -42,6 +42,7 @@ const sidebars: SidebarsConfig = {
         'sdk/rust',
       ],
     },
+    'api-reference',
     {
       type: 'category',
       label: 'Examples',

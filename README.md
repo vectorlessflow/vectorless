@@ -13,15 +13,11 @@
 
 </div>
 
-**Vectorless** is a reasoning-native document engine designed to be the foundational layer for AI applications that need structured access to documents, with the core written in Rust. It does not use vector databases, embeddings, or similarity search. Instead, it transforms documents into hierarchical semantic trees and uses the LLM itself to navigate and retrieve — purely LLM-guided, from indexing to querying.
+**Vectorless** is a reasoning-native document engine designed to be the foundational layer for AI applications that need structured access to documents, with the core written in Rust. It does not use vector databases, embeddings, or similarity search. Instead, it will reason through any of your structured documents — **PDFs, Markdown, reports, contracts** — and retrieve only what's relevant. Nothing more, nothing less.
 
 
 
-## Why Vectorless
-
-Most document retrieval solutions rely on vector similarity — splitting documents into chunks, embedding them, and searching by cosine distance. This works for rough topic matching, but breaks down when you need **precision**: specific numbers, cross-section references, or multi-step reasoning across a document.
-
-Vectorless takes a different approach. No vectors at all. It builds a **semantic tree index** of each document — preserving the original hierarchy — and uses the LLM itself to navigate that structure. The LLM generates the tree during indexing and reasons through it during retrieval. Pure LLM guidance, end to end.
+## How It Works
 
 <div align="center">
   <img src="https://vectorless.dev/img/workflow.svg" alt="Vectorless Workflow" width="900">

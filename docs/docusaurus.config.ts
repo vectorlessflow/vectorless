@@ -111,7 +111,7 @@ const config: Config = {
             },
             {
               label: 'API Reference',
-              href: 'https://docs.rs/vectorless',
+              to: '/docs/api-reference',
             },
           ],
         },
