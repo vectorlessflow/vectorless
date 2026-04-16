@@ -19,6 +19,7 @@
 //! let engine = EngineBuilder::new()
 //!     .with_key("sk-...")
 //!     .with_model("gpt-4o")
+//!     .with_endpoint("https://api.openai.com/v1")
 //!     .build()
 //!     .await?;
 //!
@@ -36,28 +37,33 @@
 //! # }
 //! ```
 
-use std::collections::HashMap;
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use futures::StreamExt;
 use tracing::info;
 
-use crate::config::Config;
-use crate::error::Result;
-use crate::index::PipelineOptions;
-use crate::index::incremental::{self, IndexAction};
-use crate::metrics::MetricsHub;
-use crate::retrieval::{PipelineRetriever, RetrieveEventReceiver};
-use crate::storage::{PersistedDocument, Workspace};
-use crate::{DocumentTree, Error};
+use crate::{
+    DocumentTree, Error,
+    config::Config,
+    error::Result,
+    events::EventEmitter,
+    index::{
+        PipelineOptions,
+        incremental::{self, IndexAction},
+    },
+    metrics::MetricsHub,
+    retrieval::{PipelineRetriever, RetrieveEventReceiver},
+    storage::{PersistedDocument, Workspace},
+};
 
-use super::index_context::{IndexContext, IndexSource};
-use super::indexer::IndexerClient;
-use super::query_context::{QueryContext, QueryScope};
-use super::retriever::RetrieverClient;
-use super::types::{DocumentInfo, FailedItem, IndexItem, IndexMode, IndexResult, QueryResult};
-use super::workspace::WorkspaceClient;
-use crate::events::EventEmitter;
+use super::{
+    index_context::{IndexContext, IndexSource},
+    indexer::IndexerClient,
+    query_context::{QueryContext, QueryScope},
+    retriever::RetrieverClient,
+    types::{DocumentInfo, FailedItem, IndexItem, IndexMode, IndexResult, QueryResult},
+    workspace::WorkspaceClient,
+};
 
 /// The main Engine client.
 ///

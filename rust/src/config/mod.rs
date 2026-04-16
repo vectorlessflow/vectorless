@@ -11,9 +11,9 @@ mod merge;
 mod types;
 mod validator;
 
-pub(crate) use loader::ConfigLoader;
+pub use types::Config;
 pub(crate) use types::{
-    CacheConfig, CompressionAlgorithm, ConcurrencyConfig, Config, FallbackBehavior, FallbackConfig,
+    CacheConfig, CompressionAlgorithm, ConcurrencyConfig, FallbackBehavior, FallbackConfig,
     IndexerConfig, LlmClientConfig, LlmConfig, LlmMetricsConfig, LlmPoolConfig, MetricsConfig,
     OnAllFailedBehavior, PilotMetricsConfig, RetrievalConfig, RetrievalMetricsConfig,
     SufficiencyConfig, SummaryConfig,

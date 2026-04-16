@@ -5,88 +5,36 @@
 //!
 //! This module provides [`EngineBuilder`] for configuring and building
 //! [`Engine`] instances with sensible defaults.
-//!
-//! # Configuration
-//!
-//! `api_key` and `model` are **required**. `endpoint` is optional
-//! (defaults to the model provider's standard endpoint).
-//!
-//! Configuration sources (later overrides earlier):
-//! 1. Default configuration
-//! 2. Config file (via `with_config_path`)
-//! 3. Builder methods (`with_key`, `with_model`, etc.) — highest priority
-//!
-//! # Examples
-//!
-//! ```rust,no_run
-//! use vectorless::client::EngineBuilder;
-//!
-//! # #[tokio::main]
-//! # async fn main() -> Result<(), vectorless::BuildError> {
-//! let engine = EngineBuilder::new()
-//!     .with_key("sk-...")
-//!     .with_model("gpt-4o")
-//!     .build()
-//!     .await?;
-//! # Ok(())
-//! # }
-//! ```
-//!
-//! ## With Custom Endpoint
-//!
-//! ```rust,no_run
-//! use vectorless::client::EngineBuilder;
-//!
-//! # #[tokio::main]
-//! # async fn main() -> Result<(), vectorless::BuildError> {
-//! let engine = EngineBuilder::new()
-//!     .with_key("sk-...")
-//!     .with_model("deepseek-chat")
-//!     .with_endpoint("https://api.deepseek.com/v1")
-//!     .build()
-//!     .await?;
-//! # Ok(())
-//! # }
-//! ```
 
-use crate::config::{Config, ConfigLoader, RetrievalConfig};
-use crate::memo::MemoStore;
-use crate::retrieval::PipelineRetriever;
-use crate::storage::Workspace;
-
-use super::engine::Engine;
-use crate::events::EventEmitter;
+use crate::{
+    client::engine::Engine, config::Config, events::EventEmitter, retrieval::PipelineRetriever,
+    storage::Workspace,
+};
 
 /// Builder for creating a [`Engine`] client.
 ///
-/// `api_key` and `model` are required and must be set via builder methods
-/// or provided through a config file.
+/// `api_key`, `model` and `endpoint` are **required**.
 ///
 /// # Example
 ///
 /// ```rust,no_run
 /// use vectorless::client::EngineBuilder;
 ///
-/// # #[tokio::main]
-/// # async fn main() -> Result<(), vectorless::BuildError> {
-/// let client = EngineBuilder::new()
-///     .with_key("sk-...")
-///     .with_model("gpt-4o")
-///     .build()
-///     .await?;
-/// # Ok(())
-/// # }
+/// #[tokio::main]
+/// async fn main() -> Result<(), vectorless::BuildError> {
+///     let client = EngineBuilder::new()
+///         .with_key("sk-...")
+///         .with_model("gpt-4o")
+///         .with_endpoint("https://api.xxx.com/v1")
+///         .build()
+///         .await?;
+///    Ok(())
+/// }
 /// ```
 #[derive(Debug)]
 pub struct EngineBuilder {
-    /// Configuration file path.
-    config_path: Option<std::path::PathBuf>,
-
-    /// Custom configuration.
+    /// Custom configuration for advanced tuning.
     config: Option<Config>,
-
-    /// Custom retrieval config.
-    retrieval_config: Option<RetrievalConfig>,
 
     /// Event emitter.
     events: Option<EventEmitter>,
@@ -99,18 +47,6 @@ pub struct EngineBuilder {
 
     /// LLM endpoint URL (override).
     endpoint: Option<String>,
-
-    /// Top-K for retrieval (override).
-    top_k: Option<usize>,
-
-    /// Fast mode flag.
-    fast_mode: bool,
-
-    /// Precise mode flag.
-    precise_mode: bool,
-
-    /// Memo store for caching LLM decisions.
-    memo_store: Option<MemoStore>,
 }
 
 impl EngineBuilder {
@@ -118,17 +54,11 @@ impl EngineBuilder {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            config_path: None,
             config: None,
-            retrieval_config: None,
             events: None,
             api_key: None,
             model: None,
             endpoint: None,
-            top_k: None,
-            fast_mode: false,
-            precise_mode: false,
-            memo_store: None,
         }
     }
 
@@ -136,28 +66,14 @@ impl EngineBuilder {
     // Basic Configuration
     // ============================================================
 
-    /// Set the configuration file path.
+    /// Set a custom configuration.
     ///
-    /// The file must be a valid TOML configuration. No auto-detection is performed.
-    #[must_use]
-    pub fn with_config_path(mut self, path: impl Into<std::path::PathBuf>) -> Self {
-        self.config_path = Some(path.into());
-        self
-    }
-
-    /// Set a custom configuration object.
-    ///
-    /// This overrides any config file settings.
+    /// When provided, this replaces the default [`Config`] entirely.
+    /// Builder methods (`with_key`, `with_model`, `with_endpoint`)
+    /// will still override the corresponding fields on top of this config.
     #[must_use]
     pub fn with_config(mut self, config: Config) -> Self {
         self.config = Some(config);
-        self
-    }
-
-    /// Set custom retrieval configuration.
-    #[must_use]
-    pub fn with_retrieval_config(mut self, config: RetrievalConfig) -> Self {
-        self.retrieval_config = Some(config);
         self
     }
 
@@ -165,40 +81,6 @@ impl EngineBuilder {
     #[must_use]
     pub fn with_events(mut self, events: EventEmitter) -> Self {
         self.events = Some(events);
-        self
-    }
-
-    /// Set a memo store for caching LLM decisions.
-    ///
-    /// When enabled, the pilot will cache navigation decisions based on
-    /// context fingerprints, avoiding redundant API calls for similar
-    /// navigation scenarios.
-    ///
-    /// # Example
-    ///
-    /// ```rust,no_run
-    /// use vectorless::client::EngineBuilder;
-    /// use vectorless::memo::MemoStore;
-    /// use chrono::Duration;
-    ///
-    /// # #[tokio::main]
-    /// # async fn main() -> Result<(), vectorless::BuildError> {
-    /// let memo_store = MemoStore::new()
-    ///     .with_ttl(Duration::days(7))
-    ///     .with_model("gpt-4o");
-    ///
-    /// let engine = EngineBuilder::new()
-    ///     .with_key("sk-...")
-    ///     .with_model("gpt-4o")
-    ///     .with_memo_store(memo_store)
-    ///     .build()
-    ///     .await?;
-    /// # Ok(())
-    /// # }
-    /// ```
-    #[must_use]
-    pub fn with_memo_store(mut self, store: MemoStore) -> Self {
-        self.memo_store = Some(store);
         self
     }
 
@@ -281,45 +163,6 @@ impl EngineBuilder {
     // Retrieval Configuration
     // ============================================================
 
-    /// Set the number of results to return from queries.
-    ///
-    /// Default is 5. Higher values return more context but cost more tokens.
-    #[must_use]
-    pub fn with_top_k(mut self, k: usize) -> Self {
-        self.top_k = Some(k);
-        self
-    }
-
-    // ============================================================
-    // Preset Configurations
-    // ============================================================
-
-    /// Enable fast mode for quicker but less thorough retrieval.
-    ///
-    /// Fast mode uses:
-    /// - Keyword-based retrieval (no LLM calls)
-    /// - Lower beam width / MCTS simulations
-    /// - Lazy summary generation
-    #[must_use]
-    pub fn fast(mut self) -> Self {
-        self.fast_mode = true;
-        self.precise_mode = false;
-        self
-    }
-
-    /// Enable precise mode for higher quality retrieval.
-    ///
-    /// Precise mode uses:
-    /// - MCTS-based retrieval
-    /// - Higher simulation count
-    /// - Full summary generation
-    #[must_use]
-    pub fn precise(mut self) -> Self {
-        self.precise_mode = true;
-        self.fast_mode = false;
-        self
-    }
-
     /// Build the Engine client.
     ///
     /// `api_key` and `model` must be provided via builder methods or config file.
@@ -347,22 +190,8 @@ impl EngineBuilder {
     /// # }
     /// ```
     pub async fn build(self) -> Result<Engine, BuildError> {
-        // Load or create configuration
-        let mut config = if let Some(config) = self.config {
-            config
-        } else if let Some(path) = self.config_path {
-            ConfigLoader::new()
-                .file(&path)
-                .load()
-                .map_err(|e| BuildError::Config(e.to_string()))?
-        } else {
-            Config::default()
-        };
-
-        // Apply builder overrides to retrieval config
-        if let Some(retrieval_config) = self.retrieval_config {
-            config.retrieval = retrieval_config;
-        }
+        // Load user-provided or default configuration
+        let mut config = self.config.unwrap_or_default();
 
         // Apply individual overrides to LlmPoolConfig (primary) + legacy config (compat)
         if let Some(api_key) = self.api_key {
@@ -392,18 +221,6 @@ impl EngineBuilder {
             config.retrieval.endpoint = endpoint.clone();
             config.summary.endpoint = endpoint;
         }
-        if let Some(top_k) = self.top_k {
-            config.retrieval.top_k = top_k;
-        }
-
-        // Apply preset modes
-        if self.fast_mode {
-            config.retrieval.search.max_iterations = 5;
-        }
-        if self.precise_mode {
-            config.retrieval.search.max_iterations = 100;
-        }
-
         // Validate required settings
         let resolved_key = config
             .llm
@@ -422,6 +239,9 @@ impl EngineBuilder {
         };
         if retrieval_model.is_empty() {
             return Err(BuildError::MissingModel);
+        }
+        if config.llm.endpoint.is_none() {
+            return Err(BuildError::MissingEndpoint);
         }
 
         // Open workspace from config
@@ -456,15 +276,6 @@ impl EngineBuilder {
                 retriever.with_content_config(retrieval_config.content.to_aggregator_config());
         }
 
-        // Add memo store if provided or create default
-        if let Some(memo_store) = self.memo_store {
-            retriever = retriever.with_memo_store(memo_store);
-        } else {
-            // Create default memo store with model from config
-            let memo_store = MemoStore::new().with_model(retrieval_model).with_version(1);
-            retriever = retriever.with_memo_store(memo_store);
-        }
-
         // Build engine
         let events = self.events.unwrap_or_default();
         Engine::with_components(config, workspace, retriever, indexer, events)
@@ -482,10 +293,6 @@ impl Default for EngineBuilder {
 /// Error during client build.
 #[derive(Debug, thiserror::Error)]
 pub enum BuildError {
-    /// Configuration error.
-    #[error("Configuration error: {0}")]
-    Config(String),
-
     /// Workspace error.
     #[error("Workspace error: {0}")]
     Workspace(String),
@@ -498,6 +305,12 @@ pub enum BuildError {
     #[error("Missing model: call .with_model(\"gpt-4o\") or set model in config file")]
     MissingModel,
 
+    /// Missing endpoint URL.
+    #[error(
+        "Missing endpoint: call .with_endpoint(\"https://api.xxx.com/v1\") or set endpoint in config"
+    )]
+    MissingEndpoint,
+
     /// Other error.
     #[error("{0}")]
     Other(String),
@@ -506,13 +319,6 @@ pub enum BuildError {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_builder_defaults() {
-        let builder = EngineBuilder::new();
-        assert!(!builder.fast_mode);
-        assert!(!builder.precise_mode);
-    }
 
     #[test]
     fn test_builder_with_key() {
@@ -536,28 +342,5 @@ mod tests {
 
         assert_eq!(builder.model, Some("gpt-4o-mini".to_string()));
         assert_eq!(builder.api_key, Some("sk-test".to_string()));
-    }
-
-    #[test]
-    fn test_builder_fast_mode() {
-        let builder = EngineBuilder::new().fast();
-
-        assert!(builder.fast_mode);
-        assert!(!builder.precise_mode);
-    }
-
-    #[test]
-    fn test_builder_precise_mode() {
-        let builder = EngineBuilder::new().precise();
-
-        assert!(builder.precise_mode);
-        assert!(!builder.fast_mode);
-    }
-
-    #[test]
-    fn test_builder_top_k() {
-        let builder = EngineBuilder::new().with_top_k(10);
-
-        assert_eq!(builder.top_k, Some(10));
     }
 }

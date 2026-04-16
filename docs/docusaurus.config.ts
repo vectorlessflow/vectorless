@@ -111,7 +111,7 @@ const config: Config = {
             },
             {
               label: 'API Reference',
-              href: 'https://docs.rs/vectorless',
+              to: '/docs/api-reference',
             },
           ],
         },
@@ -133,7 +133,7 @@ const config: Config = {
           ],
         },
       ],
-      copyright: `Copyright © ${new Date().getFullYear()} Vectorless`,
+      copyright: `Copyright \u00A9 ${new Date().getFullYear()} Vectorless`,
     },
     prism: {
       theme: prismThemes.github,

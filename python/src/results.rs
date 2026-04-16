@@ -1,0 +1,351 @@
+// Copyright (c) 2026 vectorless developers
+// SPDX-License-Identifier: Apache-2.0
+
+//! Query and index result Python wrappers.
+
+use pyo3::prelude::*;
+
+use ::vectorless::client::{FailedItem, IndexItem, IndexResult, QueryResult, QueryResultItem};
+use ::vectorless::metrics::IndexMetrics;
+
+// ============================================================
+// QueryResultItem
+// ============================================================
+
+/// A single document's query result.
+#[pyclass(name = "QueryResultItem")]
+pub struct PyQueryResultItem {
+    pub(crate) inner: QueryResultItem,
+}
+
+#[pymethods]
+impl PyQueryResultItem {
+    /// The document ID.
+    #[getter]
+    fn doc_id(&self) -> &str {
+        &self.inner.doc_id
+    }
+
+    /// The retrieved content.
+    #[getter]
+    fn content(&self) -> &str {
+        &self.inner.content
+    }
+
+    /// Relevance score (0.0 to 1.0).
+    #[getter]
+    fn score(&self) -> f32 {
+        self.inner.score
+    }
+
+    /// Node IDs that matched.
+    #[getter]
+    fn node_ids(&self) -> Vec<String> {
+        self.inner.node_ids.clone()
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "QueryResultItem(doc_id='{}', score={:.2}, content_len={})",
+            self.inner.doc_id,
+            self.inner.score,
+            self.inner.content.len()
+        )
+    }
+}
+
+// ============================================================
+// FailedItem
+// ============================================================
+
+/// A failed item in a batch operation.
+#[pyclass(name = "FailedItem")]
+pub struct PyFailedItem {
+    pub(crate) inner: FailedItem,
+}
+
+#[pymethods]
+impl PyFailedItem {
+    /// Source description.
+    #[getter]
+    fn source(&self) -> &str {
+        &self.inner.source
+    }
+
+    /// Error message.
+    #[getter]
+    fn error(&self) -> &str {
+        &self.inner.error
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "FailedItem(source='{}', error='{}')",
+            self.inner.source, self.inner.error
+        )
+    }
+}
+
+// ============================================================
+// QueryResult
+// ============================================================
+
+/// Result of a document query.
+#[pyclass(name = "QueryResult")]
+pub struct PyQueryResult {
+    pub(crate) inner: QueryResult,
+}
+
+#[pymethods]
+impl PyQueryResult {
+    /// Result items (one per document).
+    #[getter]
+    fn items(&self) -> Vec<PyQueryResultItem> {
+        self.inner
+            .items
+            .iter()
+            .map(|i| PyQueryResultItem { inner: i.clone() })
+            .collect()
+    }
+
+    /// Get the first (single-doc) result item.
+    fn single(&self) -> Option<PyQueryResultItem> {
+        self.inner
+            .single()
+            .map(|i| PyQueryResultItem { inner: i.clone() })
+    }
+
+    /// Number of result items.
+    fn __len__(&self) -> usize {
+        self.inner.len()
+    }
+
+    /// Whether any documents failed.
+    fn has_failures(&self) -> bool {
+        self.inner.has_failures()
+    }
+
+    /// Failed items.
+    #[getter]
+    fn failed(&self) -> Vec<PyFailedItem> {
+        self.inner
+            .failed
+            .iter()
+            .map(|f| PyFailedItem { inner: f.clone() })
+            .collect()
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "QueryResult(items={}, failed={})",
+            self.inner.len(),
+            self.inner.failed.len()
+        )
+    }
+}
+
+// ============================================================
+// IndexMetrics
+// ============================================================
+
+/// Indexing pipeline metrics.
+#[pyclass(name = "IndexMetrics")]
+pub struct PyIndexMetrics {
+    pub(crate) inner: IndexMetrics,
+}
+
+#[pymethods]
+impl PyIndexMetrics {
+    /// Total indexing time (ms).
+    #[getter]
+    fn total_time_ms(&self) -> u64 {
+        self.inner.total_time_ms()
+    }
+
+    /// Parse stage duration (ms).
+    #[getter]
+    fn parse_time_ms(&self) -> u64 {
+        self.inner.parse_time_ms
+    }
+
+    /// Build stage duration (ms).
+    #[getter]
+    fn build_time_ms(&self) -> u64 {
+        self.inner.build_time_ms
+    }
+
+    /// Enhance (summary) stage duration (ms).
+    #[getter]
+    fn enhance_time_ms(&self) -> u64 {
+        self.inner.enhance_time_ms
+    }
+
+    /// Number of nodes processed.
+    #[getter]
+    fn nodes_processed(&self) -> usize {
+        self.inner.nodes_processed
+    }
+
+    /// Number of summaries successfully generated.
+    #[getter]
+    fn summaries_generated(&self) -> usize {
+        self.inner.summaries_generated
+    }
+
+    /// Number of summaries that failed to generate.
+    #[getter]
+    fn summaries_failed(&self) -> usize {
+        self.inner.summaries_failed
+    }
+
+    /// Number of LLM calls made.
+    #[getter]
+    fn llm_calls(&self) -> usize {
+        self.inner.llm_calls
+    }
+
+    /// Total tokens generated by LLM.
+    #[getter]
+    fn total_tokens_generated(&self) -> usize {
+        self.inner.total_tokens_generated
+    }
+
+    /// Number of topics in reasoning index.
+    #[getter]
+    fn topics_indexed(&self) -> usize {
+        self.inner.topics_indexed
+    }
+
+    /// Number of keywords in reasoning index.
+    #[getter]
+    fn keywords_indexed(&self) -> usize {
+        self.inner.keywords_indexed
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "IndexMetrics(total={}ms, summaries={}, failed={}, llm_calls={})",
+            self.inner.total_time_ms(),
+            self.inner.summaries_generated,
+            self.inner.summaries_failed,
+            self.inner.llm_calls,
+        )
+    }
+}
+
+// ============================================================
+// IndexItem / IndexResult
+// ============================================================
+
+/// A single indexed document item.
+#[pyclass(name = "IndexItem")]
+pub struct PyIndexItem {
+    pub(crate) inner: IndexItem,
+}
+
+#[pymethods]
+impl PyIndexItem {
+    #[getter]
+    fn doc_id(&self) -> &str {
+        &self.inner.doc_id
+    }
+
+    #[getter]
+    fn name(&self) -> &str {
+        &self.inner.name
+    }
+
+    #[getter]
+    fn format(&self) -> String {
+        format!("{:?}", self.inner.format).to_lowercase()
+    }
+
+    #[getter]
+    fn description(&self) -> Option<&str> {
+        self.inner.description.as_deref()
+    }
+
+    #[getter]
+    fn source_path(&self) -> Option<&str> {
+        self.inner.source_path.as_deref()
+    }
+
+    #[getter]
+    fn page_count(&self) -> Option<usize> {
+        self.inner.page_count
+    }
+
+    /// Indexing pipeline metrics (timing, LLM usage, etc.).
+    #[getter]
+    fn metrics(&self) -> Option<PyIndexMetrics> {
+        self.inner
+            .metrics
+            .as_ref()
+            .map(|m| PyIndexMetrics { inner: m.clone() })
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "IndexItem(doc_id='{}', name='{}')",
+            self.inner.doc_id, self.inner.name
+        )
+    }
+}
+
+/// Result of a document indexing operation.
+#[pyclass(name = "IndexResult")]
+pub struct PyIndexResult {
+    pub(crate) inner: IndexResult,
+}
+
+#[pymethods]
+impl PyIndexResult {
+    /// The document ID (convenience for single-document indexing).
+    #[getter]
+    fn doc_id(&self) -> Option<String> {
+        self.inner.doc_id().map(|s| s.to_string())
+    }
+
+    /// All indexed items.
+    #[getter]
+    fn items(&self) -> Vec<PyIndexItem> {
+        self.inner
+            .items
+            .iter()
+            .map(|i| PyIndexItem { inner: i.clone() })
+            .collect()
+    }
+
+    /// Failed items.
+    #[getter]
+    fn failed(&self) -> Vec<PyFailedItem> {
+        self.inner
+            .failed
+            .iter()
+            .map(|f| PyFailedItem { inner: f.clone() })
+            .collect()
+    }
+
+    /// Whether any items failed.
+    fn has_failures(&self) -> bool {
+        self.inner.has_failures()
+    }
+
+    /// Total number of items (successful + failed).
+    fn total(&self) -> usize {
+        self.inner.total()
+    }
+
+    fn __len__(&self) -> usize {
+        self.inner.len()
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "IndexResult(doc_id={:?}, count={}, failed={})",
+            self.inner.doc_id(),
+            self.inner.items.len(),
+            self.inner.failed.len()
+        )
+    }
+}
