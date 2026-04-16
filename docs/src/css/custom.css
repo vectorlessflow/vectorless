@@ -127,7 +127,7 @@
 /* ===== Footer ===== */
 .footer {
   background-color: transparent !important;
-  padding: 5rem 1.5rem 3rem;
+  padding: 5rem 1.5rem 1.5rem;
 }
 
 .footer__title {
@@ -155,11 +155,6 @@
 }
 
 .footer__copyright {
-  text-align: center;
-  font-size: 0.82rem;
+  font-size: 0.88rem;
   color: var(--text-light);
-  letter-spacing: 0.03em;
-  margin-top: 3rem;
-  padding-top: 2rem;
-  border-top: 1px solid var(--border);
 }
