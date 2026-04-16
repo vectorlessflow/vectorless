@@ -1,5 +1,5 @@
 import type {ReactNode} from 'react';
-import {useState, useMemo} from 'react';
+import {useState, useMemo, useRef, useEffect, useCallback} from 'react';
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
 import Layout from '@theme/Layout';
 import Heading from '@theme/Heading';
@@ -256,6 +256,122 @@ function SectionHowItWorks() {
   );
 }
 
+const USE_CASES = [
+  {
+    title: 'Financial reports',
+    desc: 'Extract specific KPIs from 10\u2011K, annual reports, or earnings transcripts \u2014 even across fiscal years.',
+    query: '\u201cWhat was the net profit margin for Q3 2024?\u201d',
+    answer: '18.4%, up from 16.2% in Q3 2023. Source: Section 6.2, page 34.',
+  },
+  {
+    title: 'Legal & contracts',
+    desc: 'Locate clauses, definitions, or obligations across complex agreements without missing cross\u2011references.',
+    query: '\u201cWhich sections define \u2018force majeure\u2019 and what are the notice requirements?\u201d',
+    answer: 'Section 12.3(a) + 12.3(b) \u2014 30\u2011day written notice required.',
+  },
+  {
+    title: 'Technical docs',
+    desc: 'Navigate large API references, internal wikis, or on\u2011prem manuals with step\u2011by\u2011step reasoning.',
+    query: '\u201cHow to configure authentication for the WebSocket gateway?\u201d',
+    answer: 'See \u201cWebSocket Auth\u201d \u2192 section 4.2.1: use Authorization: Bearer <token>.',
+  },
+  {
+    title: 'Research papers',
+    desc: 'Cross\u2011reference findings, tables, or citations across arXiv preprints or internal literature.',
+    query: '\u201cWhat datasets were used for evaluation in Section 4?\u201d',
+    answer: 'Table 2: SQuAD, Natural Questions, and TriviaQA.',
+  },
+  {
+    title: 'Cross\u2011document analysis',
+    desc: 'Compare metrics, definitions, or timelines across multiple reports in one query.',
+    query: '\u201cCompare R&D spending from 2023 vs 2024 annual reports.\u201d',
+    answer: '2023: $12.4M (page 9) \u00b7 2024: $15.1M (page 11) \u2192 +21.8% YoY.',
+  },
+  {
+    title: 'Compliance & audit',
+    desc: 'Trace every retrieved statement back to its source \u2014 full explainability for regulated industries.',
+    query: '\u201cShow me all references to data retention policy.\u201d',
+    answer: 'Section 3.2 (page 8), Section 5.1 (page 14), and Appendix B.',
+  },
+];
+
+function SectionUseCases() {
+  const [current, setCurrent] = useState(0);
+  const outerRef = useRef<HTMLDivElement>(null);
+  const trackRef = useRef<HTMLDivElement>(null);
+  const [offset, setOffset] = useState(0);
+
+  const total = USE_CASES.length;
+
+  const measure = useCallback(() => {
+    if (!outerRef.current || !trackRef.current) return;
+    const outerW = outerRef.current.offsetWidth;
+    const firstCard = trackRef.current.children[0] as HTMLElement;
+    if (!firstCard) return;
+    const cardW = firstCard.offsetWidth;
+    const gap = 24; // 1.5rem
+    const step = cardW + gap;
+    const newOffset = outerW / 2 - current * step - cardW / 2;
+    setOffset(newOffset);
+  }, [current]);
+
+  useEffect(() => {
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, [measure]);
+
+  const prev = () => setCurrent(i => Math.max(0, i - 1));
+  const next = () => setCurrent(i => Math.min(total - 1, i + 1));
+
+  return (
+    <section className={styles.section}>
+      <div className={styles.sectionInner}>
+        <Heading as="h2" className={styles.sectionTitle}>
+          Use cases &middot; precision reasoning
+        </Heading>
+        <p className={styles.sectionSubtitle}>
+          Vectorless navigates through the structure of any document to retrieve exact context.
+        </p>
+        <div className={styles.sliderOuter} ref={outerRef}>
+          <div
+            className={styles.sliderTrack}
+            ref={trackRef}
+            style={{transform: `translateX(${offset}px)`}}>
+            {USE_CASES.map((c, i) => (
+              <div
+                key={i}
+                className={`${styles.caseCard} ${i === current ? styles.caseCardActive : ''}`}>
+                <Heading as="h3" className={styles.caseTitle}>{c.title}</Heading>
+                <p className={styles.caseDesc}>{c.desc}</p>
+                <div className={styles.caseQuery}>
+                  <div className={styles.caseQueryLabel}>Query:</div>
+                  <div className={styles.caseQueryText}>{c.query}</div>
+                  <div className={styles.caseAnswer}>{c.answer}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className={styles.sliderNav}>
+          <button className={styles.sliderBtn} onClick={prev} aria-label="Previous">&larr;</button>
+          <div className={styles.sliderDots}>
+            {USE_CASES.map((_, i) => (
+              <button
+                key={i}
+                className={`${styles.sliderDot} ${i === current ? styles.sliderDotActive : ''}`}
+                onClick={() => setCurrent(i)}
+                aria-label={`Go to slide ${i + 1}`}
+              />
+            ))}
+          </div>
+          <button className={styles.sliderBtn} onClick={next} aria-label="Next">&rarr;</button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function SectionCTA() {
   return (
     <section className={styles.section}>
@@ -295,6 +411,7 @@ export default function Home(): ReactNode {
       <main>
         <SectionGetStarted />
         <SectionHowItWorks />
+        <SectionUseCases />
         <SectionCTA />
       </main>
     </Layout>

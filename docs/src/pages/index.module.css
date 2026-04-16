@@ -408,10 +408,138 @@
   object-fit: contain;
 }
 
-.workflowImg {
+/* ===== Use Cases Slider ===== */
+.sliderOuter {
+  overflow: hidden;
   width: 100%;
-  height: auto;
-  display: block;
+  padding: 1rem 0;
+}
+
+.sliderTrack {
+  display: flex;
+  gap: 1.5rem;
+  transition: transform 0.45s cubic-bezier(0.2, 0.9, 0.4, 1.1);
+  will-change: transform;
+}
+
+.caseCard {
+  flex: 0 0 calc(65% - 0.75rem);
+  background: #121417;
+  border: 1px solid #23262B;
+  border-radius: 16px;
+  padding: 3rem 3rem 2.5rem;
+  opacity: 0.4;
+  transform: scale(0.94);
+  transition: all 0.35s ease;
+  filter: brightness(0.75);
+  min-height: 460px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.caseCardActive {
+  opacity: 1;
+  transform: scale(1);
+  filter: brightness(1);
+  border-color: #AF788B;
+  box-shadow: 0 12px 40px rgba(175, 120, 139, 0.18);
+}
+
+.caseTitle {
+  font-size: 1.55rem;
+  font-weight: 600;
+  margin: 0 0 0.75rem;
+  color: #EBEDF0;
+}
+
+.caseDesc {
+  color: #8E95A3;
+  font-size: 1.05rem;
+  line-height: 1.7;
+  margin: 0 0 1.75rem;
+}
+
+.caseQuery {
+  background: #0B0D0E;
+  border-radius: 12px;
+  padding: 1.5rem 1.75rem;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.88rem;
+  color: #EBEDF0;
+  border: 1px solid #23262B;
+  line-height: 1.7;
+}
+
+.caseQueryLabel {
+  color: #AF788B;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.caseQueryText {
+  color: #EBEDF0;
+}
+
+.caseAnswer {
+  color: #8E95A3;
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid #23262B;
+  font-size: 0.75rem;
+}
+
+.sliderNav {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 2.5rem;
+}
+
+.sliderBtn {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  color: var(--text-light);
+  font-size: 1.2rem;
+  width: 44px;
+  height: 44px;
+  border-radius: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.sliderBtn:hover {
+  border-color: var(--primary);
+  color: var(--primary-dark);
+  background: var(--primary-soft);
+}
+
+.sliderDots {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.sliderDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 8px;
+  background: var(--text-light);
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  transition: all 0.25s;
+  opacity: 0.4;
+}
+
+.sliderDotActive {
+  width: 28px;
+  background: var(--primary);
+  opacity: 1;
 }
 
 /* ===== CTA ===== */
@@ -483,9 +611,8 @@
     font-size: 1.15rem;
   }
 
-  .steps {
-    flex-direction: column;
-    gap: 2.5rem;
+  .caseCard {
+    flex: 0 0 calc(70% - 0.75rem);
   }
 
   .section {
@@ -512,6 +639,10 @@
     width: 100%;
     justify-content: center;
     max-width: 280px;
+  }
+
+  .caseCard {
+    flex: 0 0 calc(90% - 0.75rem);
   }
 
   .demoPre {
