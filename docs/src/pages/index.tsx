@@ -1,4 +1,5 @@
 import type {ReactNode} from 'react';
+import {useState, useMemo} from 'react';
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
 import Layout from '@theme/Layout';
 import Heading from '@theme/Heading';
@@ -37,57 +38,200 @@ function HomepageHeader() {
   );
 }
 
-function SectionWhy() {
-  const items = [
-    {
-      icon: '\u{1F9E0}',
-      title: 'Reasoning-Native',
-      desc: 'LLMs navigate hierarchical document trees with semantic understanding \u2014 not vector proximity.',
-    },
-    {
-      icon: '\u{1F5C2}\u{FE0F}',
-      title: 'No Vector Database',
-      desc: 'Eliminate embedding pipelines, vector stores, and similarity search entirely. Trees are the index.',
-    },
-    {
-      icon: '\u26A1',
-      title: 'Rust-Powered',
-      desc: 'Core engine in Rust with Python bindings. Arena-based trees, async I/O, and zero-copy traversal.',
-    },
-    {
-      icon: '\u{1F50D}',
-      title: 'Multi-Algorithm Search',
-      desc: 'Beam search, MCTS, and greedy algorithms with LLM-guided Pilot at key decision points.',
-    },
-    {
-      icon: '\u{1F4CA}',
-      title: 'Explainable Results',
-      desc: 'Full reasoning chain traces every navigation decision. Audit how and why content was retrieved.',
-    },
-    {
-      icon: '\u{1F4C4}',
-      title: 'PDF & Markdown',
-      desc: 'Index PDFs and Markdown out of the box. Hierarchical structure extracted automatically.',
-    },
-  ];
+/* ---- Regex-based syntax highlighter ---- */
+function highlight(code: string, lang: 'python' | 'rust'): ReactNode[] {
+  // Each rule has exactly ONE capture group in its regex
+  const rules: {re: RegExp; cls: string}[] = lang === 'python'
+    ? [
+        {re: /(#.*)/g, cls: styles.hlComment},
+        {re: /("(?:[^"\\]|\\.)*")/g, cls: styles.hlString},
+        {re: /\b(import|from|async|def|await|return|as|with|for|in|if|else|None|True|False)\b/g, cls: styles.hlKeyword},
+        {re: /\b([A-Z][A-Za-z0-9_]*)\b/g, cls: styles.hlType},
+        {re: /\b([a-z_]\w*)\s*(?=\()/g, cls: styles.hlFunction},
+      ]
+    : [
+        {re: /(\/\/.*)/g, cls: styles.hlComment},
+        {re: /("(?:[^"\\]|\\.)*")/g, cls: styles.hlString},
+        {re: /\b(use|let|mut|fn|async|await|return|if|else|match|struct|impl|pub|mod|crate|self|super|where|for|in|loop|while|break|continue|move|ref|type|enum|trait|const|static|unsafe|extern)\b/g, cls: styles.hlKeyword},
+        {re: /\b([A-Z][A-Za-z0-9_]*)\b/g, cls: styles.hlType},
+        {re: /\b(\w+!)/g, cls: styles.hlFunction},
+        {re: /\b([a-z_]\w*)\s*(?=\()/g, cls: styles.hlFunction},
+        {re: /(#\[.*?\])/g, cls: styles.hlAttribute},
+      ];
+
+  // Build combined regex — join the single capture-group sources directly
+  const combined = rules.map(r => r.re.source).join('|');
+  const re = new RegExp(combined, 'gm');
+
+  const nodes: ReactNode[] = [];
+  let lastIdx = 0;
+  let m: RegExpExecArray | null;
+  re.lastIndex = 0;
+
+  while ((m = re.exec(code)) !== null) {
+    if (m.index > lastIdx) {
+      nodes.push(code.slice(lastIdx, m.index));
+    }
+    // match[1..rules.length] corresponds to each rule's capture group
+    for (let i = 0; i < rules.length; i++) {
+      const captured = m[i + 1];
+      if (captured !== undefined) {
+        nodes.push(<span key={`${m.index}-${i}`} className={rules[i].cls}>{captured}</span>);
+        break;
+      }
+    }
+    lastIdx = re.lastIndex;
+  }
+  if (lastIdx < code.length) {
+    nodes.push(code.slice(lastIdx));
+  }
+  return nodes;
+}
+
+// Exact code from README
+const PYTHON_CODE = `import asyncio
+from vectorless import Engine, IndexContext, QueryContext
+
+async def main():
+    engine = Engine(api_key="sk-...", model="gpt-4o")
+
+    # Index a document
+    result = await engine.index(IndexContext.from_path("./report.pdf"))
+    doc_id = result.doc_id
+
+    # Query
+    result = await engine.query(
+        QueryContext("What is the total revenue?").with_doc_ids([doc_id])
+    )
+    print(result.single().content)
+
+asyncio.run(main())`;
+
+const RUST_CODE = `use vectorless::client::{EngineBuilder, IndexContext, QueryContext};
+
+#[tokio::main]
+async fn main() -> vectorless::Result<()> {
+    let engine = EngineBuilder::new()
+        .with_key("sk-...")
+        .with_model("gpt-4o")
+        .build()
+        .await?;
+
+    // Index a document
+    let result = engine.index(IndexContext::from_path("./report.pdf")).await?;
+    let doc_id = result.doc_id().unwrap();
+
+    // Query
+    let result = engine.query(
+        QueryContext::new("What is the total revenue?")
+            .with_doc_ids(vec![doc_id.to_string()])
+    ).await?;
+    println!("{}", result.content);
+
+    Ok(())
+}`;
+
+function PythonCode() {
+  const nodes = useMemo(() => highlight(PYTHON_CODE, 'python'), []);
+  return <pre className={styles.demoPre}><code>{nodes}</code></pre>;
+}
+
+function RustCode() {
+  const nodes = useMemo(() => highlight(RUST_CODE, 'rust'), []);
+  return <pre className={styles.demoPre}><code>{nodes}</code></pre>;
+}
+
+function SectionGetStarted() {
+  const [activeTab, setActiveTab] = useState<'python' | 'rust'>('python');
+  const [copyLabel, setCopyLabel] = useState('Copy');
+  const [installLabel, setInstallLabel] = useState('Copy & install');
+
+  const installCmd = activeTab === 'python' ? 'pip install vectorless' : 'cargo add vectorless';
+
+  const handleCopy = () => {
+    const code = activeTab === 'python' ? PYTHON_CODE : RUST_CODE;
+    navigator.clipboard.writeText(code);
+    setCopyLabel('\u2713 Copied!');
+    setTimeout(() => setCopyLabel('Copy'), 1500);
+  };
+
+  const handleInstallCopy = () => {
+    navigator.clipboard.writeText(installCmd);
+    setInstallLabel('\u2713 Copied!');
+    setTimeout(() => setInstallLabel('Copy & install'), 1500);
+  };
 
   return (
     <section className={styles.section}>
       <div className={styles.sectionInner}>
         <Heading as="h2" className={styles.sectionTitle}>
-          Why Vectorless?
+          Get Started
         </Heading>
         <p className={styles.sectionSubtitle}>
-          RAG without the baggage.
+          Just a few lines of code to get up and running.
         </p>
-        <div className={styles.grid}>
-          {items.map((item, i) => (
-            <div key={i} className={styles.card}>
-              <span className={styles.cardIcon}>{item.icon}</span>
-              <Heading as="h3" className={styles.cardTitle}>{item.title}</Heading>
-              <p className={styles.cardDesc}>{item.desc}</p>
+        <div className={styles.demoCard}>
+          {/* Tabs */}
+          <div className={styles.demoTabs}>
+            <button
+              className={`${styles.demoTab} ${activeTab === 'python' ? styles.demoTabActive : ''}`}
+              onClick={() => { setActiveTab('python'); setCopyLabel('Copy'); }}>
+              Python
+            </button>
+            <button
+              className={`${styles.demoTab} ${activeTab === 'rust' ? styles.demoTabActive : ''}`}
+              onClick={() => { setActiveTab('rust'); setCopyLabel('Copy'); }}>
+              Rust
+            </button>
+          </div>
+
+          {/* Python panel */}
+          {activeTab === 'python' && (
+            <div className={styles.demoPanel}>
+              <div className={styles.demoCodeHeader}>
+                <div className={styles.windowDots}>
+                  <span className={`${styles.windowDot} ${styles.dotRed}`} />
+                  <span className={`${styles.windowDot} ${styles.dotYellow}`} />
+                  <span className={`${styles.windowDot} ${styles.dotGreen}`} />
+                </div>
+                <button className={styles.copyBtn} onClick={handleCopy}>{copyLabel}</button>
+              </div>
+              <PythonCode />
+              <div className={styles.terminalOutput}>
+                <span className={styles.terminalPrompt}>$</span> python demo.py<br />
+                <span className={styles.terminalAnswer}>&rarr; The total revenue for fiscal year 2024 was $2.3 billion, a 15% increase YoY.</span>
+                <span className={styles.terminalCursor} />
+              </div>
             </div>
-          ))}
+          )}
+
+          {/* Rust panel */}
+          {activeTab === 'rust' && (
+            <div className={styles.demoPanel}>
+              <div className={styles.demoCodeHeader}>
+                <div className={styles.windowDots}>
+                  <span className={`${styles.windowDot} ${styles.dotRed}`} />
+                  <span className={`${styles.windowDot} ${styles.dotYellow}`} />
+                  <span className={`${styles.windowDot} ${styles.dotGreen}`} />
+                </div>
+                <button className={styles.copyBtn} onClick={handleCopy}>{copyLabel}</button>
+              </div>
+              <RustCode />
+              <div className={styles.terminalOutput}>
+                <span className={styles.terminalPrompt}>$</span> cargo run<br />
+                <span className={styles.terminalAnswer}>&rarr; The total revenue for fiscal year 2024 was $2.3 billion, a 15% increase YoY.</span>
+                <span className={styles.terminalCursor} />
+              </div>
+            </div>
+          )}
+
+          {/* Install bar */}
+          <div className={styles.installBar}>
+            <div className={styles.installCommand}>
+              <span>$</span> {installCmd}
+            </div>
+            <button className={styles.installBtn} onClick={handleInstallCopy}>{installLabel}</button>
+          </div>
         </div>
       </div>
     </section>
@@ -160,7 +304,7 @@ export default function Home(): ReactNode {
       description="Reasoning-native document intelligence engine. No vector database, no embeddings. Retrieve by reasoning.">
       <HomepageHeader />
       <main>
-        <SectionWhy />
+        <SectionGetStarted />
         <SectionHowItWorks />
         <SectionCTA />
       </main>

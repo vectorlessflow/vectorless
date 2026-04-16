@@ -172,50 +172,224 @@
   margin: 0 0 3rem;
 }
 
-/* ===== Feature Grid ===== */
-.grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 1.5rem;
+/* ===== Get Started — Linear Dark Demo Card ===== */
+.demoCard {
+  max-width: 1200px;
+  margin: 0 auto;
+  background: #121417;
+  border-radius: 16px;
+  border: 1px solid #23262B;
+  overflow: hidden;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
 }
 
-.card {
-  padding: 1.75rem;
-  border-radius: 12px;
-  border: 1px solid var(--border);
-  background: var(--card-bg);
-  transition: border-color 0.2s, box-shadow 0.2s;
-}
-
-.card:hover {
-  border-color: var(--primary-light);
-  box-shadow: 0 4px 24px var(--primary-soft);
-}
-
-.cardIcon {
-  display: inline-flex;
+.demoTabs {
+  display: flex;
   align-items: center;
-  justify-content: center;
-  width: 44px;
-  height: 44px;
-  font-size: 1.35rem;
-  border-radius: 10px;
-  background: var(--bg-offset);
-  margin-bottom: 1rem;
+  gap: 1.5rem;
+  padding: 0 1.25rem;
+  border-bottom: 1px solid #23262B;
+  background: #121417;
 }
 
-.cardTitle {
-  font-size: 1.05rem;
-  font-weight: 600;
-  margin: 0 0 0.5rem;
-  color: var(--text);
+.demoTab {
+  padding: 0.875rem 0 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #8E95A3;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  letter-spacing: -0.2px;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
-.cardDesc {
-  font-size: 0.88rem;
-  line-height: 1.65;
-  color: var(--text-light);
+.demoTabActive {
+  color: #AF788B;
+  border-bottom-color: #AF788B;
+}
+
+.demoTab:not(.demoTabActive):hover {
+  color: #EBEDF0;
+}
+
+.demoPanel {
+  background: #0B0D0E;
+}
+
+.demoCodeHeader {
+  padding: 0.75rem 1.25rem;
+  background: #0B0D0E;
+  border-bottom: 1px solid #2A2E34;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.windowDots {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.windowDot {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.dotRed {
+  background: #ED6A5E;
+}
+
+.dotYellow {
+  background: #F5BD4F;
+}
+
+.dotGreen {
+  background: #61C454;
+}
+
+.copyBtn {
+  margin-left: auto;
+  background: transparent;
+  border: none;
+  color: #8E95A3;
+  font-size: 0.7rem;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  cursor: pointer;
+  padding: 0.25rem 0.75rem;
+  border-radius: 6px;
+  transition: all 0.15s;
+  letter-spacing: -0.2px;
+}
+
+.copyBtn:hover {
+  background: rgba(175, 120, 139, 0.1);
+  color: #AF788B;
+}
+
+.demoPre {
   margin: 0;
+  padding: 1.75rem 2rem;
+  overflow-x: auto;
+  font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', Menlo, monospace;
+  font-size: 0.85rem;
+  line-height: 1.75;
+  color: #EBEDF0;
+  background: #0B0D0E;
+}
+
+.demoPre code {
+  font-family: inherit;
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: inherit;
+}
+
+/* Syntax highlight tokens */
+.hlKeyword {
+  color: #AF788B;
+  font-weight: 500;
+}
+
+.hlFunction {
+  color: #6DCDFF;
+}
+
+.hlString {
+  color: #B0E57C;
+}
+
+.hlComment {
+  color: #5E6673;
+  font-style: italic;
+}
+
+.hlType {
+  color: #6DCDFF;
+}
+
+.hlAttribute {
+  color: #D9A7E8;
+}
+
+.terminalOutput {
+  background: #0B0D0E;
+  border-top: 1px solid #2A2E34;
+  padding: 1rem 2rem;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.78rem;
+  color: #8E95A3;
+  line-height: 1.7;
+}
+
+.terminalPrompt {
+  color: #B0E57C;
+}
+
+.terminalAnswer {
+  color: #EBEDF0;
+}
+
+.terminalCursor {
+  display: inline-block;
+  width: 7px;
+  height: 13px;
+  background-color: #AF788B;
+  vertical-align: middle;
+  margin-left: 4px;
+  animation: cursorBlink 1s step-end infinite;
+}
+
+@keyframes cursorBlink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.installBar {
+  padding: 1rem 2rem;
+  background: #121417;
+  border-top: 1px solid #23262B;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.installCommand {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.75rem;
+  color: #8E95A3;
+  background: #0B0D0E;
+  padding: 0.4rem 1rem;
+  border-radius: 8px;
+  border: 1px solid #23262B;
+}
+
+.installCommand span {
+  color: #AF788B;
+}
+
+.installBtn {
+  background: #AF788B;
+  border: none;
+  color: white;
+  font-size: 0.75rem;
+  font-weight: 500;
+  padding: 0.4rem 1.2rem;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: background 0.15s;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+.installBtn:hover {
+  background: #9A6A7C;
 }
 
 /* ===== How It Works ===== */
@@ -328,10 +502,6 @@
     font-size: 1.15rem;
   }
 
-  .grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-
   .steps {
     flex-direction: column;
     gap: 2.5rem;
@@ -363,8 +533,13 @@
     max-width: 280px;
   }
 
-  .grid {
-    grid-template-columns: 1fr;
+  .demoPre {
+    font-size: 0.65rem;
+  }
+
+  .installBar {
+    flex-direction: column;
+    align-items: flex-start;
   }
 
   .ctaActions {
