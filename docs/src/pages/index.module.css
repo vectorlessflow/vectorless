@@ -560,11 +560,7 @@
   font-weight: 700;
   letter-spacing: -0.02em;
   margin: 0 0 1rem;
-  background: linear-gradient(135deg, #1e293b, #8B5E6F);
-  background-clip: text;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  color: transparent;
+  color: var(--text);
 }
 
 .ctaDesc {
