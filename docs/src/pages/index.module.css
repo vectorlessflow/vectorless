@@ -393,44 +393,25 @@
 }
 
 /* ===== How It Works ===== */
-.steps {
-  display: flex;
-  gap: 2rem;
-  max-width: 960px;
+.workflowWrapper {
+  max-width: 100%;
+  padding: 0;
   margin: 0 auto;
-}
-
-.step {
-  flex: 1;
   text-align: center;
 }
 
-.stepNum {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  background: var(--primary);
-  color: #fff;
-  font-size: 1rem;
-  font-weight: 700;
-  margin-bottom: 1.25rem;
+.workflowImg {
+  width: 100%;
+  height: auto;
+  display: block;
+  min-height: 520px;
+  object-fit: contain;
 }
 
-.stepTitle {
-  font-size: 1.1rem;
-  font-weight: 600;
-  margin: 0 0 0.5rem;
-  color: var(--text);
-}
-
-.stepDesc {
-  font-size: 0.88rem;
-  line-height: 1.65;
-  color: var(--text-light);
-  margin: 0;
+.workflowImg {
+  width: 100%;
+  height: auto;
+  display: block;
 }
 
 /* ===== CTA ===== */

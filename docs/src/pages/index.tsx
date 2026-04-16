@@ -239,28 +239,17 @@ function SectionGetStarted() {
 }
 
 function SectionHowItWorks() {
-  const steps = [
-    { num: '01', title: 'Index', desc: 'Parse documents into hierarchical semantic trees with LLM-generated summaries.' },
-    { num: '02', title: 'Navigate', desc: 'Pilot uses LLM to navigate the tree at key forks \u2014 beam search explores multiple paths in parallel.' },
-    { num: '03', title: 'Retrieve', desc: 'Evaluate sufficiency and backtrack if needed. Aggregate only the most relevant content within budget.' },
-  ];
-
   return (
-    <section className={`${styles.section} ${styles.sectionAlt}`}>
+    <section className={styles.section}>
       <div className={styles.sectionInner}>
         <Heading as="h2" className={styles.sectionTitle}>
-          How It Works
+          How does Vectorless work?
         </Heading>
-        <div className={styles.steps}>
-          {steps.map((step, i) => (
-            <div key={i} className={styles.step}>
-              <div className={styles.stepNum}>{step.num}</div>
-              <div className={styles.stepBody}>
-                <Heading as="h3" className={styles.stepTitle}>{step.title}</Heading>
-                <p className={styles.stepDesc}>{step.desc}</p>
-              </div>
-            </div>
-          ))}
+        <p className={styles.sectionSubtitle}>
+          You declare a few lines of code. We do everything else.
+        </p>
+        <div className={styles.workflowWrapper}>
+          <img src="/img/workflow.svg" alt="How Vectorless works" className={styles.workflowImg} />
         </div>
       </div>
     </section>
