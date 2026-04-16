@@ -37,9 +37,6 @@ use crate::{
 /// ```
 #[derive(Debug)]
 pub struct EngineBuilder {
-    /// Custom configuration.
-    config: Option<Config>,
-
     /// Custom retrieval config.
     retrieval_config: Option<RetrievalConfig>,
 
@@ -73,7 +70,6 @@ impl EngineBuilder {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            config: None,
             retrieval_config: None,
             events: None,
             api_key: None,
@@ -89,15 +85,6 @@ impl EngineBuilder {
     // ============================================================
     // Basic Configuration
     // ============================================================
-
-    /// Set a custom configuration object.
-    ///
-    /// This overrides any config file settings.
-    #[must_use]
-    pub fn with_config(mut self, config: Config) -> Self {
-        self.config = Some(config);
-        self
-    }
 
     /// Set custom retrieval configuration.
     #[must_use]
@@ -292,12 +279,8 @@ impl EngineBuilder {
     /// # }
     /// ```
     pub async fn build(self) -> Result<Engine, BuildError> {
-        // Load or create configuration
-        let mut config = if let Some(config) = self.config {
-            config
-        } else {
-            Config::default()
-        };
+        // Load default configuration
+        let mut config = Config::default();
 
         // Apply builder overrides to retrieval config
         if let Some(retrieval_config) = self.retrieval_config {
@@ -422,10 +405,6 @@ impl Default for EngineBuilder {
 /// Error during client build.
 #[derive(Debug, thiserror::Error)]
 pub enum BuildError {
-    /// Configuration error.
-    #[error("Configuration error: {0}")]
-    Config(String),
-
     /// Workspace error.
     #[error("Workspace error: {0}")]
     Workspace(String),
