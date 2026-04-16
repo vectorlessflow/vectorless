@@ -66,11 +66,11 @@ impl EngineBuilder {
     // Basic Configuration
     // ============================================================
 
-    /// Set a custom configuration for advanced tuning of internal parameters.
+    /// Set a custom configuration.
     ///
-    /// When provided, this replaces the default [`Config`]. Builder methods
-    /// (`with_key`, `with_model`, `with_endpoint`) still override the
-    /// corresponding fields.
+    /// When provided, this replaces the default [`Config`] entirely.
+    /// Builder methods (`with_key`, `with_model`, `with_endpoint`)
+    /// will still override the corresponding fields on top of this config.
     #[must_use]
     pub fn with_config(mut self, config: Config) -> Self {
         self.config = Some(config);

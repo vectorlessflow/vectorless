@@ -34,7 +34,7 @@
 //! ```
 
 pub mod client;
-mod config;
+pub mod config;
 pub use config::Config;
 pub mod document;
 pub mod error;
