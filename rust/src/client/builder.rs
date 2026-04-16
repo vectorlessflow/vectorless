@@ -7,7 +7,7 @@
 //! [`Engine`] instances with sensible defaults.
 
 use crate::{
-    config::{Config, RetrievalConfig},
+    config::Config,
     events::EventEmitter,
     memo::MemoStore,
     retrieval::PipelineRetriever,
@@ -37,9 +37,6 @@ use crate::{
 /// ```
 #[derive(Debug)]
 pub struct EngineBuilder {
-    /// Custom retrieval config.
-    retrieval_config: Option<RetrievalConfig>,
-
     /// Event emitter.
     events: Option<EventEmitter>,
 
@@ -70,7 +67,6 @@ impl EngineBuilder {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            retrieval_config: None,
             events: None,
             api_key: None,
             model: None,
@@ -85,13 +81,6 @@ impl EngineBuilder {
     // ============================================================
     // Basic Configuration
     // ============================================================
-
-    /// Set custom retrieval configuration.
-    #[must_use]
-    pub fn with_retrieval_config(mut self, config: RetrievalConfig) -> Self {
-        self.retrieval_config = Some(config);
-        self
-    }
 
     /// Set the event emitter for callbacks.
     #[must_use]
@@ -281,11 +270,6 @@ impl EngineBuilder {
     pub async fn build(self) -> Result<Engine, BuildError> {
         // Load default configuration
         let mut config = Config::default();
-
-        // Apply builder overrides to retrieval config
-        if let Some(retrieval_config) = self.retrieval_config {
-            config.retrieval = retrieval_config;
-        }
 
         // Apply individual overrides to LlmPoolConfig (primary) + legacy config (compat)
         if let Some(api_key) = self.api_key {
