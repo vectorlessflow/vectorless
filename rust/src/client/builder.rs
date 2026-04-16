@@ -5,83 +5,38 @@
 //!
 //! This module provides [`EngineBuilder`] for configuring and building
 //! [`Engine`] instances with sensible defaults.
-//!
-//! # Configuration
-//!
-//! `api_key` and `model` are **required**. `endpoint` is optional
-//! (defaults to the model provider's standard endpoint).
-//!
-//! Configuration sources (later overrides earlier):
-//! 1. Default configuration
-//! 2. Config file (via `with_config_path`)
-//! 3. Builder methods (`with_key`, `with_model`, etc.) — highest priority
-//!
-//! # Examples
-//!
-//! ```rust,no_run
-//! use vectorless::client::EngineBuilder;
-//!
-//! # #[tokio::main]
-//! # async fn main() -> Result<(), vectorless::BuildError> {
-//! let engine = EngineBuilder::new()
-//!     .with_key("sk-...")
-//!     .with_model("gpt-4o")
-//!     .build()
-//!     .await?;
-//! # Ok(())
-//! # }
-//! ```
-//!
-//! ## With Custom Endpoint
-//!
-//! ```rust,no_run
-//! use vectorless::client::EngineBuilder;
-//!
-//! # #[tokio::main]
-//! # async fn main() -> Result<(), vectorless::BuildError> {
-//! let engine = EngineBuilder::new()
-//!     .with_key("sk-...")
-//!     .with_model("deepseek-chat")
-//!     .with_endpoint("https://api.deepseek.com/v1")
-//!     .build()
-//!     .await?;
-//! # Ok(())
-//! # }
-//! ```
 
-use crate::config::{Config, ConfigLoader, RetrievalConfig};
-use crate::memo::MemoStore;
-use crate::retrieval::PipelineRetriever;
-use crate::storage::Workspace;
-
-use super::engine::Engine;
-use crate::events::EventEmitter;
+use crate::{
+    config::{Config, RetrievalConfig},
+    events::EventEmitter,
+    memo::MemoStore,
+    retrieval::PipelineRetriever,
+    storage::Workspace,
+    client::engine::Engine,
+};
 
 /// Builder for creating a [`Engine`] client.
 ///
-/// `api_key` and `model` are required and must be set via builder methods
-/// or provided through a config file.
+/// `api_key`, `model` and `endpoint` are **required**.
 ///
 /// # Example
 ///
 /// ```rust,no_run
 /// use vectorless::client::EngineBuilder;
 ///
-/// # #[tokio::main]
-/// # async fn main() -> Result<(), vectorless::BuildError> {
-/// let client = EngineBuilder::new()
-///     .with_key("sk-...")
-///     .with_model("gpt-4o")
-///     .build()
-///     .await?;
-/// # Ok(())
-/// # }
+/// #[tokio::main]
+/// async fn main() -> Result<(), vectorless::BuildError> {
+///     let client = EngineBuilder::new()
+///         .with_key("sk-...")
+///         .with_model("gpt-4o")
+///         .with_endpoint("https://api.xxx.com/v1")
+///         .build()
+///         .await?;
+///    Ok(())
+/// }
 /// ```
 #[derive(Debug)]
 pub struct EngineBuilder {
-    /// Configuration file path.
-    config_path: Option<std::path::PathBuf>,
-
     /// Custom configuration.
     config: Option<Config>,
 
@@ -118,7 +73,6 @@ impl EngineBuilder {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            config_path: None,
             config: None,
             retrieval_config: None,
             events: None,
@@ -135,15 +89,6 @@ impl EngineBuilder {
     // ============================================================
     // Basic Configuration
     // ============================================================
-
-    /// Set the configuration file path.
-    ///
-    /// The file must be a valid TOML configuration. No auto-detection is performed.
-    #[must_use]
-    pub fn with_config_path(mut self, path: impl Into<std::path::PathBuf>) -> Self {
-        self.config_path = Some(path.into());
-        self
-    }
 
     /// Set a custom configuration object.
     ///
@@ -350,11 +295,6 @@ impl EngineBuilder {
         // Load or create configuration
         let mut config = if let Some(config) = self.config {
             config
-        } else if let Some(path) = self.config_path {
-            ConfigLoader::new()
-                .file(&path)
-                .load()
-                .map_err(|e| BuildError::Config(e.to_string()))?
         } else {
             Config::default()
         };
