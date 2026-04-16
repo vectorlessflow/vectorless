@@ -389,7 +389,7 @@ function SectionCTA() {
   };
 
   return (
-    <section className={`${styles.section} ${styles.sectionCtaDark}`}>
+    <section className={styles.section}>
       <div className={styles.sectionInner}>
         <div className={styles.ctaBox}>
           <Heading as="h2" className={styles.ctaTitle}>
