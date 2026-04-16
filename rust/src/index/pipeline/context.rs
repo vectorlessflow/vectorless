@@ -296,7 +296,7 @@ impl IndexContext {
 
     /// Compute SHA-256 hash of the source content.
     fn compute_source_hash(input: &IndexInput) -> String {
-        use sha2::{Sha256, Digest};
+        use sha2::{Digest, Sha256};
         let hash = match input {
             IndexInput::File(path) => {
                 // Hash the file path as proxy — actual content may not be readable yet

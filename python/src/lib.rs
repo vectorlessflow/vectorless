@@ -15,7 +15,9 @@ use ::vectorless::client::{
 };
 use ::vectorless::error::Error as RustError;
 use ::vectorless::metrics::IndexMetrics;
-use ::vectorless::metrics::{LlmMetricsReport, MetricsReport, PilotMetricsReport, RetrievalMetricsReport};
+use ::vectorless::metrics::{
+    LlmMetricsReport, MetricsReport, PilotMetricsReport, RetrievalMetricsReport,
+};
 
 // ============================================================
 // Error Types
@@ -679,9 +681,7 @@ impl PyLlmMetricsReport {
     fn __repr__(&self) -> String {
         format!(
             "LlmMetricsReport(calls={}, tokens={}, cost=${:.4})",
-            self.inner.total_calls,
-            self.inner.total_tokens,
-            self.inner.estimated_cost_usd,
+            self.inner.total_calls, self.inner.total_tokens, self.inner.estimated_cost_usd,
         )
     }
 }

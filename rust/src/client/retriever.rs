@@ -21,11 +21,11 @@ use std::sync::Arc;
 
 use tracing::info;
 
-use crate::events::{EventEmitter, QueryEvent};
 use super::types::QueryResultItem;
 use crate::config::Config;
 use crate::document::{DocumentTree, ReasoningIndex};
 use crate::error::{Error, Result};
+use crate::events::{EventEmitter, QueryEvent};
 use crate::retrieval::stream::RetrieveEventReceiver;
 use crate::retrieval::{RetrieveOptions, RetrieveResponse};
 

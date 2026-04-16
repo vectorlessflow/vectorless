@@ -442,8 +442,7 @@ impl EngineBuilder {
         };
 
         // Indexer uses pool.index()
-        let indexer =
-            crate::client::indexer::IndexerClient::with_llm(pool.index().clone());
+        let indexer = crate::client::indexer::IndexerClient::with_llm(pool.index().clone());
 
         // Retriever uses pool.retrieval()
         let retrieval_config = config.retrieval.clone();
@@ -462,9 +461,7 @@ impl EngineBuilder {
             retriever = retriever.with_memo_store(memo_store);
         } else {
             // Create default memo store with model from config
-            let memo_store = MemoStore::new()
-                .with_model(retrieval_model)
-                .with_version(1);
+            let memo_store = MemoStore::new().with_model(retrieval_model).with_version(1);
             retriever = retriever.with_memo_store(memo_store);
         }
 

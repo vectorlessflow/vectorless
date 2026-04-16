@@ -73,4 +73,6 @@ pub use graph::DocumentGraph;
 pub use events::{EventEmitter, IndexEvent, QueryEvent, WorkspaceEvent};
 
 // Runtime metrics reports
-pub use metrics::{IndexMetrics, LlmMetricsReport, MetricsReport, PilotMetricsReport, RetrievalMetricsReport};
+pub use metrics::{
+    IndexMetrics, LlmMetricsReport, MetricsReport, PilotMetricsReport, RetrievalMetricsReport,
+};

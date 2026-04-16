@@ -171,7 +171,9 @@ mod tests {
     #[test]
     fn test_single_doc_scope() {
         let ctx = QueryContext::new("test").with_doc_ids(vec!["doc-1".to_string()]);
-        assert!(matches!(ctx.scope, QueryScope::Documents(ref ids) if ids == &["doc-1".to_string()]));
+        assert!(
+            matches!(ctx.scope, QueryScope::Documents(ref ids) if ids == &["doc-1".to_string()])
+        );
     }
 
     #[test]

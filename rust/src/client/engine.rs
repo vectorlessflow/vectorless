@@ -51,13 +51,13 @@ use crate::retrieval::{PipelineRetriever, RetrieveEventReceiver};
 use crate::storage::{PersistedDocument, Workspace};
 use crate::{DocumentTree, Error};
 
-use crate::events::EventEmitter;
 use super::index_context::{IndexContext, IndexSource};
 use super::indexer::IndexerClient;
 use super::query_context::{QueryContext, QueryScope};
 use super::retriever::RetrieverClient;
 use super::types::{DocumentInfo, FailedItem, IndexItem, IndexMode, IndexResult, QueryResult};
 use super::workspace::WorkspaceClient;
+use crate::events::EventEmitter;
 
 /// The main Engine client.
 ///
@@ -485,7 +485,7 @@ impl Engine {
 
     /// Query a document with streaming results.
     ///
-    /// Returns a [`RetrieveEventReceiver`] that yields [`RetrieveEvent`](crate::retrieval::RetrieveEvent)s
+    /// Returns a receiver that yields retrieval events
     /// as the retrieval pipeline progresses through each stage.
     ///
     /// Only supports single-document scope (via `with_doc_ids` with one ID).

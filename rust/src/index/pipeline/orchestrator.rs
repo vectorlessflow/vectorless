@@ -528,7 +528,9 @@ impl PipelineOrchestrator {
                     ctx.stage_results.contains_key(name)
                 });
                 if all_completed {
-                    let names: Vec<&str> = group.stage_indices.iter()
+                    let names: Vec<&str> = group
+                        .stage_indices
+                        .iter()
                         .map(|&i| self.stages[i].stage.name())
                         .collect();
                     info!("Skipping already completed parallel group: {:?}", names);
