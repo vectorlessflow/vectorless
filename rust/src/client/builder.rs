@@ -240,6 +240,9 @@ impl EngineBuilder {
         if retrieval_model.is_empty() {
             return Err(BuildError::MissingModel);
         }
+        if config.llm.endpoint.is_none() {
+            return Err(BuildError::MissingEndpoint);
+        }
 
         // Open workspace from config
         let workspace = Workspace::new(&config.storage.workspace_dir)
@@ -301,6 +304,10 @@ pub enum BuildError {
     /// Missing model name.
     #[error("Missing model: call .with_model(\"gpt-4o\") or set model in config file")]
     MissingModel,
+
+    /// Missing endpoint URL.
+    #[error("Missing endpoint: call .with_endpoint(\"https://api.xxx.com/v1\") or set endpoint in config")]
+    MissingEndpoint,
 
     /// Other error.
     #[error("{0}")]
