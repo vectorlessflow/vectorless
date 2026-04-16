@@ -26,6 +26,7 @@ export default function Navbar(): React.ReactElement {
               alt={logo?.alt || title}
             />
           </Link>
+        <div className={styles.logo}>Vectorless</div>
         </div>
         <div className={styles.navbarCenter}>
           {leftItems.map((item, i) => <NavbarItem {...(item as NavbarItemConfig)} key={i} />)}

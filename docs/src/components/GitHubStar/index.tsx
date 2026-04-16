@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FaGithub, FaStar } from 'react-icons/fa';
+import { FaGithub } from 'react-icons/fa';
 import styles from './styles.module.css';
 
 function formatStars(count: number | null): string {
@@ -40,16 +40,16 @@ export default function GitHubStar(): React.ReactElement {
         rel="noopener noreferrer"
         className={styles.githubStarButton}
       >
-        <FaGithub size={14} />
+        <FaGithub size={16} />
         <span className={styles.githubStarText}>Star</span>
       </a>
       {loading ? (
         <div className={styles.githubStarCount}>
-          <span className={styles.spinner}>...</span>
+          <span className={styles.spinner}>&hellip;</span>
         </div>
       ) : (
         <a
-          href="https://github.com/vectorlessflow/vectorless/stargazers"
+          href="https://github.com/vectorlessflow/vectorless"
           target="_blank"
           rel="noopener noreferrer"
           className={styles.githubStarCount}

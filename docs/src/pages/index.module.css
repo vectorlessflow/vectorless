@@ -8,118 +8,115 @@
 
 /* ===== Hero ===== */
 .heroBanner {
-  padding: 5rem 1.5rem 4rem;
+  padding: 10rem 1.5rem 6rem;
   position: relative;
   overflow: hidden;
-  background: linear-gradient(180deg, var(--bg-secondary) 0%, var(--bg) 100%);
+  background-color: var(--bg);
 }
 
 .heroInner {
-  max-width: 1200px;
+  max-width: 1100px;
   margin: 0 auto;
-  display: flex;
-  align-items: center;
-  gap: 3rem;
+  text-align: center;
 }
 
-/* -- Left column -- */
-.heroContent {
-  flex: 1;
-  min-width: 0;
+.heroTitle {
+  font-size: 5.5rem;
+  font-weight: 800;
+  font-family: 'Inter', 'Libre Franklin', -apple-system, BlinkMacSystemFont, sans-serif;
+  color: var(--text);
+  margin: 0 0 1.75rem;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  white-space: nowrap;
 }
 
-.heroLogo {
-  display: block;
-  max-width: 320px;
-  width: 100%;
-  height: auto;
-  margin-bottom: 1.5rem;
+.heroTitleEmphasis {
+  color: var(--primary-dark);
+}
+
+.heroTitleLight {
+  color: #9a8a92;
+  font-weight: 300;
 }
 
 .heroTagline {
   color: var(--text-light);
-  font-size: 1.15rem;
+  font-size: 1.3rem;
   line-height: 1.7;
-  margin: 0 0 1.75rem;
+  margin: 0 0 3rem;
+}
+
+.heroTaglineHighlight {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.heroTaglineLine1 {
+  /* first line is naturally longer */
+}
+
+.heroTaglineLine2 {
+  /* second line shorter */
+}
+
+.heroTagline strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.heroTagline em {
+  color: var(--primary-dark);
+  font-style: italic;
 }
 
 .heroActions {
   display: flex;
-  gap: 0.75rem;
+  gap: 1rem;
+  justify-content: center;
+  align-items: center;
   flex-wrap: wrap;
 }
 
-/* -- Right column: code preview -- */
-.codePreview {
-  flex: 1 1 520px;
-  max-width: 560px;
-  border-radius: 12px;
-  overflow: hidden;
-  border: 1px solid var(--border);
-  background: #1e1e2e;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
-}
-
-.codeHeader {
-  display: flex;
+/* GitHub Star button */
+.githubStarButton {
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 0.55rem 1rem;
-  background: #181825;
+  gap: 0.5rem;
+  padding: 0.8rem 1.8rem;
+  font-size: 1rem;
+  font-weight: 600;
+  border-radius: 999px;
+  background-color: var(--text);
+  color: #fff;
+  text-decoration: none;
 }
 
-.codeDots {
-  display: flex;
-  gap: 6px;
+[data-theme='dark'] .githubStarButton {
+  background-color: #f3f3f3;
+  color: #333;
 }
 
-.codeDots span {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-}
-
-.codeDots span:nth-child(1) { background: #f38ba8; }
-.codeDots span:nth-child(2) { background: #f9e2af; }
-.codeDots span:nth-child(3) { background: #a6e3a1; }
-
-.codeLang {
-  font-size: 0.7rem;
-  color: #6c7086;
-  font-weight: 500;
-}
-
-.codeBlock {
-  margin: 0;
-  padding: 1rem 1.25rem;
-  font-size: 0.78rem;
-  line-height: 1.7;
-  color: #cdd6f4;
-  overflow-x: auto;
-  background: transparent;
-}
-
-.codeBlock code {
-  font-family: 'SF Mono', 'Fira Code', 'JetBrains Mono', monospace;
-  font-size: 0.76rem;
+.starIcon {
+  margin-left: 0.4rem;
 }
 
 /* ===== Buttons ===== */
 .buttonPrimary {
   display: inline-flex;
   align-items: center;
-  padding: 0.65rem 1.6rem;
-  font-size: 0.92rem;
+  padding: 0.75rem 2rem;
+  font-size: 0.95rem;
   font-weight: 600;
   border-radius: 8px;
-  background-color: var(--primary);
+  background-color: var(--primary-dark);
   color: #fff;
   text-decoration: none;
   transition: background-color 0.2s, transform 0.1s;
 }
 
 .buttonPrimary:hover {
-  background-color: var(--primary-dark);
+  background-color: var(--primary-deeper);
   color: #fff;
   text-decoration: none;
   transform: translateY(-1px);
@@ -128,8 +125,8 @@
 .buttonSecondary {
   display: inline-flex;
   align-items: center;
-  padding: 0.65rem 1.6rem;
-  font-size: 0.92rem;
+  padding: 0.75rem 2rem;
+  font-size: 0.95rem;
   font-weight: 600;
   border-radius: 8px;
   background-color: transparent;
@@ -141,7 +138,7 @@
 
 .buttonSecondary:hover {
   border-color: var(--primary);
-  color: var(--primary);
+  color: var(--primary-dark);
   text-decoration: none;
   transform: translateY(-1px);
 }
@@ -152,7 +149,7 @@
 }
 
 .sectionAlt {
-  background-color: var(--bg-secondary);
+  background-color: var(--bg-offset);
 }
 
 .sectionInner {
@@ -186,13 +183,13 @@
   padding: 1.75rem;
   border-radius: 12px;
   border: 1px solid var(--border);
-  background: var(--bg);
+  background: var(--card-bg);
   transition: border-color 0.2s, box-shadow 0.2s;
 }
 
 .card:hover {
   border-color: var(--primary-light);
-  box-shadow: 0 4px 20px rgba(175, 120, 139, 0.08);
+  box-shadow: 0 4px 24px var(--primary-soft);
 }
 
 .cardIcon {
@@ -203,7 +200,7 @@
   height: 44px;
   font-size: 1.35rem;
   border-radius: 10px;
-  background: var(--bg-secondary);
+  background: var(--bg-offset);
   margin-bottom: 1rem;
 }
 
@@ -267,7 +264,7 @@
   text-align: center;
   padding: 4rem 2rem;
   border-radius: 16px;
-  background: var(--bg-secondary);
+  background: var(--bg-offset);
   border: 1px solid var(--border);
 }
 
@@ -287,7 +284,7 @@
 .ctaDesc code {
   padding: 0.2em 0.5em;
   border-radius: 4px;
-  background: var(--bg);
+  background: var(--card-bg);
   border: 1px solid var(--border);
   font-size: 0.95rem;
   color: var(--primary-dark);
@@ -301,57 +298,34 @@
 }
 
 /* ===== Dark theme overrides ===== */
-[data-theme='dark'] .codePreview {
-  border-color: #313244;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+[data-theme='dark'] .heroTitleEmphasis {
+  color: var(--primary-light);
 }
 
-[data-theme='dark'] .card {
-  background: #181825;
-  border-color: #313244;
+[data-theme='dark'] .heroTitleLight {
+  color: #6B7A8A;
+}
+
+[data-theme='dark'] .heroTaglineHighlight {
+  color: var(--text);
 }
 
 [data-theme='dark'] .card:hover {
   border-color: var(--primary);
 }
 
-[data-theme='dark'] .cardIcon {
-  background: #1e1e2e;
-}
-
-[data-theme='dark'] .ctaBox {
-  background: #181825;
-  border-color: #313244;
-}
-
-[data-theme='dark'] .ctaDesc code {
-  background: #1e1e2e;
-  border-color: #313244;
-}
-
 /* ===== Responsive ===== */
 @media screen and (max-width: 996px) {
   .heroBanner {
-    padding: 3rem 1.5rem 2.5rem;
+    padding: 6rem 1.5rem 4rem;
   }
 
-  .heroInner {
-    flex-direction: column;
-    gap: 2.5rem;
-  }
-
-  .heroLogo {
-    max-width: 240px;
+  .heroTitle {
+    font-size: 3.2rem;
   }
 
   .heroTagline {
-    font-size: 1rem;
-  }
-
-  .codePreview {
-    flex: none;
-    max-width: 100%;
-    width: 100%;
+    font-size: 1.15rem;
   }
 
   .grid {
@@ -370,21 +344,23 @@
 
 @media screen and (max-width: 600px) {
   .heroBanner {
-    padding: 2rem 1rem 1.5rem;
+    padding: 4.5rem 1rem 3rem;
   }
 
-  .heroLogo {
-    max-width: 200px;
+  .heroTitle {
+    font-size: 2rem;
   }
 
   .heroActions {
     flex-direction: column;
+    align-items: center;
   }
 
   .buttonPrimary,
   .buttonSecondary {
     width: 100%;
     justify-content: center;
+    max-width: 280px;
   }
 
   .grid {
