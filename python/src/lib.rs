@@ -20,8 +20,12 @@ use document::PyDocumentInfo;
 use engine::PyEngine;
 use error::VectorlessError;
 use graph::{PyDocumentGraph, PyDocumentGraphNode, PyEdgeEvidence, PyGraphEdge, PyWeightedKeyword};
-use metrics::{PyLlmMetricsReport, PyMetricsReport, PyPilotMetricsReport, PyRetrievalMetricsReport};
-use results::{PyFailedItem, PyIndexItem, PyIndexMetrics, PyIndexResult, PyQueryResult, PyQueryResultItem};
+use metrics::{
+    PyLlmMetricsReport, PyMetricsReport, PyPilotMetricsReport, PyRetrievalMetricsReport,
+};
+use results::{
+    PyFailedItem, PyIndexItem, PyIndexMetrics, PyIndexResult, PyQueryResult, PyQueryResultItem,
+};
 
 /// Vectorless - Reasoning-native document intelligence engine.
 ///

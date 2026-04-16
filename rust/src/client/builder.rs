@@ -306,7 +306,9 @@ pub enum BuildError {
     MissingModel,
 
     /// Missing endpoint URL.
-    #[error("Missing endpoint: call .with_endpoint(\"https://api.xxx.com/v1\") or set endpoint in config")]
+    #[error(
+        "Missing endpoint: call .with_endpoint(\"https://api.xxx.com/v1\") or set endpoint in config"
+    )]
     MissingEndpoint,
 
     /// Other error.
