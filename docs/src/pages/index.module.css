@@ -543,41 +543,110 @@
 }
 
 /* ===== CTA ===== */
+.sectionCtaDark {
+  background: #0B0D0E;
+  padding: 3rem 1.5rem;
+}
+
 .ctaBox {
+  max-width: 880px;
+  margin: 0 auto;
   text-align: center;
   padding: 4rem 2rem;
-  border-radius: 16px;
-  background: var(--bg-offset);
-  border: 1px solid var(--border);
 }
 
 .ctaTitle {
-  font-size: 2rem;
+  font-size: 2.5rem;
   font-weight: 700;
-  margin: 0 0 0.75rem;
-  color: var(--text);
+  letter-spacing: -0.02em;
+  margin: 0 0 1rem;
+  background: linear-gradient(135deg, #EBEDF0, #AF788B);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
 }
 
 .ctaDesc {
-  font-size: 1.1rem;
-  color: var(--text-light);
-  margin: 0 0 2rem;
+  font-size: 1.05rem;
+  color: #8E95A3;
+  max-width: 520px;
+  margin: 0 auto 2rem;
+  line-height: 1.6;
 }
 
-.ctaDesc code {
-  padding: 0.2em 0.5em;
-  border-radius: 4px;
-  background: var(--card-bg);
-  border: 1px solid var(--border);
-  font-size: 0.95rem;
-  color: var(--primary-dark);
-}
-
-.ctaActions {
+.ctaButtons {
   display: flex;
-  gap: 0.75rem;
   justify-content: center;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
   flex-wrap: wrap;
+}
+
+.ctaBtnSecondary {
+  padding: 0.7rem 1.8rem;
+  border-radius: 40px;
+  font-weight: 600;
+  font-size: 0.88rem;
+  background: transparent;
+  border: 1px solid #23262B;
+  color: #EBEDF0;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+.ctaBtnSecondary:hover {
+  border-color: #AF788B;
+  background: rgba(175, 120, 139, 0.12);
+  color: #AF788B;
+  text-decoration: none;
+}
+
+.ctaInstallCards {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 2rem;
+}
+
+.ctaInstallItem {
+  background: #121417;
+  border: 1px solid #23262B;
+  border-radius: 12px;
+  padding: 0.65rem 1.25rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.ctaInstallCommand {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.82rem;
+  color: #EBEDF0;
+}
+
+.ctaInstallCommand span {
+  color: #AF788B;
+}
+
+.ctaCopyIcon {
+  background: transparent;
+  border: none;
+  color: #8E95A3;
+  cursor: pointer;
+  padding: 0.25rem 0.65rem;
+  border-radius: 6px;
+  font-size: 0.7rem;
+  font-family: 'Inter', sans-serif;
+  transition: all 0.15s;
+}
+
+.ctaCopyIcon:hover {
+  background: rgba(175, 120, 139, 0.12);
+  color: #AF788B;
 }
 
 /* ===== Dark theme overrides ===== */
@@ -652,11 +721,6 @@
   .installBar {
     flex-direction: column;
     align-items: flex-start;
-  }
-
-  .ctaActions {
-    flex-direction: column;
-    align-items: center;
   }
 
   .sectionTitle {
