@@ -35,6 +35,7 @@
 
 pub mod client;
 mod config;
+pub use config::Config;
 pub mod document;
 pub mod error;
 pub mod events;

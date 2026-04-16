@@ -33,6 +33,9 @@ use crate::{
 /// ```
 #[derive(Debug)]
 pub struct EngineBuilder {
+    /// Custom configuration for advanced tuning.
+    config: Option<Config>,
+
     /// Event emitter.
     events: Option<EventEmitter>,
 
@@ -45,11 +48,13 @@ pub struct EngineBuilder {
     /// LLM endpoint URL (override).
     endpoint: Option<String>,
 }
+
 impl EngineBuilder {
     /// Create a new builder with defaults.
     #[must_use]
     pub fn new() -> Self {
         Self {
+            config: None,
             events: None,
             api_key: None,
             model: None,
@@ -60,6 +65,17 @@ impl EngineBuilder {
     // ============================================================
     // Basic Configuration
     // ============================================================
+
+    /// Set a custom configuration for advanced tuning of internal parameters.
+    ///
+    /// When provided, this replaces the default [`Config`]. Builder methods
+    /// (`with_key`, `with_model`, `with_endpoint`) still override the
+    /// corresponding fields.
+    #[must_use]
+    pub fn with_config(mut self, config: Config) -> Self {
+        self.config = Some(config);
+        self
+    }
 
     /// Set the event emitter for callbacks.
     #[must_use]
@@ -174,8 +190,8 @@ impl EngineBuilder {
     /// # }
     /// ```
     pub async fn build(self) -> Result<Engine, BuildError> {
-        // Load default configuration
-        let mut config = Config::default();
+        // Load user-provided or default configuration
+        let mut config = self.config.unwrap_or_default();
 
         // Apply individual overrides to LlmPoolConfig (primary) + legacy config (compat)
         if let Some(api_key) = self.api_key {
