@@ -34,9 +34,9 @@ use crate::index::{
 use crate::llm::LlmClient;
 use crate::storage::{DocumentMeta, PersistedDocument};
 
-use crate::events::{EventEmitter, IndexEvent};
 use super::index_context::IndexSource;
 use super::types::{IndexOptions, IndexedDocument};
+use crate::events::{EventEmitter, IndexEvent};
 
 /// Document indexing client.
 ///
@@ -115,7 +115,11 @@ impl IndexerClient {
         let validation = crate::utils::validate_file(&path)?;
         if !validation.valid {
             return Err(Error::Parse(
-                validation.errors.first().cloned().unwrap_or_else(|| "Invalid file".to_string()),
+                validation
+                    .errors
+                    .first()
+                    .cloned()
+                    .unwrap_or_else(|| "Invalid file".to_string()),
             ));
         }
         for warning in &validation.warnings {
@@ -162,7 +166,11 @@ impl IndexerClient {
         let validation = crate::utils::validate_content(content, format);
         if !validation.valid {
             return Err(Error::Parse(
-                validation.errors.first().cloned().unwrap_or_else(|| "Invalid content".to_string()),
+                validation
+                    .errors
+                    .first()
+                    .cloned()
+                    .unwrap_or_else(|| "Invalid content".to_string()),
             ));
         }
 
@@ -199,7 +207,11 @@ impl IndexerClient {
         let validation = crate::utils::validate_bytes(bytes, format);
         if !validation.valid {
             return Err(Error::Parse(
-                validation.errors.first().cloned().unwrap_or_else(|| "Invalid bytes".to_string()),
+                validation
+                    .errors
+                    .first()
+                    .cloned()
+                    .unwrap_or_else(|| "Invalid bytes".to_string()),
             ));
         }
 

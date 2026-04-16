@@ -24,10 +24,7 @@ async fn main() -> vectorless::Result<()> {
 
     // Parse CLI arguments
     let args: Vec<String> = std::env::args().collect();
-    let dir = args
-        .get(1)
-        .map(|s| s.as_str())
-        .unwrap_or("./samples");
+    let dir = args.get(1).map(|s| s.as_str()).unwrap_or("./samples");
     let recursive = !args.iter().any(|a| a == "--no-recursive");
 
     // Build engine
@@ -46,7 +43,11 @@ async fn main() -> vectorless::Result<()> {
         .map_err(|e| vectorless::Error::Config(e.to_string()))?;
 
     // Index directory
-    println!("{}indexing: {}", if recursive { "Recursively " } else { "" }, dir);
+    println!(
+        "{}indexing: {}",
+        if recursive { "Recursively " } else { "" },
+        dir
+    );
     let ctx = IndexContext::from_dir(dir, recursive);
 
     if ctx.is_empty() {
@@ -81,9 +82,7 @@ async fn main() -> vectorless::Result<()> {
     let query = "What is this about?";
     println!("\nQuerying: \"{query}\"");
 
-    let answer = engine
-        .query(vectorless::QueryContext::new(query))
-        .await?;
+    let answer = engine.query(vectorless::QueryContext::new(query)).await?;
 
     for item in &answer.items {
         println!("  [{} score={:.2}]", item.doc_id, item.score);
@@ -99,9 +98,7 @@ async fn main() -> vectorless::Result<()> {
     println!("\nMetrics:");
     println!(
         "  LLM: {} calls, {} tokens, ${:.4}",
-        report.llm.total_calls,
-        report.llm.total_tokens,
-        report.llm.estimated_cost_usd,
+        report.llm.total_calls, report.llm.total_tokens, report.llm.estimated_cost_usd,
     );
     println!(
         "  Retrieval: {} queries, avg score {:.2}",

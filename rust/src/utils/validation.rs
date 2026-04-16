@@ -73,11 +73,10 @@ pub fn validate_file(path: &Path) -> Result<SourceValidation> {
 
     let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
     if DocumentFormat::from_extension(ext).is_none() {
-        return Ok(SourceValidation::invalid(vec![format!(
-            "Unsupported format: .{}",
-            ext
-        )])
-        .with_warnings(warnings));
+        return Ok(
+            SourceValidation::invalid(vec![format!("Unsupported format: .{}", ext)])
+                .with_warnings(warnings),
+        );
     }
 
     Ok(SourceValidation::valid().with_warnings(warnings))
