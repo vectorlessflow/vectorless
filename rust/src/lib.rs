@@ -4,11 +4,9 @@
 
 //! # Vectorless
 //!
-//! An ultra-performant reasoning-native document intelligence engine for AI.
-//!
-//! It transforms documents into rich semantic trees and uses LLMs to
-//! intelligently traverse the hierarchy — retrieving the most relevant content
-//! through structural reasoning and deep contextual understanding.
+//! A document engine for AI. It transforms documents into hierarchical semantic
+//! trees and uses the LLM itself to navigate and retrieve — purely LLM-guided,
+//! from indexing to querying. No vector databases, no embeddings, no similarity search.
 //!
 //! ## Quick Start
 //!
