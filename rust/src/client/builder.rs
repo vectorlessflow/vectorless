@@ -7,12 +7,8 @@
 //! [`Engine`] instances with sensible defaults.
 
 use crate::{
-    config::Config,
-    events::EventEmitter,
-    memo::MemoStore,
-    retrieval::PipelineRetriever,
+    client::engine::Engine, config::Config, events::EventEmitter, retrieval::PipelineRetriever,
     storage::Workspace,
-    client::engine::Engine,
 };
 
 /// Builder for creating a [`Engine`] client.
@@ -48,20 +44,7 @@ pub struct EngineBuilder {
 
     /// LLM endpoint URL (override).
     endpoint: Option<String>,
-
-    /// Top-K for retrieval (override).
-    top_k: Option<usize>,
-
-    /// Fast mode flag.
-    fast_mode: bool,
-
-    /// Precise mode flag.
-    precise_mode: bool,
-
-    /// Memo store for caching LLM decisions.
-    memo_store: Option<MemoStore>,
 }
-
 impl EngineBuilder {
     /// Create a new builder with defaults.
     #[must_use]
@@ -71,10 +54,6 @@ impl EngineBuilder {
             api_key: None,
             model: None,
             endpoint: None,
-            top_k: None,
-            fast_mode: false,
-            precise_mode: false,
-            memo_store: None,
         }
     }
 
@@ -86,40 +65,6 @@ impl EngineBuilder {
     #[must_use]
     pub fn with_events(mut self, events: EventEmitter) -> Self {
         self.events = Some(events);
-        self
-    }
-
-    /// Set a memo store for caching LLM decisions.
-    ///
-    /// When enabled, the pilot will cache navigation decisions based on
-    /// context fingerprints, avoiding redundant API calls for similar
-    /// navigation scenarios.
-    ///
-    /// # Example
-    ///
-    /// ```rust,no_run
-    /// use vectorless::client::EngineBuilder;
-    /// use vectorless::memo::MemoStore;
-    /// use chrono::Duration;
-    ///
-    /// # #[tokio::main]
-    /// # async fn main() -> Result<(), vectorless::BuildError> {
-    /// let memo_store = MemoStore::new()
-    ///     .with_ttl(Duration::days(7))
-    ///     .with_model("gpt-4o");
-    ///
-    /// let engine = EngineBuilder::new()
-    ///     .with_key("sk-...")
-    ///     .with_model("gpt-4o")
-    ///     .with_memo_store(memo_store)
-    ///     .build()
-    ///     .await?;
-    /// # Ok(())
-    /// # }
-    /// ```
-    #[must_use]
-    pub fn with_memo_store(mut self, store: MemoStore) -> Self {
-        self.memo_store = Some(store);
         self
     }
 
@@ -202,45 +147,6 @@ impl EngineBuilder {
     // Retrieval Configuration
     // ============================================================
 
-    /// Set the number of results to return from queries.
-    ///
-    /// Default is 5. Higher values return more context but cost more tokens.
-    #[must_use]
-    pub fn with_top_k(mut self, k: usize) -> Self {
-        self.top_k = Some(k);
-        self
-    }
-
-    // ============================================================
-    // Preset Configurations
-    // ============================================================
-
-    /// Enable fast mode for quicker but less thorough retrieval.
-    ///
-    /// Fast mode uses:
-    /// - Keyword-based retrieval (no LLM calls)
-    /// - Lower beam width / MCTS simulations
-    /// - Lazy summary generation
-    #[must_use]
-    pub fn fast(mut self) -> Self {
-        self.fast_mode = true;
-        self.precise_mode = false;
-        self
-    }
-
-    /// Enable precise mode for higher quality retrieval.
-    ///
-    /// Precise mode uses:
-    /// - MCTS-based retrieval
-    /// - Higher simulation count
-    /// - Full summary generation
-    #[must_use]
-    pub fn precise(mut self) -> Self {
-        self.precise_mode = true;
-        self.fast_mode = false;
-        self
-    }
-
     /// Build the Engine client.
     ///
     /// `api_key` and `model` must be provided via builder methods or config file.
@@ -299,18 +205,6 @@ impl EngineBuilder {
             config.retrieval.endpoint = endpoint.clone();
             config.summary.endpoint = endpoint;
         }
-        if let Some(top_k) = self.top_k {
-            config.retrieval.top_k = top_k;
-        }
-
-        // Apply preset modes
-        if self.fast_mode {
-            config.retrieval.search.max_iterations = 5;
-        }
-        if self.precise_mode {
-            config.retrieval.search.max_iterations = 100;
-        }
-
         // Validate required settings
         let resolved_key = config
             .llm
@@ -363,15 +257,6 @@ impl EngineBuilder {
                 retriever.with_content_config(retrieval_config.content.to_aggregator_config());
         }
 
-        // Add memo store if provided or create default
-        if let Some(memo_store) = self.memo_store {
-            retriever = retriever.with_memo_store(memo_store);
-        } else {
-            // Create default memo store with model from config
-            let memo_store = MemoStore::new().with_model(retrieval_model).with_version(1);
-            retriever = retriever.with_memo_store(memo_store);
-        }
-
         // Build engine
         let events = self.events.unwrap_or_default();
         Engine::with_components(config, workspace, retriever, indexer, events)
@@ -411,13 +296,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_builder_defaults() {
-        let builder = EngineBuilder::new();
-        assert!(!builder.fast_mode);
-        assert!(!builder.precise_mode);
-    }
-
-    #[test]
     fn test_builder_with_key() {
         let builder = EngineBuilder::new().with_key("sk-test-key");
 
@@ -439,28 +317,5 @@ mod tests {
 
         assert_eq!(builder.model, Some("gpt-4o-mini".to_string()));
         assert_eq!(builder.api_key, Some("sk-test".to_string()));
-    }
-
-    #[test]
-    fn test_builder_fast_mode() {
-        let builder = EngineBuilder::new().fast();
-
-        assert!(builder.fast_mode);
-        assert!(!builder.precise_mode);
-    }
-
-    #[test]
-    fn test_builder_precise_mode() {
-        let builder = EngineBuilder::new().precise();
-
-        assert!(builder.precise_mode);
-        assert!(!builder.fast_mode);
-    }
-
-    #[test]
-    fn test_builder_top_k() {
-        let builder = EngineBuilder::new().with_top_k(10);
-
-        assert_eq!(builder.top_k, Some(10));
     }
 }
