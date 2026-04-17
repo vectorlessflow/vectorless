@@ -5,9 +5,7 @@
 
 use pyo3::prelude::*;
 
-use ::vectorless::{
-    LlmMetricsReport, MetricsReport, PilotMetricsReport, RetrievalMetricsReport,
-};
+use ::vectorless::{LlmMetricsReport, MetricsReport, PilotMetricsReport, RetrievalMetricsReport};
 
 /// LLM usage metrics report.
 #[pyclass(name = "LlmMetricsReport")]

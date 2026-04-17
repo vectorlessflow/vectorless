@@ -91,9 +91,7 @@ impl IndexerClient {
     ) -> Result<IndexedDocument> {
         pipeline_options.existing_tree = existing_tree.cloned();
         match source {
-            IndexSource::Path(path) => {
-                self.index_from_path(path, name, pipeline_options).await
-            }
+            IndexSource::Path(path) => self.index_from_path(path, name, pipeline_options).await,
             IndexSource::Content { data, format } => {
                 self.index_from_content(data, *format, name, pipeline_options)
                     .await

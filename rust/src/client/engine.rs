@@ -198,7 +198,9 @@ impl Engine {
                     let name = name.map(str::to_string);
                     let engine = self.clone();
                     async move {
-                        engine.process_source(&source, &options, name.as_deref()).await
+                        engine
+                            .process_source(&source, &options, name.as_deref())
+                            .await
                     }
                 })
                 .buffer_unordered(concurrency)
@@ -547,9 +549,10 @@ impl Engine {
         use crate::index::{IndexMode, ReasoningIndexConfig, SummaryStrategy};
 
         let format = match source {
-            IndexSource::Path(path) => {
-                self.indexer.detect_format_from_path(path).unwrap_or(crate::index::parse::DocumentFormat::Markdown)
-            }
+            IndexSource::Path(path) => self
+                .indexer
+                .detect_format_from_path(path)
+                .unwrap_or(crate::index::parse::DocumentFormat::Markdown),
             IndexSource::Content { format, .. } => *format,
             IndexSource::Bytes { format, .. } => *format,
         };

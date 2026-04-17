@@ -48,10 +48,7 @@ impl LlmPool {
     /// [`LlmClient`] instances with the appropriate settings.
     pub fn from_config(config: &crate::config::LlmConfig) -> Self {
         let api_key = config.api_key.clone();
-        let endpoint = config
-            .endpoint
-            .clone()
-            .unwrap_or_default();
+        let endpoint = config.endpoint.clone().unwrap_or_default();
         let retry = super::config::RetryConfig {
             max_attempts: config.retry.max_attempts,
             initial_delay_ms: config.retry.initial_delay_ms,

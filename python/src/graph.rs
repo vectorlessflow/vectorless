@@ -5,9 +5,7 @@
 
 use pyo3::prelude::*;
 
-use ::vectorless::{
-    DocumentGraph, DocumentGraphNode, EdgeEvidence, GraphEdge, WeightedKeyword,
-};
+use ::vectorless::{DocumentGraph, DocumentGraphNode, EdgeEvidence, GraphEdge, WeightedKeyword};
 
 /// A keyword with weight from document analysis.
 #[pyclass(name = "WeightedKeyword")]

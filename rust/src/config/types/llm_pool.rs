@@ -192,9 +192,7 @@ impl LlmConfig {
     ///
     /// Returns the slot-specific model if set, otherwise the default model.
     pub fn resolve_model(&self, slot: &SlotConfig) -> String {
-        slot.model
-            .clone()
-            .unwrap_or_else(|| self.model.clone())
+        slot.model.clone().unwrap_or_else(|| self.model.clone())
     }
 }
 
@@ -603,8 +601,8 @@ mod tests {
 
     #[test]
     fn test_resolve_model() {
-        let config = LlmConfig::new("gpt-4o")
-            .with_retrieval(SlotConfig::new().with_model("gpt-4o-mini"));
+        let config =
+            LlmConfig::new("gpt-4o").with_retrieval(SlotConfig::new().with_model("gpt-4o-mini"));
 
         assert_eq!(config.resolve_model(&config.index), "gpt-4o");
         assert_eq!(config.resolve_model(&config.retrieval), "gpt-4o-mini");

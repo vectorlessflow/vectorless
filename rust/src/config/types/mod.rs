@@ -12,19 +12,15 @@ mod storage;
 
 use serde::{Deserialize, Serialize};
 
-pub(crate) use content::ContentAggregatorConfig;
 pub(crate) use indexer::IndexerConfig;
 pub(crate) use llm_pool::{
-    FallbackBehavior, FallbackConfig, LlmConfig, OnAllFailedBehavior, RetryConfig, SlotConfig,
-    ThrottleConfig,
+    FallbackBehavior, FallbackConfig, LlmConfig, OnAllFailedBehavior, SlotConfig,
 };
 pub(crate) use metrics::{
     LlmMetricsConfig, MetricsConfig, PilotMetricsConfig, RetrievalMetricsConfig,
 };
-pub(crate) use retrieval::{RetrievalConfig, SearchConfig};
-pub(crate) use storage::{
-    CacheConfig, CompressionAlgorithm, StorageConfig, StrategyConfig, SufficiencyConfig,
-};
+pub(crate) use retrieval::RetrievalConfig;
+pub(crate) use storage::{CacheConfig, CompressionAlgorithm, StorageConfig, SufficiencyConfig};
 
 /// Main configuration for vectorless.
 ///

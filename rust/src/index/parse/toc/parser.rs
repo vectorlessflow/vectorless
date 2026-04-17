@@ -5,8 +5,8 @@
 
 use tracing::debug;
 
-use crate::llm::config::LlmConfig;
 use crate::error::Result;
+use crate::llm::config::LlmConfig;
 
 use super::types::TocEntry;
 use crate::llm::LlmClient;
