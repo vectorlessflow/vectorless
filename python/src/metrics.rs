@@ -358,11 +358,6 @@ impl PyMetricsReport {
         self.inner.total_cost_usd()
     }
 
-    /// Overall success rate (0.0 - 1.0).
-    fn overall_success_rate(&self) -> f64 {
-        self.inner.overall_success_rate()
-    }
-
     fn __repr__(&self) -> String {
         format!(
             "MetricsReport(llm_calls={}, cost=${:.4}, queries={})",

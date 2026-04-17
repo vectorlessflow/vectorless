@@ -297,17 +297,6 @@ impl MetricsReport {
     pub fn total_cost_usd(&self) -> f64 {
         self.llm.estimated_cost_usd
     }
-
-    /// Calculate overall success rate.
-    pub fn overall_success_rate(&self) -> f64 {
-        let llm_rate = self.llm.success_rate;
-        let pilot_rate = if self.pilot.total_decisions > 0 {
-            self.pilot.accuracy
-        } else {
-            1.0
-        };
-        (llm_rate + pilot_rate) / 2.0
-    }
 }
 
 #[cfg(test)]
@@ -353,5 +342,65 @@ mod tests {
 
         let report = hub.generate_report();
         assert_eq!(report.llm.total_calls, 0);
+    }
+
+    #[test]
+    fn test_llm_metrics_success_and_failure() {
+        let hub = MetricsHub::with_defaults();
+
+        // Record successes
+        hub.record_llm_call(100, 50, 150, true);
+        hub.record_llm_call(200, 100, 300, true);
+
+        // Record failure
+        hub.record_llm_call(0, 0, 50, false);
+
+        let report = hub.llm_report();
+        assert_eq!(report.total_calls, 3);
+        assert_eq!(report.successful_calls, 2);
+        assert_eq!(report.failed_calls, 1);
+        assert!((report.success_rate - 0.666).abs() < 0.01);
+        assert_eq!(report.total_input_tokens, 300);
+        assert_eq!(report.total_output_tokens, 150);
+    }
+
+    #[test]
+    fn test_llm_error_events() {
+        let hub = MetricsHub::with_defaults();
+
+        hub.record_llm_rate_limit();
+        hub.record_llm_rate_limit();
+        hub.record_llm_timeout();
+        hub.record_llm_fallback();
+
+        let report = hub.llm_report();
+        assert_eq!(report.rate_limit_errors, 2);
+        assert_eq!(report.timeout_errors, 1);
+        assert_eq!(report.fallback_triggers, 1);
+    }
+
+    #[test]
+    fn test_shared_arc_metrics() {
+        let hub = MetricsHub::shared();
+
+        // Clone the Arc — both references point to the same hub
+        let hub2 = hub.clone();
+        hub.record_llm_call(100, 50, 100, true);
+        hub2.record_llm_call(200, 100, 200, true);
+
+        let report = hub.generate_report();
+        assert_eq!(report.llm.total_calls, 2);
+        assert_eq!(report.llm.total_input_tokens, 300);
+    }
+
+    #[test]
+    fn test_metrics_report_cost() {
+        let hub = MetricsHub::with_defaults();
+
+        hub.record_llm_call(1000, 500, 200, true);
+
+        let report = hub.generate_report();
+        // Cost should be positive (exact value depends on config pricing)
+        assert!(report.total_cost_usd() >= 0.0);
     }
 }

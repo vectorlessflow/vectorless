@@ -146,6 +146,12 @@ impl LlmClient {
         self
     }
 
+    /// Add metrics hub for recording LLM call statistics.
+    pub fn with_shared_metrics(mut self, hub: Arc<crate::metrics::MetricsHub>) -> Self {
+        self.executor = self.executor.with_shared_metrics(hub);
+        self
+    }
+
     /// Get the configuration.
     pub fn config(&self) -> &LlmConfig {
         self.executor.config()
@@ -355,5 +361,18 @@ mod tests {
         let client = LlmClient::for_model("gpt-4o-mini").with_concurrency(controller);
 
         assert!(client.concurrency().is_some());
+    }
+
+    #[test]
+    fn test_client_with_shared_metrics() {
+        use crate::metrics::MetricsHub;
+
+        let hub = MetricsHub::shared();
+        let client = LlmClient::for_model("gpt-4o").with_shared_metrics(hub.clone());
+
+        // Client should still function normally
+        assert_eq!(client.config().model, "gpt-4o");
+        assert!(client.fallback().is_none()); // no fallback added
+        assert!(client.concurrency().is_none()); // no concurrency added
     }
 }

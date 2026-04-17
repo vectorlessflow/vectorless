@@ -7,8 +7,8 @@
 //! [`Engine`] instances with sensible defaults.
 
 use crate::{
-    client::engine::Engine, config::Config, events::EventEmitter, retrieval::PipelineRetriever,
-    storage::Workspace,
+    client::engine::Engine, config::Config, events::EventEmitter, metrics::MetricsHub,
+    retrieval::PipelineRetriever, storage::Workspace,
 };
 
 /// Builder for creating a [`Engine`] client.
@@ -188,8 +188,9 @@ impl EngineBuilder {
             .await
             .map_err(|e| BuildError::Workspace(e.to_string()))?;
 
-        // Build LlmPool from unified LlmConfig
-        let pool = crate::llm::LlmPool::from_config(&config.llm);
+        // Build LlmPool from unified LlmConfig (shared metrics hub)
+        let metrics_hub = std::sync::Arc::new(MetricsHub::with_defaults());
+        let pool = crate::llm::LlmPool::from_config(&config.llm, Some(metrics_hub.clone()));
 
         // Indexer uses pool.index()
         let indexer = crate::client::indexer::IndexerClient::with_llm(pool.index().clone());
@@ -208,7 +209,7 @@ impl EngineBuilder {
 
         // Build engine
         let events = self.events.unwrap_or_default();
-        Engine::with_components(config, workspace, retriever, indexer, events)
+        Engine::with_components(config, workspace, retriever, indexer, events, metrics_hub)
             .await
             .map_err(|e| BuildError::Other(e.to_string()))
     }

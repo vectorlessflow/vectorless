@@ -132,6 +132,7 @@ impl Engine {
         retriever: PipelineRetriever,
         indexer: IndexerClient,
         events: EventEmitter,
+        metrics_hub: Arc<MetricsHub>,
     ) -> Result<Self> {
         let config = Arc::new(config);
 
@@ -151,7 +152,7 @@ impl Engine {
             indexer,
             retriever,
             workspace: workspace_client,
-            metrics_hub: Arc::new(MetricsHub::with_defaults()),
+            metrics_hub,
             graph_dirty: Arc::new(AtomicBool::new(false)),
             graph_fail_count: Arc::new(AtomicU32::new(0)),
             cancelled: Arc::new(AtomicBool::new(false)),

@@ -13,6 +13,7 @@ use crate::client::indexer::IndexerClient;
 use crate::config::Config;
 use crate::events::EventEmitter;
 use crate::index::PipelineExecutor;
+use crate::metrics::MetricsHub;
 use crate::retrieval::PipelineRetriever;
 use crate::storage::Workspace;
 
@@ -38,7 +39,14 @@ pub async fn build_test_engine(workspace_dir: &std::path::Path) -> Engine {
     let workspace = Workspace::new(workspace_dir).await.unwrap();
     let retriever = PipelineRetriever::new();
 
-    Engine::with_components(config, workspace, retriever, indexer, EventEmitter::new())
-        .await
-        .unwrap()
+    Engine::with_components(
+        config,
+        workspace,
+        retriever,
+        indexer,
+        EventEmitter::new(),
+        Arc::new(MetricsHub::with_defaults()),
+    )
+    .await
+    .unwrap()
 }

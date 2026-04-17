@@ -61,6 +61,7 @@ use async_openai::types::chat::{
 use super::config::LlmConfig;
 use super::error::{LlmError, LlmResult};
 use super::fallback::{FallbackChain, FallbackStep};
+use crate::metrics::MetricsHub;
 use crate::throttle::ConcurrencyController;
 
 /// Unified executor for LLM operations.
@@ -76,6 +77,8 @@ pub struct LlmExecutor {
     throttle: Option<Arc<ConcurrencyController>>,
     /// Fallback chain (optional).
     fallback: Option<Arc<FallbackChain>>,
+    /// Metrics hub for recording LLM call statistics (optional).
+    metrics: Option<Arc<MetricsHub>>,
 }
 
 impl std::fmt::Debug for LlmExecutor {
@@ -86,6 +89,7 @@ impl std::fmt::Debug for LlmExecutor {
             .field("has_throttle", &self.throttle.is_some())
             .field("has_fallback", &self.fallback.is_some())
             .field("has_openai_client", &true)
+            .field("has_metrics", &self.metrics.is_some())
             .finish()
     }
 }
@@ -99,11 +103,14 @@ impl LlmExecutor {
             openai_client: Arc::new(openai_client),
             throttle: None,
             fallback: None,
+            metrics: None,
         }
     }
 
     /// Build the async-openai client from config.
-    fn build_openai_client(config: &LlmConfig) -> async_openai::Client<async_openai::config::OpenAIConfig> {
+    fn build_openai_client(
+        config: &LlmConfig,
+    ) -> async_openai::Client<async_openai::config::OpenAIConfig> {
         let api_key = config.api_key.clone().unwrap_or_default();
         let endpoint = if config.endpoint.is_empty() {
             "https://api.openai.com/v1".to_string()
@@ -147,6 +154,12 @@ impl LlmExecutor {
     /// Add fallback chain from an existing Arc.
     pub fn with_shared_fallback(mut self, chain: Arc<FallbackChain>) -> Self {
         self.fallback = Some(chain);
+        self
+    }
+
+    /// Add metrics hub for recording LLM call statistics.
+    pub fn with_shared_metrics(mut self, hub: Arc<MetricsHub>) -> Self {
+        self.metrics = Some(hub);
         self
     }
 
@@ -255,6 +268,15 @@ impl LlmExecutor {
                     return Ok(response);
                 }
                 Err(error) => {
+                    // Record specific error events
+                    if let Some(ref metrics) = self.metrics {
+                        match &error {
+                            LlmError::RateLimit(_) => metrics.record_llm_rate_limit(),
+                            LlmError::Timeout(_) => metrics.record_llm_timeout(),
+                            _ => {}
+                        }
+                    }
+
                     // Step 3: Check if we should retry
                     if self.should_retry(&error, attempts) {
                         let delay = self.retry_delay(attempts);
@@ -281,6 +303,9 @@ impl LlmExecutor {
                                     to_model = %next_model,
                                     "Falling back to next model"
                                 );
+                                if let Some(ref metrics) = self.metrics {
+                                    metrics.record_llm_fallback();
+                                }
                                 fallback.record_fallback(
                                     &mut fallback_history,
                                     current_model.clone(),
@@ -370,10 +395,17 @@ impl LlmExecutor {
         );
 
         let request_start = std::time::Instant::now();
-        let response = self.openai_client.chat().create(request).await.map_err(|e| {
-            let msg = e.to_string();
-            LlmError::from_api_message(&msg)
-        })?;
+        let response = match self.openai_client.chat().create(request).await {
+            Ok(r) => r,
+            Err(e) => {
+                let elapsed = request_start.elapsed();
+                if let Some(ref metrics) = self.metrics {
+                    metrics.record_llm_call(0, 0, elapsed.as_millis() as u64, false);
+                }
+                let msg = e.to_string();
+                return Err(LlmError::from_api_message(&msg));
+            }
+        };
         let request_elapsed = request_start.elapsed();
 
         let usage = response.usage.as_ref();
@@ -385,6 +417,15 @@ impl LlmExecutor {
             .first()
             .and_then(|choice| choice.message.content.clone())
             .ok_or(LlmError::NoContent)?;
+
+        if let Some(ref metrics) = self.metrics {
+            metrics.record_llm_call(
+                prompt_tokens as u64,
+                completion_tokens as u64,
+                request_elapsed.as_millis() as u64,
+                true,
+            );
+        }
 
         info!(
             "LLM response ← {}ms, tokens: {} prompt + {} completion, content: {} chars",
@@ -450,5 +491,19 @@ mod tests {
         // First retry attempt (attempt 1 -> delay_for_attempt(0))
         let delay = executor.retry_delay(1);
         assert_eq!(delay, Duration::from_millis(500));
+    }
+
+    #[test]
+    fn test_executor_with_metrics() {
+        let hub = MetricsHub::shared();
+        let executor = LlmExecutor::for_model("gpt-4o").with_shared_metrics(hub);
+
+        assert!(executor.metrics.is_some());
+    }
+
+    #[test]
+    fn test_executor_without_metrics() {
+        let executor = LlmExecutor::for_model("gpt-4o");
+        assert!(executor.metrics.is_none());
     }
 }

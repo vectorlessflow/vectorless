@@ -22,16 +22,6 @@ pub enum InterventionPoint {
     Prune,
 }
 
-/// Helper to store f64 as u64 bits for atomic operations.
-fn f64_to_u64_bits(v: f64) -> u64 {
-    v.to_bits()
-}
-
-/// Helper to convert u64 bits back to f64.
-fn u64_bits_to_f64(v: u64) -> f64 {
-    f64::from_bits(v)
-}
-
 /// Pilot metrics tracker.
 #[derive(Debug, Default)]
 pub struct PilotMetrics {

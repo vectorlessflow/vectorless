@@ -8,6 +8,7 @@ use std::sync::Arc;
 use super::client::LlmClient;
 use super::config::LlmConfig;
 use super::fallback::{FallbackChain, FallbackConfig};
+use crate::metrics::MetricsHub;
 use crate::throttle::ConcurrencyController;
 
 /// Pool of LLM clients for different purposes.
@@ -46,7 +47,12 @@ impl LlmPool {
     ///
     /// Resolves per-slot model overrides and creates individual
     /// [`LlmClient`] instances with the appropriate settings.
-    pub fn from_config(config: &crate::config::LlmConfig) -> Self {
+    /// When `metrics` is provided, all clients share the same hub
+    /// for unified LLM call statistics.
+    pub fn from_config(
+        config: &crate::config::LlmConfig,
+        metrics: Option<Arc<MetricsHub>>,
+    ) -> Self {
         let api_key = config.api_key.clone();
         let endpoint = config.endpoint.clone().unwrap_or_default();
         let retry = config.retry.to_runtime_config();
@@ -68,13 +74,11 @@ impl LlmPool {
         } else {
             endpoint.clone()
         };
-        let openai_client = Arc::new(
-            async_openai::Client::with_config(
-                async_openai::config::OpenAIConfig::new()
-                    .with_api_key(api_key.clone().unwrap_or_default())
-                    .with_api_base(openai_base),
-            ),
-        );
+        let openai_client = Arc::new(async_openai::Client::with_config(
+            async_openai::config::OpenAIConfig::new()
+                .with_api_key(api_key.clone().unwrap_or_default())
+                .with_api_base(openai_base),
+        ));
 
         // Attach shared throttle controller from config
         let concurrency_config = config.throttle.to_runtime_config();
@@ -84,31 +88,27 @@ impl LlmPool {
         let fallback_config: FallbackConfig = config.fallback.clone().into();
         let fallback_chain = Arc::new(FallbackChain::new(fallback_config));
 
+        let build_client = |slot_config: &crate::config::SlotConfig| {
+            let mut client = LlmClient::new(make_config(slot_config))
+                .with_shared_concurrency(controller.clone())
+                .with_shared_openai_client(openai_client.clone())
+                .with_shared_fallback(fallback_chain.clone());
+            if let Some(ref hub) = metrics {
+                client = client.with_shared_metrics(hub.clone());
+            }
+            Arc::new(client)
+        };
+
         Self {
-            index: Arc::new(
-                LlmClient::new(make_config(&config.index))
-                    .with_shared_concurrency(controller.clone())
-                    .with_shared_openai_client(openai_client.clone())
-                    .with_shared_fallback(fallback_chain.clone()),
-            ),
-            retrieval: Arc::new(
-                LlmClient::new(make_config(&config.retrieval))
-                    .with_shared_concurrency(controller.clone())
-                    .with_shared_openai_client(openai_client.clone())
-                    .with_shared_fallback(fallback_chain.clone()),
-            ),
-            pilot: Arc::new(
-                LlmClient::new(make_config(&config.pilot))
-                    .with_shared_concurrency(controller.clone())
-                    .with_shared_openai_client(openai_client.clone())
-                    .with_shared_fallback(fallback_chain.clone()),
-            ),
+            index: build_client(&config.index),
+            retrieval: build_client(&config.retrieval),
+            pilot: build_client(&config.pilot),
         }
     }
 
     /// Create a pool with default configurations.
     pub fn from_defaults() -> Self {
-        Self::from_config(&crate::config::LlmConfig::default())
+        Self::from_config(&crate::config::LlmConfig::default(), None)
     }
 
     /// Get the index client.
@@ -144,11 +144,44 @@ mod tests {
             .with_endpoint("https://api.openai.com/v1")
             .with_index(crate::config::SlotConfig::fast().with_model("gpt-4o-mini"));
 
-        let pool = LlmPool::from_config(&config);
+        let pool = LlmPool::from_config(&config, None);
 
         assert_eq!(pool.index().config().model, "gpt-4o-mini");
         assert_eq!(pool.retrieval().config().model, "gpt-4o");
         assert_eq!(pool.pilot().config().model, "gpt-4o");
         assert_eq!(pool.index().config().max_tokens, 100);
+    }
+
+    #[test]
+    fn test_pool_from_config_with_metrics() {
+        let config = crate::config::LlmConfig::new("gpt-4o")
+            .with_api_key("sk-test")
+            .with_endpoint("https://api.openai.com/v1");
+
+        let hub = MetricsHub::shared();
+        let pool = LlmPool::from_config(&config, Some(hub.clone()));
+
+        // Verify each client has fallback (which means executor was built correctly)
+        assert!(pool.index().fallback().is_some());
+        assert!(pool.retrieval().fallback().is_some());
+        assert!(pool.pilot().fallback().is_some());
+
+        // Verify models are resolved correctly
+        assert_eq!(pool.index().config().model, "gpt-4o");
+        assert_eq!(pool.retrieval().config().model, "gpt-4o");
+        assert_eq!(pool.pilot().config().model, "gpt-4o");
+    }
+
+    #[test]
+    fn test_pool_shared_metrics_hub() {
+        let config = crate::config::LlmConfig::new("gpt-4o")
+            .with_api_key("sk-test")
+            .with_endpoint("https://api.openai.com/v1");
+
+        let hub = MetricsHub::shared();
+        let _pool = LlmPool::from_config(&config, Some(hub.clone()));
+
+        // Hub is shared with all three clients — Arc refcount > 1
+        assert!(Arc::strong_count(&hub) > 1);
     }
 }
