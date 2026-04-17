@@ -359,40 +359,6 @@ impl Engine {
     ///
     /// Accepts a [`QueryContext`] that specifies the query text and scope
     /// (single document, multiple documents, or entire workspace).
-    ///
-    /// # Example
-    ///
-    /// ```rust,no_run
-    /// use vectorless::client::{EngineBuilder, QueryContext};
-    ///
-    /// # #[tokio::main]
-    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let engine = EngineBuilder::new()
-    ///     .with_key("sk-...")
-    ///     .with_model("gpt-4o")
-    ///     .build()
-    ///     .await?;
-    ///
-    /// // Single document
-    /// let result = engine.query(
-    ///     QueryContext::new("What is the total revenue?")
-    ///         .with_doc_ids(vec!["doc-123".to_string()])
-    /// ).await?;
-    ///
-    /// if let Some(item) = result.single() {
-    ///     println!("Answer: {}", item.content);
-    /// }
-    ///
-    /// // Entire workspace
-    /// let result = engine.query(
-    ///     QueryContext::new("Summarize all documents")
-    /// ).await?;
-    /// for item in &result.items {
-    ///     println!("{}: score={}", item.doc_id, item.score);
-    /// }
-    /// # Ok(())
-    /// # }
-    /// ```
     pub async fn query(&self, ctx: QueryContext) -> Result<QueryResult> {
         let doc_ids = self.resolve_scope(&ctx.scope).await?;
         let mut options = ctx.to_retrieve_options(&self.config);
