@@ -94,7 +94,7 @@ pub use query_context::QueryContext;
 // ============================================================
 
 pub use types::{
-    ClientError, DocumentInfo, FailedItem, IndexItem, IndexMode, IndexOptions, IndexResult,
+    DocumentInfo, FailedItem, IndexItem, IndexMode, IndexOptions, IndexResult,
     QueryResult, QueryResultItem,
 };
 

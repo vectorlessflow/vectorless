@@ -90,20 +90,15 @@ impl WorkspaceClient {
     ///
     /// Returns an error if the workspace read fails.
     pub async fn load(&self, doc_id: &str) -> Result<Option<PersistedDocument>> {
-        if !self.workspace.contains(doc_id).await {
-            return Ok(None);
-        }
-
         let doc = self.workspace.load_and_cache(doc_id).await?;
-        let cache_hit = doc.is_some();
 
-        if let Some(ref _doc) = doc {
-            debug!("Loaded document: {} (cache={})", doc_id, cache_hit);
+        if let Some(ref _d) = doc {
+            debug!("Loaded document: {}", doc_id);
         }
 
         self.events.emit_workspace(WorkspaceEvent::Loaded {
             doc_id: doc_id.to_string(),
-            cache_hit,
+            cache_hit: doc.is_some(),
         });
 
         Ok(doc)
@@ -194,19 +189,23 @@ impl WorkspaceClient {
     /// Returns an error if the workspace write fails.
     pub async fn clear(&self) -> Result<usize> {
         let doc_ids = self.workspace.list_documents().await;
-        let count = doc_ids.len();
+        let mut removed = 0usize;
 
         for doc_id in &doc_ids {
-            let _ = self.workspace.remove(doc_id).await;
+            match self.workspace.remove(doc_id).await {
+                Ok(true) => removed += 1,
+                Ok(false) => {}
+                Err(e) => tracing::warn!("Failed to remove document {}: {}", doc_id, e),
+            }
         }
 
-        if count > 0 {
-            info!("Cleared workspace: {} documents removed", count);
+        if removed > 0 {
+            info!("Cleared workspace: {removed} documents removed");
             self.events
-                .emit_workspace(WorkspaceEvent::Cleared { count });
+                .emit_workspace(WorkspaceEvent::Cleared { count: removed });
         }
 
-        Ok(count)
+        Ok(removed)
     }
 
     /// Get the underlying workspace Arc (for advanced use).

@@ -71,9 +71,6 @@ pub struct IndexOptions {
     /// Whether to generate summaries using LLM.
     pub generate_summaries: bool,
 
-    /// Whether to include node text in the tree.
-    pub include_text: bool,
-
     /// Whether to generate node IDs.
     pub generate_ids: bool,
 
@@ -84,6 +81,9 @@ pub struct IndexOptions {
     /// during reasoning index construction. Improves recall for
     /// queries that use different wording than the document.
     pub enable_synonym_expansion: bool,
+
+    /// Per-operation timeout (seconds). `None` means no timeout.
+    pub timeout_secs: Option<u64>,
 }
 
 impl Default for IndexOptions {
@@ -91,10 +91,10 @@ impl Default for IndexOptions {
         Self {
             mode: IndexMode::Default,
             generate_summaries: true,
-            include_text: true,
             generate_ids: true,
             generate_description: false,
             enable_synonym_expansion: true,
+            timeout_secs: None,
         }
     }
 }
@@ -126,6 +126,12 @@ impl IndexOptions {
     /// - [`IndexMode::Incremental`] - Only re-index changed files
     pub fn with_mode(mut self, mode: IndexMode) -> Self {
         self.mode = mode;
+        self
+    }
+
+    /// Set per-operation timeout in seconds.
+    pub fn with_timeout_secs(mut self, secs: u64) -> Self {
+        self.timeout_secs = Some(secs);
         self
     }
 }
@@ -379,30 +385,6 @@ impl DocumentInfo {
     }
 }
 
-// ============================================================
-// Error Types
-// ============================================================
-
-/// Client error types.
-#[derive(Debug, Clone, thiserror::Error)]
-pub enum ClientError {
-    /// Document not found.
-    #[error("Document not found: {0}")]
-    NotFound(String),
-
-    /// Invalid operation.
-    #[error("Invalid operation: {0}")]
-    InvalidOperation(String),
-
-    /// Configuration error.
-    #[error("Configuration error: {0}")]
-    Config(String),
-
-    /// Timeout error.
-    #[error("Operation timed out")]
-    Timeout,
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -415,6 +397,15 @@ mod tests {
 
         assert!(options.generate_summaries);
         assert_eq!(options.mode, IndexMode::Force);
+    }
+
+    #[test]
+    fn test_index_options_timeout() {
+        let opts = IndexOptions::new().with_timeout_secs(30);
+        assert_eq!(opts.timeout_secs, Some(30));
+
+        let default = IndexOptions::default();
+        assert_eq!(default.timeout_secs, None);
     }
 
     #[test]

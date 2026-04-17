@@ -60,6 +60,8 @@ pub struct QueryContext {
     pub(crate) include_reasoning: bool,
     /// Maximum tree traversal depth for the pilot.
     pub(crate) depth_limit: Option<usize>,
+    /// Per-operation timeout (seconds). `None` means no timeout.
+    pub(crate) timeout_secs: Option<u64>,
 }
 
 impl QueryContext {
@@ -72,6 +74,7 @@ impl QueryContext {
             strategy: None,
             include_reasoning: true,
             depth_limit: None,
+            timeout_secs: None,
         }
     }
 
@@ -111,6 +114,12 @@ impl QueryContext {
     /// Set the maximum tree traversal depth for the pilot.
     pub fn with_depth_limit(mut self, depth: usize) -> Self {
         self.depth_limit = Some(depth);
+        self
+    }
+
+    /// Set per-operation timeout in seconds.
+    pub fn with_timeout_secs(mut self, secs: u64) -> Self {
+        self.timeout_secs = Some(secs);
         self
     }
 
@@ -193,10 +202,18 @@ mod tests {
             .with_doc_ids(vec!["doc-1".to_string()])
             .with_max_tokens(4000)
             .with_include_reasoning(false)
-            .with_depth_limit(5);
+            .with_depth_limit(5)
+            .with_timeout_secs(60);
 
         assert_eq!(ctx.max_tokens, Some(4000));
         assert!(!ctx.include_reasoning);
         assert_eq!(ctx.depth_limit, Some(5));
+        assert_eq!(ctx.timeout_secs, Some(60));
+    }
+
+    #[test]
+    fn test_query_context_timeout_default() {
+        let ctx = QueryContext::new("test");
+        assert_eq!(ctx.timeout_secs, None);
     }
 }
