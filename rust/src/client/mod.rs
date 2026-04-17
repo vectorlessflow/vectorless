@@ -68,6 +68,7 @@
 mod builder;
 mod engine;
 mod index_context;
+mod indexed_document;
 mod indexer;
 mod query_context;
 mod retriever;

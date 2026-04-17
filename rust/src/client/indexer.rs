@@ -33,7 +33,7 @@ use crate::llm::LlmClient;
 use crate::storage::{DocumentMeta, PersistedDocument};
 
 use super::index_context::IndexSource;
-use super::types::IndexedDocument;
+use super::indexed_document::IndexedDocument;
 use crate::events::{EventEmitter, IndexEvent};
 
 /// Document indexing client.

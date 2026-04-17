@@ -298,7 +298,7 @@ impl Engine {
     /// successful save (atomic save-first, then remove old).
     async fn index_and_persist(
         &self,
-        doc: super::types::IndexedDocument,
+        doc: super::indexed_document::IndexedDocument,
         pipeline_options: &PipelineOptions,
         source_label: &str,
         old_id: Option<&str>,
@@ -321,8 +321,8 @@ impl Engine {
         (vec![item], Vec::new())
     }
 
-    /// Build an [`IndexItem`] from an [`IndexedDocument`](super::types::IndexedDocument).
-    fn build_index_item(doc: &super::types::IndexedDocument) -> IndexItem {
+    /// Build an [`IndexItem`] from an [`IndexedDocument`](super::indexed_document::IndexedDocument).
+    fn build_index_item(doc: &super::indexed_document::IndexedDocument) -> IndexItem {
         IndexItem::new(
             doc.id.clone(),
             doc.name.clone(),
