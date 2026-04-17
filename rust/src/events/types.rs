@@ -9,19 +9,6 @@
 use crate::index::parse::DocumentFormat;
 use crate::retrieval::SufficiencyLevel;
 
-/// Top-level event types for client operations.
-#[derive(Debug, Clone)]
-pub enum Event {
-    /// Indexing events.
-    Index(IndexEvent),
-
-    /// Query events.
-    Query(QueryEvent),
-
-    /// Workspace events.
-    Workspace(WorkspaceEvent),
-}
-
 /// Indexing operation events.
 #[derive(Debug, Clone)]
 pub enum IndexEvent {
