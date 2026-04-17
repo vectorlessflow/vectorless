@@ -40,7 +40,7 @@
 use std::{
     collections::HashMap,
     sync::Arc,
-    sync::atomic::{AtomicBool, Ordering},
+    sync::atomic::{AtomicBool, AtomicU32, Ordering},
     sync::Mutex,
 };
 
@@ -73,6 +73,9 @@ use super::{
 /// Shared cancel state: `true` means cancelled.
 type CancelFlag = Arc<AtomicBool>;
 
+/// Max consecutive graph rebuild failures before giving up.
+const GRAPH_REBUILD_MAX_FAILURES: u32 = 3;
+
 /// The main Engine client.
 ///
 /// Provides high-level operations for document indexing and retrieval.
@@ -104,6 +107,9 @@ pub struct Engine {
 
     /// Whether the document graph needs rebuilding (set after index, consumed in query).
     graph_dirty: Arc<AtomicBool>,
+
+    /// Consecutive graph rebuild failures — skip rebuild after threshold.
+    graph_fail_count: Arc<AtomicU32>,
 
     /// Shared cancel flag — set by `cancel()`, checked by long-running operations.
     cancelled: CancelFlag,
@@ -145,6 +151,7 @@ impl Engine {
             workspace: workspace_client,
             metrics_hub: Arc::new(MetricsHub::with_defaults()),
             graph_dirty: Arc::new(AtomicBool::new(false)),
+            graph_fail_count: Arc::new(AtomicU32::new(0)),
             cancelled: Arc::new(AtomicBool::new(false)),
             active_ops: Arc::new(Mutex::new(0)),
         })
@@ -196,8 +203,10 @@ impl Engine {
             }
 
             // Mark graph as dirty — will be lazily rebuilt on next query()
+            // Also reset failure count so the new data gets a fresh rebuild attempt.
             if !items.is_empty() && self.config.graph.enabled {
                 self.graph_dirty.store(true, Ordering::Relaxed);
+                self.graph_fail_count.store(0, Ordering::Relaxed);
             }
 
             Ok(IndexResult::with_partial(items, failed))
@@ -275,8 +284,7 @@ impl Engine {
             Ok(IndexAction::FullIndex { existing_id }) => {
                 let pipeline_options = self.build_pipeline_options(options, source);
                 match self
-                    .indexer
-                    .index(source, name, pipeline_options.clone())
+                    .index_with_retry(source, name, pipeline_options.clone(), None)
                     .await
                 {
                     Ok(doc) => {
@@ -304,8 +312,7 @@ impl Engine {
                 info!("Incremental update for: {}", source_label);
                 let pipeline_options = self.build_pipeline_options(options, source);
                 match self
-                    .indexer
-                    .index_with_existing(source, name, pipeline_options.clone(), Some(&old_tree))
+                    .index_with_retry(source, name, pipeline_options.clone(), Some(&old_tree))
                     .await
                 {
                     Ok(mut doc) => {
@@ -330,6 +337,54 @@ impl Engine {
                 )
             }
         }
+    }
+
+    /// Index with retry on retryable errors.
+    ///
+    /// Reads `config.llm.retry` for backoff parameters.
+    /// Returns `Err` only after all retries are exhausted or the error
+    /// is not retryable.
+    async fn index_with_retry(
+        &self,
+        source: &IndexSource,
+        name: Option<&str>,
+        pipeline_options: PipelineOptions,
+        existing_tree: Option<&DocumentTree>,
+    ) -> Result<super::indexed_document::IndexedDocument> {
+        let retry = &self.config.llm.retry;
+        let max_attempts = retry.max_attempts;
+
+        for attempt in 0..max_attempts {
+            if self.is_cancelled() {
+                return Err(Error::Config("Operation cancelled".into()));
+            }
+
+            let result = if let Some(tree) = existing_tree {
+                self.indexer
+                    .index_with_existing(source, name, pipeline_options.clone(), Some(tree))
+                    .await
+            } else {
+                self.indexer.index(source, name, pipeline_options.clone()).await
+            };
+
+            match result {
+                Ok(doc) => return Ok(doc),
+                Err(e) if e.is_retryable() && attempt + 1 < max_attempts => {
+                    let delay = retry.delay_for_attempt(attempt);
+                    tracing::warn!(
+                        attempt,
+                        max_attempts,
+                        ?delay,
+                        "Retryable error indexing, retrying: {e}"
+                    );
+                    tokio::time::sleep(delay).await;
+                }
+                Err(e) => return Err(e),
+            }
+        }
+
+        // Unreachable: loop always returns via Ok/Err branches
+        unreachable!()
     }
 
     /// Convert an [`IndexedDocument`] to an [`IndexItem`] and persist it.
@@ -401,11 +456,29 @@ impl Engine {
 
             // Lazy graph rebuild: only rebuild if index() marked it dirty
             if self.config.graph.enabled {
+                let fail_count = self.graph_fail_count.load(Ordering::Relaxed);
+                let should_try = fail_count < GRAPH_REBUILD_MAX_FAILURES;
+
                 if self.graph_dirty.swap(false, Ordering::Relaxed) {
-                    if let Err(e) = self.rebuild_graph().await {
-                        tracing::warn!("Graph rebuild failed: {e}");
-                        // Re-mark dirty so next query retries
-                        self.graph_dirty.store(true, Ordering::Relaxed);
+                    if should_try {
+                        if let Err(e) = self.rebuild_graph().await {
+                            let count = self.graph_fail_count.fetch_add(1, Ordering::Relaxed) + 1;
+                            tracing::warn!(
+                                count,
+                                "Graph rebuild failed: {e}"
+                            );
+                            // Re-mark dirty so next query retries
+                            self.graph_dirty.store(true, Ordering::Relaxed);
+                        } else {
+                            // Reset failure count on success
+                            self.graph_fail_count.store(0, Ordering::Relaxed);
+                        }
+                    } else {
+                        tracing::warn!(
+                            count = fail_count,
+                            "Skipping graph rebuild after {} consecutive failures",
+                            fail_count
+                        );
                     }
                 }
                 // Load (now up-to-date) graph for retrieval
@@ -809,6 +882,7 @@ impl Clone for Engine {
             workspace: self.workspace.clone(),
             metrics_hub: Arc::clone(&self.metrics_hub),
             graph_dirty: Arc::clone(&self.graph_dirty),
+            graph_fail_count: Arc::clone(&self.graph_fail_count),
             cancelled: Arc::clone(&self.cancelled),
             active_ops: Arc::clone(&self.active_ops),
         }

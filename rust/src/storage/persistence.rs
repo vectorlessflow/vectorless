@@ -22,6 +22,13 @@ use crate::error::Result;
 /// Current format version for persisted documents.
 const FORMAT_VERSION: u32 = 1;
 
+/// Current schema version for `PersistedDocument`.
+///
+/// Increment this when the document structure changes in a
+/// backward-incompatible way (e.g. field renames, new required fields).
+/// Old documents will be detected and logged as stale on load.
+const SCHEMA_VERSION: u32 = 1;
+
 /// Metadata for a persisted document.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DocumentMeta {
@@ -203,6 +210,11 @@ impl DocumentMeta {
 /// A persisted document index containing tree and metadata.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PersistedDocument {
+    /// Schema version — incremented on backward-incompatible changes.
+    /// Old documents default to `0` via serde when the field is absent.
+    #[serde(default)]
+    pub schema_version: u32,
+
     /// Document metadata.
     pub meta: DocumentMeta,
 
@@ -222,6 +234,7 @@ impl PersistedDocument {
     /// Create a new persisted document.
     pub fn new(meta: DocumentMeta, tree: DocumentTree) -> Self {
         Self {
+            schema_version: SCHEMA_VERSION,
             meta,
             tree,
             pages: Vec::new(),
@@ -441,6 +454,19 @@ pub fn load_document_with_options(
     let doc: PersistedDocument = serde_json::from_value(wrapper.payload)
         .map_err(|e| Error::Parse(format!("Failed to deserialize document: {}", e)))?;
 
+    // Check schema version — warn on stale documents, fail on future versions
+    if doc.schema_version == 0 {
+        tracing::warn!(
+            doc_id = %doc.meta.id,
+            "Document was created before schema versioning — consider re-indexing"
+        );
+    } else if doc.schema_version > SCHEMA_VERSION {
+        return Err(Error::Parse(format!(
+            "Document schema version {} is newer than supported {} — please upgrade vectorless",
+            doc.schema_version, SCHEMA_VERSION
+        )));
+    }
+
     Ok(doc)
 }
 
@@ -618,6 +644,19 @@ pub fn load_document_from_bytes_with_options(
     // Deserialize Value to target type
     let doc: PersistedDocument = serde_json::from_value(wrapper.payload)
         .map_err(|e| Error::Parse(format!("Failed to deserialize document: {}", e)))?;
+
+    // Check schema version
+    if doc.schema_version == 0 {
+        tracing::warn!(
+            doc_id = %doc.meta.id,
+            "Document was created before schema versioning — consider re-indexing"
+        );
+    } else if doc.schema_version > SCHEMA_VERSION {
+        return Err(Error::Parse(format!(
+            "Document schema version {} is newer than supported {} — please upgrade vectorless",
+            doc.schema_version, SCHEMA_VERSION
+        )));
+    }
 
     Ok(doc)
 }

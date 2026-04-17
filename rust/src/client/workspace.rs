@@ -68,11 +68,22 @@ impl WorkspaceClient {
 
     /// Save a document to the workspace.
     ///
+    /// If a document with the same ID already exists, logs a warning
+    /// (this can happen during concurrent indexing of the same source).
+    ///
     /// # Errors
     ///
     /// Returns an error if the workspace write fails.
     pub async fn save(&self, doc: &PersistedDocument) -> Result<()> {
         let doc_id = doc.meta.id.clone();
+
+        if self.workspace.contains(&doc_id).await {
+            tracing::warn!(
+                doc_id,
+                name = %doc.meta.name,
+                "Overwriting existing document — possible concurrent index of the same source"
+            );
+        }
 
         self.workspace.add(doc).await?;
 
