@@ -11,6 +11,7 @@ use async_trait::async_trait;
 use tracing::{info, warn};
 
 use crate::llm::LlmClient;
+use crate::llm::memo::MemoStore;
 use crate::retrieval::content::{ContentAggregator, ContentAggregatorConfig};
 use crate::retrieval::pipeline::{FailurePolicy, PipelineContext, RetrievalStage, StageOutcome};
 use crate::retrieval::sufficiency::{LlmJudge, SufficiencyChecker, ThresholdChecker};
@@ -46,6 +47,8 @@ pub struct EvaluateStage {
     use_llm_judge: bool,
     /// Optional content aggregator for precision-focused aggregation.
     content_aggregator: Option<ContentAggregator>,
+    /// Memo store for caching LLM judgments.
+    memo_store: Option<MemoStore>,
 }
 
 impl Default for EvaluateStage {
@@ -63,13 +66,24 @@ impl EvaluateStage {
             max_iterations: 3,
             use_llm_judge: false,
             content_aggregator: None,
+            memo_store: None,
         }
     }
 
     /// Add LLM judge for more accurate sufficiency checking.
     pub fn with_llm_judge(mut self, client: LlmClient) -> Self {
-        self.llm_judge = Some(LlmJudge::new(Box::new(client)));
+        let mut judge = LlmJudge::new(Box::new(client));
+        if let Some(ref store) = self.memo_store {
+            judge = judge.with_memo_store(store.clone());
+        }
+        self.llm_judge = Some(judge);
         self.use_llm_judge = true;
+        self
+    }
+
+    /// Add memo store for caching LLM judgments.
+    pub fn with_memo_store(mut self, store: MemoStore) -> Self {
+        self.memo_store = Some(store);
         self
     }
 

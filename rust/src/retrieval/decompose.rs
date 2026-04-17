@@ -48,6 +48,8 @@ use serde::{Deserialize, Serialize};
 use tracing::{debug, info};
 
 use crate::llm::{LlmClient, LlmExecutor};
+use crate::llm::memo::{MemoKey, MemoOpType, MemoStore, MemoValue};
+use crate::utils::fingerprint::Fingerprint;
 
 /// Sub-query resulting from decomposition.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -204,6 +206,8 @@ pub struct QueryDecomposer {
     llm_client: Option<LlmClient>,
     /// LLM executor for unified execution (optional).
     llm_executor: Option<LlmExecutor>,
+    /// Memo store for caching decomposition results.
+    memo_store: Option<MemoStore>,
 }
 
 impl Default for QueryDecomposer {
@@ -219,6 +223,7 @@ impl QueryDecomposer {
             config,
             llm_client: None,
             llm_executor: None,
+            memo_store: None,
         }
     }
 
@@ -234,6 +239,12 @@ impl QueryDecomposer {
         self
     }
 
+    /// Add memo store for caching decomposition results.
+    pub fn with_memo_store(mut self, store: MemoStore) -> Self {
+        self.memo_store = Some(store);
+        self
+    }
+
     /// Decompose a query into sub-queries.
     pub async fn decompose(&self, query: &str) -> crate::error::Result<DecompositionResult> {
         // Check if decomposition is needed
@@ -244,23 +255,71 @@ impl QueryDecomposer {
             ));
         }
 
+        // Check memo cache
+        if let Some(ref store) = self.memo_store {
+            let cache_key = Self::build_cache_key(query);
+            if let Some(cached) = store.get(&cache_key) {
+                if let Some(result) = Self::deserialize_decomposition(&cached) {
+                    tracing::debug!("Memo cache hit for query decomposition");
+                    return Ok(result);
+                }
+            }
+        }
+
         info!("Decomposing complex query: '{}'", query);
 
         // Try LLM-based decomposition if available
-        if self.config.use_llm && (self.llm_client.is_some() || self.llm_executor.is_some()) {
+        let result = if self.config.use_llm && (self.llm_client.is_some() || self.llm_executor.is_some()) {
             match self.llm_decompose(query).await {
-                Ok(result) => return Ok(result),
+                Ok(result) => result,
                 Err(e) => {
                     debug!(
                         "LLM decomposition failed, falling back to rule-based: {}",
                         e
                     );
+                    self.rule_based_decompose(query)?
                 }
+            }
+        } else {
+            self.rule_based_decompose(query)?
+        };
+
+        // Cache the result
+        if let Some(ref store) = self.memo_store {
+            let cache_key = Self::build_cache_key(query);
+            if let Ok(json) = serde_json::to_value(&CachedDecomposition::from_result(&result)) {
+                store.put_with_tokens(
+                    cache_key,
+                    MemoValue::Json(json),
+                    (query.len() / 4) as u64,
+                );
             }
         }
 
-        // Fall back to rule-based decomposition
-        self.rule_based_decompose(query)
+        Ok(result)
+    }
+
+    /// Build a cache key for query decomposition.
+    fn build_cache_key(query: &str) -> MemoKey {
+        let fp = Fingerprint::from_str(query);
+        MemoKey {
+            op_type: MemoOpType::QueryDecomposition,
+            input_fp: fp,
+            model_id: None,
+            version: 1,
+            context_fp: Fingerprint::zero(),
+        }
+    }
+
+    /// Deserialize a DecompositionResult from a MemoValue.
+    fn deserialize_decomposition(value: &MemoValue) -> Option<DecompositionResult> {
+        match value {
+            MemoValue::Json(json) => {
+                let cached: CachedDecomposition = serde_json::from_value(json.clone()).ok()?;
+                Some(cached.into_result())
+            }
+            _ => None,
+        }
     }
 
     /// Check if a query should be decomposed.
@@ -534,6 +593,72 @@ fn extract_json(text: &str) -> String {
         }
     }
     text.to_string()
+}
+
+/// Serializable decomposition result for caching.
+///
+/// Only caches the essential fields needed to reconstruct a DecompositionResult.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct CachedSubQuery {
+    text: String,
+    priority: u8,
+    query_type: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct CachedDecomposition {
+    original: String,
+    sub_queries: Vec<CachedSubQuery>,
+    was_decomposed: bool,
+    reason: String,
+}
+
+impl CachedDecomposition {
+    fn from_result(result: &DecompositionResult) -> Self {
+        Self {
+            original: result.original.clone(),
+            sub_queries: result
+                .sub_queries
+                .iter()
+                .map(|sq| CachedSubQuery {
+                    text: sq.text.clone(),
+                    priority: sq.priority,
+                    query_type: format!("{:?}", sq.query_type),
+                })
+                .collect(),
+            was_decomposed: result.was_decomposed,
+            reason: result.reason.clone(),
+        }
+    }
+
+    fn into_result(self) -> DecompositionResult {
+        let sub_queries: Vec<SubQuery> = self
+            .sub_queries
+            .into_iter()
+            .map(|csq| SubQuery {
+                text: csq.text,
+                priority: csq.priority,
+                query_type: match csq.query_type.as_str() {
+                    "Fact" => SubQueryType::Fact,
+                    "Explanation" => SubQueryType::Explanation,
+                    "Comparison" => SubQueryType::Comparison,
+                    "Synthesis" => SubQueryType::Synthesis,
+                    "Navigation" => SubQueryType::Navigation,
+                    _ => SubQueryType::Fact,
+                },
+                complexity: SubQueryComplexity::Simple,
+                depends_on: vec![],
+                path_constraint: None,
+            })
+            .collect();
+        DecompositionResult {
+            original: self.original,
+            sub_queries,
+            was_decomposed: self.was_decomposed,
+            reason: self.reason,
+            total_complexity: 0.5,
+        }
+    }
 }
 
 /// Result aggregator for multi-turn retrieval.

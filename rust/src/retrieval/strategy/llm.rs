@@ -15,6 +15,8 @@ use super::super::types::{NavigationDecision, QueryComplexity};
 use super::r#trait::{NodeEvaluation, RetrievalStrategy, StrategyCapabilities};
 use crate::document::{DocumentTree, NodeId, TocView};
 use crate::llm::LlmClient;
+use crate::llm::memo::{MemoKey, MemoOpType, MemoStore, MemoValue};
+use crate::utils::fingerprint::Fingerprint;
 
 /// LLM response for a single node in batch evaluation.
 #[derive(Debug, Clone, Deserialize)]
@@ -85,6 +87,8 @@ pub struct LlmStrategy {
     toc_view: TocView,
     /// Whether to include ToC context in prompts.
     include_toc: bool,
+    /// Memo store for caching LLM evaluations.
+    memo_store: Option<MemoStore>,
 }
 
 impl LlmStrategy {
@@ -96,6 +100,7 @@ impl LlmStrategy {
             batch_system_prompt: Self::default_batch_system_prompt(),
             toc_view: TocView::new(),
             include_toc: true,
+            memo_store: None,
         }
     }
 
@@ -113,6 +118,15 @@ impl LlmStrategy {
     /// Enable or disable ToC context in prompts.
     pub fn with_toc_context(mut self, include: bool) -> Self {
         self.include_toc = include;
+        self
+    }
+
+    /// Add memo store for caching LLM evaluations.
+    ///
+    /// When enabled, node evaluations are cached based on prompt fingerprints,
+    /// avoiding redundant LLM calls for the same node+query combinations.
+    pub fn with_memo_store(mut self, store: MemoStore) -> Self {
+        self.memo_store = Some(store);
         self
     }
 
@@ -254,6 +268,50 @@ Rules:
         )
     }
 
+    /// Build a memo cache key for a single node evaluation.
+    fn node_eval_cache_key(&self, node_id: NodeId, context: &RetrievalContext) -> MemoKey {
+        let mut parts = String::new();
+        parts.push_str(&context.query);
+        parts.push_str(":node:");
+        // Use the NodeId debug representation as part of the fingerprint
+        parts.push_str(&format!("{:?}", node_id));
+        let fp = Fingerprint::from_str(&parts);
+        MemoKey {
+            op_type: MemoOpType::NodeEvaluation,
+            input_fp: fp,
+            model_id: None,
+            version: 1,
+            context_fp: Fingerprint::zero(),
+        }
+    }
+
+    /// Build a memo cache key for a batch evaluation.
+    fn batch_eval_cache_key(&self, node_ids: &[NodeId], context: &RetrievalContext) -> MemoKey {
+        let mut parts = String::new();
+        parts.push_str(&context.query);
+        parts.push_str(":batch:");
+        for id in node_ids {
+            parts.push_str(&format!("{:?}", id));
+            parts.push(',');
+        }
+        let fp = Fingerprint::from_str(&parts);
+        MemoKey {
+            op_type: MemoOpType::NodeEvaluation,
+            input_fp: fp,
+            model_id: None,
+            version: 1,
+            context_fp: Fingerprint::zero(),
+        }
+    }
+
+    /// Try to deserialize a cached NodeEvaluation from MemoValue.
+    fn deserialize_cached_eval(&self, value: &MemoValue) -> Option<NodeEvaluation> {
+        match value {
+            MemoValue::Json(json) => serde_json::from_value(json.clone()).ok(),
+            _ => None,
+        }
+    }
+
     /// Parse LLM response to evaluation for a single node.
     fn parse_response(
         &self,
@@ -391,9 +449,20 @@ impl RetrievalStrategy for LlmStrategy {
         node_id: NodeId,
         context: &RetrievalContext,
     ) -> NodeEvaluation {
+        // Check memo cache
+        if let Some(ref store) = self.memo_store {
+            let cache_key = self.node_eval_cache_key(node_id, context);
+            if let Some(cached) = store.get(&cache_key) {
+                if let Some(eval) = self.deserialize_cached_eval(&cached) {
+                    tracing::debug!("Memo cache hit for node evaluation (node={:?})", node_id);
+                    return eval;
+                }
+            }
+        }
+
         let prompt = self.build_prompt(tree, node_id, context);
 
-        match self.client.complete(&self.system_prompt, &prompt).await {
+        let result = match self.client.complete(&self.system_prompt, &prompt).await {
             Ok(response) => self.parse_response(&response, tree, node_id),
             Err(e) => {
                 tracing::warn!("LLM evaluation failed: {}", e);
@@ -407,7 +476,18 @@ impl RetrievalStrategy for LlmStrategy {
                     reasoning: Some(format!("LLM error: {}", e)),
                 }
             }
+        };
+
+        // Cache the result
+        if let Some(ref store) = self.memo_store {
+            let cache_key = self.node_eval_cache_key(node_id, context);
+            if let Ok(json) = serde_json::to_value(&result) {
+                let tokens = (prompt.len() / 4) as u64;
+                store.put_with_tokens(cache_key, MemoValue::Json(json), tokens);
+            }
         }
+
+        result
     }
 
     async fn evaluate_nodes(
@@ -425,10 +505,28 @@ impl RetrievalStrategy for LlmStrategy {
             return vec![self.evaluate_node(tree, node_ids[0], context).await];
         }
 
+        // Check memo cache for the entire batch
+        if let Some(ref store) = self.memo_store {
+            let cache_key = self.batch_eval_cache_key(node_ids, context);
+            if let Some(cached) = store.get(&cache_key) {
+                if let MemoValue::Json(json) = &cached {
+                    if let Ok(evals) = serde_json::from_value::<Vec<NodeEvaluation>>(json.clone()) {
+                        if evals.len() == node_ids.len() {
+                            tracing::debug!(
+                                "Memo cache hit for batch evaluation ({} nodes)",
+                                node_ids.len()
+                            );
+                            return evals;
+                        }
+                    }
+                }
+            }
+        }
+
         // Batch: send all nodes in one LLM call
         let prompt = self.build_batch_prompt(tree, node_ids, context);
 
-        match self
+        let result = match self
             .client
             .complete(&self.batch_system_prompt, &prompt)
             .await
@@ -447,7 +545,18 @@ impl RetrievalStrategy for LlmStrategy {
                 }
                 results
             }
+        };
+
+        // Cache the batch result
+        if let Some(ref store) = self.memo_store {
+            let cache_key = self.batch_eval_cache_key(node_ids, context);
+            if let Ok(json) = serde_json::to_value(&result) {
+                let tokens = (prompt.len() / 4) as u64;
+                store.put_with_tokens(cache_key, MemoValue::Json(json), tokens);
+            }
         }
+
+        result
     }
 
     fn name(&self) -> &'static str {

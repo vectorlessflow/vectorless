@@ -13,6 +13,7 @@ use super::content::ContentAggregatorConfig;
 use super::pipeline::RetrievalOrchestrator;
 use super::retriever::{CostEstimate, Retriever, RetrieverError, RetrieverResult};
 use super::stages::{AnalyzeStage, EvaluateStage, PlanStage, SearchStage};
+use super::strategy::LlmStrategy;
 use super::stream::RetrieveEventReceiver;
 use super::types::{RetrieveOptions, RetrieveResponse};
 use crate::document::{DocumentTree, ReasoningIndex};
@@ -112,6 +113,9 @@ impl PipelineRetriever {
         if let Some(ref client) = self.llm_client {
             analyze_stage = analyze_stage.with_llm_client(client.clone());
         }
+        if let Some(ref store) = self.memo_store {
+            analyze_stage = analyze_stage.with_memo_store(store.clone());
+        }
         orchestrator = orchestrator.stage(analyze_stage);
 
         // Add plan stage
@@ -133,11 +137,21 @@ impl PipelineRetriever {
             }
 
             search_stage = search_stage.with_pilot(Arc::new(pilot));
+
+            // Create LLM strategy with memo store for node evaluation
+            let mut llm_strategy = LlmStrategy::new(client.clone());
+            if let Some(ref store) = self.memo_store {
+                llm_strategy = llm_strategy.with_memo_store(store.clone());
+            }
+            search_stage = search_stage.with_llm_strategy(llm_strategy);
         }
         orchestrator = orchestrator.stage(search_stage);
 
         // Add evaluate stage with optional content aggregator
         let mut evaluate_stage = EvaluateStage::new();
+        if let Some(ref store) = self.memo_store {
+            evaluate_stage = evaluate_stage.with_memo_store(store.clone());
+        }
         if let Some(ref client) = self.llm_client {
             evaluate_stage = evaluate_stage.with_llm_judge(client.clone());
         }

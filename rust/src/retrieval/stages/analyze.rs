@@ -13,6 +13,7 @@ use async_trait::async_trait;
 use tracing::info;
 
 use crate::document::{DocumentTree, NodeId, TocView};
+use crate::llm::memo::MemoStore;
 use crate::retrieval::complexity::ComplexityDetector;
 use crate::retrieval::decompose::{DecompositionConfig, QueryDecomposer};
 use crate::retrieval::pipeline::{FailurePolicy, PipelineContext, RetrievalStage, StageOutcome};
@@ -101,6 +102,8 @@ pub struct AnalyzeStage {
     enable_decomposition: bool,
     /// Complexity threshold for triggering decomposition.
     decomposition_threshold: f32,
+    /// Memo store for caching LLM results.
+    memo_store: Option<MemoStore>,
 }
 
 impl Default for AnalyzeStage {
@@ -119,6 +122,7 @@ impl AnalyzeStage {
             query_decomposer: None,
             enable_decomposition: false,
             decomposition_threshold: 0.6,
+            memo_store: None,
         }
     }
 
@@ -144,17 +148,30 @@ impl AnalyzeStage {
         self
     }
 
+    /// Add memo store for caching complexity detection and decomposition results.
+    pub fn with_memo_store(mut self, store: MemoStore) -> Self {
+        self.memo_store = Some(store);
+        self
+    }
+
     /// Enable query decomposition and LLM-based complexity detection.
     pub fn with_llm_client(mut self, client: crate::llm::LlmClient) -> Self {
         // Use LLM client for complexity detection
-        self.complexity_detector = ComplexityDetector::with_llm_client(client.clone());
+        let mut detector = ComplexityDetector::with_llm_client(client.clone());
+        if let Some(ref store) = self.memo_store {
+            detector = detector.with_memo_store(store.clone());
+        }
+        self.complexity_detector = detector;
+
         // Also enable query decomposition
+        let mut decomposer = QueryDecomposer::new(DecompositionConfig::default()).with_llm_client(client);
+        if let Some(ref store) = self.memo_store {
+            decomposer = decomposer.with_memo_store(store.clone());
+        }
         if self.query_decomposer.is_none() {
-            self.query_decomposer =
-                Some(QueryDecomposer::new(DecompositionConfig::default()).with_llm_client(client));
-        } else if let Some(ref mut decomposer) = self.query_decomposer {
-            *decomposer =
-                QueryDecomposer::new(DecompositionConfig::default()).with_llm_client(client);
+            self.query_decomposer = Some(decomposer);
+        } else if let Some(ref mut d) = self.query_decomposer {
+            *d = decomposer;
         }
         self.enable_decomposition = true;
         self

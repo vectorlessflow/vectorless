@@ -10,7 +10,7 @@ use super::super::types::{NavigationDecision, QueryComplexity};
 use crate::document::{DocumentTree, NodeId};
 
 /// Result of evaluating a single node.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct NodeEvaluation {
     /// Relevance score (0.0 - 1.0).
     pub score: f32,
