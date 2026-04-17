@@ -39,7 +39,6 @@ pub struct LlmPool {
     index: Arc<LlmClient>,
     retrieval: Arc<LlmClient>,
     pilot: Arc<LlmClient>,
-    concurrency: Option<Arc<ConcurrencyController>>,
 }
 
 impl LlmPool {
@@ -104,50 +103,12 @@ impl LlmPool {
                     .with_shared_openai_client(openai_client.clone())
                     .with_shared_fallback(fallback_chain.clone()),
             ),
-            concurrency: Some(controller),
         }
     }
 
     /// Create a pool with default configurations.
     pub fn from_defaults() -> Self {
         Self::from_config(&crate::config::LlmConfig::default())
-    }
-
-    /// Add concurrency control to all clients in the pool.
-    pub fn with_concurrency(mut self, controller: ConcurrencyController) -> Self {
-        let arc = Arc::new(controller);
-        self.concurrency = Some(arc.clone());
-        self.index = Arc::new(
-            LlmClient::new(self.index.config().clone()).with_shared_concurrency(arc.clone()),
-        );
-        self.retrieval = Arc::new(
-            LlmClient::new(self.retrieval().config().clone()).with_shared_concurrency(arc.clone()),
-        );
-        self.pilot = Arc::new(
-            LlmClient::new(self.pilot.config().clone()).with_shared_concurrency(arc.clone()),
-        );
-        self
-    }
-
-    /// Add concurrency control from an existing Arc.
-    pub fn with_shared_concurrency(mut self, controller: Arc<ConcurrencyController>) -> Self {
-        self.concurrency = Some(controller.clone());
-        self.index = Arc::new(
-            LlmClient::new(self.index.config().clone()).with_shared_concurrency(controller.clone()),
-        );
-        self.retrieval = Arc::new(
-            LlmClient::new(self.retrieval().config().clone())
-                .with_shared_concurrency(controller.clone()),
-        );
-        self.pilot = Arc::new(
-            LlmClient::new(self.pilot.config().clone()).with_shared_concurrency(controller.clone()),
-        );
-        self
-    }
-
-    /// Get the concurrency controller (if any).
-    pub fn concurrency(&self) -> Option<&ConcurrencyController> {
-        self.concurrency.as_deref()
     }
 
     /// Get the index client.
@@ -177,14 +138,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_pool_creation() {
-        let pool = LlmPool::from_defaults();
-
-        assert!(!pool.index().config().model.is_empty() || pool.index().config().model.is_empty());
-        // Default pool creates clients (models may be empty from defaults)
-    }
-
-    #[test]
     fn test_pool_from_config() {
         let config = crate::config::LlmConfig::new("gpt-4o")
             .with_api_key("sk-test")
@@ -197,15 +150,5 @@ mod tests {
         assert_eq!(pool.retrieval().config().model, "gpt-4o");
         assert_eq!(pool.pilot().config().model, "gpt-4o");
         assert_eq!(pool.index().config().max_tokens, 100);
-    }
-
-    #[test]
-    fn test_pool_with_concurrency() {
-        use crate::throttle::ConcurrencyConfig;
-
-        let controller = ConcurrencyController::new(ConcurrencyConfig::conservative());
-        let pool = LlmPool::from_defaults().with_concurrency(controller);
-
-        assert!(pool.concurrency().is_some());
     }
 }

@@ -204,7 +204,6 @@ impl LlmExecutor {
     ) -> LlmResult<String> {
         let mut attempts = 0;
         let mut current_model = self.config.model.clone();
-        let current_endpoint = self.config.endpoint.clone();
         let mut fallback_history: Vec<FallbackStep> = vec![];
         let mut total_attempts_including_fallback = 0;
 
@@ -231,13 +230,12 @@ impl LlmExecutor {
             debug!(
                 attempt = attempts,
                 model = %current_model,
-                endpoint = %current_endpoint,
                 "Executing LLM request"
             );
 
             // Step 2: Execute the request
             let result = self
-                .do_request(&current_model, &current_endpoint, system, user, max_tokens)
+                .do_request(&current_model, system, user, max_tokens)
                 .await;
 
             match result {
@@ -287,7 +285,7 @@ impl LlmExecutor {
                                     &mut fallback_history,
                                     current_model.clone(),
                                     Some(next_model.clone()),
-                                    current_endpoint.clone(),
+                                    self.config.endpoint.clone(),
                                     None,
                                     error.to_string(),
                                 );
@@ -347,7 +345,6 @@ impl LlmExecutor {
     async fn do_request(
         &self,
         model: &str,
-        endpoint: &str,
         system: &str,
         user: &str,
         max_tokens: Option<u16>,
@@ -366,7 +363,7 @@ impl LlmExecutor {
 
         info!(
             "LLM request → endpoint: {}, model: {}, system: {} chars, user: {} chars",
-            endpoint,
+            self.config.endpoint,
             model,
             system.len(),
             user.len()
