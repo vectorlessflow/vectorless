@@ -164,7 +164,8 @@ impl AnalyzeStage {
         self.complexity_detector = detector;
 
         // Also enable query decomposition
-        let mut decomposer = QueryDecomposer::new(DecompositionConfig::default()).with_llm_client(client);
+        let mut decomposer =
+            QueryDecomposer::new(DecompositionConfig::default()).with_llm_client(client);
         if let Some(ref store) = self.memo_store {
             decomposer = decomposer.with_memo_store(store.clone());
         }

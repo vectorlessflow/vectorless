@@ -61,8 +61,8 @@ use async_openai::types::chat::{
 use super::config::LlmConfig;
 use super::error::{LlmError, LlmResult};
 use super::fallback::{FallbackChain, FallbackStep};
-use crate::metrics::MetricsHub;
 use super::throttle::ConcurrencyController;
+use crate::metrics::MetricsHub;
 
 /// Unified executor for LLM operations.
 ///

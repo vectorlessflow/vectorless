@@ -8,8 +8,8 @@ use std::sync::Arc;
 use super::client::LlmClient;
 use super::config::LlmConfig;
 use super::fallback::{FallbackChain, FallbackConfig};
-use crate::metrics::MetricsHub;
 use super::throttle::ConcurrencyController;
+use crate::metrics::MetricsHub;
 
 /// Pool of LLM clients for different purposes.
 ///

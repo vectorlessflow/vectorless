@@ -6,8 +6,8 @@
 use async_trait::async_trait;
 
 use crate::document::{DocumentTree, NodeId};
-use crate::llm::{LlmClient, LlmResult};
 use crate::llm::memo::{MemoKey, MemoStore, MemoValue};
+use crate::llm::{LlmClient, LlmResult};
 use crate::utils::fingerprint::Fingerprint;
 
 /// Configuration for summary strategies.
