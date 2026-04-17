@@ -91,9 +91,6 @@ pub struct Engine {
     /// Workspace client for persistence.
     workspace: Option<WorkspaceClient>,
 
-    /// Workspace root directory (for checkpoint path).
-    workspace_dir: Option<std::path::PathBuf>,
-
     /// Event emitter.
     events: EventEmitter,
 
@@ -115,7 +112,6 @@ impl Engine {
         events: EventEmitter,
     ) -> Result<Self> {
         let config = Arc::new(config);
-        let workspace_dir = Some(std::path::PathBuf::from(&config.storage.workspace_dir));
 
         // Attach event emitter to indexer
         let indexer = indexer.with_events(events.clone());
@@ -134,7 +130,6 @@ impl Engine {
             indexer,
             retriever,
             workspace: Some(workspace_client),
-            workspace_dir,
             events,
             metrics_hub: Arc::new(MetricsHub::with_defaults()),
         })
@@ -626,7 +621,7 @@ impl Engine {
         format: crate::index::parse::DocumentFormat,
     ) -> PipelineOptions {
         use crate::index::SummaryStrategy;
-        let checkpoint_dir = self.workspace_dir.as_ref().map(|p| p.join("checkpoints"));
+        let checkpoint_dir = Some(std::path::PathBuf::from(&self.config.storage.workspace_dir).join("checkpoints"));
         PipelineOptions {
             mode: match format {
                 crate::index::parse::DocumentFormat::Markdown => crate::index::IndexMode::Markdown,
@@ -767,7 +762,6 @@ impl Clone for Engine {
             indexer: self.indexer.clone(),
             retriever: self.retriever.clone(),
             workspace: self.workspace.clone(),
-            workspace_dir: self.workspace_dir.clone(),
             events: self.events.clone(),
             metrics_hub: Arc::clone(&self.metrics_hub),
         }
