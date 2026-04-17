@@ -6,7 +6,7 @@
 use pyo3::exceptions::PyException;
 use pyo3::prelude::*;
 
-use ::vectorless::error::Error as RustError;
+use ::vectorless::Error as RustError;
 
 /// Python exception for vectorless errors.
 #[pyclass(extends = PyException, subclass)]

@@ -5,7 +5,7 @@
 
 use pyo3::prelude::*;
 
-use ::vectorless::metrics::{
+use ::vectorless::{
     LlmMetricsReport, MetricsReport, PilotMetricsReport, RetrievalMetricsReport,
 };
 

@@ -5,7 +5,7 @@
 
 use pyo3::prelude::*;
 
-use ::vectorless::graph::{
+use ::vectorless::{
     DocumentGraph, DocumentGraphNode, EdgeEvidence, GraphEdge, WeightedKeyword,
 };
 

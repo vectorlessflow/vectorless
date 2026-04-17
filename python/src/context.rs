@@ -5,7 +5,7 @@
 
 use pyo3::prelude::*;
 
-use ::vectorless::client::{DocumentFormat, IndexContext, IndexMode, IndexOptions, QueryContext};
+use ::vectorless::{DocumentFormat, IndexContext, IndexMode, IndexOptions, QueryContext};
 
 use super::error::VectorlessError;
 

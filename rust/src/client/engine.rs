@@ -139,94 +139,31 @@ impl Engine {
     // Document Indexing
     // ============================================================
 
-    /// Index a document.
+    /// Index one or more documents.
     ///
     /// Accepts an [`IndexContext`] that specifies the source (file path,
-    /// content string, or bytes) and indexing options.
+    /// directory, content string, or bytes) and indexing options.
+    /// Multiple sources are indexed in parallel.
     ///
     /// Returns an [`IndexResult`] containing the indexed document metadata.
-    ///
-    /// # Example
-    ///
-    /// ```rust,no_run
-    /// use vectorless::client::{EngineBuilder, IndexContext};
-    ///
-    /// # #[tokio::main]
-    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let engine = EngineBuilder::new()
-    ///     .with_key("sk-...")
-    ///     .with_model("gpt-4o")
-    ///     .build()
-    ///     .await?;
-    ///
-    /// let result = engine.index(IndexContext::from_path("./doc.md")).await?;
-    /// println!("Indexed: {}", result.doc_id().unwrap());
-    /// # Ok(())
-    /// # }
-    /// ```
     pub async fn index(&self, ctx: IndexContext) -> Result<IndexResult> {
         if ctx.is_empty() {
-            return Err(Error::Config("No document sources provided".to_string()));
+            return Err(Error::Config("No document sources provided".into()));
         }
 
-        // Single source: no need for concurrency overhead
-        if ctx.sources.len() == 1 {
-            let source = &ctx.sources[0];
-            let (items, failed) = self
-                .process_source(source, &ctx.options, ctx.name.as_deref())
-                .await;
-            if items.is_empty() && !failed.is_empty() {
-                return Err(Error::Config(format!(
-                    "All {} source(s) failed to index: {}",
-                    failed.len(),
-                    failed
-                        .iter()
-                        .map(|f| format!("{} ({})", f.source, f.error))
-                        .collect::<Vec<_>>()
-                        .join("; ")
-                )));
-            }
-            if !items.is_empty() {
-                if let Err(e) = self.rebuild_graph().await {
-                    tracing::warn!("Graph rebuild failed: {}", e);
-                }
-            }
-            return Ok(IndexResult::with_partial(items, failed));
-        }
-
-        // Multiple sources: parallel indexing
         let concurrency = self
             .config
             .concurrency
             .max_concurrent_requests
             .min(ctx.sources.len());
 
-        let results: Vec<(Vec<IndexItem>, Vec<FailedItem>)> =
-            futures::stream::iter(ctx.sources.iter().cloned())
-                .map(|source| {
-                    let options = ctx.options.clone();
-                    let name = ctx.name.clone();
-                    let engine = self.clone();
-                    async move {
-                        engine
-                            .process_source(&source, &options, name.as_deref())
-                            .await
-                    }
-                })
-                .buffer_unordered(concurrency)
-                .collect()
-                .await;
-
-        let mut items = Vec::new();
-        let mut failed = Vec::new();
-        for (ok, err) in results {
-            items.extend(ok);
-            failed.extend(err);
-        }
+        let (items, failed) = self
+            .process_sources(&ctx.sources, &ctx.options, ctx.name.as_deref(), concurrency)
+            .await;
 
         if items.is_empty() && !failed.is_empty() {
             return Err(Error::Config(format!(
-                "All {} source(s) failed to index: {}",
+                "All {} source(s) failed: {}",
                 failed.len(),
                 failed
                     .iter()
@@ -236,14 +173,45 @@ impl Engine {
             )));
         }
 
-        // Rebuild document graph after successful batch index
         if !items.is_empty() {
             if let Err(e) = self.rebuild_graph().await {
-                tracing::warn!("Graph rebuild failed: {}", e);
+                tracing::warn!("Graph rebuild failed: {e}");
             }
         }
 
         Ok(IndexResult::with_partial(items, failed))
+    }
+
+    /// Process multiple sources in parallel.
+    async fn process_sources(
+        &self,
+        sources: &[IndexSource],
+        options: &super::types::IndexOptions,
+        name: Option<&str>,
+        concurrency: usize,
+    ) -> (Vec<IndexItem>, Vec<FailedItem>) {
+        let results: Vec<(Vec<IndexItem>, Vec<FailedItem>)> =
+            futures::stream::iter(sources.iter().cloned())
+                .map(|source| {
+                    let options = options.clone();
+                    let name = name.map(str::to_string);
+                    let engine = self.clone();
+                    async move {
+                        engine.process_source(&source, &options, name.as_deref()).await
+                    }
+                })
+                .buffer_unordered(concurrency)
+                .collect()
+                .await;
+
+        results.into_iter().fold(
+            (Vec::new(), Vec::new()),
+            |(mut items, mut failed), (ok, err)| {
+                items.extend(ok);
+                failed.extend(err);
+                (items, failed)
+            },
+        )
     }
 
     /// Process a single source — resolve action and index.

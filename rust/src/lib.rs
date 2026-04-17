@@ -75,7 +75,9 @@ pub use document::{
 };
 
 // Graph
-pub use graph::DocumentGraph;
+pub use graph::{
+    DocumentGraph, DocumentGraphNode, EdgeEvidence, GraphEdge, WeightedKeyword,
+};
 
 // Events
 pub use events::{EventEmitter, IndexEvent, QueryEvent, WorkspaceEvent};

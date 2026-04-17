@@ -8,7 +8,7 @@ use pyo3_async_runtimes::tokio::future_into_py;
 use std::sync::Arc;
 use tokio::runtime::Runtime;
 
-use ::vectorless::client::{Engine, EngineBuilder, IndexContext, QueryContext};
+use ::vectorless::{Engine, EngineBuilder, IndexContext, QueryContext};
 
 use super::config::PyConfig;
 use super::context::{PyIndexContext, PyQueryContext};
