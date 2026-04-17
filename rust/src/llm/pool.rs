@@ -7,6 +7,7 @@ use std::sync::Arc;
 
 use super::client::LlmClient;
 use super::config::LlmConfig;
+use super::fallback::{FallbackChain, FallbackConfig};
 use crate::throttle::ConcurrencyController;
 
 /// Pool of LLM clients for different purposes.
@@ -49,13 +50,7 @@ impl LlmPool {
     pub fn from_config(config: &crate::config::LlmConfig) -> Self {
         let api_key = config.api_key.clone();
         let endpoint = config.endpoint.clone().unwrap_or_default();
-        let retry = super::config::RetryConfig {
-            max_attempts: config.retry.max_attempts,
-            initial_delay_ms: config.retry.initial_delay_ms,
-            max_delay_ms: config.retry.max_delay_ms,
-            multiplier: config.retry.multiplier,
-            retry_on_rate_limit: config.retry.retry_on_rate_limit,
-        };
+        let retry = config.retry.to_runtime_config();
 
         let make_config = |slot: &crate::config::SlotConfig| -> LlmConfig {
             LlmConfig {
@@ -68,25 +63,46 @@ impl LlmPool {
             }
         };
 
-        // Build clients first
-        let index = Arc::new(LlmClient::new(make_config(&config.index)));
-        let retrieval = Arc::new(LlmClient::new(make_config(&config.retrieval)));
-        let pilot = Arc::new(LlmClient::new(make_config(&config.pilot)));
+        // Build a single shared async-openai client (reuses connection pool)
+        let openai_base = if endpoint.is_empty() {
+            "https://api.openai.com/v1".to_string()
+        } else {
+            endpoint.clone()
+        };
+        let openai_client = Arc::new(
+            async_openai::Client::with_config(
+                async_openai::config::OpenAIConfig::new()
+                    .with_api_key(api_key.clone().unwrap_or_default())
+                    .with_api_base(openai_base),
+            ),
+        );
 
         // Attach shared throttle controller from config
         let concurrency_config = config.throttle.to_runtime_config();
         let controller = Arc::new(ConcurrencyController::new(concurrency_config));
 
+        // Attach shared fallback chain from config
+        let fallback_config: FallbackConfig = config.fallback.clone().into();
+        let fallback_chain = Arc::new(FallbackChain::new(fallback_config));
+
         Self {
             index: Arc::new(
-                LlmClient::new(index.config().clone()).with_shared_concurrency(controller.clone()),
+                LlmClient::new(make_config(&config.index))
+                    .with_shared_concurrency(controller.clone())
+                    .with_shared_openai_client(openai_client.clone())
+                    .with_shared_fallback(fallback_chain.clone()),
             ),
             retrieval: Arc::new(
-                LlmClient::new(retrieval.config().clone())
-                    .with_shared_concurrency(controller.clone()),
+                LlmClient::new(make_config(&config.retrieval))
+                    .with_shared_concurrency(controller.clone())
+                    .with_shared_openai_client(openai_client.clone())
+                    .with_shared_fallback(fallback_chain.clone()),
             ),
             pilot: Arc::new(
-                LlmClient::new(pilot.config().clone()).with_shared_concurrency(controller.clone()),
+                LlmClient::new(make_config(&config.pilot))
+                    .with_shared_concurrency(controller.clone())
+                    .with_shared_openai_client(openai_client.clone())
+                    .with_shared_fallback(fallback_chain.clone()),
             ),
             concurrency: Some(controller),
         }

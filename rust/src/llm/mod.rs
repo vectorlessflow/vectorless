@@ -34,7 +34,6 @@ mod error;
 mod executor;
 mod fallback;
 mod pool;
-mod retry;
 
 pub use client::LlmClient;
 pub use error::LlmResult;

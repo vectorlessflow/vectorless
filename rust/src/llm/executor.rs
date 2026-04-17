@@ -53,6 +53,11 @@ use std::sync::Arc;
 use std::time::Duration;
 use tracing::{debug, info, warn};
 
+use async_openai::types::chat::{
+    ChatCompletionRequestSystemMessage, ChatCompletionRequestUserMessage,
+    CreateChatCompletionRequestArgs,
+};
+
 use super::config::LlmConfig;
 use super::error::{LlmError, LlmResult};
 use super::fallback::{FallbackChain, FallbackStep};
@@ -65,6 +70,8 @@ use crate::throttle::ConcurrencyController;
 pub struct LlmExecutor {
     /// LLM configuration.
     config: LlmConfig,
+    /// Reusable async-openai client (created once, shared via Arc).
+    openai_client: Arc<async_openai::Client<async_openai::config::OpenAIConfig>>,
     /// Throttle controller (optional).
     throttle: Option<Arc<ConcurrencyController>>,
     /// Fallback chain (optional).
@@ -78,6 +85,7 @@ impl std::fmt::Debug for LlmExecutor {
             .field("endpoint", &self.config.endpoint)
             .field("has_throttle", &self.throttle.is_some())
             .field("has_fallback", &self.fallback.is_some())
+            .field("has_openai_client", &true)
             .finish()
     }
 }
@@ -85,11 +93,27 @@ impl std::fmt::Debug for LlmExecutor {
 impl LlmExecutor {
     /// Create a new executor with the given configuration.
     pub fn new(config: LlmConfig) -> Self {
+        let openai_client = Self::build_openai_client(&config);
         Self {
             config,
+            openai_client: Arc::new(openai_client),
             throttle: None,
             fallback: None,
         }
+    }
+
+    /// Build the async-openai client from config.
+    fn build_openai_client(config: &LlmConfig) -> async_openai::Client<async_openai::config::OpenAIConfig> {
+        let api_key = config.api_key.clone().unwrap_or_default();
+        let endpoint = if config.endpoint.is_empty() {
+            "https://api.openai.com/v1".to_string()
+        } else {
+            config.endpoint.clone()
+        };
+        let openai_config = async_openai::config::OpenAIConfig::new()
+            .with_api_key(api_key)
+            .with_api_base(endpoint);
+        async_openai::Client::with_config(openai_config)
     }
 
     /// Create an executor with default configuration.
@@ -123,6 +147,15 @@ impl LlmExecutor {
     /// Add fallback chain from an existing Arc.
     pub fn with_shared_fallback(mut self, chain: Arc<FallbackChain>) -> Self {
         self.fallback = Some(chain);
+        self
+    }
+
+    /// Replace the async-openai client (used when pool reconfigures clients).
+    pub fn with_openai_client(
+        mut self,
+        client: Arc<async_openai::Client<async_openai::config::OpenAIConfig>>,
+    ) -> Self {
+        self.openai_client = client;
         self
     }
 
@@ -297,19 +330,11 @@ impl LlmExecutor {
             return false;
         }
 
-        match error {
-            LlmError::RateLimit(_) => self.config.retry.retry_on_rate_limit,
-            LlmError::Timeout(_) => true,
-            LlmError::Api(msg) => {
-                let msg_lower = msg.to_lowercase();
-                msg_lower.contains("rate limit")
-                    || msg_lower.contains("429")
-                    || msg_lower.contains("503")
-                    || msg_lower.contains("502")
-                    || msg_lower.contains("timeout")
-                    || msg_lower.contains("overloaded")
-            }
-            _ => false,
+        // Use unified retryable check, with rate-limit override
+        if matches!(error, LlmError::RateLimit(_)) {
+            self.config.retry.retry_on_rate_limit
+        } else {
+            error.is_retryable()
         }
     }
 
@@ -327,66 +352,28 @@ impl LlmExecutor {
         user: &str,
         max_tokens: Option<u16>,
     ) -> LlmResult<String> {
-        use async_openai::{
-            Client,
-            config::OpenAIConfig,
-            types::chat::{
-                ChatCompletionRequestSystemMessage, ChatCompletionRequestUserMessage,
-                CreateChatCompletionRequestArgs,
-            },
-        };
-
-        let api_key = self.config.api_key.clone().ok_or_else(|| {
-            LlmError::Config(
-                "No API key configured. Call .with_key(\"sk-...\") when building the engine."
-                    .to_string(),
-            )
-        })?;
-
-        let openai_config = OpenAIConfig::new()
-            .with_api_key(api_key)
-            .with_api_base(endpoint);
-
-        let client = Client::with_config(openai_config);
-
-        // Truncate user prompt if too long
-        let truncated = self.truncate_prompt(user);
-
-        // Build request based on whether max_tokens is specified
-        let request = if let Some(_tokens) = max_tokens {
-            CreateChatCompletionRequestArgs::default()
-                .model(model)
-                .messages([
-                    ChatCompletionRequestSystemMessage::from(system).into(),
-                    ChatCompletionRequestUserMessage::from(truncated).into(),
-                ])
-                .temperature(self.config.temperature)
-                // .max_tokens(tokens)
-                .build()
-        } else {
-            CreateChatCompletionRequestArgs::default()
-                .model(model)
-                .messages([
-                    ChatCompletionRequestSystemMessage::from(system).into(),
-                    ChatCompletionRequestUserMessage::from(truncated).into(),
-                ])
-                .temperature(self.config.temperature)
-                .build()
-        };
-
-        let request =
-            request.map_err(|e| LlmError::Request(format!("Failed to build request: {}", e)))?;
+        // Build request
+        let request = CreateChatCompletionRequestArgs::default()
+            .model(model)
+            .messages([
+                ChatCompletionRequestSystemMessage::from(system).into(),
+                ChatCompletionRequestUserMessage::from(user).into(),
+            ])
+            .temperature(self.config.temperature)
+            .max_tokens(max_tokens.unwrap_or(self.config.max_tokens as u16))
+            .build()
+            .map_err(|e| LlmError::Request(format!("Failed to build request: {}", e)))?;
 
         info!(
             "LLM request → endpoint: {}, model: {}, system: {} chars, user: {} chars",
             endpoint,
             model,
             system.len(),
-            truncated.len()
+            user.len()
         );
 
         let request_start = std::time::Instant::now();
-        let response = client.chat().create(request).await.map_err(|e| {
+        let response = self.openai_client.chat().create(request).await.map_err(|e| {
             let msg = e.to_string();
             LlmError::from_api_message(&msg)
         })?;
@@ -411,17 +398,6 @@ impl LlmExecutor {
         );
 
         Ok(content)
-    }
-
-    /// Truncate a prompt to a reasonable length.
-    fn truncate_prompt<'a>(&self, text: &'a str) -> &'a str {
-        // Roughly 4 chars per token, limit to ~30k chars
-        const MAX_CHARS: usize = 30000;
-        if text.len() > MAX_CHARS {
-            &text[..MAX_CHARS]
-        } else {
-            text
-        }
     }
 }
 

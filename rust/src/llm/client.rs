@@ -113,6 +113,15 @@ impl LlmClient {
         self
     }
 
+    /// Replace the async-openai client with a shared instance (reuses connection pool).
+    pub fn with_shared_openai_client(
+        mut self,
+        client: Arc<async_openai::Client<async_openai::config::OpenAIConfig>>,
+    ) -> Self {
+        self.executor = self.executor.with_openai_client(client);
+        self
+    }
+
     /// Add fallback chain for error recovery.
     ///
     /// # Example

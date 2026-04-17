@@ -352,6 +352,17 @@ impl RetryConfig {
         let delay_ms = delay_ms.min(self.max_delay_ms as f64);
         std::time::Duration::from_millis(delay_ms as u64)
     }
+
+    /// Convert to the runtime retry config (used by llm module).
+    pub fn to_runtime_config(&self) -> crate::llm::config::RetryConfig {
+        crate::llm::config::RetryConfig {
+            max_attempts: self.max_attempts,
+            initial_delay_ms: self.initial_delay_ms,
+            max_delay_ms: self.max_delay_ms,
+            multiplier: self.multiplier,
+            retry_on_rate_limit: self.retry_on_rate_limit,
+        }
+    }
 }
 
 /// Throttle / rate-limiting configuration.
