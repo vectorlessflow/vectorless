@@ -1,74 +1,117 @@
 // Copyright (c) 2026 vectorless developers
 // SPDX-License-Identifier: Apache-2.0
 
-//! Unified LLM configuration including pool, retry, throttle, and fallback.
+//! Unified LLM configuration.
 //!
 //! This module consolidates all LLM-related configuration into a single
-//! cohesive structure that maps directly to the TOML configuration file.
+//! cohesive structure. Users configure via [`EngineBuilder`](crate::client::EngineBuilder)
+//! for simple cases, or construct [`LlmConfig`] programmatically for advanced use.
 
 use serde::{Deserialize, Serialize};
 
-/// Unified LLM configuration.
+/// Unified LLM configuration — the single entry point for all LLM settings.
 ///
-/// Contains all settings for LLM operations including:
-/// - Pool of clients for different purposes (index, retrieval, pilot)
-/// - Retry behavior
-/// - Throttle/rate limiting
-/// - Fallback strategy
+/// Contains:
+/// - Global credentials (`api_key`, `model`, `endpoint`)
+/// - Per-purpose slot overrides (`index`, `retrieval`, `pilot`)
+/// - Infrastructure settings (`retry`, `throttle`, `fallback`)
+///
+/// # Simple usage (via EngineBuilder)
+///
+/// ```rust,no_run
+/// use vectorless::client::EngineBuilder;
+///
+/// # async fn example() -> Result<(), vectorless::BuildError> {
+/// let engine = EngineBuilder::new()
+///     .with_key("sk-...")
+///     .with_model("gpt-4o")
+///     .with_endpoint("https://api.openai.com/v1")
+///     .build()
+///     .await?;
+/// # Ok(())
+/// # }
+/// ```
+///
+/// # Advanced usage (programmatic config)
+///
+/// ```rust,ignore
+/// use vectorless::config::{Config, LlmConfig, SlotConfig};
+///
+/// let config = Config::new().with_llm(
+///     LlmConfig::new("gpt-4o")
+///         .with_api_key("sk-...")
+///         .with_endpoint("https://api.openai.com/v1")
+///         .with_index(SlotConfig::fast().with_model("gpt-4o-mini"))
+///         .with_retrieval(SlotConfig::default().with_max_tokens(200))
+/// );
+/// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LlmPoolConfig {
-    /// Index client configuration (used during document indexing).
-    #[serde(default, alias = "summary")]
-    pub index: LlmClientConfig,
-
-    /// Retrieval client configuration.
-    #[serde(default)]
-    pub retrieval: LlmClientConfig,
-
-    /// Pilot client configuration.
-    #[serde(default = "default_pilot_config")]
-    pub pilot: LlmClientConfig,
-
-    /// Default API key (used if not specified per-client).
+pub struct LlmConfig {
+    /// API key — **required**.
     #[serde(default)]
     pub api_key: Option<String>,
 
-    /// Default API endpoint (used if not specified per-client).
+    /// Default model name — **required**.
+    ///
+    /// Individual slots can override this via [`SlotConfig::model`].
+    #[serde(default)]
+    pub model: String,
+
+    /// API endpoint URL — **required**.
     #[serde(default)]
     pub endpoint: Option<String>,
 
-    /// Retry configuration.
+    /// Index slot (document indexing / summarization).
+    /// Uses a fast, cost-effective model by default.
+    #[serde(default)]
+    pub index: SlotConfig,
+
+    /// Retrieval slot (document navigation).
+    /// Uses the default model.
+    #[serde(default = "default_retrieval_slot")]
+    pub retrieval: SlotConfig,
+
+    /// Pilot slot (navigation guidance).
+    /// Uses a fast model with higher token limit.
+    #[serde(default = "default_pilot_slot")]
+    pub pilot: SlotConfig,
+
+    /// Retry configuration for LLM calls.
     #[serde(default)]
     pub retry: RetryConfig,
 
-    /// Throttle/rate limiting configuration.
+    /// Throttle / rate-limiting configuration.
     #[serde(default)]
     pub throttle: ThrottleConfig,
 
-    /// Fallback configuration.
+    /// Fallback configuration for error recovery.
     #[serde(default)]
     pub fallback: FallbackConfig,
 }
 
-fn default_pilot_config() -> LlmClientConfig {
-    LlmClientConfig {
-        max_tokens: 300,
-        temperature: 0.0,
-        ..Default::default()
+fn default_retrieval_slot() -> SlotConfig {
+    SlotConfig {
+        max_tokens: 100,
+        ..SlotConfig::default()
     }
 }
 
-impl Default for LlmPoolConfig {
+fn default_pilot_slot() -> SlotConfig {
+    SlotConfig {
+        max_tokens: 300,
+        ..SlotConfig::default()
+    }
+}
+
+impl Default for LlmConfig {
     fn default() -> Self {
         Self {
-            index: LlmClientConfig::default(),
-            retrieval: LlmClientConfig {
-                max_tokens: 100,
-                ..Default::default()
-            },
-            pilot: default_pilot_config(),
             api_key: None,
+            model: String::new(),
             endpoint: None,
+            index: SlotConfig::default(),
+            retrieval: default_retrieval_slot(),
+            pilot: default_pilot_slot(),
             retry: RetryConfig::default(),
             throttle: ThrottleConfig::default(),
             fallback: FallbackConfig::default(),
@@ -76,71 +119,100 @@ impl Default for LlmPoolConfig {
     }
 }
 
-impl LlmPoolConfig {
-    /// Create a new LLM pool config with defaults.
-    pub fn new() -> Self {
-        Self::default()
+impl LlmConfig {
+    /// Create a new config with a specific model.
+    pub fn new(model: impl Into<String>) -> Self {
+        Self {
+            model: model.into(),
+            ..Self::default()
+        }
     }
 
-    /// Set the default API key.
-    pub fn with_api_key(mut self, api_key: impl Into<String>) -> Self {
-        self.api_key = Some(api_key.into());
+    /// Set the API key.
+    pub fn with_api_key(mut self, key: impl Into<String>) -> Self {
+        self.api_key = Some(key.into());
         self
     }
 
-    /// Get API key for a specific client (client-specific or default).
-    pub fn get_api_key_for(&self, client_key: Option<&str>) -> Option<String> {
-        // First check client-specific key
-        if let Some(key) = client_key {
-            if let Some(ref k) = self.index.api_key {
-                if self.index.model == key {
-                    return Some(k.clone());
-                }
-            }
-            if let Some(ref k) = self.retrieval.api_key {
-                if self.retrieval.model == key {
-                    return Some(k.clone());
-                }
-            }
-            if let Some(ref k) = self.pilot.api_key {
-                if self.pilot.model == key {
-                    return Some(k.clone());
-                }
-            }
-        }
-        // Fall back to default
-        self.api_key.clone()
+    /// Set the default model.
+    pub fn with_model(mut self, model: impl Into<String>) -> Self {
+        self.model = model.into();
+        self
     }
 
-    /// Resolve API key: client-specific first, then default.
-    pub fn resolved_api_key(&self, client: &LlmClientConfig) -> Option<String> {
-        client.api_key.clone().or_else(|| self.api_key.clone())
+    /// Set the endpoint URL.
+    pub fn with_endpoint(mut self, url: impl Into<String>) -> Self {
+        self.endpoint = Some(url.into());
+        self
     }
 
-    /// Resolve endpoint: client-specific first, then default.
-    pub fn resolved_endpoint(&self, client: &LlmClientConfig) -> String {
-        if !client.endpoint.is_empty() {
-            client.endpoint.clone()
-        } else {
-            self.endpoint.clone().unwrap_or_default()
-        }
+    /// Set the index slot configuration.
+    pub fn with_index(mut self, slot: SlotConfig) -> Self {
+        self.index = slot;
+        self
+    }
+
+    /// Set the retrieval slot configuration.
+    pub fn with_retrieval(mut self, slot: SlotConfig) -> Self {
+        self.retrieval = slot;
+        self
+    }
+
+    /// Set the pilot slot configuration.
+    pub fn with_pilot(mut self, slot: SlotConfig) -> Self {
+        self.pilot = slot;
+        self
+    }
+
+    /// Set the retry configuration.
+    pub fn with_retry(mut self, retry: RetryConfig) -> Self {
+        self.retry = retry;
+        self
+    }
+
+    /// Set the throttle configuration.
+    pub fn with_throttle(mut self, throttle: ThrottleConfig) -> Self {
+        self.throttle = throttle;
+        self
+    }
+
+    /// Set the fallback configuration.
+    pub fn with_fallback(mut self, fallback: FallbackConfig) -> Self {
+        self.fallback = fallback;
+        self
+    }
+
+    /// Convenience: set max concurrent requests (delegates to throttle).
+    pub fn with_max_concurrent(mut self, max: usize) -> Self {
+        self.throttle.max_concurrent_requests = max;
+        self
+    }
+
+    /// Resolve the effective model for a given slot.
+    ///
+    /// Returns the slot-specific model if set, otherwise the default model.
+    pub fn resolve_model(&self, slot: &SlotConfig) -> String {
+        slot.model.clone().unwrap_or_else(|| self.model.clone())
     }
 }
 
-/// Individual LLM client configuration.
+/// Per-purpose LLM slot override.
+///
+/// Controls model selection and generation parameters for a specific
+/// LLM usage (index, retrieval, or pilot).
+///
+/// - `model`: Override the default model (optional).
+/// - `max_tokens`: Maximum response tokens.
+/// - `temperature`: Generation temperature.
+///
+/// `api_key` and `endpoint` are **not** here — they are always inherited
+/// from the parent [`LlmConfig`].
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LlmClientConfig {
-    /// Model name.
+pub struct SlotConfig {
+    /// Override the default model for this purpose.
+    /// When `None`, uses [`LlmConfig::model`].
     #[serde(default)]
-    pub model: String,
-
-    /// API endpoint.
-    #[serde(default)]
-    pub endpoint: String,
-
-    /// API key (optional, falls back to default).
-    #[serde(default)]
-    pub api_key: Option<String>,
+    pub model: Option<String>,
 
     /// Maximum tokens for responses.
     #[serde(default = "default_max_tokens")]
@@ -159,39 +231,33 @@ fn default_temperature() -> f32 {
     0.0
 }
 
-impl Default for LlmClientConfig {
+impl Default for SlotConfig {
     fn default() -> Self {
         Self {
-            model: String::new(),
-            endpoint: String::new(),
-            api_key: None,
+            model: None,
             max_tokens: default_max_tokens(),
             temperature: default_temperature(),
         }
     }
 }
 
-impl LlmClientConfig {
-    /// Create a new client config with defaults.
+impl SlotConfig {
+    /// Create a new slot config with defaults.
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Set the model.
+    /// Create a "fast" preset (low tokens).
+    pub fn fast() -> Self {
+        Self {
+            max_tokens: 100,
+            ..Self::default()
+        }
+    }
+
+    /// Set the model override.
     pub fn with_model(mut self, model: impl Into<String>) -> Self {
-        self.model = model.into();
-        self
-    }
-
-    /// Set the endpoint.
-    pub fn with_endpoint(mut self, endpoint: impl Into<String>) -> Self {
-        self.endpoint = endpoint.into();
-        self
-    }
-
-    /// Set the API key.
-    pub fn with_api_key(mut self, api_key: impl Into<String>) -> Self {
-        self.api_key = Some(api_key.into());
+        self.model = Some(model.into());
         self
     }
 
@@ -200,7 +266,17 @@ impl LlmClientConfig {
         self.max_tokens = max_tokens;
         self
     }
+
+    /// Set the temperature.
+    pub fn with_temperature(mut self, temperature: f32) -> Self {
+        self.temperature = temperature;
+        self
+    }
 }
+
+// ============================================================
+// Supporting configuration types
+// ============================================================
 
 /// Retry configuration for LLM calls.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -276,9 +352,20 @@ impl RetryConfig {
         let delay_ms = delay_ms.min(self.max_delay_ms as f64);
         std::time::Duration::from_millis(delay_ms as u64)
     }
+
+    /// Convert to the runtime retry config (used by llm module).
+    pub fn to_runtime_config(&self) -> crate::llm::config::RetryConfig {
+        crate::llm::config::RetryConfig {
+            max_attempts: self.max_attempts,
+            initial_delay_ms: self.initial_delay_ms,
+            max_delay_ms: self.max_delay_ms,
+            multiplier: self.multiplier,
+            retry_on_rate_limit: self.retry_on_rate_limit,
+        }
+    }
 }
 
-/// Throttle/rate limiting configuration.
+/// Throttle / rate-limiting configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ThrottleConfig {
     /// Maximum concurrent LLM API calls.
@@ -334,38 +421,16 @@ impl ThrottleConfig {
         self.requests_per_minute = rpm;
         self
     }
-}
 
-/// Fallback configuration for LLM calls.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FallbackConfig {
-    /// Enable fallback mechanism.
-    #[serde(default = "default_true")]
-    pub enabled: bool,
-
-    /// Fallback models in priority order.
-    #[serde(default = "default_fallback_models")]
-    pub models: Vec<String>,
-
-    /// Fallback endpoints (optional).
-    #[serde(default)]
-    pub endpoints: Vec<String>,
-
-    /// Behavior on rate limit error.
-    #[serde(default)]
-    pub on_rate_limit: FallbackBehavior,
-
-    /// Behavior on timeout error.
-    #[serde(default)]
-    pub on_timeout: FallbackBehavior,
-
-    /// Behavior when all attempts fail.
-    #[serde(default)]
-    pub on_all_failed: OnAllFailedBehavior,
-}
-
-fn default_fallback_models() -> Vec<String> {
-    vec!["gpt-4o-mini".to_string(), "glm-4-flash".to_string()]
+    /// Convert to the runtime concurrency config.
+    pub fn to_runtime_config(&self) -> crate::llm::throttle::ConcurrencyConfig {
+        crate::llm::throttle::ConcurrencyConfig {
+            max_concurrent_requests: self.max_concurrent_requests,
+            requests_per_minute: self.requests_per_minute,
+            enabled: self.enabled,
+            semaphore_enabled: self.semaphore_enabled,
+        }
+    }
 }
 
 /// Fallback behavior on errors.
@@ -394,6 +459,70 @@ pub enum OnAllFailedBehavior {
     ReturnCache,
 }
 
+/// Fallback configuration for error recovery.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FallbackConfig {
+    /// Enable fallback mechanism.
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+
+    /// Fallback models in priority order.
+    #[serde(default = "default_fallback_models")]
+    pub models: Vec<String>,
+
+    /// Fallback endpoints (optional).
+    #[serde(default)]
+    pub endpoints: Vec<String>,
+
+    /// Behavior on rate limit error.
+    #[serde(default)]
+    pub on_rate_limit: FallbackBehavior,
+
+    /// Behavior on timeout error.
+    #[serde(default)]
+    pub on_timeout: FallbackBehavior,
+
+    /// Behavior when all attempts fail.
+    #[serde(default)]
+    pub on_all_failed: OnAllFailedBehavior,
+
+    /// Maximum retry attempts.
+    #[serde(default = "default_max_retries")]
+    pub max_retries: usize,
+
+    /// Initial retry delay in milliseconds.
+    #[serde(default = "default_initial_retry_delay_ms")]
+    pub initial_retry_delay_ms: u64,
+
+    /// Maximum retry delay in milliseconds.
+    #[serde(default = "default_max_retry_delay_ms")]
+    pub max_retry_delay_ms: u64,
+
+    /// Retry delay multiplier (exponential backoff).
+    #[serde(default = "default_retry_multiplier")]
+    pub retry_multiplier: f32,
+}
+
+fn default_fallback_models() -> Vec<String> {
+    vec!["gpt-4o-mini".to_string(), "glm-4-flash".to_string()]
+}
+
+fn default_max_retries() -> usize {
+    3
+}
+
+fn default_initial_retry_delay_ms() -> u64 {
+    1000
+}
+
+fn default_max_retry_delay_ms() -> u64 {
+    30000
+}
+
+fn default_retry_multiplier() -> f32 {
+    2.0
+}
+
 impl Default for FallbackConfig {
     fn default() -> Self {
         Self {
@@ -403,6 +532,10 @@ impl Default for FallbackConfig {
             on_rate_limit: FallbackBehavior::default(),
             on_timeout: FallbackBehavior::default(),
             on_all_failed: OnAllFailedBehavior::default(),
+            max_retries: default_max_retries(),
+            initial_retry_delay_ms: default_initial_retry_delay_ms(),
+            max_retry_delay_ms: default_max_retry_delay_ms(),
+            retry_multiplier: default_retry_multiplier(),
         }
     }
 }
@@ -413,12 +546,36 @@ impl FallbackConfig {
         Self::default()
     }
 
-    /// Disable fallback.
+    /// Disable fallback entirely.
     pub fn disabled() -> Self {
         Self {
             enabled: false,
             ..Self::default()
         }
+    }
+
+    /// Set fallback models.
+    pub fn with_models(mut self, models: Vec<String>) -> Self {
+        self.models = models;
+        self
+    }
+
+    /// Set behavior on rate limit.
+    pub fn with_on_rate_limit(mut self, behavior: FallbackBehavior) -> Self {
+        self.on_rate_limit = behavior;
+        self
+    }
+
+    /// Calculate retry delay with exponential backoff.
+    pub fn calculate_retry_delay(&self, attempt: usize) -> std::time::Duration {
+        let delay_ms = if attempt == 0 {
+            self.initial_retry_delay_ms
+        } else {
+            let delay =
+                self.initial_retry_delay_ms as f32 * self.retry_multiplier.powi(attempt as i32);
+            delay.min(self.max_retry_delay_ms as f32) as u64
+        };
+        std::time::Duration::from_millis(delay_ms)
     }
 }
 
@@ -427,30 +584,66 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_llm_pool_config_defaults() {
-        let config = LlmPoolConfig::default();
-        assert!(config.index.model.is_empty());
-        assert!(config.retrieval.model.is_empty());
-        assert!(config.pilot.model.is_empty());
-        assert_eq!(config.retry.max_attempts, 3);
-        assert_eq!(config.throttle.max_concurrent_requests, 10);
+    fn test_llm_config_defaults() {
+        let config = LlmConfig::default();
+        assert!(config.api_key.is_none());
+        assert!(config.model.is_empty());
+        assert!(config.endpoint.is_none());
+        assert!(config.index.model.is_none());
+        assert!(config.retrieval.model.is_none());
+        assert!(config.pilot.model.is_none());
+        assert_eq!(config.index.max_tokens, 200);
+        assert_eq!(config.retrieval.max_tokens, 100);
+        assert_eq!(config.pilot.max_tokens, 300);
+    }
+
+    #[test]
+    fn test_llm_config_builder() {
+        let config = LlmConfig::new("gpt-4o")
+            .with_api_key("sk-test")
+            .with_endpoint("https://api.openai.com/v1")
+            .with_index(SlotConfig::fast().with_model("gpt-4o-mini"));
+
+        assert_eq!(config.model, "gpt-4o");
+        assert_eq!(config.api_key, Some("sk-test".to_string()));
+        assert_eq!(config.index.model, Some("gpt-4o-mini".to_string()));
+        assert_eq!(config.index.max_tokens, 100);
+    }
+
+    #[test]
+    fn test_resolve_model() {
+        let config =
+            LlmConfig::new("gpt-4o").with_retrieval(SlotConfig::new().with_model("gpt-4o-mini"));
+
+        assert_eq!(config.resolve_model(&config.index), "gpt-4o");
+        assert_eq!(config.resolve_model(&config.retrieval), "gpt-4o-mini");
+        assert_eq!(config.resolve_model(&config.pilot), "gpt-4o");
+    }
+
+    #[test]
+    fn test_slot_config_fast() {
+        let slot = SlotConfig::fast();
+        assert_eq!(slot.max_tokens, 100);
     }
 
     #[test]
     fn test_retry_delay_calculation() {
         let config = RetryConfig::default();
-
-        // Initial delay
         assert_eq!(
             config.delay_for_attempt(0),
             std::time::Duration::from_millis(500)
         );
-
-        // Second attempt: 500 * 2 = 1000
         assert_eq!(
             config.delay_for_attempt(1),
             std::time::Duration::from_millis(1000)
         );
+    }
+
+    #[test]
+    fn test_throttle_config_defaults() {
+        let config = ThrottleConfig::default();
+        assert_eq!(config.max_concurrent_requests, 10);
+        assert_eq!(config.requests_per_minute, 500);
     }
 
     #[test]

@@ -12,7 +12,7 @@ use tracing::{debug, info, warn};
 
 use crate::document::{DocumentTree, NodeId};
 use crate::llm::{LlmClient, LlmExecutor};
-use crate::memo::{MemoKey, MemoStore, MemoValue};
+use crate::llm::memo::{MemoKey, MemoStore, MemoValue};
 use crate::utils::fingerprint::Fingerprint;
 
 use super::budget::BudgetController;
@@ -442,8 +442,8 @@ impl LlmPilot {
     fn decision_to_cached_value(
         &self,
         decision: &PilotDecision,
-    ) -> crate::memo::PilotDecisionValue {
-        crate::memo::PilotDecisionValue {
+    ) -> crate::llm::memo::PilotDecisionValue {
+        crate::llm::memo::PilotDecisionValue {
             selected_idx: decision
                 .ranked_candidates
                 .first()
@@ -457,7 +457,7 @@ impl LlmPilot {
     /// Convert a cached value back to a PilotDecision.
     fn cached_value_to_decision(
         &self,
-        value: crate::memo::PilotDecisionValue,
+        value: crate::llm::memo::PilotDecisionValue,
         candidates: &[super::parser::CandidateInfo],
         point: InterventionPoint,
     ) -> PilotDecision {

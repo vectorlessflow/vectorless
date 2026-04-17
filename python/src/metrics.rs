@@ -5,9 +5,7 @@
 
 use pyo3::prelude::*;
 
-use ::vectorless::metrics::{
-    LlmMetricsReport, MetricsReport, PilotMetricsReport, RetrievalMetricsReport,
-};
+use ::vectorless::{LlmMetricsReport, MetricsReport, PilotMetricsReport, RetrievalMetricsReport};
 
 /// LLM usage metrics report.
 #[pyclass(name = "LlmMetricsReport")]
@@ -358,11 +356,6 @@ impl PyMetricsReport {
     /// Total estimated cost in USD.
     fn total_cost_usd(&self) -> f64 {
         self.inner.total_cost_usd()
-    }
-
-    /// Overall success rate (0.0 - 1.0).
-    fn overall_success_rate(&self) -> f64 {
-        self.inner.overall_success_rate()
     }
 
     fn __repr__(&self) -> String {

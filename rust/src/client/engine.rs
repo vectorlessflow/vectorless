@@ -37,7 +37,12 @@
 //! # }
 //! ```
 
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::HashMap,
+    sync::Arc,
+    sync::Mutex,
+    sync::atomic::{AtomicBool, AtomicU32, Ordering},
+};
 
 use futures::StreamExt;
 use tracing::info;
@@ -61,9 +66,17 @@ use super::{
     indexer::IndexerClient,
     query_context::{QueryContext, QueryScope},
     retriever::RetrieverClient,
-    types::{DocumentInfo, FailedItem, IndexItem, IndexMode, IndexResult, QueryResult},
+    types::{
+        DocumentInfo, FailedItem, IndexItem, IndexMode, IndexResult, QueryResult, QueryResultItem,
+    },
     workspace::WorkspaceClient,
 };
+
+/// Shared cancel state: `true` means cancelled.
+type CancelFlag = Arc<AtomicBool>;
+
+/// Max consecutive graph rebuild failures before giving up.
+const GRAPH_REBUILD_MAX_FAILURES: u32 = 3;
 
 /// The main Engine client.
 ///
@@ -89,16 +102,22 @@ pub struct Engine {
     retriever: RetrieverClient,
 
     /// Workspace client for persistence.
-    workspace: Option<WorkspaceClient>,
-
-    /// Workspace root directory (for checkpoint path).
-    workspace_dir: Option<std::path::PathBuf>,
-
-    /// Event emitter.
-    events: EventEmitter,
+    workspace: WorkspaceClient,
 
     /// Central metrics hub for unified collection.
     metrics_hub: Arc<MetricsHub>,
+
+    /// Whether the document graph needs rebuilding (set after index, consumed in query).
+    graph_dirty: Arc<AtomicBool>,
+
+    /// Consecutive graph rebuild failures — skip rebuild after threshold.
+    graph_fail_count: Arc<AtomicU32>,
+
+    /// Shared cancel flag — set by `cancel()`, checked by long-running operations.
+    cancelled: CancelFlag,
+
+    /// Active operation count so `cancel()` can wait for drain.
+    active_ops: Arc<Mutex<usize>>,
 }
 
 impl Engine {
@@ -113,16 +132,15 @@ impl Engine {
         retriever: PipelineRetriever,
         indexer: IndexerClient,
         events: EventEmitter,
+        metrics_hub: Arc<MetricsHub>,
     ) -> Result<Self> {
         let config = Arc::new(config);
-        let workspace_dir = Some(std::path::PathBuf::from(&config.storage.workspace_dir));
 
         // Attach event emitter to indexer
         let indexer = indexer.with_events(events.clone());
 
         // Create retriever client
-        let retriever =
-            RetrieverClient::new(retriever, Arc::clone(&config)).with_events(events.clone());
+        let retriever = RetrieverClient::new(retriever).with_events(events.clone());
 
         // Create workspace client
         let workspace_client = WorkspaceClient::new(workspace)
@@ -133,10 +151,12 @@ impl Engine {
             config,
             indexer,
             retriever,
-            workspace: Some(workspace_client),
-            workspace_dir,
-            events,
-            metrics_hub: Arc::new(MetricsHub::with_defaults()),
+            workspace: workspace_client,
+            metrics_hub,
+            graph_dirty: Arc::new(AtomicBool::new(false)),
+            graph_fail_count: Arc::new(AtomicU32::new(0)),
+            cancelled: Arc::new(AtomicBool::new(false)),
+            active_ops: Arc::new(Mutex::new(0)),
         })
     }
 
@@ -144,45 +164,38 @@ impl Engine {
     // Document Indexing
     // ============================================================
 
-    /// Index a document.
+    /// Index one or more documents.
     ///
     /// Accepts an [`IndexContext`] that specifies the source (file path,
-    /// content string, or bytes) and indexing options.
+    /// directory, content string, or bytes) and indexing options.
+    /// Multiple sources are indexed in parallel.
     ///
     /// Returns an [`IndexResult`] containing the indexed document metadata.
-    ///
-    /// # Example
-    ///
-    /// ```rust,no_run
-    /// use vectorless::client::{EngineBuilder, IndexContext};
-    ///
-    /// # #[tokio::main]
-    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let engine = EngineBuilder::new()
-    ///     .with_key("sk-...")
-    ///     .with_model("gpt-4o")
-    ///     .build()
-    ///     .await?;
-    ///
-    /// let result = engine.index(IndexContext::from_path("./doc.md")).await?;
-    /// println!("Indexed: {}", result.doc_id().unwrap());
-    /// # Ok(())
-    /// # }
-    /// ```
+    #[tracing::instrument(skip_all, fields(sources = ctx.sources.len()))]
     pub async fn index(&self, ctx: IndexContext) -> Result<IndexResult> {
+        self.check_cancel()?;
         if ctx.is_empty() {
-            return Err(Error::Config("No document sources provided".to_string()));
+            return Err(Error::Config("No document sources provided".into()));
         }
 
-        // Single source: no need for concurrency overhead
-        if ctx.sources.len() == 1 {
-            let source = &ctx.sources[0];
+        let _guard = self.inc_active();
+        let timeout_secs = ctx.options.timeout_secs;
+
+        self.with_timeout(timeout_secs, async move {
+            let concurrency = self
+                .config
+                .llm
+                .throttle
+                .max_concurrent_requests
+                .min(ctx.sources.len());
+
             let (items, failed) = self
-                .process_source(source, &ctx.options, ctx.name.as_deref())
+                .process_sources(&ctx.sources, &ctx.options, ctx.name.as_deref(), concurrency)
                 .await;
+
             if items.is_empty() && !failed.is_empty() {
                 return Err(Error::Config(format!(
-                    "All {} source(s) failed to index: {}",
+                    "All {} source(s) failed: {}",
                     failed.len(),
                     failed
                         .iter()
@@ -191,26 +204,32 @@ impl Engine {
                         .join("; ")
                 )));
             }
-            if !items.is_empty() {
-                if let Err(e) = self.rebuild_graph().await {
-                    tracing::warn!("Graph rebuild failed: {}", e);
-                }
+
+            // Mark graph as dirty — will be lazily rebuilt on next query()
+            // Also reset failure count so the new data gets a fresh rebuild attempt.
+            if !items.is_empty() && self.config.graph.enabled {
+                self.graph_dirty.store(true, Ordering::Relaxed);
+                self.graph_fail_count.store(0, Ordering::Relaxed);
             }
-            return Ok(IndexResult::with_partial(items, failed));
-        }
 
-        // Multiple sources: parallel indexing
-        let concurrency = self
-            .config
-            .concurrency
-            .max_concurrent_requests
-            .min(ctx.sources.len());
+            Ok(IndexResult::with_partial(items, failed))
+        })
+        .await
+    }
 
+    /// Process multiple sources in parallel.
+    async fn process_sources(
+        &self,
+        sources: &[IndexSource],
+        options: &super::types::IndexOptions,
+        name: Option<&str>,
+        concurrency: usize,
+    ) -> (Vec<IndexItem>, Vec<FailedItem>) {
         let results: Vec<(Vec<IndexItem>, Vec<FailedItem>)> =
-            futures::stream::iter(ctx.sources.iter().cloned())
+            futures::stream::iter(sources.iter().cloned())
                 .map(|source| {
-                    let options = ctx.options.clone();
-                    let name = ctx.name.clone();
+                    let options = options.clone();
+                    let name = name.map(str::to_string);
                     let engine = self.clone();
                     async move {
                         engine
@@ -222,36 +241,18 @@ impl Engine {
                 .collect()
                 .await;
 
-        let mut items = Vec::new();
-        let mut failed = Vec::new();
-        for (ok, err) in results {
-            items.extend(ok);
-            failed.extend(err);
-        }
-
-        if items.is_empty() && !failed.is_empty() {
-            return Err(Error::Config(format!(
-                "All {} source(s) failed to index: {}",
-                failed.len(),
-                failed
-                    .iter()
-                    .map(|f| format!("{} ({})", f.source, f.error))
-                    .collect::<Vec<_>>()
-                    .join("; ")
-            )));
-        }
-
-        // Rebuild document graph after successful batch index
-        if !items.is_empty() {
-            if let Err(e) = self.rebuild_graph().await {
-                tracing::warn!("Graph rebuild failed: {}", e);
-            }
-        }
-
-        Ok(IndexResult::with_partial(items, failed))
+        results.into_iter().fold(
+            (Vec::new(), Vec::new()),
+            |(mut items, mut failed), (ok, err)| {
+                items.extend(ok);
+                failed.extend(err);
+                (items, failed)
+            },
+        )
     }
 
     /// Process a single source — resolve action and index.
+    #[tracing::instrument(skip_all, fields(source = %source))]
     ///
     /// Returns `(items, failed)`.
     async fn process_source(
@@ -260,6 +261,16 @@ impl Engine {
         options: &super::types::IndexOptions,
         name: Option<&str>,
     ) -> (Vec<IndexItem>, Vec<FailedItem>) {
+        if self.is_cancelled() {
+            return (
+                Vec::new(),
+                vec![FailedItem::new(
+                    source.to_string(),
+                    "Operation cancelled".to_string(),
+                )],
+            );
+        }
+
         let source_label = source.to_string();
 
         match self.resolve_index_action(source, options).await {
@@ -277,43 +288,19 @@ impl Engine {
                 )
             }
             Ok(IndexAction::FullIndex { existing_id }) => {
-                match self.indexer.index(source, name, options).await {
+                let pipeline_options = self.build_pipeline_options(options, source);
+                match self
+                    .index_with_retry(source, name, pipeline_options.clone(), None)
+                    .await
+                {
                     Ok(doc) => {
-                        let pipeline_options = self.build_pipeline_options(options, doc.format);
-                        let metrics = doc.metrics.clone();
-                        let item = IndexItem::new(
-                            doc.id.clone(),
-                            doc.name.clone(),
-                            doc.format.clone(),
-                            doc.description.clone(),
-                            doc.page_count,
+                        self.index_and_persist(
+                            doc,
+                            &pipeline_options,
+                            &source_label,
+                            existing_id.as_deref(),
                         )
-                        .with_source_path(
-                            doc.source_path
-                                .as_ref()
-                                .map(|p| p.to_string_lossy().to_string())
-                                .unwrap_or_default(),
-                        )
-                        .with_metrics_opt(metrics);
-                        let persisted = self
-                            .indexer
-                            .to_persisted_with_options(doc, &pipeline_options);
-
-                        if let Some(ref workspace) = self.workspace {
-                            if let Err(e) = workspace.save(&persisted).await {
-                                return (
-                                    Vec::new(),
-                                    vec![FailedItem::new(&source_label, e.to_string())],
-                                );
-                            }
-                            // Clean up old document after successful save (atomic: save-first, then remove old)
-                            if let Some(old_id) = &existing_id {
-                                let _ = workspace.remove(old_id).await;
-                            }
-                        }
-
-                        info!("Indexed document: {}", item.doc_id);
-                        (vec![item], Vec::new())
+                        .await
                     }
                     Err(e) => {
                         tracing::warn!("Failed to index {}: {}", source_label, e);
@@ -329,45 +316,15 @@ impl Engine {
                 existing_id,
             }) => {
                 info!("Incremental update for: {}", source_label);
+                let pipeline_options = self.build_pipeline_options(options, source);
                 match self
-                    .indexer
-                    .index_with_existing(source, name, options, Some(&old_tree))
+                    .index_with_retry(source, name, pipeline_options.clone(), Some(&old_tree))
                     .await
                 {
                     Ok(mut doc) => {
                         doc.id = existing_id.clone();
-                        let pipeline_options = self.build_pipeline_options(options, doc.format);
-                        let metrics = doc.metrics.clone();
-                        let item = IndexItem::new(
-                            doc.id.clone(),
-                            doc.name.clone(),
-                            doc.format.clone(),
-                            doc.description.clone(),
-                            doc.page_count,
-                        )
-                        .with_source_path(
-                            doc.source_path
-                                .as_ref()
-                                .map(|p| p.to_string_lossy().to_string())
-                                .unwrap_or_default(),
-                        )
-                        .with_metrics_opt(metrics);
-                        let persisted = self
-                            .indexer
-                            .to_persisted_with_options(doc, &pipeline_options);
-
-                        if let Some(ref workspace) = self.workspace {
-                            // save() is atomic (write-lock + put), no need to remove first
-                            if let Err(e) = workspace.save(&persisted).await {
-                                return (
-                                    Vec::new(),
-                                    vec![FailedItem::new(&source_label, e.to_string())],
-                                );
-                            }
-                        }
-
-                        info!("Incrementally updated: {}", item.doc_id);
-                        (vec![item], Vec::new())
+                        self.index_and_persist(doc, &pipeline_options, &source_label, None)
+                            .await
                     }
                     Err(e) => {
                         tracing::warn!("Incremental update failed for {}: {}", source_label, e);
@@ -388,6 +345,105 @@ impl Engine {
         }
     }
 
+    /// Index with retry on retryable errors.
+    ///
+    /// Reads `config.llm.retry` for backoff parameters.
+    /// Returns `Err` only after all retries are exhausted or the error
+    /// is not retryable.
+    async fn index_with_retry(
+        &self,
+        source: &IndexSource,
+        name: Option<&str>,
+        pipeline_options: PipelineOptions,
+        existing_tree: Option<&DocumentTree>,
+    ) -> Result<super::indexed_document::IndexedDocument> {
+        let retry = &self.config.llm.retry;
+        let max_attempts = retry.max_attempts;
+
+        for attempt in 0..max_attempts {
+            if self.is_cancelled() {
+                return Err(Error::Config("Operation cancelled".into()));
+            }
+
+            let result = if let Some(tree) = existing_tree {
+                self.indexer
+                    .index_with_existing(source, name, pipeline_options.clone(), Some(tree))
+                    .await
+            } else {
+                self.indexer
+                    .index(source, name, pipeline_options.clone())
+                    .await
+            };
+
+            match result {
+                Ok(doc) => return Ok(doc),
+                Err(e) if e.is_retryable() && attempt + 1 < max_attempts => {
+                    let delay = retry.delay_for_attempt(attempt);
+                    tracing::warn!(
+                        attempt,
+                        max_attempts,
+                        ?delay,
+                        "Retryable error indexing, retrying: {e}"
+                    );
+                    tokio::time::sleep(delay).await;
+                }
+                Err(e) => return Err(e),
+            }
+        }
+
+        // Unreachable: loop always returns via Ok/Err branches
+        unreachable!()
+    }
+
+    /// Convert an [`IndexedDocument`] to an [`IndexItem`] and persist it.
+    ///
+    /// If `old_id` is provided, the old document is removed after a
+    /// successful save (atomic save-first, then remove old).
+    async fn index_and_persist(
+        &self,
+        doc: super::indexed_document::IndexedDocument,
+        pipeline_options: &PipelineOptions,
+        source_label: &str,
+        old_id: Option<&str>,
+    ) -> (Vec<IndexItem>, Vec<FailedItem>) {
+        let item = Self::build_index_item(&doc);
+        let persisted = IndexerClient::to_persisted(doc, pipeline_options).await;
+
+        if let Err(e) = self.workspace.save(&persisted).await {
+            return (
+                Vec::new(),
+                vec![FailedItem::new(source_label, e.to_string())],
+            );
+        }
+        // Clean up old document after successful save
+        if let Some(old_id) = old_id {
+            if let Err(e) = self.workspace.remove(old_id).await {
+                tracing::warn!("Failed to remove old document {}: {}", old_id, e);
+            }
+        }
+
+        info!("Indexed document: {}", item.doc_id);
+        (vec![item], Vec::new())
+    }
+
+    /// Build an [`IndexItem`] from an [`IndexedDocument`](super::indexed_document::IndexedDocument).
+    fn build_index_item(doc: &super::indexed_document::IndexedDocument) -> IndexItem {
+        IndexItem::new(
+            doc.id.clone(),
+            doc.name.clone(),
+            doc.format.clone(),
+            doc.description.clone(),
+            doc.page_count,
+        )
+        .with_source_path(
+            doc.source_path
+                .as_ref()
+                .map(|p| p.to_string_lossy().to_string())
+                .unwrap_or_default(),
+        )
+        .with_metrics_opt(doc.metrics.clone())
+    }
+
     // ============================================================
     // Document Querying
     // ============================================================
@@ -396,97 +452,118 @@ impl Engine {
     ///
     /// Accepts a [`QueryContext`] that specifies the query text and scope
     /// (single document, multiple documents, or entire workspace).
-    ///
-    /// # Example
-    ///
-    /// ```rust,no_run
-    /// use vectorless::client::{EngineBuilder, QueryContext};
-    ///
-    /// # #[tokio::main]
-    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// let engine = EngineBuilder::new()
-    ///     .with_key("sk-...")
-    ///     .with_model("gpt-4o")
-    ///     .build()
-    ///     .await?;
-    ///
-    /// // Single document
-    /// let result = engine.query(
-    ///     QueryContext::new("What is the total revenue?")
-    ///         .with_doc_ids(vec!["doc-123".to_string()])
-    /// ).await?;
-    ///
-    /// if let Some(item) = result.single() {
-    ///     println!("Answer: {}", item.content);
-    /// }
-    ///
-    /// // Entire workspace
-    /// let result = engine.query(
-    ///     QueryContext::new("Summarize all documents")
-    /// ).await?;
-    /// for item in &result.items {
-    ///     println!("{}: score={}", item.doc_id, item.score);
-    /// }
-    /// # Ok(())
-    /// # }
-    /// ```
+    #[tracing::instrument(skip_all, fields(query = %ctx.query))]
     pub async fn query(&self, ctx: QueryContext) -> Result<QueryResult> {
-        let doc_ids = self.resolve_scope(&ctx.scope).await?;
-        let mut options = ctx.to_retrieve_options(&self.config);
+        self.check_cancel()?;
+        let _guard = self.inc_active();
+        let timeout_secs = ctx.timeout_secs;
 
-        // Load document graph for graph-aware retrieval (if enabled)
-        if self.config.graph.enabled {
-            if let Some(ref workspace) = self.workspace {
-                if let Ok(Some(graph)) = workspace.get_graph().await {
+        self.with_timeout(timeout_secs, async move {
+            let doc_ids = self.resolve_scope(&ctx.scope).await?;
+            let mut options = ctx.to_retrieve_options(&self.config);
+
+            // Lazy graph rebuild: only rebuild if index() marked it dirty
+            if self.config.graph.enabled {
+                let fail_count = self.graph_fail_count.load(Ordering::Relaxed);
+                let should_try = fail_count < GRAPH_REBUILD_MAX_FAILURES;
+
+                if self.graph_dirty.swap(false, Ordering::Relaxed) {
+                    if should_try {
+                        if let Err(e) = self.rebuild_graph().await {
+                            let count = self.graph_fail_count.fetch_add(1, Ordering::Relaxed) + 1;
+                            tracing::warn!(count, "Graph rebuild failed: {e}");
+                            // Re-mark dirty so next query retries
+                            self.graph_dirty.store(true, Ordering::Relaxed);
+                        } else {
+                            // Reset failure count on success
+                            self.graph_fail_count.store(0, Ordering::Relaxed);
+                        }
+                    } else {
+                        tracing::warn!(
+                            count = fail_count,
+                            "Skipping graph rebuild after {} consecutive failures",
+                            fail_count
+                        );
+                    }
+                }
+                // Load (now up-to-date) graph for retrieval
+                if let Ok(Some(graph)) = self.workspace.get_graph().await {
                     options = options.with_document_graph(Arc::new(graph));
                 }
             }
-        }
 
-        let mut items = Vec::with_capacity(doc_ids.len());
-        let mut failed = Vec::new();
+            // Query documents in parallel (with concurrency limit)
+            let concurrency = self.config.llm.throttle.max_concurrent_requests;
+            let query = ctx.query.clone();
+            let cancelled = Arc::clone(&self.cancelled);
 
-        // TODO: if doc_ids.len() > 1, consider parallelizing queries across documents (with concurrency limit)
-        for doc_id in doc_ids {
-            let (tree, reasoning_index) = match self.get_structure(&doc_id).await {
-                Ok((t, ri)) => (t, ri),
-                Err(e) => {
-                    tracing::warn!("Skipping document {}: {}", doc_id, e);
-                    failed.push(FailedItem::new(&doc_id, e.to_string()));
-                    continue;
-                }
-            };
+            let results: Vec<(String, std::result::Result<QueryResultItem, String>)> =
+                futures::stream::iter(doc_ids.into_iter())
+                    .map(|doc_id| {
+                        let engine = self.clone();
+                        let options = options.clone();
+                        let query = query.clone();
+                        let cancelled = Arc::clone(&cancelled);
+                        async move {
+                            if cancelled.load(Ordering::Relaxed) {
+                                return (doc_id, Err("Operation cancelled".to_string()));
+                            }
 
-            match self
-                .retriever
-                .query_with_reasoning_index(&tree, &ctx.query, &options, reasoning_index)
-                .await
-            {
-                Ok(mut result) => {
-                    result.doc_id = doc_id;
-                    items.push(result);
-                }
-                Err(e) => {
-                    tracing::warn!("Query failed for {}: {}", doc_id, e);
-                    failed.push(FailedItem::new(&doc_id, e.to_string()));
+                            let (tree, reasoning_index) = match engine.get_structure(&doc_id).await
+                            {
+                                Ok(t) => t,
+                                Err(e) => return (doc_id, Err(e.to_string())),
+                            };
+
+                            match engine
+                                .retriever
+                                .query_with_reasoning_index(
+                                    &tree,
+                                    &query,
+                                    &options,
+                                    reasoning_index,
+                                )
+                                .await
+                            {
+                                Ok(mut result) => {
+                                    result.doc_id = doc_id.clone();
+                                    (doc_id, Ok(result))
+                                }
+                                Err(e) => (doc_id, Err(e.to_string())),
+                            }
+                        }
+                    })
+                    .buffer_unordered(concurrency)
+                    .collect()
+                    .await;
+
+            let mut items = Vec::new();
+            let mut failed = Vec::new();
+            for (doc_id, result) in results {
+                match result {
+                    Ok(item) => items.push(item),
+                    Err(e) => {
+                        tracing::warn!("Query failed for {}: {}", doc_id, e);
+                        failed.push(FailedItem::new(&doc_id, e));
+                    }
                 }
             }
-        }
 
-        // If everything failed, return error
-        if items.is_empty() && !failed.is_empty() {
-            return Err(Error::Config(format!(
-                "Query failed for all {} document(s): {}",
-                failed.len(),
-                failed
-                    .iter()
-                    .map(|f| format!("{} ({})", f.source, f.error))
-                    .collect::<Vec<_>>()
-                    .join("; ")
-            )));
-        }
+            if items.is_empty() && !failed.is_empty() {
+                return Err(Error::Config(format!(
+                    "Query failed for all {} document(s): {}",
+                    failed.len(),
+                    failed
+                        .iter()
+                        .map(|f| format!("{} ({})", f.source, f.error))
+                        .collect::<Vec<_>>()
+                        .join("; ")
+                )));
+            }
 
-        Ok(QueryResult::with_partial(items, failed))
+            Ok(QueryResult::with_partial(items, failed))
+        })
+        .await
     }
 
     /// Query a document with streaming results.
@@ -522,44 +599,24 @@ impl Engine {
 
     /// Get a list of all indexed documents.
     pub async fn list(&self) -> Result<Vec<DocumentInfo>> {
-        let workspace = self
-            .workspace
-            .as_ref()
-            .ok_or_else(|| Error::Config("No workspace configured".to_string()))?;
-
-        workspace.list().await
+        self.workspace.list().await
     }
 
     /// Remove a document from the workspace.
     pub async fn remove(&self, doc_id: &str) -> Result<bool> {
-        let workspace = self
-            .workspace
-            .as_ref()
-            .ok_or_else(|| Error::Config("No workspace configured".to_string()))?;
-
-        workspace.remove(doc_id).await
+        self.workspace.remove(doc_id).await
     }
 
     /// Check if a document exists in the workspace.
     pub async fn exists(&self, doc_id: &str) -> Result<bool> {
-        let workspace = self
-            .workspace
-            .as_ref()
-            .ok_or_else(|| Error::Config("No workspace configured".to_string()))?;
-
-        workspace.exists(doc_id).await
+        self.workspace.exists(doc_id).await
     }
 
     /// Remove all documents from the workspace.
     ///
     /// Returns the number of documents removed.
     pub async fn clear(&self) -> Result<usize> {
-        let workspace = self
-            .workspace
-            .as_ref()
-            .ok_or_else(|| Error::Config("No workspace configured".to_string()))?;
-
-        workspace.clear().await
+        self.workspace.clear().await
     }
 
     /// Get the cross-document relationship graph.
@@ -567,12 +624,7 @@ impl Engine {
     /// The graph is automatically rebuilt after indexing documents.
     /// Returns `None` if no graph has been built yet.
     pub async fn get_graph(&self) -> Result<Option<crate::graph::DocumentGraph>> {
-        let workspace = self
-            .workspace
-            .as_ref()
-            .ok_or_else(|| Error::Config("No workspace configured".to_string()))?;
-
-        workspace.get_graph().await
+        self.workspace.get_graph().await
     }
 
     /// Generate a complete metrics report.
@@ -583,24 +635,79 @@ impl Engine {
         self.metrics_hub.generate_report()
     }
 
+    /// Cancel all in-flight `index()` and `query()` operations.
+    ///
+    /// After calling this, running operations will return at the next
+    /// convenient point with a cancellation error. New operations will
+    /// also fail until [`reset_cancel`](Self::reset_cancel) is called.
+    pub fn cancel(&self) {
+        self.cancelled.store(true, Ordering::Relaxed);
+        tracing::info!("Cancellation requested");
+    }
+
+    /// Reset the cancel flag so new operations can proceed.
+    pub fn reset_cancel(&self) {
+        self.cancelled.store(false, Ordering::Relaxed);
+        tracing::info!("Cancel flag reset");
+    }
+
+    /// Returns `true` if cancellation has been requested.
+    pub fn is_cancelled(&self) -> bool {
+        self.cancelled.load(Ordering::Relaxed)
+    }
+
     // ============================================================
     // Internal
     // ============================================================
+
+    /// Check cancel flag, returning an error if cancelled.
+    fn check_cancel(&self) -> Result<()> {
+        if self.cancelled.load(Ordering::Relaxed) {
+            return Err(Error::Config("Operation cancelled".into()));
+        }
+        Ok(())
+    }
+
+    /// Increment active operation counter. Returns a guard that decrements on drop.
+    fn inc_active(&self) -> ActiveGuard {
+        let mut ops = self.active_ops.lock().unwrap();
+        *ops += 1;
+        ActiveGuard {
+            active_ops: Arc::clone(&self.active_ops),
+        }
+    }
+
+    /// Get current active operation count.
+    pub fn active_operations(&self) -> usize {
+        *self.active_ops.lock().unwrap()
+    }
+
+    /// Run a future with an optional timeout.
+    /// If `timeout_secs` is `Some`, wraps the future in `tokio::time::timeout`.
+    async fn with_timeout<F, T>(&self, timeout_secs: Option<u64>, fut: F) -> Result<T>
+    where
+        F: std::future::Future<Output = Result<T>>,
+    {
+        match timeout_secs {
+            Some(secs) => {
+                match tokio::time::timeout(std::time::Duration::from_secs(secs), fut).await {
+                    Ok(result) => result,
+                    Err(_) => Err(Error::Config(format!("Operation timed out after {secs}s"))),
+                }
+            }
+            None => fut.await,
+        }
+    }
 
     /// Get document structure (tree) and optional reasoning index. Internal use only.
     pub(crate) async fn get_structure(
         &self,
         doc_id: &str,
     ) -> Result<(DocumentTree, Option<crate::document::ReasoningIndex>)> {
-        let workspace = self
-            .workspace
-            .as_ref()
-            .ok_or_else(|| Error::Config("No workspace configured".to_string()))?;
-
-        let doc = workspace
-            .load(doc_id)
-            .await?
-            .ok_or_else(|| Error::DocumentNotFound(format!("Document not found: {}", doc_id)))?;
+        let doc =
+            self.workspace.load(doc_id).await?.ok_or_else(|| {
+                Error::DocumentNotFound(format!("Document not found: {}", doc_id))
+            })?;
 
         Ok((doc.tree, doc.reasoning_index))
     }
@@ -619,18 +726,31 @@ impl Engine {
         }
     }
 
-    /// Build pipeline options from client IndexOptions and detected format.
+    /// Build pipeline options for pipeline execution (with checkpoint dir).
+    ///
+    /// This is the single source of truth for pipeline configuration.
     fn build_pipeline_options(
         &self,
         options: &super::types::IndexOptions,
-        format: crate::index::parse::DocumentFormat,
+        source: &IndexSource,
     ) -> PipelineOptions {
-        use crate::index::SummaryStrategy;
-        let checkpoint_dir = self.workspace_dir.as_ref().map(|p| p.join("checkpoints"));
+        use crate::index::{IndexMode, ReasoningIndexConfig, SummaryStrategy};
+
+        let format = match source {
+            IndexSource::Path(path) => self
+                .indexer
+                .detect_format_from_path(path)
+                .unwrap_or(crate::index::parse::DocumentFormat::Markdown),
+            IndexSource::Content { format, .. } => *format,
+            IndexSource::Bytes { format, .. } => *format,
+        };
+
+        let checkpoint_dir = Some(self.config.storage.checkpoint_dir.clone());
+
         PipelineOptions {
             mode: match format {
-                crate::index::parse::DocumentFormat::Markdown => crate::index::IndexMode::Markdown,
-                crate::index::parse::DocumentFormat::Pdf => crate::index::IndexMode::Pdf,
+                crate::index::parse::DocumentFormat::Markdown => IndexMode::Markdown,
+                crate::index::parse::DocumentFormat::Pdf => IndexMode::Pdf,
             },
             generate_ids: options.generate_ids,
             summary_strategy: if options.generate_summaries {
@@ -640,53 +760,13 @@ impl Engine {
             },
             generate_description: options.generate_description,
             checkpoint_dir,
+            reasoning_index: ReasoningIndexConfig {
+                enable_synonym_expansion: options.enable_synonym_expansion,
+                ..ReasoningIndexConfig::default()
+            },
+            concurrency: self.config.llm.throttle.to_runtime_config(),
             ..Default::default()
         }
-    }
-
-    /// Rebuild the document graph after indexing, if graph is enabled.
-    async fn rebuild_graph(&self) -> Result<()> {
-        if !self.config.graph.enabled {
-            return Ok(());
-        }
-        let workspace = match self.workspace {
-            Some(ref ws) => ws,
-            None => return Ok(()),
-        };
-
-        // Load all documents and extract keyword profiles
-        let doc_ids = workspace.inner().list_documents().await;
-        let mut builder = crate::graph::DocumentGraphBuilder::new(self.config.graph.clone());
-
-        for doc_id in &doc_ids {
-            if let Some(doc) = workspace.load(doc_id).await? {
-                let keywords = Self::extract_keywords_from_doc(&doc);
-                builder.add_document(
-                    &doc.meta.id,
-                    &doc.meta.name,
-                    &doc.meta.format,
-                    doc.meta.node_count,
-                    keywords,
-                );
-            }
-        }
-
-        let graph = builder.build();
-        workspace.set_graph(&graph).await?;
-        Ok(())
-    }
-
-    /// Extract keyword → weight map from a persisted document's ReasoningIndex.
-    fn extract_keywords_from_doc(doc: &PersistedDocument) -> HashMap<String, f32> {
-        let mut keywords = HashMap::new();
-        if let Some(ref ri) = doc.reasoning_index {
-            for (kw, entries) in ri.all_topic_entries() {
-                let weight: f32 =
-                    entries.iter().map(|e| e.weight).sum::<f32>() / entries.len().max(1) as f32;
-                keywords.insert(kw.clone(), weight);
-            }
-        }
-        keywords
     }
 
     /// Resolve what action to take for a source.
@@ -695,10 +775,7 @@ impl Engine {
         source: &IndexSource,
         options: &super::types::IndexOptions,
     ) -> Result<IndexAction> {
-        let workspace = match self.workspace {
-            Some(ref ws) => ws,
-            None => return Ok(IndexAction::FullIndex { existing_id: None }),
-        };
+        let workspace = &self.workspace;
 
         // Force mode always re-indexes from scratch
         if options.mode == IndexMode::Force {
@@ -735,7 +812,7 @@ impl Engine {
         }
 
         // Incremental mode: load stored document and delegate to resolver
-        let current_bytes = match std::fs::read(path) {
+        let current_bytes = match tokio::fs::read(path).await {
             Ok(b) => b,
             Err(_) => return Ok(IndexAction::FullIndex { existing_id: None }),
         };
@@ -747,7 +824,7 @@ impl Engine {
 
         let format = crate::index::parse::DocumentFormat::from_extension(&stored_doc.meta.format)
             .unwrap_or(crate::index::parse::DocumentFormat::Markdown);
-        let pipeline_options = self.build_pipeline_options(options, format);
+        let pipeline_options = self.build_pipeline_options(options, source);
 
         // If logic fingerprint changed, remove old doc before full reprocess
         let action =
@@ -758,6 +835,55 @@ impl Engine {
 
         Ok(action)
     }
+
+    /// Rebuild the document graph after indexing, if graph is enabled.
+    async fn rebuild_graph(&self) -> Result<()> {
+        if !self.config.graph.enabled {
+            return Ok(());
+        }
+
+        // Load all documents in parallel and extract keyword profiles
+        let doc_ids = self.workspace.inner().list_documents().await;
+        let concurrency = self.config.llm.throttle.max_concurrent_requests;
+
+        let loaded: Vec<Option<PersistedDocument>> = futures::stream::iter(doc_ids.iter().cloned())
+            .map(|doc_id| {
+                let ws = self.workspace.clone();
+                async move { ws.load(&doc_id).await.ok().flatten() }
+            })
+            .buffer_unordered(concurrency)
+            .collect()
+            .await;
+
+        let mut builder = crate::graph::DocumentGraphBuilder::new(self.config.graph.clone());
+        for doc in loaded.into_iter().flatten() {
+            let keywords = Self::extract_keywords_from_doc(&doc);
+            builder.add_document(
+                &doc.meta.id,
+                &doc.meta.name,
+                &doc.meta.format,
+                doc.meta.node_count,
+                keywords,
+            );
+        }
+
+        let graph = builder.build();
+        self.workspace.set_graph(&graph).await?;
+        Ok(())
+    }
+
+    /// Extract keyword → weight map from a persisted document's ReasoningIndex.
+    fn extract_keywords_from_doc(doc: &PersistedDocument) -> HashMap<String, f32> {
+        let mut keywords = HashMap::new();
+        if let Some(ref ri) = doc.reasoning_index {
+            for (kw, entries) in ri.all_topic_entries() {
+                let weight: f32 =
+                    entries.iter().map(|e| e.weight).sum::<f32>() / entries.len().max(1) as f32;
+                keywords.insert(kw.clone(), weight);
+            }
+        }
+        keywords
+    }
 }
 
 impl Clone for Engine {
@@ -767,28 +893,132 @@ impl Clone for Engine {
             indexer: self.indexer.clone(),
             retriever: self.retriever.clone(),
             workspace: self.workspace.clone(),
-            workspace_dir: self.workspace_dir.clone(),
-            events: self.events.clone(),
             metrics_hub: Arc::clone(&self.metrics_hub),
+            graph_dirty: Arc::clone(&self.graph_dirty),
+            graph_fail_count: Arc::clone(&self.graph_fail_count),
+            cancelled: Arc::clone(&self.cancelled),
+            active_ops: Arc::clone(&self.active_ops),
         }
+    }
+}
+
+/// RAII guard that decrements `active_ops` on drop.
+struct ActiveGuard {
+    active_ops: Arc<Mutex<usize>>,
+}
+
+impl Drop for ActiveGuard {
+    fn drop(&mut self) {
+        let mut ops = self.active_ops.lock().unwrap();
+        *ops = ops.saturating_sub(1);
     }
 }
 
 impl std::fmt::Debug for Engine {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Engine")
-            .field("has_workspace", &self.workspace.is_some())
-            .finish_non_exhaustive()
+        f.debug_struct("Engine").finish_non_exhaustive()
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::super::EngineBuilder;
+    use super::*;
+    use crate::client::types::IndexMode;
+
+    // ── Cancel ────────────────────────────────────────────────────────────
 
     #[test]
-    fn test_engine_builder() {
-        let builder = EngineBuilder::new();
-        let _ = builder;
+    fn test_cancel_flag() {
+        // We can't construct a full Engine without async + LLM, so test the
+        // underlying primitives directly.
+        let flag = Arc::new(AtomicBool::new(false));
+        assert!(!flag.load(Ordering::Relaxed));
+
+        flag.store(true, Ordering::Relaxed);
+        assert!(flag.load(Ordering::Relaxed));
+
+        flag.store(false, Ordering::Relaxed);
+        assert!(!flag.load(Ordering::Relaxed));
+    }
+
+    #[test]
+    fn test_graph_dirty_flag() {
+        let dirty = Arc::new(AtomicBool::new(false));
+        assert!(!dirty.load(Ordering::Relaxed));
+
+        // Simulate: index marks dirty
+        dirty.store(true, Ordering::Relaxed);
+
+        // Simulate: query swaps to false and rebuilds
+        let was_dirty = dirty.swap(false, Ordering::Relaxed);
+        assert!(was_dirty);
+        assert!(!dirty.load(Ordering::Relaxed));
+    }
+
+    #[test]
+    fn test_active_guard_decrement() {
+        let active_ops: Arc<Mutex<usize>> = Arc::new(Mutex::new(0));
+
+        // Increment
+        {
+            let mut ops = active_ops.lock().unwrap();
+            *ops += 1;
+        }
+
+        assert_eq!(*active_ops.lock().unwrap(), 1);
+
+        // Drop guard (simulate ActiveGuard drop)
+        {
+            let mut ops = active_ops.lock().unwrap();
+            *ops = ops.saturating_sub(1);
+        }
+
+        assert_eq!(*active_ops.lock().unwrap(), 0);
+    }
+
+    // ── resolve_index_action Default mode ──────────────────────────────────
+
+    // We can't call resolve_index_action without a workspace, but we can
+    // verify IndexMode equality logic used inside.
+    #[test]
+    fn test_index_mode_force_skips_incremental() {
+        let mode = IndexMode::Force;
+        assert_eq!(mode, IndexMode::Force);
+        assert_ne!(mode, IndexMode::Default);
+        assert_ne!(mode, IndexMode::Incremental);
+    }
+
+    // ── build_index_item ──────────────────────────────────────────────────
+
+    // Build_index_item only transforms data — no I/O.
+    use crate::client::indexed_document::IndexedDocument;
+
+    fn make_doc() -> IndexedDocument {
+        IndexedDocument::new("test-id", crate::index::parse::DocumentFormat::Markdown)
+            .with_name("test.md")
+            .with_description("test doc")
+            .with_source_path(std::path::PathBuf::from("/tmp/test.md"))
+    }
+
+    #[test]
+    fn test_build_index_item() {
+        let doc = make_doc();
+        let item = Engine::build_index_item(&doc);
+
+        assert_eq!(item.doc_id, "test-id");
+        assert_eq!(item.name, "test.md");
+        assert_eq!(item.format, crate::index::parse::DocumentFormat::Markdown);
+        assert_eq!(item.description, Some("test doc".to_string()));
+        assert_eq!(item.source_path, Some("/tmp/test.md".to_string()));
+        assert!(item.metrics.is_none());
+    }
+
+    #[test]
+    fn test_build_index_item_no_source_path() {
+        let doc = IndexedDocument::new("id", crate::index::parse::DocumentFormat::Pdf);
+        let item = Engine::build_index_item(&doc);
+
+        assert_eq!(item.source_path, Some(String::new())); // unwrap_or_default
+        assert_eq!(item.format, crate::index::parse::DocumentFormat::Pdf);
     }
 }

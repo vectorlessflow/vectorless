@@ -1,36 +1,23 @@
 // Copyright (c) 2026 vectorless developers
 // SPDX-License-Identifier: Apache-2.0
 
-//! Retrieval configuration types.
+//! Retrieval strategy configuration types.
+//!
+//! LLM configuration (model, api_key, endpoint) is managed centrally
+//! in [`LlmConfig`](super::LlmConfig). This module only contains
+//! retrieval strategy parameters.
 
 use serde::{Deserialize, Serialize};
 
 use super::content::ContentAggregatorConfig;
 use super::storage::{CacheConfig, StrategyConfig, SufficiencyConfig};
 
-/// Retrieval model configuration (for navigation).
+/// Retrieval strategy configuration.
+///
+/// Controls how documents are searched and retrieved, independent
+/// of which LLM model is used for navigation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RetrievalConfig {
-    /// Model name for retrieval/navigation.
-    #[serde(default)]
-    pub model: String,
-
-    /// API endpoint for retrieval model.
-    #[serde(default)]
-    pub endpoint: String,
-
-    /// API key.
-    #[serde(default)]
-    pub api_key: Option<String>,
-
-    /// Maximum tokens for retrieval context.
-    #[serde(default = "default_max_retrieval_tokens")]
-    pub max_tokens: usize,
-
-    /// Temperature for retrieval.
-    #[serde(default = "default_temperature")]
-    pub temperature: f32,
-
     /// Number of top-k results to return.
     #[serde(default = "default_top_k")]
     pub top_k: usize,
@@ -56,14 +43,6 @@ pub struct RetrievalConfig {
     pub content: ContentAggregatorConfig,
 }
 
-fn default_max_retrieval_tokens() -> usize {
-    1000
-}
-
-fn default_temperature() -> f32 {
-    0.0
-}
-
 fn default_top_k() -> usize {
     3
 }
@@ -71,11 +50,6 @@ fn default_top_k() -> usize {
 impl Default for RetrievalConfig {
     fn default() -> Self {
         Self {
-            model: String::new(),
-            endpoint: String::new(),
-            api_key: None,
-            max_tokens: default_max_retrieval_tokens(),
-            temperature: default_temperature(),
             top_k: default_top_k(),
             search: SearchConfig::default(),
             sufficiency: SufficiencyConfig::default(),
@@ -90,24 +64,6 @@ impl RetrievalConfig {
     /// Create a new retrieval config with defaults.
     pub fn new() -> Self {
         Self::default()
-    }
-
-    /// Set the model.
-    pub fn with_model(mut self, model: impl Into<String>) -> Self {
-        self.model = model.into();
-        self
-    }
-
-    /// Set the endpoint.
-    pub fn with_endpoint(mut self, endpoint: impl Into<String>) -> Self {
-        self.endpoint = endpoint.into();
-        self
-    }
-
-    /// Set the API key.
-    pub fn with_api_key(mut self, api_key: impl Into<String>) -> Self {
-        self.api_key = Some(api_key.into());
-        self
     }
 
     /// Set the top_k.
@@ -206,7 +162,6 @@ mod tests {
     #[test]
     fn test_retrieval_config_defaults() {
         let config = RetrievalConfig::default();
-        assert!(config.model.is_empty());
         assert_eq!(config.top_k, 3);
         assert_eq!(config.search.top_k, 5);
     }

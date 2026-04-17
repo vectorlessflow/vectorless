@@ -10,6 +10,8 @@ use serde::{Deserialize, Serialize};
 
 use super::{SufficiencyChecker, SufficiencyLevel};
 use crate::config::SufficiencyConfig;
+use crate::llm::memo::{MemoKey, MemoOpType, MemoStore, MemoValue};
+use crate::utils::fingerprint::Fingerprint;
 
 /// LLM client trait for the judge.
 #[async_trait]
@@ -49,6 +51,8 @@ pub struct LlmJudge {
     system_prompt: String,
     /// Minimum confidence to consider sufficient.
     confidence_threshold: f32,
+    /// Memo store for caching sufficiency judgments.
+    memo_store: Option<MemoStore>,
 }
 
 impl LlmJudge {
@@ -63,7 +67,17 @@ impl LlmJudge {
             client,
             system_prompt: Self::default_system_prompt(),
             confidence_threshold: config.confidence_threshold,
+            memo_store: None,
         }
+    }
+
+    /// Add memo store for caching sufficiency judgments.
+    ///
+    /// When enabled, sufficiency check results are cached based on
+    /// query+content fingerprints, avoiding redundant LLM calls.
+    pub fn with_memo_store(mut self, store: MemoStore) -> Self {
+        self.memo_store = Some(store);
+        self
     }
 
     /// Set confidence threshold.
@@ -135,11 +149,65 @@ Be conservative - only mark as sufficient if you're confident the content answer
         content: &str,
         _token_count: usize,
     ) -> SufficiencyLevel {
+        // Check memo cache
+        if let Some(ref store) = self.memo_store {
+            let cache_key = self.build_cache_key(query, content);
+            if let Some(cached) = store.get(&cache_key) {
+                if let Some(level) = Self::deserialize_sufficiency(&cached) {
+                    tracing::debug!("Memo cache hit for sufficiency check");
+                    return level;
+                }
+            }
+        }
+
         let prompt = self.build_prompt(query, content);
 
-        match self.client.complete(&prompt).await {
+        let result = match self.client.complete(&prompt).await {
             Ok(response) => self.parse_response(&response).0,
             Err(_) => SufficiencyLevel::Insufficient,
+        };
+
+        // Cache the result
+        if let Some(ref store) = self.memo_store {
+            let cache_key = self.build_cache_key(query, content);
+            let tokens = (prompt.len() / 4) as u64;
+            store.put_with_tokens(
+                cache_key,
+                MemoValue::Text(format!("{:?}", result)),
+                tokens,
+            );
+        }
+
+        result
+    }
+
+    /// Build a cache key for sufficiency check.
+    fn build_cache_key(&self, query: &str, content: &str) -> MemoKey {
+        let mut input = String::with_capacity(query.len() + content.len() / 4);
+        input.push_str(query);
+        // Use only first 2000 chars of content for fingerprint to avoid
+        // giant cache keys — content prefix captures topic identity.
+        input.push_str(&content[..2000.min(content.len())]);
+        let fp = Fingerprint::from_str(&input);
+        MemoKey {
+            op_type: MemoOpType::SufficiencyCheck,
+            input_fp: fp,
+            model_id: None,
+            version: 1,
+            context_fp: Fingerprint::zero(),
+        }
+    }
+
+    /// Deserialize a SufficiencyLevel from a MemoValue.
+    fn deserialize_sufficiency(value: &MemoValue) -> Option<SufficiencyLevel> {
+        match value {
+            MemoValue::Text(s) => match s.as_str() {
+                "Sufficient" => Some(SufficiencyLevel::Sufficient),
+                "PartialSufficient" => Some(SufficiencyLevel::PartialSufficient),
+                "Insufficient" => Some(SufficiencyLevel::Insufficient),
+                _ => None,
+            },
+            _ => None,
         }
     }
 }

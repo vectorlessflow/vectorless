@@ -23,6 +23,18 @@ pub enum MemoOpType {
     /// Content extraction result.
     Extraction,
 
+    /// LLM node evaluation during retrieval.
+    NodeEvaluation,
+
+    /// Sufficiency check result.
+    SufficiencyCheck,
+
+    /// Query complexity detection.
+    ComplexityDetection,
+
+    /// Query decomposition.
+    QueryDecomposition,
+
     /// Custom operation type.
     Custom(u8),
 }
@@ -35,6 +47,10 @@ impl MemoOpType {
             MemoOpType::PilotDecision => 1,
             MemoOpType::QueryAnalysis => 2,
             MemoOpType::Extraction => 3,
+            MemoOpType::NodeEvaluation => 4,
+            MemoOpType::SufficiencyCheck => 5,
+            MemoOpType::ComplexityDetection => 6,
+            MemoOpType::QueryDecomposition => 7,
             MemoOpType::Custom(n) => 100 + n,
         }
     }

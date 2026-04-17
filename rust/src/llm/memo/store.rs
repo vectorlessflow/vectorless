@@ -15,7 +15,6 @@ use chrono::Duration;
 use lru::LruCache;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
-use tokio::sync::RwLock as AsyncRwLock;
 use tracing::{debug, info};
 
 use super::types::{MemoEntry, MemoKey, MemoOpType, MemoStats, MemoValue};
@@ -41,8 +40,8 @@ struct MemoStoreData {
     stats: MemoStats,
 }
 
-/// Atomic statistics for lock-free access.
-#[derive(Debug, Default)]
+/// Lock-free atomic statistics for concurrent access.
+#[derive(Debug)]
 struct AtomicStats {
     hits: AtomicU64,
     misses: AtomicU64,
@@ -77,6 +76,12 @@ impl AtomicStats {
             self.tokens_saved.load(Ordering::Relaxed),
         )
     }
+
+    fn load_from(&self, hits: u64, misses: u64, tokens_saved: u64) {
+        self.hits.store(hits, Ordering::Relaxed);
+        self.misses.store(misses, Ordering::Relaxed);
+        self.tokens_saved.store(tokens_saved, Ordering::Relaxed);
+    }
 }
 
 /// LLM Memoization store.
@@ -90,7 +95,7 @@ impl AtomicStats {
 /// # Example
 ///
 /// ```rust,ignore
-/// let store = MemoStore::new(1000);
+/// let store = MemoStore::new();
 ///
 /// let summary = store.get_or_compute(
 ///     MemoKey::summary(&content_fp),
@@ -103,8 +108,8 @@ pub struct MemoStore {
     /// LRU cache for entries.
     cache: Arc<RwLock<LruCache<String, MemoEntry>>>,
 
-    /// Statistics (async for safe updates).
-    stats: Arc<AsyncRwLock<MemoStats>>,
+    /// Lock-free statistics.
+    stats: Arc<AtomicStats>,
 
     /// TTL for entries.
     ttl: Duration,
@@ -152,7 +157,7 @@ impl MemoStore {
                 std::num::NonZeroUsize::new(capacity)
                     .unwrap_or(std::num::NonZeroUsize::new(1000).unwrap()),
             ))),
-            stats: Arc::new(AsyncRwLock::new(MemoStats::default())),
+            stats: Arc::new(AtomicStats::new()),
             ttl: DEFAULT_TTL,
             model_id: None,
             version: 1,
@@ -183,13 +188,10 @@ impl MemoStore {
         let mut cache = self.cache.write();
 
         if let Some(entry) = cache.get_mut(&full_key) {
-            // Check TTL
             if entry.is_expired(self.ttl) {
                 cache.pop(&full_key);
                 return None;
             }
-
-            // Record hit
             entry.record_hit();
             debug!("Memo cache hit for {:?}", key.op_type);
             return Some(entry.value.clone());
@@ -226,17 +228,12 @@ impl MemoStore {
     {
         // Check cache first (synchronous)
         if let Some(value) = self.get(&key) {
-            // Update stats
-            let mut stats = self.stats.write().await;
-            stats.hits += 1;
+            self.stats.record_hit();
             return Ok(value);
         }
 
         // Record miss
-        {
-            let mut stats = self.stats.write().await;
-            stats.misses += 1;
-        }
+        self.stats.record_miss();
 
         // Compute
         let (value, tokens) = compute().await?;
@@ -244,11 +241,8 @@ impl MemoStore {
         // Cache result
         self.put_with_tokens(key.clone(), value.clone(), tokens);
 
-        // Update stats
-        {
-            let mut stats = self.stats.write().await;
-            stats.tokens_saved += tokens;
-        }
+        // Update tokens saved
+        self.stats.add_tokens_saved(tokens);
 
         Ok(value)
     }
@@ -285,50 +279,25 @@ impl MemoStore {
         self.len() == 0
     }
 
-    /// Get cache statistics.
-    pub async fn stats(&self) -> MemoStats {
-        let stats = self.stats.read().await;
-        let mut result = stats.clone();
-        result.entries = self.len();
-        result
-    }
-
-    /// Get cache statistics synchronously.
-    ///
-    /// This acquires a read lock on the stats, which is generally fast.
-    /// Use this when you need stats without async context.
-    pub fn stats_snapshot(&self) -> MemoStats {
-        // Use try_read to avoid blocking; fall back to defaults if locked
-        match self.stats.try_read() {
-            Ok(stats) => {
-                let mut result = stats.clone();
-                result.entries = self.len();
-                result
-            }
-            Err(_) => MemoStats {
-                entries: self.len(),
-                ..Default::default()
-            },
+    /// Get cache statistics (synchronous, lock-free).
+    pub fn stats(&self) -> MemoStats {
+        let (hits, misses, tokens_saved) = self.stats.snapshot();
+        MemoStats {
+            entries: self.len(),
+            hits,
+            misses,
+            tokens_saved,
+            cost_saved: 0.0,
         }
     }
 
     /// Invalidate all entries of a specific operation type.
     ///
-    /// This is useful for batch invalidation when the algorithm for
-    /// a specific operation type changes.
-    ///
-    /// # Example
-    ///
-    /// ```rust,ignore
-    /// // Invalidate all pilot decision caches
-    /// let removed = store.invalidate_by_op_type(MemoOpType::PilotDecision);
-    /// println!("Removed {} cached pilot decisions", removed);
-    /// ```
+    /// Useful when the algorithm for a specific operation changes.
     pub fn invalidate_by_op_type(&self, op_type: MemoOpType) -> usize {
         let mut cache = self.cache.write();
         let before = cache.len();
 
-        // Collect keys to remove based on entry value type
         let keys_to_remove: Vec<String> = cache
             .iter()
             .filter_map(|(key, entry)| {
@@ -343,7 +312,6 @@ impl MemoStore {
             })
             .collect();
 
-        // Remove entries
         for key in keys_to_remove {
             cache.pop(&key);
         }
@@ -357,21 +325,11 @@ impl MemoStore {
 
     /// Invalidate all entries matching a model ID prefix.
     ///
-    /// This is useful when switching models or when a model's behavior changes.
-    ///
-    /// # Example
-    ///
-    /// ```rust,ignore
-    /// // Invalidate all GPT-4 caches
-    /// let removed = store.invalidate_by_model_prefix("gpt-4");
-    /// ```
+    /// Useful when switching models or when a model's behavior changes.
     pub fn invalidate_by_model_prefix(&self, prefix: &str) -> usize {
         let mut cache = self.cache.write();
         let before = cache.len();
 
-        // Since the key is a fingerprint, we need to check model_id from entries
-        // For now, we'll clear all entries if prefix matches our model_id
-        // A better approach would be to store model_id in entry metadata
         let should_clear = self
             .model_id
             .as_ref()
@@ -396,14 +354,12 @@ impl MemoStore {
         let mut cache = self.cache.write();
         let before = cache.len();
 
-        // Collect expired keys
         let expired: Vec<String> = cache
             .iter()
             .filter(|(_, entry)| entry.is_expired(self.ttl))
             .map(|(k, _)| k.clone())
             .collect();
 
-        // Remove expired entries
         for key in expired {
             cache.pop(&key);
         }
@@ -417,8 +373,11 @@ impl MemoStore {
 
     /// Save the cache to disk.
     pub async fn save(&self, path: &Path) -> Result<()> {
+        // Prune expired entries before persisting
+        self.prune_expired();
+
         let cache = self.cache.read();
-        let stats = self.stats.read().await;
+        let stats = self.stats();
 
         let entries: HashMap<String, MemoEntry> =
             cache.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
@@ -426,7 +385,7 @@ impl MemoStore {
         let data = MemoStoreData {
             version: 1,
             entries,
-            stats: stats.clone(),
+            stats,
         };
 
         let parent = path
@@ -459,20 +418,15 @@ impl MemoStore {
             .map_err(|e| crate::Error::Parse(format!("Failed to deserialize memo store: {}", e)))?;
 
         let mut cache = self.cache.write();
-        let mut stats = self.stats.write().await;
 
         for (key, entry) in data.entries {
-            // Skip expired entries
             if !entry.is_expired(self.ttl) {
                 cache.put(key, entry);
             }
         }
 
-        stats.entries = cache.len();
-        stats.hits = data.stats.hits;
-        stats.misses = data.stats.misses;
-        stats.tokens_saved = data.stats.tokens_saved;
-        stats.cost_saved = data.stats.cost_saved;
+        // Restore stats
+        self.stats.load_from(data.stats.hits, data.stats.misses, data.stats.tokens_saved);
 
         info!(
             "Loaded memo store with {} entries from {:?}",
@@ -484,7 +438,6 @@ impl MemoStore {
 
     /// Make a full cache key from a MemoKey.
     fn make_key(&self, key: &MemoKey) -> String {
-        // Include model_id and version in the key
         let mut key_with_context = key.clone();
         if key_with_context.model_id.is_none() {
             key_with_context.model_id = self.model_id.clone();
@@ -616,7 +569,6 @@ mod tests {
             store.put(key, MemoValue::Summary(format!("Summary {}", i)));
         }
 
-        // Only 3 entries should remain
         assert_eq!(store.len(), 3);
     }
 
@@ -656,7 +608,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(result2.as_summary(), Some("Computed"));
-        assert_eq!(call_count.load(std::sync::atomic::Ordering::SeqCst), 1); // Still 1
+        assert_eq!(call_count.load(std::sync::atomic::Ordering::SeqCst), 1);
     }
 
     #[tokio::test]
@@ -699,7 +651,7 @@ mod tests {
             .await
             .unwrap();
 
-        // Hit via get_or_compute (this updates global stats)
+        // Hit
         store
             .get_or_compute(key.clone(), || async {
                 Ok((MemoValue::Summary("Should not be called".to_string()), 0))
@@ -707,7 +659,7 @@ mod tests {
             .await
             .unwrap();
 
-        let stats = store.stats().await;
+        let stats = store.stats();
         assert_eq!(stats.misses, 1);
         assert_eq!(stats.hits, 1);
         assert_eq!(stats.tokens_saved, 100);

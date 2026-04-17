@@ -12,7 +12,7 @@ use super::config::LlmConfig;
 use super::error::{LlmError, LlmResult};
 use super::executor::LlmExecutor;
 use super::fallback::FallbackChain;
-use crate::throttle::ConcurrencyController;
+use super::throttle::ConcurrencyController;
 
 /// Unified LLM client.
 ///
@@ -113,6 +113,15 @@ impl LlmClient {
         self
     }
 
+    /// Replace the async-openai client with a shared instance (reuses connection pool).
+    pub fn with_shared_openai_client(
+        mut self,
+        client: Arc<async_openai::Client<async_openai::config::OpenAIConfig>>,
+    ) -> Self {
+        self.executor = self.executor.with_openai_client(client);
+        self
+    }
+
     /// Add fallback chain for error recovery.
     ///
     /// # Example
@@ -134,6 +143,12 @@ impl LlmClient {
     /// Add fallback chain from an existing Arc.
     pub fn with_shared_fallback(mut self, chain: Arc<FallbackChain>) -> Self {
         self.executor = self.executor.with_shared_fallback(chain);
+        self
+    }
+
+    /// Add metrics hub for recording LLM call statistics.
+    pub fn with_shared_metrics(mut self, hub: Arc<crate::metrics::MetricsHub>) -> Self {
+        self.executor = self.executor.with_shared_metrics(hub);
         self
     }
 
@@ -340,11 +355,24 @@ mod tests {
 
     #[test]
     fn test_client_with_concurrency() {
-        use crate::throttle::ConcurrencyConfig;
+        use crate::llm::throttle::ConcurrencyConfig;
 
         let controller = ConcurrencyController::new(ConcurrencyConfig::conservative());
         let client = LlmClient::for_model("gpt-4o-mini").with_concurrency(controller);
 
         assert!(client.concurrency().is_some());
+    }
+
+    #[test]
+    fn test_client_with_shared_metrics() {
+        use crate::metrics::MetricsHub;
+
+        let hub = MetricsHub::shared();
+        let client = LlmClient::for_model("gpt-4o").with_shared_metrics(hub.clone());
+
+        // Client should still function normally
+        assert_eq!(client.config().model, "gpt-4o");
+        assert!(client.fallback().is_none()); // no fallback added
+        assert!(client.concurrency().is_none()); // no concurrency added
     }
 }

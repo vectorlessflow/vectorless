@@ -46,7 +46,7 @@ opts = IndexOptions(enable_synonym_expansion=False)
 The synonym expansion is controlled via `ReasoningIndexConfig`:
 
 ```rust
-use vectorless::document::ReasoningIndexConfig;
+use vectorless::ReasoningIndexConfig;
 
 let config = ReasoningIndexConfig::default()
     .with_synonym_expansion(true);

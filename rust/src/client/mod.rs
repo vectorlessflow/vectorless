@@ -68,9 +68,11 @@
 mod builder;
 mod engine;
 mod index_context;
+mod indexed_document;
 mod indexer;
 mod query_context;
 mod retriever;
+pub(crate) mod test_support;
 mod types;
 mod workspace;
 
@@ -93,8 +95,8 @@ pub use query_context::QueryContext;
 // ============================================================
 
 pub use types::{
-    ClientError, DocumentInfo, FailedItem, IndexItem, IndexMode, IndexOptions, IndexResult,
-    QueryResult, QueryResultItem,
+    DocumentInfo, FailedItem, IndexItem, IndexMode, IndexOptions, IndexResult, QueryResult,
+    QueryResultItem,
 };
 
 // ============================================================

@@ -55,26 +55,19 @@ impl PyConfig {
     ///
     /// Default: 10
     fn set_max_concurrent_requests(&mut self, max: usize) {
-        self.inner.concurrency.max_concurrent_requests = max;
+        self.inner.llm.throttle.max_concurrent_requests = max;
     }
 
     /// Set the rate limit (requests per minute).
     ///
     /// Default: 500
     fn set_requests_per_minute(&mut self, rpm: usize) {
-        self.inner.concurrency.requests_per_minute = rpm;
+        self.inner.llm.throttle.requests_per_minute = rpm;
     }
 
     /// Set the maximum iterations for retrieval search.
     fn set_max_iterations(&mut self, max: usize) {
         self.inner.retrieval.search.max_iterations = max;
-    }
-
-    /// Set the retrieval temperature.
-    ///
-    /// Default: 0.0
-    fn set_temperature(&mut self, temp: f32) {
-        self.inner.retrieval.temperature = temp;
     }
 
     /// Enable or disable metrics collection.

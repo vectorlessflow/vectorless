@@ -33,6 +33,10 @@ pub struct StorageConfig {
     /// Enable compression for stored documents.
     #[serde(default)]
     pub compression: CompressionConfig,
+
+    /// Directory for pipeline checkpoints (derived from `workspace_dir`).
+    #[serde(skip)]
+    pub checkpoint_dir: PathBuf,
 }
 
 fn default_workspace_dir() -> PathBuf {
@@ -100,13 +104,16 @@ fn default_checksum_enabled() -> bool {
 
 impl Default for StorageConfig {
     fn default() -> Self {
+        let workspace_dir = default_workspace_dir();
+        let checkpoint_dir = workspace_dir.join("checkpoints");
         Self {
-            workspace_dir: default_workspace_dir(),
+            workspace_dir,
             cache_size: default_cache_size(),
             atomic_writes: default_atomic_writes(),
             file_lock: default_file_lock(),
             checksum_enabled: default_checksum_enabled(),
             compression: CompressionConfig::default(),
+            checkpoint_dir,
         }
     }
 }

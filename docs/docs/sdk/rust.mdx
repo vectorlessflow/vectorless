@@ -16,7 +16,7 @@ vectorless = "0.1"
 ## Engine
 
 ```rust
-use vectorless::client::{Engine, EngineBuilder};
+use vectorless::{Engine, EngineBuilder};
 
 let engine = EngineBuilder::new()
     .with_key("sk-...")
@@ -29,7 +29,7 @@ let engine = EngineBuilder::new()
 ## Indexing
 
 ```rust
-use vectorless::client::{IndexContext, IndexOptions, IndexMode};
+use vectorless::{IndexContext, IndexOptions, IndexMode};
 
 // From a file
 let result = engine.index(IndexContext::from_path("./report.pdf")).await?;
@@ -51,7 +51,7 @@ let result = engine.index(
 ## Querying
 
 ```rust
-use vectorless::client::QueryContext;
+use vectorless::QueryContext;
 use vectorless::StrategyPreference;
 
 let result = engine.query(

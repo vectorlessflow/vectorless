@@ -6,15 +6,12 @@
 //! Users configure vectorless via [`EngineBuilder`](crate::client::EngineBuilder) methods,
 //! not by directly interacting with this module.
 
-mod loader;
-mod merge;
 mod types;
 mod validator;
 
 pub use types::Config;
 pub(crate) use types::{
-    CacheConfig, CompressionAlgorithm, ConcurrencyConfig, FallbackBehavior, FallbackConfig,
-    IndexerConfig, LlmClientConfig, LlmConfig, LlmMetricsConfig, LlmPoolConfig, MetricsConfig,
-    OnAllFailedBehavior, PilotMetricsConfig, RetrievalConfig, RetrievalMetricsConfig,
-    SufficiencyConfig, SummaryConfig,
+    CacheConfig, CompressionAlgorithm, FallbackBehavior, FallbackConfig, IndexerConfig, LlmConfig,
+    LlmMetricsConfig, MetricsConfig, OnAllFailedBehavior, PilotMetricsConfig,
+    RetrievalMetricsConfig, SlotConfig, SufficiencyConfig,
 };

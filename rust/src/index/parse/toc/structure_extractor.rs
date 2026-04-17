@@ -10,9 +10,9 @@
 use futures::stream::{self, StreamExt};
 use tracing::{debug, info, warn};
 
-use crate::config::LlmConfig;
 use crate::error::Result;
 use crate::index::parse::pdf::PdfPage;
+use crate::llm::config::LlmConfig;
 
 use super::types::TocEntry;
 use crate::llm::LlmClient;

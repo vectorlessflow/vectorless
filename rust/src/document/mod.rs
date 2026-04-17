@@ -16,7 +16,6 @@
 //! - [`NodeReference`] - In-document reference (e.g., "see Appendix G")
 //! - [`RefType`] - Type of reference (Section, Appendix, Table, etc.)
 
-mod graph;
 mod node;
 mod reasoning;
 mod reference;
@@ -24,16 +23,12 @@ mod structure;
 mod toc;
 mod tree;
 
-pub use graph::{
-    DocumentGraph, DocumentGraphConfig, DocumentGraphNode, EdgeEvidence, GraphEdge, GraphMetadata,
-    KeywordDocEntry, SharedKeyword, WeightedKeyword,
-};
 pub use node::{NodeId, TreeNode};
 pub use reasoning::{
     HotNodeEntry, ReasoningIndex, ReasoningIndexBuilder, ReasoningIndexConfig, SectionSummary,
     SummaryShortcut, TopicEntry,
 };
-pub use reference::{NodeReference, RefType, ReferenceExtractor, ReferenceResolver};
+pub use reference::{NodeReference, RefType, ReferenceExtractor};
 pub use structure::{DocumentStructure, StructureNode};
 pub use toc::{TocConfig, TocEntry, TocNode, TocView};
 pub use tree::{DocumentTree, RetrievalIndex};

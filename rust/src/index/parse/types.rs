@@ -36,6 +36,12 @@ impl DocumentFormat {
             Self::Pdf => "pdf",
         }
     }
+
+    /// All supported file extensions (lowercase).
+    ///
+    /// Single source of truth — used by directory scanning to
+    /// discover indexable files.
+    pub const SUPPORTED_EXTENSIONS: &'static [&'static str] = &["md", "pdf"];
 }
 
 /// A raw node extracted from a document.

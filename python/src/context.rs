@@ -5,7 +5,7 @@
 
 use pyo3::prelude::*;
 
-use ::vectorless::client::{DocumentFormat, IndexContext, IndexMode, IndexOptions, QueryContext};
+use ::vectorless::{DocumentFormat, IndexContext, IndexMode, IndexOptions, QueryContext};
 
 use super::error::VectorlessError;
 
@@ -31,7 +31,6 @@ fn parse_format(format: &str) -> PyResult<DocumentFormat> {
 ///     mode: Indexing mode - "default", "force", or "incremental".
 ///     generate_summaries: Whether to generate summaries. Default: True.
 ///     generate_description: Whether to generate document description. Default: False.
-///     include_text: Whether to include node text in the tree. Default: True.
 ///     generate_ids: Whether to generate node IDs. Default: True.
 ///     enable_synonym_expansion: Whether to expand keywords with LLM-generated
 ///         synonyms during indexing. Improves recall for differently-worded queries.
@@ -45,12 +44,11 @@ pub struct PyIndexOptions {
 #[pymethods]
 impl PyIndexOptions {
     #[new]
-    #[pyo3(signature = (mode="default", generate_summaries=true, generate_description=false, include_text=true, generate_ids=true, enable_synonym_expansion=false))]
+    #[pyo3(signature = (mode="default", generate_summaries=true, generate_description=false, generate_ids=true, enable_synonym_expansion=false))]
     fn new(
         mode: &str,
         generate_summaries: bool,
         generate_description: bool,
-        include_text: bool,
         generate_ids: bool,
         enable_synonym_expansion: bool,
     ) -> PyResult<Self> {
@@ -71,7 +69,6 @@ impl PyIndexOptions {
         }
         opts.generate_summaries = generate_summaries;
         opts.generate_description = generate_description;
-        opts.include_text = include_text;
         opts.generate_ids = generate_ids;
         opts.enable_synonym_expansion = enable_synonym_expansion;
         Ok(Self { inner: opts })
@@ -79,7 +76,7 @@ impl PyIndexOptions {
 
     fn __repr__(&self) -> String {
         format!(
-            "IndexOptions(mode='{}', generate_summaries={}, generate_description={}, include_text={}, generate_ids={}, enable_synonym_expansion={})",
+            "IndexOptions(mode='{}', generate_summaries={}, generate_description={}, generate_ids={}, enable_synonym_expansion={})",
             match self.inner.mode {
                 IndexMode::Default => "default",
                 IndexMode::Force => "force",
@@ -87,7 +84,6 @@ impl PyIndexOptions {
             },
             self.inner.generate_summaries,
             self.inner.generate_description,
-            self.inner.include_text,
             self.inner.generate_ids,
             self.inner.enable_synonym_expansion,
         )
@@ -267,18 +263,6 @@ impl PyQueryContext {
     /// Set the maximum tokens for the result content.
     fn with_max_tokens(&self, tokens: usize) -> Self {
         let ctx = self.inner.clone().with_max_tokens(tokens);
-        Self { inner: ctx }
-    }
-
-    /// Set whether to include the reasoning chain.
-    fn with_include_reasoning(&self, include: bool) -> Self {
-        let ctx = self.inner.clone().with_include_reasoning(include);
-        Self { inner: ctx }
-    }
-
-    /// Set the maximum tree traversal depth.
-    fn with_depth_limit(&self, depth: usize) -> Self {
-        let ctx = self.inner.clone().with_depth_limit(depth);
         Self { inner: ctx }
     }
 

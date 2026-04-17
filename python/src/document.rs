@@ -5,7 +5,7 @@
 
 use pyo3::prelude::*;
 
-use ::vectorless::client::DocumentInfo;
+use ::vectorless::DocumentInfo;
 
 /// Information about an indexed document.
 #[pyclass(name = "DocumentInfo")]

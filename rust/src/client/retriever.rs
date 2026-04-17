@@ -22,7 +22,6 @@ use std::sync::Arc;
 use tracing::info;
 
 use super::types::QueryResultItem;
-use crate::config::Config;
 use crate::document::{DocumentTree, ReasoningIndex};
 use crate::error::{Error, Result};
 use crate::events::{EventEmitter, QueryEvent};
@@ -36,24 +35,16 @@ pub(crate) struct RetrieverClient {
     /// Pipeline retriever.
     retriever: Arc<crate::retrieval::PipelineRetriever>,
 
-    /// Configuration reference.
-    config: Arc<Config>,
-
     /// Event emitter.
     events: EventEmitter,
-
-    /// Default retrieval options.
-    default_options: RetrieveOptions,
 }
 
 impl RetrieverClient {
     /// Create a new retriever client.
-    pub fn new(retriever: crate::retrieval::PipelineRetriever, config: Arc<Config>) -> Self {
+    pub fn new(retriever: crate::retrieval::PipelineRetriever) -> Self {
         Self {
             retriever: Arc::new(retriever),
-            config,
             events: EventEmitter::new(),
-            default_options: RetrieveOptions::default(),
         }
     }
 
@@ -64,6 +55,7 @@ impl RetrieverClient {
     }
 
     /// Query a document tree with optional reasoning index for fast-path lookup.
+    #[tracing::instrument(skip_all, fields(question = %question))]
     ///
     /// # Errors
     ///
@@ -146,24 +138,12 @@ impl RetrieverClient {
 
         info!("Streaming query: {:?}", question);
 
-        let (handle, rx) = self.retriever.retrieve_streaming(tree, question, options);
+        let (_handle, rx) = self.retriever.retrieve_streaming(tree, question, options);
 
-        // Spawn a sidecar task that forwards events to the EventEmitter
-        let events = self.events.clone();
-        let question_owned = question.to_string();
-        tokio::spawn(async move {
-            // The handle will complete when the streaming task finishes.
-            // We don't need to forward events individually here since
-            // the primary channel (rx) is returned to the caller.
-            // The EventEmitter events are already emitted above for Started.
-            // The caller can consume rx for detailed streaming events.
-            let _ = handle.await;
-            events.emit_query(QueryEvent::Complete {
-                total_results: 0,
-                confidence: 0.0,
-            });
-            let _ = question_owned; // suppress unused warning
-        });
+        // Note: The Complete event is NOT emitted via EventEmitter here because
+        // the streaming handle returns () — the actual result flows through the
+        // rx channel as RetrieveEvent::Completed { response }. Callers who need
+        // completion metrics should consume the channel.
 
         Ok(rx)
     }
@@ -209,9 +189,7 @@ impl Clone for RetrieverClient {
     fn clone(&self) -> Self {
         Self {
             retriever: Arc::clone(&self.retriever),
-            config: Arc::clone(&self.config),
             events: self.events.clone(),
-            default_options: self.default_options.clone(),
         }
     }
 }
@@ -222,9 +200,7 @@ mod tests {
 
     #[test]
     fn test_retriever_client_creation() {
-        let config = Arc::new(Config::default());
         let retriever = crate::retrieval::PipelineRetriever::new();
-        let client = RetrieverClient::new(retriever, config);
-        assert!(client.default_options.top_k > 0);
+        let _client = RetrieverClient::new(retriever);
     }
 }

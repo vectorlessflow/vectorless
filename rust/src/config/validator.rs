@@ -82,22 +82,26 @@ impl ValidationRule for RangeValidator {
             );
         }
 
-        // Summary ranges
-        if config.summary.max_tokens == 0 {
+        // LLM slot token ranges
+        if config.llm.index.max_tokens == 0 {
             errors.push(ValidationError::error(
-                "summary.max_tokens",
-                "Summary max tokens must be greater than 0",
+                "llm.index.max_tokens",
+                "Index max tokens must be greater than 0",
             ));
         }
 
-        if config.summary.temperature < 0.0 || config.summary.temperature > 2.0 {
-            errors.push(
-                ValidationError::warning(
-                    "summary.temperature",
-                    "Temperature outside typical range [0.0, 2.0]",
-                )
-                .with_actual(config.summary.temperature.to_string()),
-            );
+        if config.llm.retrieval.max_tokens == 0 {
+            errors.push(ValidationError::error(
+                "llm.retrieval.max_tokens",
+                "Retrieval max tokens must be greater than 0",
+            ));
+        }
+
+        if config.llm.pilot.max_tokens == 0 {
+            errors.push(ValidationError::error(
+                "llm.pilot.max_tokens",
+                "Pilot max tokens must be greater than 0",
+            ));
         }
 
         // Retrieval ranges
@@ -145,25 +149,25 @@ impl ValidationRule for RangeValidator {
             ));
         }
 
-        // Concurrency ranges
-        if config.concurrency.max_concurrent_requests == 0 {
+        // Throttle ranges
+        if config.llm.throttle.max_concurrent_requests == 0 {
             errors.push(ValidationError::error(
-                "concurrency.max_concurrent_requests",
+                "llm.throttle.max_concurrent_requests",
                 "Max concurrent requests must be greater than 0",
             ));
         }
 
-        if config.concurrency.requests_per_minute == 0 {
+        if config.llm.throttle.requests_per_minute == 0 {
             errors.push(ValidationError::error(
-                "concurrency.requests_per_minute",
+                "llm.throttle.requests_per_minute",
                 "Requests per minute must be greater than 0",
             ));
         }
 
         // Fallback ranges
-        if config.fallback.max_retries == 0 {
+        if config.llm.fallback.max_retries == 0 {
             errors.push(ValidationError::warning(
-                "fallback.max_retries",
+                "llm.fallback.max_retries",
                 "Max retries is 0, fallback will not retry",
             ));
         }
@@ -176,15 +180,15 @@ struct ConsistencyValidator;
 
 impl ValidationRule for ConsistencyValidator {
     fn validate(&self, config: &Config, errors: &mut Vec<ValidationError>) {
-        // Check if summary tokens are reasonable
-        if config.summary.max_tokens > config.indexer.max_segment_tokens {
+        // Check if index tokens are reasonable
+        if config.llm.index.max_tokens > config.indexer.max_segment_tokens {
             errors.push(
                 ValidationError::warning(
-                    "summary.max_tokens",
-                    "Summary max tokens exceeds max segment tokens",
+                    "llm.index.max_tokens",
+                    "Index max tokens exceeds max segment tokens",
                 )
                 .with_expected(format!("<= {}", config.indexer.max_segment_tokens))
-                .with_actual(config.summary.max_tokens.to_string()),
+                .with_actual(config.llm.index.max_tokens.to_string()),
             );
         }
 
@@ -254,33 +258,32 @@ struct DependencyValidator;
 impl ValidationRule for DependencyValidator {
     fn validate(&self, config: &Config, errors: &mut Vec<ValidationError>) {
         // Check if API key is available when summaries are needed
-        if config.summary.api_key.is_none() {
-            // Check if any feature requires LLM
+        if config.llm.api_key.is_none() {
             if config.indexer.max_summary_tokens > 0 {
                 errors.push(ValidationError::info(
-                    "summary.api_key",
+                    "llm.api_key",
                     "No API key configured, summary generation will be disabled",
                 ));
             }
         }
 
         // Check fallback configuration
-        if config.fallback.enabled {
-            if config.fallback.models.is_empty() && config.fallback.endpoints.is_empty() {
+        if config.llm.fallback.enabled {
+            if config.llm.fallback.models.is_empty() && config.llm.fallback.endpoints.is_empty() {
                 errors.push(ValidationError::warning(
-                    "fallback.models",
+                    "llm.fallback.models",
                     "Fallback enabled but no fallback models or endpoints configured",
                 ));
             }
 
             // Check retry behavior consistency
             if matches!(
-                config.fallback.on_rate_limit,
+                config.llm.fallback.on_rate_limit,
                 super::types::FallbackBehavior::Fallback
-            ) && config.fallback.models.is_empty()
+            ) && config.llm.fallback.models.is_empty()
             {
                 errors.push(ValidationError::error(
-                    "fallback.models",
+                    "llm.fallback.models",
                     "Rate limit behavior is 'fallback' but no fallback models configured",
                 ));
             }
@@ -374,8 +377,8 @@ mod tests {
     #[test]
     fn test_validator_catches_dependency_warnings() {
         let mut config = Config::default();
-        config.fallback.enabled = true;
-        config.fallback.models.clear();
+        config.llm.fallback.enabled = true;
+        config.llm.fallback.models.clear();
 
         let validator = ConfigValidator::new();
         let result = validator.validate(&config);
@@ -385,7 +388,7 @@ mod tests {
             assert!(
                 err.errors
                     .iter()
-                    .any(|e| e.path.contains("fallback.models"))
+                    .any(|e| e.path.contains("llm.fallback.models"))
             );
         }
     }

@@ -53,10 +53,16 @@ use std::sync::Arc;
 use std::time::Duration;
 use tracing::{debug, info, warn};
 
+use async_openai::types::chat::{
+    ChatCompletionRequestSystemMessage, ChatCompletionRequestUserMessage,
+    CreateChatCompletionRequestArgs,
+};
+
 use super::config::LlmConfig;
 use super::error::{LlmError, LlmResult};
 use super::fallback::{FallbackChain, FallbackStep};
-use crate::throttle::ConcurrencyController;
+use crate::metrics::MetricsHub;
+use super::throttle::ConcurrencyController;
 
 /// Unified executor for LLM operations.
 ///
@@ -65,10 +71,14 @@ use crate::throttle::ConcurrencyController;
 pub struct LlmExecutor {
     /// LLM configuration.
     config: LlmConfig,
+    /// Reusable async-openai client (created once, shared via Arc).
+    openai_client: Arc<async_openai::Client<async_openai::config::OpenAIConfig>>,
     /// Throttle controller (optional).
     throttle: Option<Arc<ConcurrencyController>>,
     /// Fallback chain (optional).
     fallback: Option<Arc<FallbackChain>>,
+    /// Metrics hub for recording LLM call statistics (optional).
+    metrics: Option<Arc<MetricsHub>>,
 }
 
 impl std::fmt::Debug for LlmExecutor {
@@ -78,6 +88,8 @@ impl std::fmt::Debug for LlmExecutor {
             .field("endpoint", &self.config.endpoint)
             .field("has_throttle", &self.throttle.is_some())
             .field("has_fallback", &self.fallback.is_some())
+            .field("has_openai_client", &true)
+            .field("has_metrics", &self.metrics.is_some())
             .finish()
     }
 }
@@ -85,11 +97,30 @@ impl std::fmt::Debug for LlmExecutor {
 impl LlmExecutor {
     /// Create a new executor with the given configuration.
     pub fn new(config: LlmConfig) -> Self {
+        let openai_client = Self::build_openai_client(&config);
         Self {
             config,
+            openai_client: Arc::new(openai_client),
             throttle: None,
             fallback: None,
+            metrics: None,
         }
+    }
+
+    /// Build the async-openai client from config.
+    fn build_openai_client(
+        config: &LlmConfig,
+    ) -> async_openai::Client<async_openai::config::OpenAIConfig> {
+        let api_key = config.api_key.clone().unwrap_or_default();
+        let endpoint = if config.endpoint.is_empty() {
+            "https://api.openai.com/v1".to_string()
+        } else {
+            config.endpoint.clone()
+        };
+        let openai_config = async_openai::config::OpenAIConfig::new()
+            .with_api_key(api_key)
+            .with_api_base(endpoint);
+        async_openai::Client::with_config(openai_config)
     }
 
     /// Create an executor with default configuration.
@@ -123,6 +154,21 @@ impl LlmExecutor {
     /// Add fallback chain from an existing Arc.
     pub fn with_shared_fallback(mut self, chain: Arc<FallbackChain>) -> Self {
         self.fallback = Some(chain);
+        self
+    }
+
+    /// Add metrics hub for recording LLM call statistics.
+    pub fn with_shared_metrics(mut self, hub: Arc<MetricsHub>) -> Self {
+        self.metrics = Some(hub);
+        self
+    }
+
+    /// Replace the async-openai client (used when pool reconfigures clients).
+    pub fn with_openai_client(
+        mut self,
+        client: Arc<async_openai::Client<async_openai::config::OpenAIConfig>>,
+    ) -> Self {
+        self.openai_client = client;
         self
     }
 
@@ -171,7 +217,6 @@ impl LlmExecutor {
     ) -> LlmResult<String> {
         let mut attempts = 0;
         let mut current_model = self.config.model.clone();
-        let current_endpoint = self.config.endpoint.clone();
         let mut fallback_history: Vec<FallbackStep> = vec![];
         let mut total_attempts_including_fallback = 0;
 
@@ -198,13 +243,12 @@ impl LlmExecutor {
             debug!(
                 attempt = attempts,
                 model = %current_model,
-                endpoint = %current_endpoint,
                 "Executing LLM request"
             );
 
             // Step 2: Execute the request
             let result = self
-                .do_request(&current_model, &current_endpoint, system, user, max_tokens)
+                .do_request(&current_model, system, user, max_tokens)
                 .await;
 
             match result {
@@ -224,6 +268,15 @@ impl LlmExecutor {
                     return Ok(response);
                 }
                 Err(error) => {
+                    // Record specific error events
+                    if let Some(ref metrics) = self.metrics {
+                        match &error {
+                            LlmError::RateLimit(_) => metrics.record_llm_rate_limit(),
+                            LlmError::Timeout(_) => metrics.record_llm_timeout(),
+                            _ => {}
+                        }
+                    }
+
                     // Step 3: Check if we should retry
                     if self.should_retry(&error, attempts) {
                         let delay = self.retry_delay(attempts);
@@ -250,11 +303,14 @@ impl LlmExecutor {
                                     to_model = %next_model,
                                     "Falling back to next model"
                                 );
+                                if let Some(ref metrics) = self.metrics {
+                                    metrics.record_llm_fallback();
+                                }
                                 fallback.record_fallback(
                                     &mut fallback_history,
                                     current_model.clone(),
                                     Some(next_model.clone()),
-                                    current_endpoint.clone(),
+                                    self.config.endpoint.clone(),
                                     None,
                                     error.to_string(),
                                 );
@@ -297,19 +353,11 @@ impl LlmExecutor {
             return false;
         }
 
-        match error {
-            LlmError::RateLimit(_) => self.config.retry.retry_on_rate_limit,
-            LlmError::Timeout(_) => true,
-            LlmError::Api(msg) => {
-                let msg_lower = msg.to_lowercase();
-                msg_lower.contains("rate limit")
-                    || msg_lower.contains("429")
-                    || msg_lower.contains("503")
-                    || msg_lower.contains("502")
-                    || msg_lower.contains("timeout")
-                    || msg_lower.contains("overloaded")
-            }
-            _ => false,
+        // Use unified retryable check, with rate-limit override
+        if matches!(error, LlmError::RateLimit(_)) {
+            self.config.retry.retry_on_rate_limit
+        } else {
+            error.is_retryable()
         }
     }
 
@@ -322,74 +370,42 @@ impl LlmExecutor {
     async fn do_request(
         &self,
         model: &str,
-        endpoint: &str,
         system: &str,
         user: &str,
         max_tokens: Option<u16>,
     ) -> LlmResult<String> {
-        use async_openai::{
-            Client,
-            config::OpenAIConfig,
-            types::chat::{
-                ChatCompletionRequestSystemMessage, ChatCompletionRequestUserMessage,
-                CreateChatCompletionRequestArgs,
-            },
-        };
-
-        let api_key = self.config.api_key.clone().ok_or_else(|| {
-            LlmError::Config(
-                "No API key configured. Call .with_key(\"sk-...\") when building the engine."
-                    .to_string(),
-            )
-        })?;
-
-        let openai_config = OpenAIConfig::new()
-            .with_api_key(api_key)
-            .with_api_base(endpoint);
-
-        let client = Client::with_config(openai_config);
-
-        // Truncate user prompt if too long
-        let truncated = self.truncate_prompt(user);
-
-        // Build request based on whether max_tokens is specified
-        let request = if let Some(_tokens) = max_tokens {
-            CreateChatCompletionRequestArgs::default()
-                .model(model)
-                .messages([
-                    ChatCompletionRequestSystemMessage::from(system).into(),
-                    ChatCompletionRequestUserMessage::from(truncated).into(),
-                ])
-                .temperature(self.config.temperature)
-                // .max_tokens(tokens)
-                .build()
-        } else {
-            CreateChatCompletionRequestArgs::default()
-                .model(model)
-                .messages([
-                    ChatCompletionRequestSystemMessage::from(system).into(),
-                    ChatCompletionRequestUserMessage::from(truncated).into(),
-                ])
-                .temperature(self.config.temperature)
-                .build()
-        };
-
-        let request =
-            request.map_err(|e| LlmError::Request(format!("Failed to build request: {}", e)))?;
+        // Build request
+        let request = CreateChatCompletionRequestArgs::default()
+            .model(model)
+            .messages([
+                ChatCompletionRequestSystemMessage::from(system).into(),
+                ChatCompletionRequestUserMessage::from(user).into(),
+            ])
+            .temperature(self.config.temperature)
+            .max_tokens(max_tokens.unwrap_or(self.config.max_tokens as u16))
+            .build()
+            .map_err(|e| LlmError::Request(format!("Failed to build request: {}", e)))?;
 
         info!(
             "LLM request → endpoint: {}, model: {}, system: {} chars, user: {} chars",
-            endpoint,
+            self.config.endpoint,
             model,
             system.len(),
-            truncated.len()
+            user.len()
         );
 
         let request_start = std::time::Instant::now();
-        let response = client.chat().create(request).await.map_err(|e| {
-            let msg = e.to_string();
-            LlmError::from_api_message(&msg)
-        })?;
+        let response = match self.openai_client.chat().create(request).await {
+            Ok(r) => r,
+            Err(e) => {
+                let elapsed = request_start.elapsed();
+                if let Some(ref metrics) = self.metrics {
+                    metrics.record_llm_call(0, 0, elapsed.as_millis() as u64, false);
+                }
+                let msg = e.to_string();
+                return Err(LlmError::from_api_message(&msg));
+            }
+        };
         let request_elapsed = request_start.elapsed();
 
         let usage = response.usage.as_ref();
@@ -402,6 +418,15 @@ impl LlmExecutor {
             .and_then(|choice| choice.message.content.clone())
             .ok_or(LlmError::NoContent)?;
 
+        if let Some(ref metrics) = self.metrics {
+            metrics.record_llm_call(
+                prompt_tokens as u64,
+                completion_tokens as u64,
+                request_elapsed.as_millis() as u64,
+                true,
+            );
+        }
+
         info!(
             "LLM response ← {}ms, tokens: {} prompt + {} completion, content: {} chars",
             request_elapsed.as_millis(),
@@ -411,17 +436,6 @@ impl LlmExecutor {
         );
 
         Ok(content)
-    }
-
-    /// Truncate a prompt to a reasonable length.
-    fn truncate_prompt<'a>(&self, text: &'a str) -> &'a str {
-        // Roughly 4 chars per token, limit to ~30k chars
-        const MAX_CHARS: usize = 30000;
-        if text.len() > MAX_CHARS {
-            &text[..MAX_CHARS]
-        } else {
-            text
-        }
     }
 }
 
@@ -445,7 +459,7 @@ mod tests {
 
     #[test]
     fn test_executor_with_throttle() {
-        use crate::throttle::ConcurrencyConfig;
+        use crate::llm::throttle::ConcurrencyConfig;
 
         let controller = ConcurrencyController::new(ConcurrencyConfig::conservative());
         let executor = LlmExecutor::for_model("gpt-4o-mini").with_throttle(controller);
@@ -477,5 +491,19 @@ mod tests {
         // First retry attempt (attempt 1 -> delay_for_attempt(0))
         let delay = executor.retry_delay(1);
         assert_eq!(delay, Duration::from_millis(500));
+    }
+
+    #[test]
+    fn test_executor_with_metrics() {
+        let hub = MetricsHub::shared();
+        let executor = LlmExecutor::for_model("gpt-4o").with_shared_metrics(hub);
+
+        assert!(executor.metrics.is_some());
+    }
+
+    #[test]
+    fn test_executor_without_metrics() {
+        let executor = LlmExecutor::for_model("gpt-4o");
+        assert!(executor.metrics.is_none());
     }
 }

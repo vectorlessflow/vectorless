@@ -9,6 +9,8 @@
 use std::collections::HashSet;
 
 use super::QueryComplexity;
+use crate::llm::memo::{MemoKey, MemoOpType, MemoStore, MemoValue};
+use crate::utils::fingerprint::Fingerprint;
 
 /// Query complexity detector.
 ///
@@ -16,33 +18,96 @@ use super::QueryComplexity;
 pub struct ComplexityDetector {
     /// Optional LLM client for LLM-based detection.
     llm_client: Option<crate::llm::LlmClient>,
+    /// Memo store for caching complexity detection results.
+    memo_store: Option<MemoStore>,
 }
 
 impl ComplexityDetector {
     /// Create a new complexity detector (heuristic only).
     pub fn new() -> Self {
-        Self { llm_client: None }
+        Self {
+            llm_client: None,
+            memo_store: None,
+        }
     }
 
     /// Create with LLM client for accurate detection.
     pub fn with_llm_client(client: crate::llm::LlmClient) -> Self {
         Self {
             llm_client: Some(client),
+            memo_store: None,
         }
+    }
+
+    /// Add memo store for caching complexity detection results.
+    pub fn with_memo_store(mut self, store: MemoStore) -> Self {
+        self.memo_store = Some(store);
+        self
     }
 
     /// Detect the complexity of a query.
     ///
     /// Uses LLM when available; falls back to heuristic rules.
     pub async fn detect(&self, query: &str) -> QueryComplexity {
-        if let Some(ref client) = self.llm_client {
-            if let Some(complexity) = crate::retrieval::pilot::detect_with_llm(client, query).await
-            {
-                return complexity;
+        // Check memo cache
+        if let Some(ref store) = self.memo_store {
+            let cache_key = Self::build_cache_key(query);
+            if let Some(cached) = store.get(&cache_key) {
+                if let Some(complexity) = Self::deserialize_complexity(&cached) {
+                    return complexity;
+                }
             }
-            tracing::warn!("LLM complexity detection failed, falling back to heuristic");
         }
-        self.detect_heuristic(query)
+
+        let result = if let Some(ref client) = self.llm_client {
+            if let Some(complexity) =
+                crate::retrieval::pilot::detect_with_llm(client, query).await
+            {
+                complexity
+            } else {
+                tracing::warn!("LLM complexity detection failed, falling back to heuristic");
+                self.detect_heuristic(query)
+            }
+        } else {
+            self.detect_heuristic(query)
+        };
+
+        // Cache the result
+        if let Some(ref store) = self.memo_store {
+            let cache_key = Self::build_cache_key(query);
+            store.put_with_tokens(
+                cache_key,
+                MemoValue::Text(format!("{:?}", result)),
+                (query.len() / 4) as u64,
+            );
+        }
+
+        result
+    }
+
+    /// Build a cache key for complexity detection.
+    fn build_cache_key(query: &str) -> MemoKey {
+        let fp = Fingerprint::from_str(query);
+        MemoKey {
+            op_type: MemoOpType::ComplexityDetection,
+            input_fp: fp,
+            model_id: None,
+            version: 1,
+            context_fp: Fingerprint::zero(),
+        }
+    }
+
+    /// Deserialize a QueryComplexity from a MemoValue.
+    fn deserialize_complexity(value: &MemoValue) -> Option<QueryComplexity> {
+        match value {
+            MemoValue::Text(s) => match s.as_str() {
+                "Simple" => Some(QueryComplexity::Simple),
+                "Medium" => Some(QueryComplexity::Medium),
+                "Complex" => Some(QueryComplexity::Complex),
+                _ => None,
+            },
+            _ => None,
+        }
     }
 
     /// Heuristic-based fallback: keyword matching + word count.

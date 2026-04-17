@@ -6,8 +6,8 @@
 use regex::Regex;
 use tracing::debug;
 
-use crate::config::LlmConfig;
 use crate::error::Result;
+use crate::llm::config::LlmConfig;
 
 use super::types::TocDetection;
 use crate::index::parse::pdf::PdfPage;

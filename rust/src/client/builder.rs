@@ -7,15 +7,16 @@
 //! [`Engine`] instances with sensible defaults.
 
 use crate::{
-    client::engine::Engine, config::Config, events::EventEmitter, retrieval::PipelineRetriever,
-    storage::Workspace,
+    client::engine::Engine, config::Config, events::EventEmitter, metrics::MetricsHub,
+    retrieval::PipelineRetriever, storage::Workspace,
 };
 
 /// Builder for creating a [`Engine`] client.
 ///
-/// `api_key`, `model` and `endpoint` are **required**.
+/// `api_key`, `model` and `endpoint` are **required** for simple usage.
+/// Advanced users can provide a pre-built [`Config`] via [`with_config`](EngineBuilder::with_config).
 ///
-/// # Example
+/// # Example (simple)
 ///
 /// ```rust,no_run
 /// use vectorless::client::EngineBuilder;
@@ -30,6 +31,25 @@ use crate::{
 ///         .await?;
 ///    Ok(())
 /// }
+/// ```
+///
+/// # Example (advanced)
+///
+/// ```rust,ignore
+/// use vectorless::client::EngineBuilder;
+/// use vectorless::config::{Config, LlmConfig, SlotConfig};
+///
+/// let config = Config::new().with_llm(
+///     LlmConfig::new("gpt-4o")
+///         .with_api_key("sk-...")
+///         .with_endpoint("https://api.openai.com/v1")
+///         .with_index(SlotConfig::fast().with_model("gpt-4o-mini"))
+/// );
+///
+/// let engine = EngineBuilder::new()
+///     .with_config(config)
+///     .build()
+///     .await?;
 /// ```
 #[derive(Debug)]
 pub struct EngineBuilder {
@@ -63,7 +83,7 @@ impl EngineBuilder {
     }
 
     // ============================================================
-    // Basic Configuration
+    // Configuration
     // ============================================================
 
     /// Set a custom configuration.
@@ -85,25 +105,10 @@ impl EngineBuilder {
     }
 
     // ============================================================
-    // LLM Configuration
+    // LLM Configuration (simple overrides)
     // ============================================================
 
-    /// Set the LLM API key. **Required**.
-    ///
-    /// # Example
-    ///
-    /// ```rust,no_run
-    /// use vectorless::client::EngineBuilder;
-    ///
-    /// # #[tokio::main]
-    /// # async fn main() -> Result<(), vectorless::BuildError> {
-    /// let engine = EngineBuilder::new()
-    ///     .with_key("sk-...")
-    ///     .build()
-    ///     .await?;
-    /// # Ok(())
-    /// # }
-    /// ```
+    /// Set the LLM API key. **Required** (unless provided via Config).
     #[must_use]
     pub fn with_key(mut self, key: impl Into<String>) -> Self {
         self.api_key = Some(key.into());
@@ -111,23 +116,6 @@ impl EngineBuilder {
     }
 
     /// Set the LLM model name.
-    ///
-    /// Default: "gpt-4o".
-    ///
-    /// # Example
-    ///
-    /// ```rust,no_run
-    /// use vectorless::client::EngineBuilder;
-    ///
-    /// # #[tokio::main]
-    /// # async fn main() -> Result<(), vectorless::BuildError> {
-    /// let engine = EngineBuilder::new()
-    ///     .with_model("gpt-4o-mini")
-    ///     .build()
-    ///     .await?;
-    /// # Ok(())
-    /// # }
-    /// ```
     #[must_use]
     pub fn with_model(mut self, model: impl Into<String>) -> Self {
         self.model = Some(model.into());
@@ -135,24 +123,6 @@ impl EngineBuilder {
     }
 
     /// Set a custom LLM endpoint URL.
-    ///
-    /// Use this for OpenAI-compatible APIs (e.g., Azure OpenAI, local models).
-    ///
-    /// # Example
-    ///
-    /// ```rust,no_run
-    /// use vectorless::client::EngineBuilder;
-    ///
-    /// # #[tokio::main]
-    /// # async fn main() -> Result<(), vectorless::BuildError> {
-    /// let engine = EngineBuilder::new()
-    ///     .with_model("deepseek-chat")
-    ///     .with_endpoint("https://api.deepseek.com/v1")
-    ///     .build()
-    ///     .await?;
-    /// # Ok(())
-    /// # }
-    /// ```
     #[must_use]
     pub fn with_endpoint(mut self, url: impl Into<String>) -> Self {
         self.endpoint = Some(url.into());
@@ -160,17 +130,14 @@ impl EngineBuilder {
     }
 
     // ============================================================
-    // Retrieval Configuration
+    // Build
     // ============================================================
 
     /// Build the Engine client.
     ///
-    /// `api_key` and `model` must be provided via builder methods or config file.
-    ///
     /// # Errors
     ///
     /// Returns a [`BuildError`] if:
-    /// - Configuration loading fails
     /// - Workspace creation fails
     /// - Required `api_key` or `model` is missing
     ///
@@ -184,6 +151,7 @@ impl EngineBuilder {
     /// let engine = EngineBuilder::new()
     ///     .with_key("sk-...")
     ///     .with_model("gpt-4o")
+    ///     .with_endpoint("https://api.openai.com/v1")
     ///     .build()
     ///     .await?;
     /// # Ok(())
@@ -193,51 +161,22 @@ impl EngineBuilder {
         // Load user-provided or default configuration
         let mut config = self.config.unwrap_or_default();
 
-        // Apply individual overrides to LlmPoolConfig (primary) + legacy config (compat)
+        // Apply simple overrides — write once, no dual-writing
         if let Some(api_key) = self.api_key {
-            config.llm.api_key = Some(api_key.clone());
-            // Legacy compat
-            config.retrieval.api_key = Some(api_key.clone());
-            config.summary.api_key = Some(api_key);
+            config.llm.api_key = Some(api_key);
         }
         if let Some(model) = self.model {
-            // Apply model to pool slots
-            if config.llm.index.model.is_empty() {
-                config.llm.index.model = model.clone();
-            }
-            if config.llm.retrieval.model.is_empty() {
-                config.llm.retrieval.model = model.clone();
-            }
-            if config.llm.pilot.model.is_empty() {
-                config.llm.pilot.model = model.clone();
-            }
-            // Legacy compat
-            config.retrieval.model = model.clone();
-            config.summary.model = model;
+            config.llm.model = model;
         }
         if let Some(endpoint) = self.endpoint {
-            config.llm.endpoint = Some(endpoint.clone());
-            // Legacy compat
-            config.retrieval.endpoint = endpoint.clone();
-            config.summary.endpoint = endpoint;
+            config.llm.endpoint = Some(endpoint);
         }
+
         // Validate required settings
-        let resolved_key = config
-            .llm
-            .api_key
-            .as_ref()
-            .or_else(|| config.llm.retrieval.api_key.as_ref())
-            .or_else(|| config.summary.api_key.as_ref())
-            .or_else(|| config.retrieval.api_key.as_ref());
-        if resolved_key.is_none() {
+        if config.llm.api_key.is_none() {
             return Err(BuildError::MissingApiKey);
         }
-        let retrieval_model = if config.llm.retrieval.model.is_empty() {
-            &config.retrieval.model
-        } else {
-            &config.llm.retrieval.model
-        };
-        if retrieval_model.is_empty() {
+        if config.llm.model.is_empty() {
             return Err(BuildError::MissingModel);
         }
         if config.llm.endpoint.is_none() {
@@ -249,17 +188,9 @@ impl EngineBuilder {
             .await
             .map_err(|e| BuildError::Workspace(e.to_string()))?;
 
-        // Build LlmPool from config.llm — centralizes all LLM client creation
-        let llm_configs: crate::llm::LlmConfigs = config.llm.clone().into();
-        let pool = {
-            let controller = crate::throttle::ConcurrencyController::new(
-                crate::throttle::ConcurrencyConfig::new()
-                    .with_max_concurrent_requests(config.concurrency.max_concurrent_requests)
-                    .with_requests_per_minute(config.concurrency.requests_per_minute)
-                    .with_enabled(config.concurrency.enabled),
-            );
-            crate::llm::LlmPool::new(llm_configs).with_concurrency(controller)
-        };
+        // Build LlmPool from unified LlmConfig (shared metrics hub)
+        let metrics_hub = std::sync::Arc::new(MetricsHub::with_defaults());
+        let pool = crate::llm::LlmPool::from_config(&config.llm, Some(metrics_hub.clone()));
 
         // Indexer uses pool.index()
         let indexer = crate::client::indexer::IndexerClient::with_llm(pool.index().clone());
@@ -278,7 +209,7 @@ impl EngineBuilder {
 
         // Build engine
         let events = self.events.unwrap_or_default();
-        Engine::with_components(config, workspace, retriever, indexer, events)
+        Engine::with_components(config, workspace, retriever, indexer, events, metrics_hub)
             .await
             .map_err(|e| BuildError::Other(e.to_string()))
     }
@@ -298,11 +229,11 @@ pub enum BuildError {
     Workspace(String),
 
     /// Missing API key.
-    #[error("Missing API key: call .with_key(\"sk-...\") or set api_key in config file")]
+    #[error("Missing API key: call .with_key(\"sk-...\") or set api_key in config")]
     MissingApiKey,
 
     /// Missing model name.
-    #[error("Missing model: call .with_model(\"gpt-4o\") or set model in config file")]
+    #[error("Missing model: call .with_model(\"gpt-4o\") or set model in config")]
     MissingModel,
 
     /// Missing endpoint URL.

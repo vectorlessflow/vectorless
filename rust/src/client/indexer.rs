@@ -28,14 +28,12 @@ use uuid::Uuid;
 
 use crate::error::{Error, Result};
 use crate::index::parse::DocumentFormat;
-use crate::index::{
-    IndexInput, IndexMode, PipelineExecutor, PipelineOptions, ReasoningIndexConfig, SummaryStrategy,
-};
+use crate::index::{IndexInput, IndexMode, PipelineExecutor, PipelineOptions};
 use crate::llm::LlmClient;
 use crate::storage::{DocumentMeta, PersistedDocument};
 
 use super::index_context::IndexSource;
-use super::types::{IndexOptions, IndexedDocument};
+use super::indexed_document::IndexedDocument;
 use crate::events::{EventEmitter, IndexEvent};
 
 /// Document indexing client.
@@ -61,6 +59,14 @@ impl IndexerClient {
         }
     }
 
+    /// Create with a custom executor factory (for testing).
+    pub(crate) fn with_factory(factory: Arc<dyn Fn() -> PipelineExecutor + Send + Sync>) -> Self {
+        Self {
+            executor_factory: factory,
+            events: EventEmitter::new(),
+        }
+    }
+
     /// Create with event emitter.
     pub fn with_events(mut self, events: EventEmitter) -> Self {
         self.events = events;
@@ -68,46 +74,51 @@ impl IndexerClient {
     }
 
     /// Index a document from an index context.
+    ///
+    /// The caller provides fully constructed [`PipelineOptions`]
+    /// (including checkpoint dir, reasoning config, etc.).
     pub async fn index(
         &self,
         source: &IndexSource,
         name: Option<&str>,
-        options: &IndexOptions,
+        pipeline_options: PipelineOptions,
     ) -> Result<IndexedDocument> {
-        self.index_with_existing(source, name, options, None).await
+        self.index_with_existing(source, name, pipeline_options, None)
+            .await
     }
 
     /// Index a document, optionally reusing an existing tree for incremental updates.
+    ///
+    /// The caller provides fully constructed [`PipelineOptions`].
     pub async fn index_with_existing(
         &self,
         source: &IndexSource,
         name: Option<&str>,
-        options: &IndexOptions,
+        mut pipeline_options: PipelineOptions,
         existing_tree: Option<&crate::DocumentTree>,
     ) -> Result<IndexedDocument> {
+        pipeline_options.existing_tree = existing_tree.cloned();
         match source {
-            IndexSource::Path(path) => {
-                self.index_from_path(path, name, options, existing_tree)
-                    .await
-            }
+            IndexSource::Path(path) => self.index_from_path(path, name, pipeline_options).await,
             IndexSource::Content { data, format } => {
-                self.index_from_content(data, *format, name, options, existing_tree)
+                self.index_from_content(data, *format, name, pipeline_options)
                     .await
             }
             IndexSource::Bytes { data, format } => {
-                self.index_from_bytes(data, *format, name, options, existing_tree)
+                self.index_from_bytes(data, *format, name, pipeline_options)
                     .await
             }
         }
     }
 
     /// Index from a file path.
+    ///
+    /// Uses the format from `PipelineOptions.mode` — no redundant detection.
     async fn index_from_path(
         &self,
         path: &Path,
         name: Option<&str>,
-        options: &IndexOptions,
-        existing_tree: Option<&crate::DocumentTree>,
+        pipeline_options: PipelineOptions,
     ) -> Result<IndexedDocument> {
         let path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
 
@@ -126,31 +137,19 @@ impl IndexerClient {
             tracing::warn!("{}", warning);
         }
 
-        // Emit start event
-        self.events.emit_index(IndexEvent::Started {
-            path: path.display().to_string(),
-        });
+        // Resolve format from pipeline options (set by Engine) — no re-detection
+        let format = Self::format_from_mode(&pipeline_options.mode);
 
-        // Generate document ID
-        let doc_id = Uuid::new_v4().to_string();
-
-        // Detect format from extension
-        let format = self.detect_format_from_path(&path)?;
-        self.events
-            .emit_index(IndexEvent::FormatDetected { format });
-
-        info!("Indexing {:?} document: {}", format, path.display());
-
-        // Build pipeline options
-        let pipeline_options =
-            self.build_pipeline_options_with_existing(options, format, existing_tree.cloned());
-
-        // Create pipeline input and execute
         let input = IndexInput::file(&path);
-        let mut executor = (self.executor_factory)();
-        let result = executor.execute(input, pipeline_options).await?;
-
-        self.build_indexed_document(doc_id, result, format, name, Some(&path))
+        self.run_pipeline(
+            input,
+            format,
+            &path.display().to_string(),
+            name,
+            Some(&path),
+            pipeline_options,
+        )
+        .await
     }
 
     /// Index from content string.
@@ -159,8 +158,7 @@ impl IndexerClient {
         content: &str,
         format: DocumentFormat,
         name: Option<&str>,
-        options: &IndexOptions,
-        existing_tree: Option<&crate::DocumentTree>,
+        pipeline_options: PipelineOptions,
     ) -> Result<IndexedDocument> {
         // Validate content before indexing
         let validation = crate::utils::validate_content(content, format);
@@ -174,24 +172,16 @@ impl IndexerClient {
             ));
         }
 
-        self.events.emit_index(IndexEvent::Started {
-            path: name.unwrap_or("content").to_string(),
-        });
-
-        let doc_id = Uuid::new_v4().to_string();
-        self.events
-            .emit_index(IndexEvent::FormatDetected { format });
-
-        info!("Indexing {:?} document from content", format);
-
-        let pipeline_options =
-            self.build_pipeline_options_with_existing(options, format, existing_tree.cloned());
-
         let input = IndexInput::content(content);
-        let mut executor = (self.executor_factory)();
-        let result = executor.execute(input, pipeline_options).await?;
-
-        self.build_indexed_document(doc_id, result, format, name, None)
+        self.run_pipeline(
+            input,
+            format,
+            name.unwrap_or("content"),
+            name,
+            None,
+            pipeline_options,
+        )
+        .await
     }
 
     /// Index from binary data.
@@ -200,8 +190,7 @@ impl IndexerClient {
         bytes: &[u8],
         format: DocumentFormat,
         name: Option<&str>,
-        options: &IndexOptions,
-        existing_tree: Option<&crate::DocumentTree>,
+        pipeline_options: PipelineOptions,
     ) -> Result<IndexedDocument> {
         // Validate bytes before indexing
         let validation = crate::utils::validate_bytes(bytes, format);
@@ -215,56 +204,49 @@ impl IndexerClient {
             ));
         }
 
-        self.events.emit_index(IndexEvent::Started {
-            path: name.unwrap_or("bytes").to_string(),
-        });
-
-        let doc_id = Uuid::new_v4().to_string();
-        self.events
-            .emit_index(IndexEvent::FormatDetected { format });
-
         info!(
             "Indexing {:?} document from bytes ({} bytes)",
             format,
             bytes.len()
         );
 
-        let pipeline_options =
-            self.build_pipeline_options_with_existing(options, format, existing_tree.cloned());
-
         let input = IndexInput::bytes(bytes);
+        self.run_pipeline(
+            input,
+            format,
+            name.unwrap_or("bytes"),
+            name,
+            None,
+            pipeline_options,
+        )
+        .await
+    }
+
+    /// Common pipeline execution: emit events → run pipeline → build result.
+    #[tracing::instrument(skip_all, fields(format = ?format, source = %source_label))]
+    async fn run_pipeline(
+        &self,
+        input: IndexInput,
+        format: DocumentFormat,
+        source_label: &str,
+        name: Option<&str>,
+        path: Option<&Path>,
+        pipeline_options: PipelineOptions,
+    ) -> Result<IndexedDocument> {
+        self.events.emit_index(IndexEvent::Started {
+            path: source_label.to_string(),
+        });
+
+        let doc_id = Uuid::new_v4().to_string();
+        self.events
+            .emit_index(IndexEvent::FormatDetected { format });
+
+        info!("Indexing {:?} document: {}", format, source_label);
+
         let mut executor = (self.executor_factory)();
         let result = executor.execute(input, pipeline_options).await?;
 
-        self.build_indexed_document(doc_id, result, format, name, None)
-    }
-
-    /// Build pipeline options with optional existing tree for incremental updates.
-    fn build_pipeline_options_with_existing(
-        &self,
-        options: &IndexOptions,
-        format: DocumentFormat,
-        existing_tree: Option<crate::DocumentTree>,
-    ) -> PipelineOptions {
-        PipelineOptions {
-            mode: match format {
-                DocumentFormat::Markdown => IndexMode::Markdown,
-                DocumentFormat::Pdf => IndexMode::Pdf,
-            },
-            generate_ids: options.generate_ids,
-            summary_strategy: if options.generate_summaries {
-                SummaryStrategy::full()
-            } else {
-                SummaryStrategy::none()
-            },
-            generate_description: options.generate_description,
-            reasoning_index: ReasoningIndexConfig {
-                enable_synonym_expansion: options.enable_synonym_expansion,
-                ..ReasoningIndexConfig::default()
-            },
-            existing_tree,
-            ..Default::default()
-        }
+        self.build_indexed_document(doc_id, result, format, name, path)
     }
 
     /// Build indexed document from pipeline result.
@@ -316,16 +298,32 @@ impl IndexerClient {
         Ok(doc)
     }
 
+    /// Resolve `DocumentFormat` from `PipelineOptions.mode`.
+    ///
+    /// Falls back to Markdown for `Auto` mode (the engine resolves
+    /// `Auto` to a concrete format before calling the indexer).
+    fn format_from_mode(mode: &IndexMode) -> DocumentFormat {
+        match mode {
+            IndexMode::Markdown => DocumentFormat::Markdown,
+            IndexMode::Pdf => DocumentFormat::Pdf,
+            IndexMode::Auto => DocumentFormat::Markdown,
+        }
+    }
+
     /// Detect document format from file extension.
-    fn detect_format_from_path(&self, path: &Path) -> Result<DocumentFormat> {
+    pub(crate) fn detect_format_from_path(&self, path: &Path) -> Result<DocumentFormat> {
         let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
         DocumentFormat::from_extension(ext)
             .ok_or_else(|| Error::Parse(format!("Unsupported format: {}", ext)))
     }
 
-    /// Convert IndexedDocument to PersistedDocument, storing fingerprints from pipeline options.
-    pub fn to_persisted_with_options(
-        &self,
+    /// Convert [`IndexedDocument`] to [`PersistedDocument`].
+    ///
+    /// This is an associated function — it does not depend on client state.
+    /// Stores content and logic fingerprints from the pipeline options.
+    ///
+    /// Uses async file I/O to avoid blocking the tokio runtime.
+    pub async fn to_persisted(
         doc: IndexedDocument,
         pipeline_options: &PipelineOptions,
     ) -> PersistedDocument {
@@ -338,9 +336,9 @@ impl IndexerClient {
             )
             .with_description(doc.description.clone().unwrap_or_default());
 
-        // Compute content fingerprint for incremental indexing
+        // Compute content fingerprint for incremental indexing (async I/O)
         if let Some(ref path) = doc.source_path {
-            if let Ok(bytes) = std::fs::read(path) {
+            if let Ok(bytes) = tokio::fs::read(path).await {
                 let fp = crate::utils::fingerprint::Fingerprint::from_bytes(&bytes);
                 meta = meta.with_fingerprint(fp);
             }

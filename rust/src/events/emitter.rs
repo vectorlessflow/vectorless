@@ -8,24 +8,9 @@
 
 use std::sync::Arc;
 
-use async_trait::async_trait;
 use parking_lot::RwLock;
-use tracing::info;
 
-use super::types::{Event, IndexEvent, QueryEvent, WorkspaceEvent};
-
-/// Sync event handler trait.
-pub(crate) trait EventHandler: Send + Sync {
-    /// Handle an event.
-    fn handle(&self, event: &Event);
-}
-
-/// Async event handler trait.
-#[async_trait]
-pub(crate) trait AsyncEventHandler: Send + Sync {
-    /// Handle an event asynchronously.
-    async fn handle(&self, event: &Event);
-}
+use super::types::{IndexEvent, QueryEvent, WorkspaceEvent};
 
 /// Type alias for sync index handler.
 pub(crate) type IndexHandler = Box<dyn Fn(&IndexEvent) + Send + Sync>;
@@ -46,9 +31,6 @@ struct EventEmitterInner {
 
     /// Workspace event handlers.
     workspace_handlers: Vec<WorkspaceHandler>,
-
-    /// Async handlers.
-    async_handlers: Vec<Arc<dyn AsyncEventHandler>>,
 }
 
 impl Default for EventEmitterInner {
@@ -57,7 +39,6 @@ impl Default for EventEmitterInner {
             index_handlers: Vec::new(),
             query_handlers: Vec::new(),
             workspace_handlers: Vec::new(),
-            async_handlers: Vec::new(),
         }
     }
 }
@@ -120,25 +101,11 @@ impl EventEmitter {
         self
     }
 
-    /// Add an async event handler.
-    pub(crate) fn with_async_handler<H>(self, handler: Arc<H>) -> Self
-    where
-        H: AsyncEventHandler + 'static,
-    {
-        self.inner.write().async_handlers.push(handler);
-        self
-    }
-
     /// Emit an index event.
     pub fn emit_index(&self, event: IndexEvent) {
         let inner = self.inner.read();
         for handler in &inner.index_handlers {
             handler(&event);
-        }
-        for _handler in &inner.async_handlers {
-            // For sync context, we just log async handlers
-            let event = Event::Index(event.clone());
-            info!("Async event: {:?}", event);
         }
     }
 
@@ -164,7 +131,6 @@ impl EventEmitter {
         !inner.index_handlers.is_empty()
             || !inner.query_handlers.is_empty()
             || !inner.workspace_handlers.is_empty()
-            || !inner.async_handlers.is_empty()
     }
 
     /// Merge another emitter into this one.
@@ -180,9 +146,6 @@ impl EventEmitter {
         inner
             .workspace_handlers
             .extend(other_inner.workspace_handlers.drain(..));
-        inner
-            .async_handlers
-            .extend(other_inner.async_handlers.drain(..));
         drop(inner);
         drop(other_inner);
         self
@@ -212,7 +175,6 @@ impl std::fmt::Debug for EventEmitter {
             .field("index_handlers", &inner.index_handlers.len())
             .field("query_handlers", &inner.query_handlers.len())
             .field("workspace_handlers", &inner.workspace_handlers.len())
-            .field("async_handlers", &inner.async_handlers.len())
             .finish()
     }
 }

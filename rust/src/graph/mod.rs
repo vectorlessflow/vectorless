@@ -35,7 +35,4 @@ mod types;
 // Re-export public API
 pub use builder::DocumentGraphBuilder;
 pub use config::DocumentGraphConfig;
-pub use types::{
-    DocumentGraph, DocumentGraphNode, EdgeEvidence, GraphEdge, GraphMetadata, KeywordDocEntry,
-    SharedKeyword, WeightedKeyword,
-};
+pub use types::{DocumentGraph, DocumentGraphNode, EdgeEvidence, GraphEdge, WeightedKeyword};
