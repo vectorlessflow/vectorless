@@ -59,6 +59,16 @@ impl IndexerClient {
         }
     }
 
+    /// Create with a custom executor factory (for testing).
+    pub(crate) fn with_factory(
+        factory: Arc<dyn Fn() -> PipelineExecutor + Send + Sync>,
+    ) -> Self {
+        Self {
+            executor_factory: factory,
+            events: EventEmitter::new(),
+        }
+    }
+
     /// Create with event emitter.
     pub fn with_events(mut self, events: EventEmitter) -> Self {
         self.events = events;
@@ -215,6 +225,7 @@ impl IndexerClient {
     }
 
     /// Common pipeline execution: emit events → run pipeline → build result.
+    #[tracing::instrument(skip_all, fields(format = ?format, source = %source_label))]
     async fn run_pipeline(
         &self,
         input: IndexInput,

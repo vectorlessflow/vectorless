@@ -55,6 +55,7 @@ impl RetrieverClient {
     }
 
     /// Query a document tree with optional reasoning index for fast-path lookup.
+    #[tracing::instrument(skip_all, fields(question = %question))]
     ///
     /// # Errors
     ///

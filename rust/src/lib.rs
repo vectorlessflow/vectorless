@@ -87,3 +87,12 @@ pub use metrics::{
 
 // Errors
 pub use error::{Error, Result};
+
+/// Test-only utilities.
+///
+/// **Do not use in production code.** This module exposes helpers for writing
+/// integration tests without a real LLM endpoint.
+#[doc(hidden)]
+pub mod __test_support {
+    pub use crate::client::test_support::*;
+}

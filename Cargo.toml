@@ -35,7 +35,7 @@ uuid = { version = "1.10", features = ["v4", "serde"] }
 chrono = { version = "0.4", default-features = false, features = ["serde", "clock"] }
 
 # Logging
-tracing = "0.1"
+tracing = { version = "0.1", features = ["attributes"] }
 
 # Rate limiting
 governor = "0.6"

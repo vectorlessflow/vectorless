@@ -161,6 +161,7 @@ impl Engine {
     /// Multiple sources are indexed in parallel.
     ///
     /// Returns an [`IndexResult`] containing the indexed document metadata.
+    #[tracing::instrument(skip_all, fields(sources = ctx.sources.len()))]
     pub async fn index(&self, ctx: IndexContext) -> Result<IndexResult> {
         self.check_cancel()?;
         if ctx.is_empty() {
@@ -239,6 +240,7 @@ impl Engine {
     }
 
     /// Process a single source — resolve action and index.
+    #[tracing::instrument(skip_all, fields(source = %source))]
     ///
     /// Returns `(items, failed)`.
     async fn process_source(
@@ -387,6 +389,7 @@ impl Engine {
     ///
     /// Accepts a [`QueryContext`] that specifies the query text and scope
     /// (single document, multiple documents, or entire workspace).
+    #[tracing::instrument(skip_all, fields(query = %ctx.query))]
     pub async fn query(&self, ctx: QueryContext) -> Result<QueryResult> {
         self.check_cancel()?;
         let _guard = self.inc_active();
