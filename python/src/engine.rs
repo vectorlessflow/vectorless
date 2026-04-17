@@ -229,9 +229,6 @@ impl PyEngine {
     }
 
     /// Generate a complete metrics report.
-    ///
-    /// Returns:
-    ///     MetricsReport with LLM, Pilot, and Retrieval metrics.
     fn metrics_report(&self) -> PyMetricsReport {
         run_metrics_report(Arc::clone(&self.inner))
     }

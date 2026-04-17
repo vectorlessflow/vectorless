@@ -56,6 +56,7 @@ use crate::{
         PipelineOptions,
         incremental::{self, IndexAction},
     },
+    metrics::MetricsHub,
     retrieval::{PipelineRetriever, RetrieveEventReceiver},
     storage::{PersistedDocument, Workspace},
 };
@@ -65,7 +66,7 @@ use super::{
     indexer::IndexerClient,
     query_context::{QueryContext, QueryScope},
     retriever::RetrieverClient,
-    types::{DocumentInfo, FailedItem, IndexItem, IndexMode, IndexResult, QueryResult},
+    types::{DocumentInfo, FailedItem, IndexItem, IndexMode, IndexResult, QueryResult, QueryResultItem},
     workspace::WorkspaceClient,
 };
 
@@ -97,6 +98,9 @@ pub struct Engine {
 
     /// Workspace client for persistence.
     workspace: WorkspaceClient,
+
+    /// Central metrics hub for unified collection.
+    metrics_hub: Arc<MetricsHub>,
 
     /// Whether the document graph needs rebuilding (set after index, consumed in query).
     graph_dirty: Arc<AtomicBool>,
@@ -139,6 +143,7 @@ impl Engine {
             indexer,
             retriever,
             workspace: workspace_client,
+            metrics_hub: Arc::new(MetricsHub::with_defaults()),
             graph_dirty: Arc::new(AtomicBool::new(false)),
             cancelled: Arc::new(AtomicBool::new(false)),
             active_ops: Arc::new(Mutex::new(0)),
@@ -406,36 +411,53 @@ impl Engine {
                 }
             }
 
-            let mut items = Vec::with_capacity(doc_ids.len());
+            // Query documents in parallel (with concurrency limit)
+            let concurrency = self.config.llm.throttle.max_concurrent_requests;
+            let query = ctx.query.clone();
+            let cancelled = Arc::clone(&self.cancelled);
+
+            let results: Vec<(String, std::result::Result<QueryResultItem, String>)> =
+                futures::stream::iter(doc_ids.into_iter())
+                    .map(|doc_id| {
+                        let engine = self.clone();
+                        let options = options.clone();
+                        let query = query.clone();
+                        let cancelled = Arc::clone(&cancelled);
+                        async move {
+                            if cancelled.load(Ordering::Relaxed) {
+                                return (doc_id, Err("Operation cancelled".to_string()));
+                            }
+
+                            let (tree, reasoning_index) = match engine.get_structure(&doc_id).await {
+                                Ok(t) => t,
+                                Err(e) => return (doc_id, Err(e.to_string())),
+                            };
+
+                            match engine
+                                .retriever
+                                .query_with_reasoning_index(&tree, &query, &options, reasoning_index)
+                                .await
+                            {
+                                Ok(mut result) => {
+                                    result.doc_id = doc_id.clone();
+                                    (doc_id, Ok(result))
+                                }
+                                Err(e) => (doc_id, Err(e.to_string())),
+                            }
+                        }
+                    })
+                    .buffer_unordered(concurrency)
+                    .collect()
+                    .await;
+
+            let mut items = Vec::new();
             let mut failed = Vec::new();
-
-            for doc_id in doc_ids {
-                if self.is_cancelled() {
-                    failed.push(FailedItem::new(&doc_id, "Operation cancelled".to_string()));
-                    break;
-                }
-
-                let (tree, reasoning_index) = match self.get_structure(&doc_id).await {
-                    Ok((t, ri)) => (t, ri),
-                    Err(e) => {
-                        tracing::warn!("Skipping document {}: {}", doc_id, e);
-                        failed.push(FailedItem::new(&doc_id, e.to_string()));
-                        continue;
-                    }
-                };
-
-                match self
-                    .retriever
-                    .query_with_reasoning_index(&tree, &ctx.query, &options, reasoning_index)
-                    .await
-                {
-                    Ok(mut result) => {
-                        result.doc_id = doc_id;
-                        items.push(result);
-                    }
+            for (doc_id, result) in results {
+                match result {
+                    Ok(item) => items.push(item),
                     Err(e) => {
                         tracing::warn!("Query failed for {}: {}", doc_id, e);
-                        failed.push(FailedItem::new(&doc_id, e.to_string()));
+                        failed.push(FailedItem::new(&doc_id, e));
                     }
                 }
             }
@@ -516,6 +538,14 @@ impl Engine {
     /// Returns `None` if no graph has been built yet.
     pub async fn get_graph(&self) -> Result<Option<crate::graph::DocumentGraph>> {
         self.workspace.get_graph().await
+    }
+
+    /// Generate a complete metrics report.
+    ///
+    /// Returns a [`MetricsReport`](crate::metrics::MetricsReport) containing
+    /// LLM usage, pilot decision, and retrieval operation metrics.
+    pub fn metrics_report(&self) -> crate::metrics::MetricsReport {
+        self.metrics_hub.generate_report()
     }
 
     /// Cancel all in-flight `index()` and `query()` operations.
@@ -626,8 +656,7 @@ impl Engine {
             IndexSource::Bytes { format, .. } => *format,
         };
 
-        let checkpoint_dir =
-            Some(std::path::PathBuf::from(&self.config.storage.workspace_dir).join("checkpoints"));
+        let checkpoint_dir = Some(self.config.storage.checkpoint_dir.clone());
 
         PipelineOptions {
             mode: match format {
@@ -723,21 +752,30 @@ impl Engine {
             return Ok(());
         }
 
-        // Load all documents and extract keyword profiles
+        // Load all documents in parallel and extract keyword profiles
         let doc_ids = self.workspace.inner().list_documents().await;
-        let mut builder = crate::graph::DocumentGraphBuilder::new(self.config.graph.clone());
+        let concurrency = self.config.llm.throttle.max_concurrent_requests;
 
-        for doc_id in &doc_ids {
-            if let Some(doc) = self.workspace.load(doc_id).await? {
-                let keywords = Self::extract_keywords_from_doc(&doc);
-                builder.add_document(
-                    &doc.meta.id,
-                    &doc.meta.name,
-                    &doc.meta.format,
-                    doc.meta.node_count,
-                    keywords,
-                );
-            }
+        let loaded: Vec<Option<PersistedDocument>> =
+            futures::stream::iter(doc_ids.iter().cloned())
+                .map(|doc_id| {
+                    let ws = self.workspace.clone();
+                    async move { ws.load(&doc_id).await.ok().flatten() }
+                })
+                .buffer_unordered(concurrency)
+                .collect()
+                .await;
+
+        let mut builder = crate::graph::DocumentGraphBuilder::new(self.config.graph.clone());
+        for doc in loaded.into_iter().flatten() {
+            let keywords = Self::extract_keywords_from_doc(&doc);
+            builder.add_document(
+                &doc.meta.id,
+                &doc.meta.name,
+                &doc.meta.format,
+                doc.meta.node_count,
+                keywords,
+            );
         }
 
         let graph = builder.build();
@@ -766,6 +804,7 @@ impl Clone for Engine {
             indexer: self.indexer.clone(),
             retriever: self.retriever.clone(),
             workspace: self.workspace.clone(),
+            metrics_hub: Arc::clone(&self.metrics_hub),
             graph_dirty: Arc::clone(&self.graph_dirty),
             cancelled: Arc::clone(&self.cancelled),
             active_ops: Arc::clone(&self.active_ops),
