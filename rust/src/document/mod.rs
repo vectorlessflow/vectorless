@@ -16,7 +16,6 @@
 //! - [`NodeReference`] - In-document reference (e.g., "see Appendix G")
 //! - [`RefType`] - Type of reference (Section, Appendix, Table, etc.)
 
-mod graph;
 mod node;
 mod reasoning;
 mod reference;
