@@ -9,7 +9,7 @@ use super::client::LlmClient;
 use super::config::LlmConfig;
 use super::fallback::{FallbackChain, FallbackConfig};
 use crate::metrics::MetricsHub;
-use crate::throttle::ConcurrencyController;
+use super::throttle::ConcurrencyController;
 
 /// Pool of LLM clients for different purposes.
 ///

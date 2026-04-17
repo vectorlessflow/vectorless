@@ -62,7 +62,7 @@ use super::config::LlmConfig;
 use super::error::{LlmError, LlmResult};
 use super::fallback::{FallbackChain, FallbackStep};
 use crate::metrics::MetricsHub;
-use crate::throttle::ConcurrencyController;
+use super::throttle::ConcurrencyController;
 
 /// Unified executor for LLM operations.
 ///
@@ -459,7 +459,7 @@ mod tests {
 
     #[test]
     fn test_executor_with_throttle() {
-        use crate::throttle::ConcurrencyConfig;
+        use super::throttle::ConcurrencyConfig;
 
         let controller = ConcurrencyController::new(ConcurrencyConfig::conservative());
         let executor = LlmExecutor::for_model("gpt-4o-mini").with_throttle(controller);

@@ -423,8 +423,8 @@ impl ThrottleConfig {
     }
 
     /// Convert to the runtime concurrency config.
-    pub fn to_runtime_config(&self) -> crate::throttle::ConcurrencyConfig {
-        crate::throttle::ConcurrencyConfig {
+    pub fn to_runtime_config(&self) -> crate::llm::throttle::ConcurrencyConfig {
+        crate::llm::throttle::ConcurrencyConfig {
             max_concurrent_requests: self.max_concurrent_requests,
             requests_per_minute: self.requests_per_minute,
             enabled: self.enabled,

@@ -53,7 +53,6 @@ mod llm;
 mod memo;
 mod retrieval;
 mod storage;
-mod throttle;
 mod utils;
 
 // ── Public API ───────────────────────────────────────────────────────────────
