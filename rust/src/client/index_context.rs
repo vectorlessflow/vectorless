@@ -146,7 +146,7 @@ impl IndexContext {
     /// Internal: scan a directory for supported document files.
     fn scan_dir(dir: impl Into<PathBuf>, recursive: bool) -> Self {
         let dir = dir.into();
-        let supported_extensions = ["md", "pdf"];
+        let supported_extensions = DocumentFormat::SUPPORTED_EXTENSIONS;
 
         if !dir.exists() {
             tracing::warn!("Directory not found: {}", dir.display());

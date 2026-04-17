@@ -56,10 +56,6 @@ pub struct QueryContext {
     pub(crate) max_tokens: Option<usize>,
     /// Retrieval strategy override.
     pub(crate) strategy: Option<StrategyPreference>,
-    /// Whether to include the reasoning chain in the result.
-    pub(crate) include_reasoning: bool,
-    /// Maximum tree traversal depth.
-    pub(crate) depth_limit: Option<usize>,
 }
 
 impl QueryContext {
@@ -70,8 +66,6 @@ impl QueryContext {
             scope: QueryScope::Workspace,
             max_tokens: None,
             strategy: None,
-            include_reasoning: true,
-            depth_limit: None,
         }
     }
 
@@ -99,18 +93,6 @@ impl QueryContext {
     /// Set the retrieval strategy.
     pub fn with_strategy(mut self, strategy: StrategyPreference) -> Self {
         self.strategy = Some(strategy);
-        self
-    }
-
-    /// Set whether to include the reasoning chain.
-    pub fn with_include_reasoning(mut self, include: bool) -> Self {
-        self.include_reasoning = include;
-        self
-    }
-
-    /// Set the maximum tree traversal depth.
-    pub fn with_depth_limit(mut self, depth: usize) -> Self {
-        self.depth_limit = Some(depth);
         self
     }
 
@@ -153,7 +135,6 @@ mod tests {
     fn test_query_context_new() {
         let ctx = QueryContext::new("What is this?");
         assert_eq!(ctx.query, "What is this?");
-        assert!(ctx.include_reasoning);
     }
 
     #[test]
@@ -192,12 +173,8 @@ mod tests {
     fn test_builder_options() {
         let ctx = QueryContext::new("test")
             .with_doc_ids(vec!["doc-1".to_string()])
-            .with_max_tokens(4000)
-            .with_include_reasoning(false)
-            .with_depth_limit(5);
+            .with_max_tokens(4000);
 
         assert_eq!(ctx.max_tokens, Some(4000));
-        assert!(!ctx.include_reasoning);
-        assert_eq!(ctx.depth_limit, Some(5));
     }
 }

@@ -270,18 +270,6 @@ impl PyQueryContext {
         Self { inner: ctx }
     }
 
-    /// Set whether to include the reasoning chain.
-    fn with_include_reasoning(&self, include: bool) -> Self {
-        let ctx = self.inner.clone().with_include_reasoning(include);
-        Self { inner: ctx }
-    }
-
-    /// Set the maximum tree traversal depth.
-    fn with_depth_limit(&self, depth: usize) -> Self {
-        let ctx = self.inner.clone().with_depth_limit(depth);
-        Self { inner: ctx }
-    }
-
     fn __repr__(&self) -> String {
         "QueryContext(...)".to_string()
     }
