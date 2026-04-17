@@ -13,8 +13,8 @@ mod validator;
 
 pub use types::Config;
 pub(crate) use types::{
-    CacheConfig, CompressionAlgorithm, ConcurrencyConfig, FallbackBehavior, FallbackConfig,
-    IndexerConfig, LlmClientConfig, LlmConfig, LlmMetricsConfig, LlmPoolConfig, MetricsConfig,
-    OnAllFailedBehavior, PilotMetricsConfig, RetrievalConfig, RetrievalMetricsConfig,
-    SufficiencyConfig, SummaryConfig,
+    CacheConfig, CompressionAlgorithm, ContentAggregatorConfig, FallbackBehavior, FallbackConfig,
+    IndexerConfig, LlmConfig, LlmMetricsConfig, MetricsConfig, OnAllFailedBehavior,
+    PilotMetricsConfig, RetrievalConfig, RetrievalMetricsConfig, RetryConfig, SlotConfig,
+    StrategyConfig, SufficiencyConfig, ThrottleConfig,
 };

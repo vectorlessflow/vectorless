@@ -7,7 +7,7 @@ use futures::stream::{self, StreamExt};
 use rand::seq::SliceRandom;
 use tracing::{debug, info};
 
-use crate::config::LlmConfig;
+use crate::llm::config::LlmConfig;
 use crate::error::Result;
 use crate::index::parse::pdf::PdfPage;
 

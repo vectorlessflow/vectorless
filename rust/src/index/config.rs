@@ -10,7 +10,8 @@
 //! - [`ThinningConfig`] - Node merging settings
 
 use super::summary::SummaryStrategy;
-use crate::config::{ConcurrencyConfig, IndexerConfig};
+use crate::config::IndexerConfig;
+use crate::throttle::ConcurrencyConfig;
 use crate::document::{DocumentTree, ReasoningIndexConfig};
 use crate::utils::fingerprint::{Fingerprint, Fingerprinter};
 

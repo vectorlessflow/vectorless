@@ -153,7 +153,8 @@ impl Engine {
 
         let concurrency = self
             .config
-            .concurrency
+            .llm
+            .throttle
             .max_concurrent_requests
             .min(ctx.sources.len());
 

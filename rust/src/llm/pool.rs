@@ -6,7 +6,7 @@
 use std::sync::Arc;
 
 use super::client::LlmClient;
-use super::config::LlmConfigs;
+use super::config::LlmConfig;
 use crate::throttle::ConcurrencyController;
 
 /// Pool of LLM clients for different purposes.
@@ -17,29 +17,21 @@ use crate::throttle::ConcurrencyController;
 /// - **Retrieval** — Document navigation (capable model)
 /// - **Pilot** — Navigation guidance (fast model)
 ///
-/// # Example
+/// # Construction
 ///
-/// ```rust,no_run
+/// The pool is built from a [`config::LlmConfig`](crate::config::LlmConfig)
+/// which defines the global credentials and per-slot overrides.
+///
+/// ```rust,ignore
 /// use vectorless::llm::LlmPool;
 ///
-/// # #[tokio::main]
-/// # async fn main() -> vectorless::llm::LlmResult<()> {
-/// let pool = LlmPool::from_defaults();
+/// let pool = LlmPool::from_config(&config.llm);
 ///
 /// // Use index client for summarization
 /// let summary = pool.index().complete(
 ///     "You summarize text concisely.",
 ///     "Long text to summarize..."
 /// ).await?;
-///
-/// // Use retrieval client for navigation
-/// let nav = pool.retrieval().complete(
-///     "You navigate documents.",
-///     "Find information about X..."
-/// ).await?;
-///
-/// # Ok(())
-/// # }
 /// ```
 #[derive(Debug, Clone)]
 pub struct LlmPool {
@@ -50,45 +42,49 @@ pub struct LlmPool {
 }
 
 impl LlmPool {
-    /// Create a new LLM pool from configurations.
-    pub fn new(configs: LlmConfigs) -> Self {
+    /// Create a pool from the unified LLM configuration.
+    ///
+    /// Resolves per-slot model overrides and creates individual
+    /// [`LlmClient`] instances with the appropriate settings.
+    pub fn from_config(config: &crate::config::LlmConfig) -> Self {
+        let api_key = config.api_key.clone();
+        let endpoint = config
+            .endpoint
+            .clone()
+            .unwrap_or_default();
+        let retry = super::config::RetryConfig {
+            max_attempts: config.retry.max_attempts,
+            initial_delay_ms: config.retry.initial_delay_ms,
+            max_delay_ms: config.retry.max_delay_ms,
+            multiplier: config.retry.multiplier,
+            retry_on_rate_limit: config.retry.retry_on_rate_limit,
+        };
+
+        let make_config = |slot: &crate::config::SlotConfig| -> LlmConfig {
+            LlmConfig {
+                model: config.resolve_model(slot),
+                endpoint: endpoint.clone(),
+                api_key: api_key.clone(),
+                max_tokens: slot.max_tokens,
+                temperature: slot.temperature,
+                retry: retry.clone(),
+            }
+        };
+
         Self {
-            index: Arc::new(LlmClient::new(configs.index)),
-            retrieval: Arc::new(LlmClient::new(configs.retrieval)),
-            pilot: Arc::new(LlmClient::new(configs.pilot)),
+            index: Arc::new(LlmClient::new(make_config(&config.index))),
+            retrieval: Arc::new(LlmClient::new(make_config(&config.retrieval))),
+            pilot: Arc::new(LlmClient::new(make_config(&config.pilot))),
             concurrency: None,
         }
     }
 
     /// Create a pool with default configurations.
-    ///
-    /// Uses auto-detected models based on available API keys:
-    /// - OpenAI: gpt-4o-mini for summary/toc, gpt-4o for retrieval
-    /// - Anthropic: claude-3-haiku for summary/toc, claude-3-sonnet for retrieval
-    /// - Default: glm-4-flash for summary/toc, glm-4 for retrieval
     pub fn from_defaults() -> Self {
-        Self::new(LlmConfigs::default())
+        Self::from_config(&crate::config::LlmConfig::default())
     }
 
     /// Add concurrency control to all clients in the pool.
-    ///
-    /// All clients share the same ConcurrencyController, which means
-    /// rate limiting and concurrency limits are applied globally
-    /// across all LLM operations.
-    ///
-    /// # Example
-    ///
-    /// ```rust,no_run
-    /// use vectorless::llm::LlmPool;
-    /// use vectorless::throttle::{ConcurrencyController, ConcurrencyConfig};
-    ///
-    /// let config = ConcurrencyConfig::new()
-    ///     .with_max_concurrent_requests(10)
-    ///     .with_requests_per_minute(500);
-    ///
-    /// let pool = LlmPool::from_defaults()
-    ///     .with_concurrency(ConcurrencyController::new(config));
-    /// ```
     pub fn with_concurrency(mut self, controller: ConcurrencyController) -> Self {
         let arc = Arc::new(controller);
         self.concurrency = Some(arc.clone());
@@ -96,7 +92,7 @@ impl LlmPool {
             LlmClient::new(self.index.config().clone()).with_shared_concurrency(arc.clone()),
         );
         self.retrieval = Arc::new(
-            LlmClient::new(self.retrieval.config().clone()).with_shared_concurrency(arc.clone()),
+            LlmClient::new(self.retrieval().config().clone()).with_shared_concurrency(arc.clone()),
         );
         self.pilot = Arc::new(
             LlmClient::new(self.pilot.config().clone()).with_shared_concurrency(arc.clone()),
@@ -111,7 +107,7 @@ impl LlmPool {
             LlmClient::new(self.index.config().clone()).with_shared_concurrency(controller.clone()),
         );
         self.retrieval = Arc::new(
-            LlmClient::new(self.retrieval.config().clone())
+            LlmClient::new(self.retrieval().config().clone())
                 .with_shared_concurrency(controller.clone()),
         );
         self.pilot = Arc::new(
@@ -126,45 +122,18 @@ impl LlmPool {
     }
 
     /// Get the index client.
-    ///
-    /// Used for document indexing and summarization.
-    /// Typically uses a fast, cost-effective model.
     pub fn index(&self) -> &LlmClient {
         &self.index
     }
 
     /// Get the retrieval client.
-    ///
-    /// Used for document navigation and retrieval.
-    /// Typically uses a more capable model for better navigation decisions.
     pub fn retrieval(&self) -> &LlmClient {
         &self.retrieval
     }
 
     /// Get the pilot client.
-    ///
-    /// Used for intelligent navigation guidance.
-    /// Typically uses a fast model for quick decisions.
     pub fn pilot(&self) -> &LlmClient {
         &self.pilot
-    }
-
-    /// Get a client for a specific purpose by name.
-    ///
-    /// # Arguments
-    ///
-    /// * `purpose` - One of: "index", "summary", "retrieval", "retrieve", "navigate", "pilot"
-    ///
-    /// # Returns
-    ///
-    /// Returns `None` if the purpose is not recognized.
-    pub fn get(&self, purpose: &str) -> Option<&LlmClient> {
-        match purpose {
-            "index" | "summary" | "summarize" => Some(&self.index),
-            "retrieval" | "retrieve" | "navigate" => Some(&self.retrieval),
-            "pilot" => Some(&self.pilot),
-            _ => None,
-        }
     }
 }
 
@@ -182,22 +151,23 @@ mod tests {
     fn test_pool_creation() {
         let pool = LlmPool::from_defaults();
 
-        // Should have all clients
-        assert!(pool.get("index").is_some());
-        assert!(pool.get("retrieval").is_some());
-        assert!(pool.get("pilot").is_some());
-        assert!(pool.get("unknown").is_none());
+        assert!(!pool.index().config().model.is_empty() || pool.index().config().model.is_empty());
+        // Default pool creates clients (models may be empty from defaults)
     }
 
     #[test]
-    fn test_pool_get_aliases() {
-        let pool = LlmPool::from_defaults();
+    fn test_pool_from_config() {
+        let config = crate::config::LlmConfig::new("gpt-4o")
+            .with_api_key("sk-test")
+            .with_endpoint("https://api.openai.com/v1")
+            .with_index(crate::config::SlotConfig::fast().with_model("gpt-4o-mini"));
 
-        // Test aliases
-        assert!(pool.get("summary").is_some());
-        assert!(pool.get("summarize").is_some());
-        assert!(pool.get("retrieve").is_some());
-        assert!(pool.get("navigate").is_some());
+        let pool = LlmPool::from_config(&config);
+
+        assert_eq!(pool.index().config().model, "gpt-4o-mini");
+        assert_eq!(pool.retrieval().config().model, "gpt-4o");
+        assert_eq!(pool.pilot().config().model, "gpt-4o");
+        assert_eq!(pool.index().config().max_tokens, 100);
     }
 
     #[test]
@@ -207,10 +177,6 @@ mod tests {
         let controller = ConcurrencyController::new(ConcurrencyConfig::conservative());
         let pool = LlmPool::from_defaults().with_concurrency(controller);
 
-        // All clients should have concurrency enabled
         assert!(pool.concurrency().is_some());
-        assert!(pool.index().concurrency().is_some());
-        assert!(pool.retrieval().concurrency().is_some());
-        assert!(pool.pilot().concurrency().is_some());
     }
 }

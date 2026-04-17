@@ -2,15 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! Configuration type definitions.
-//!
-//! All configuration values are defined inline in `Default` trait implementations.
-//! Configuration is loaded from TOML files only — no environment variables, no auto-detection.
 
-mod concurrency;
 mod content;
-mod fallback;
 mod indexer;
-mod llm;
 mod llm_pool;
 mod metrics;
 mod retrieval;
@@ -18,12 +12,12 @@ mod storage;
 
 use serde::{Deserialize, Serialize};
 
-pub(crate) use concurrency::ConcurrencyConfig;
 pub(crate) use content::ContentAggregatorConfig;
-pub(crate) use fallback::{FallbackBehavior, FallbackConfig, OnAllFailedBehavior};
 pub(crate) use indexer::IndexerConfig;
-pub(crate) use llm::{LlmConfig, SummaryConfig};
-pub(crate) use llm_pool::{LlmClientConfig, LlmPoolConfig};
+pub(crate) use llm_pool::{
+    FallbackBehavior, FallbackConfig, LlmConfig, OnAllFailedBehavior, RetryConfig, SlotConfig,
+    ThrottleConfig,
+};
 pub(crate) use metrics::{
     LlmMetricsConfig, MetricsConfig, PilotMetricsConfig, RetrievalMetricsConfig,
 };
@@ -33,13 +27,42 @@ pub(crate) use storage::{
 };
 
 /// Main configuration for vectorless.
+///
+/// Users typically configure via [`EngineBuilder`](crate::client::EngineBuilder):
+///
+/// ```rust,no_run
+/// use vectorless::client::EngineBuilder;
+///
+/// # async fn example() -> Result<(), vectorless::BuildError> {
+/// let engine = EngineBuilder::new()
+///     .with_key("sk-...")
+///     .with_model("gpt-4o")
+///     .with_endpoint("https://api.openai.com/v1")
+///     .build()
+///     .await?;
+/// # Ok(())
+/// # }
+/// ```
+///
+/// Advanced users can construct this programmatically:
+///
+/// ```rust,ignore
+/// use vectorless::config::{Config, LlmConfig, SlotConfig};
+///
+/// let config = Config::new().with_llm(
+///     LlmConfig::new("gpt-4o")
+///         .with_api_key("sk-...")
+///         .with_endpoint("https://api.openai.com/v1")
+///         .with_index(SlotConfig::fast().with_model("gpt-4o-mini"))
+/// );
+/// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
-    /// Unified LLM configuration (pool, retry, throttle, fallback).
+    /// LLM configuration (model, credentials, retry, throttle, fallback).
     #[serde(default)]
-    pub llm: LlmPoolConfig,
+    pub llm: LlmConfig,
 
-    /// Unified metrics configuration.
+    /// Metrics configuration.
     #[serde(default)]
     pub metrics: MetricsConfig,
 
@@ -47,11 +70,7 @@ pub struct Config {
     #[serde(default)]
     pub indexer: IndexerConfig,
 
-    /// Summary model configuration (legacy, prefer llm.summary).
-    #[serde(default)]
-    pub summary: SummaryConfig,
-
-    /// Retrieval model configuration.
+    /// Retrieval strategy configuration (search, content aggregation, etc.).
     #[serde(default)]
     pub retrieval: RetrievalConfig,
 
@@ -59,31 +78,20 @@ pub struct Config {
     #[serde(default)]
     pub storage: StorageConfig,
 
-    /// Concurrency control configuration (legacy, prefer llm.throttle).
-    #[serde(default)]
-    pub concurrency: ConcurrencyConfig,
-
     /// Document graph configuration.
     #[serde(default)]
     pub graph: crate::graph::DocumentGraphConfig,
-
-    /// Fallback/error recovery configuration (legacy, prefer llm.fallback).
-    #[serde(default)]
-    pub fallback: FallbackConfig,
 }
 
 impl Default for Config {
     fn default() -> Self {
         Self {
-            llm: LlmPoolConfig::default(),
+            llm: LlmConfig::default(),
             metrics: MetricsConfig::default(),
             indexer: IndexerConfig::default(),
-            summary: SummaryConfig::default(),
             retrieval: RetrievalConfig::default(),
             storage: StorageConfig::default(),
-            concurrency: ConcurrencyConfig::default(),
             graph: crate::graph::DocumentGraphConfig::default(),
-            fallback: FallbackConfig::default(),
         }
     }
 }
@@ -94,8 +102,8 @@ impl Config {
         Self::default()
     }
 
-    /// Set the LLM pool configuration.
-    pub fn with_llm(mut self, llm: LlmPoolConfig) -> Self {
+    /// Set the LLM configuration.
+    pub fn with_llm(mut self, llm: LlmConfig) -> Self {
         self.llm = llm;
         self
     }
@@ -112,12 +120,6 @@ impl Config {
         self
     }
 
-    /// Set the summary configuration.
-    pub fn with_summary(mut self, summary: SummaryConfig) -> Self {
-        self.summary = summary;
-        self
-    }
-
     /// Set the retrieval configuration.
     pub fn with_retrieval(mut self, retrieval: RetrievalConfig) -> Self {
         self.retrieval = retrieval;
@@ -130,21 +132,9 @@ impl Config {
         self
     }
 
-    /// Set the concurrency configuration.
-    pub fn with_concurrency(mut self, concurrency: ConcurrencyConfig) -> Self {
-        self.concurrency = concurrency;
-        self
-    }
-
     /// Set the document graph configuration.
     pub fn with_graph(mut self, graph: crate::graph::DocumentGraphConfig) -> Self {
         self.graph = graph;
-        self
-    }
-
-    /// Set the fallback configuration.
-    pub fn with_fallback(mut self, fallback: FallbackConfig) -> Self {
-        self.fallback = fallback;
         self
     }
 
@@ -160,11 +150,18 @@ impl Config {
             ));
         }
 
-        // Validate summary (index)
-        if self.summary.max_tokens == 0 {
+        // Validate LLM slot tokens
+        if self.llm.index.max_tokens == 0 {
             errors.push(ValidationError::error(
-                "summary.max_tokens",
-                "Summary max tokens must be greater than 0",
+                "llm.index.max_tokens",
+                "Index max tokens must be greater than 0",
+            ));
+        }
+
+        if self.llm.retrieval.max_tokens == 0 {
+            errors.push(ValidationError::error(
+                "llm.retrieval.max_tokens",
+                "Retrieval max tokens must be greater than 0",
             ));
         }
 
@@ -174,16 +171,6 @@ impl Config {
                 "retrieval.top_k",
                 "Top K must be greater than 0",
             ));
-        }
-
-        if self.retrieval.temperature < 0.0 || self.retrieval.temperature > 2.0 {
-            errors.push(
-                ValidationError::warning(
-                    "retrieval.temperature",
-                    "Temperature outside typical range [0.0, 2.0]",
-                )
-                .with_actual(self.retrieval.temperature.to_string()),
-            );
         }
 
         // Validate content aggregator
@@ -207,10 +194,10 @@ impl Config {
             );
         }
 
-        // Validate concurrency
-        if self.concurrency.max_concurrent_requests == 0 {
+        // Validate throttle
+        if self.llm.throttle.max_concurrent_requests == 0 {
             errors.push(ValidationError::error(
-                "concurrency.max_concurrent_requests",
+                "llm.throttle.max_concurrent_requests",
                 "Max concurrent requests must be greater than 0",
             ));
         }
@@ -230,9 +217,9 @@ impl Config {
         }
 
         // Validate fallback
-        if self.fallback.enabled && self.fallback.models.is_empty() {
+        if self.llm.fallback.enabled && self.llm.fallback.models.is_empty() {
             errors.push(ValidationError::warning(
-                "fallback.models",
+                "llm.fallback.models",
                 "Fallback enabled but no fallback models configured",
             ));
         }
@@ -355,20 +342,18 @@ mod tests {
     #[test]
     fn test_config_defaults() {
         let config = Config::default();
+        assert!(config.llm.model.is_empty());
+        assert!(config.llm.index.model.is_none());
+        assert_eq!(config.retrieval.top_k, 3);
         assert_eq!(config.indexer.subsection_threshold, 300);
-        assert!(config.summary.model.is_empty());
-        assert!(config.retrieval.model.is_empty());
-        assert_eq!(config.concurrency.max_concurrent_requests, 10);
-        // New fields
-        assert!(config.llm.index.model.is_empty());
         assert!(config.metrics.enabled);
     }
 
     #[test]
-    fn test_llm_pool_config_defaults() {
-        let config = LlmPoolConfig::default();
-        assert!(config.index.model.is_empty());
-        assert!(config.retrieval.model.is_empty());
+    fn test_llm_config_defaults() {
+        let config = LlmConfig::default();
+        assert!(config.index.model.is_none());
+        assert!(config.retrieval.model.is_none());
         assert_eq!(config.retry.max_attempts, 3);
         assert_eq!(config.throttle.max_concurrent_requests, 10);
     }

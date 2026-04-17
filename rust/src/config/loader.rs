@@ -173,8 +173,8 @@ mod tests {
     fn test_default_config() {
         let config = Config::default();
         assert_eq!(config.indexer.subsection_threshold, 300);
-        assert!(config.summary.model.is_empty());
-        assert!(config.retrieval.model.is_empty());
+        assert!(config.llm.model.is_empty());
+        assert_eq!(config.retrieval.top_k, 3);
     }
 
     #[test]
@@ -195,6 +195,6 @@ mod tests {
     fn test_config_loader_with_validation() {
         let config = ConfigLoader::new().with_validation(true).load().unwrap();
 
-        assert!(config.retrieval.model.is_empty());
+        assert!(config.llm.model.is_empty());
     }
 }

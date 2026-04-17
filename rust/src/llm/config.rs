@@ -1,16 +1,114 @@
 // Copyright (c) 2026 vectorless developers
 // SPDX-License-Identifier: Apache-2.0
 
-//! LLM configuration types.
+//! Runtime LLM configuration types.
 
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
-/// Retry configuration for LLM calls.
+/// Runtime LLM client configuration.
+///
+/// This is the runtime representation used by [`LlmClient`](super::LlmClient).
+/// Created from the config-layer [`LlmConfig`](crate::config::LlmConfig)
+/// during pool construction — users never construct this directly.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LlmConfig {
+    /// Model name (e.g., "gpt-4o-mini", "gpt-4o").
+    #[serde(default)]
+    pub model: String,
+
+    /// API endpoint URL.
+    #[serde(default)]
+    pub endpoint: String,
+
+    /// API key.
+    #[serde(default)]
+    pub api_key: Option<String>,
+
+    /// Maximum tokens for response.
+    #[serde(default = "default_max_tokens")]
+    pub max_tokens: usize,
+
+    /// Temperature for generation.
+    #[serde(default = "default_temperature")]
+    pub temperature: f32,
+
+    /// Retry configuration.
+    #[serde(default)]
+    pub retry: RetryConfig,
+}
+
+fn default_max_tokens() -> usize {
+    2000
+}
+
+fn default_temperature() -> f32 {
+    0.0
+}
+
+impl Default for LlmConfig {
+    fn default() -> Self {
+        Self {
+            model: String::new(),
+            endpoint: String::new(),
+            api_key: None,
+            max_tokens: default_max_tokens(),
+            temperature: default_temperature(),
+            retry: RetryConfig::default(),
+        }
+    }
+}
+
+impl LlmConfig {
+    /// Create a new config with a specific model.
+    pub fn new(model: impl Into<String>) -> Self {
+        Self {
+            model: model.into(),
+            ..Self::default()
+        }
+    }
+
+    /// Set the model.
+    pub fn with_model(mut self, model: impl Into<String>) -> Self {
+        self.model = model.into();
+        self
+    }
+
+    /// Set the endpoint.
+    pub fn with_endpoint(mut self, endpoint: impl Into<String>) -> Self {
+        self.endpoint = endpoint.into();
+        self
+    }
+
+    /// Set the API key.
+    pub fn with_api_key(mut self, api_key: impl Into<String>) -> Self {
+        self.api_key = Some(api_key.into());
+        self
+    }
+
+    /// Set the max tokens.
+    pub fn with_max_tokens(mut self, max_tokens: usize) -> Self {
+        self.max_tokens = max_tokens;
+        self
+    }
+
+    /// Set the temperature.
+    pub fn with_temperature(mut self, temperature: f32) -> Self {
+        self.temperature = temperature;
+        self
+    }
+
+    /// Set the retry configuration.
+    pub fn with_retry(mut self, retry: RetryConfig) -> Self {
+        self.retry = retry;
+        self
+    }
+}
+
+/// Runtime retry configuration for LLM calls.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RetryConfig {
     /// Maximum number of retry attempts (including initial call).
-    /// e.g., max_attempts=3 means 1 initial + 2 retries.
     #[serde(default = "default_max_attempts")]
     pub max_attempts: usize,
 
@@ -100,226 +198,6 @@ impl RetryConfig {
         let delay_ms = (self.initial_delay_ms as f64) * self.multiplier.powf(attempt as f64);
         let delay_ms = delay_ms.min(self.max_delay_ms as f64);
         Duration::from_millis(delay_ms as u64)
-    }
-}
-
-/// LLM client configuration.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LlmConfig {
-    /// Model name (e.g., "gpt-4o-mini", "gpt-4o").
-    #[serde(default)]
-    pub model: String,
-
-    /// API endpoint URL.
-    #[serde(default)]
-    pub endpoint: String,
-
-    /// API key.
-    #[serde(default)]
-    pub api_key: Option<String>,
-
-    /// Maximum tokens for response.
-    #[serde(default = "default_max_tokens")]
-    pub max_tokens: usize,
-
-    /// Temperature for generation.
-    #[serde(default = "default_temperature")]
-    pub temperature: f32,
-
-    /// Retry configuration.
-    #[serde(default)]
-    pub retry: RetryConfig,
-}
-
-fn default_max_tokens() -> usize {
-    2000
-}
-fn default_temperature() -> f32 {
-    0.0
-}
-
-impl Default for LlmConfig {
-    fn default() -> Self {
-        Self {
-            model: String::new(),
-            endpoint: String::new(),
-            api_key: None,
-            max_tokens: default_max_tokens(),
-            temperature: default_temperature(),
-            retry: RetryConfig::default(),
-        }
-    }
-}
-
-impl LlmConfig {
-    /// Create a new config with a specific model.
-    pub fn new(model: impl Into<String>) -> Self {
-        Self {
-            model: model.into(),
-            ..Self::default()
-        }
-    }
-
-    /// Set the model.
-    pub fn with_model(mut self, model: impl Into<String>) -> Self {
-        self.model = model.into();
-        self
-    }
-
-    /// Set the endpoint.
-    pub fn with_endpoint(mut self, endpoint: impl Into<String>) -> Self {
-        self.endpoint = endpoint.into();
-        self
-    }
-
-    /// Set the API key.
-    pub fn with_api_key(mut self, api_key: impl Into<String>) -> Self {
-        self.api_key = Some(api_key.into());
-        self
-    }
-
-    /// Set the max tokens.
-    pub fn with_max_tokens(mut self, max_tokens: usize) -> Self {
-        self.max_tokens = max_tokens;
-        self
-    }
-
-    /// Set the temperature.
-    pub fn with_temperature(mut self, temperature: f32) -> Self {
-        self.temperature = temperature;
-        self
-    }
-
-    /// Set the retry configuration.
-    pub fn with_retry(mut self, retry: RetryConfig) -> Self {
-        self.retry = retry;
-        self
-    }
-}
-
-/// Pool of LLM configurations for different purposes.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LlmConfigs {
-    /// Configuration for indexing tasks (document summarization, etc.).
-    #[serde(default = "default_index_config", alias = "summary")]
-    pub index: LlmConfig,
-
-    /// Configuration for retrieval/navigation tasks.
-    #[serde(default = "default_retrieval_config")]
-    pub retrieval: LlmConfig,
-
-    /// Configuration for Pilot navigation tasks.
-    #[serde(default = "default_pilot_config")]
-    pub pilot: LlmConfig,
-}
-
-fn default_index_config() -> LlmConfig {
-    LlmConfig {
-        max_tokens: 200,
-        temperature: 0.0,
-        ..LlmConfig::default()
-    }
-}
-
-fn default_retrieval_config() -> LlmConfig {
-    LlmConfig {
-        max_tokens: 100,
-        temperature: 0.0,
-        ..LlmConfig::default()
-    }
-}
-
-fn default_pilot_config() -> LlmConfig {
-    LlmConfig {
-        max_tokens: 300,
-        temperature: 0.0,
-        ..LlmConfig::default()
-    }
-}
-
-impl Default for LlmConfigs {
-    fn default() -> Self {
-        Self {
-            index: default_index_config(),
-            retrieval: default_retrieval_config(),
-            pilot: default_pilot_config(),
-        }
-    }
-}
-
-// ============================================================================
-// Conversion from config types
-// ============================================================================
-
-impl From<crate::config::LlmPoolConfig> for LlmConfigs {
-    fn from(pool: crate::config::LlmPoolConfig) -> Self {
-        // Resolve shared values before moving individual client configs
-        let default_api_key = pool.api_key.clone();
-        let default_endpoint = pool.endpoint.clone();
-
-        fn to_llm_config(
-            client: crate::config::LlmClientConfig,
-            default_api_key: &Option<String>,
-            default_endpoint: &Option<String>,
-        ) -> LlmConfig {
-            LlmConfig {
-                model: client.model,
-                endpoint: if client.endpoint.is_empty() {
-                    default_endpoint.clone().unwrap_or_default()
-                } else {
-                    client.endpoint
-                },
-                api_key: client.api_key.or_else(|| default_api_key.clone()),
-                max_tokens: client.max_tokens,
-                temperature: client.temperature,
-                retry: RetryConfig::default(),
-            }
-        }
-
-        Self {
-            index: to_llm_config(pool.index, &default_api_key, &default_endpoint),
-            retrieval: to_llm_config(pool.retrieval, &default_api_key, &default_endpoint),
-            pilot: to_llm_config(pool.pilot, &default_api_key, &default_endpoint),
-        }
-    }
-}
-
-impl From<crate::config::LlmConfig> for LlmConfig {
-    fn from(old: crate::config::LlmConfig) -> Self {
-        Self {
-            model: old.model,
-            endpoint: old.endpoint,
-            api_key: old.api_key,
-            max_tokens: old.max_tokens,
-            temperature: old.temperature,
-            retry: RetryConfig::default(),
-        }
-    }
-}
-
-impl From<crate::config::SummaryConfig> for LlmConfig {
-    fn from(old: crate::config::SummaryConfig) -> Self {
-        Self {
-            model: old.model,
-            endpoint: old.endpoint,
-            api_key: old.api_key,
-            max_tokens: old.max_tokens,
-            temperature: old.temperature,
-            retry: RetryConfig::default(),
-        }
-    }
-}
-
-impl From<crate::config::RetrievalConfig> for LlmConfig {
-    fn from(old: crate::config::RetrievalConfig) -> Self {
-        Self {
-            model: old.model,
-            endpoint: old.endpoint,
-            api_key: old.api_key,
-            max_tokens: old.max_tokens,
-            temperature: old.temperature,
-            retry: RetryConfig::default(),
-        }
     }
 }
 

@@ -7,8 +7,9 @@
 //! enabling layered configuration from multiple sources.
 
 use super::types::{
-    CacheConfig, ConcurrencyConfig, Config, ContentAggregatorConfig, FallbackConfig, IndexerConfig,
-    RetrievalConfig, SearchConfig, StorageConfig, StrategyConfig, SufficiencyConfig, SummaryConfig,
+    CacheConfig, Config, ContentAggregatorConfig, FallbackConfig, IndexerConfig, LlmConfig,
+    RetrievalConfig, SearchConfig, SlotConfig, StorageConfig, StrategyConfig, SufficiencyConfig,
+    ThrottleConfig,
 };
 
 /// Configuration merge strategy.
@@ -30,12 +31,44 @@ pub trait Merge {
 
 impl Merge for Config {
     fn merge(&mut self, other: &Self, strategy: MergeStrategy) {
+        self.llm.merge(&other.llm, strategy);
         self.indexer.merge(&other.indexer, strategy);
-        self.summary.merge(&other.summary, strategy);
         self.retrieval.merge(&other.retrieval, strategy);
         self.storage.merge(&other.storage, strategy);
-        self.concurrency.merge(&other.concurrency, strategy);
+    }
+}
+
+impl Merge for LlmConfig {
+    fn merge(&mut self, other: &Self, strategy: MergeStrategy) {
+        // Always merge API key if present
+        if other.api_key.is_some() {
+            self.api_key = other.api_key.clone();
+        }
+        if strategy == MergeStrategy::Replace || self.model.is_empty() {
+            self.model = other.model.clone();
+        }
+        if other.endpoint.is_some() {
+            self.endpoint = other.endpoint.clone();
+        }
+        self.index.merge(&other.index, strategy);
+        self.retrieval.merge(&other.retrieval, strategy);
+        self.pilot.merge(&other.pilot, strategy);
+        self.throttle.merge(&other.throttle, strategy);
         self.fallback.merge(&other.fallback, strategy);
+    }
+}
+
+impl Merge for SlotConfig {
+    fn merge(&mut self, other: &Self, strategy: MergeStrategy) {
+        if other.model.is_some() {
+            self.model = other.model.clone();
+        }
+        if strategy == MergeStrategy::Replace || self.max_tokens == 200 {
+            self.max_tokens = other.max_tokens;
+        }
+        if strategy == MergeStrategy::Replace || self.temperature == 0.0 {
+            self.temperature = other.temperature;
+        }
     }
 }
 
@@ -56,44 +89,8 @@ impl Merge for IndexerConfig {
     }
 }
 
-impl Merge for SummaryConfig {
-    fn merge(&mut self, other: &Self, strategy: MergeStrategy) {
-        if strategy == MergeStrategy::Replace || self.model == "gpt-4o-mini" {
-            self.model = other.model.clone();
-        }
-        if strategy == MergeStrategy::Replace || self.endpoint == "https://api.openai.com/v1" {
-            self.endpoint = other.endpoint.clone();
-        }
-        // Always merge API keys if present
-        if other.api_key.is_some() {
-            self.api_key = other.api_key.clone();
-        }
-        if strategy == MergeStrategy::Replace || self.max_tokens == 200 {
-            self.max_tokens = other.max_tokens;
-        }
-        if strategy == MergeStrategy::Replace || self.temperature == 0.0 {
-            self.temperature = other.temperature;
-        }
-    }
-}
-
 impl Merge for RetrievalConfig {
     fn merge(&mut self, other: &Self, strategy: MergeStrategy) {
-        if strategy == MergeStrategy::Replace || self.model == "gpt-4o" {
-            self.model = other.model.clone();
-        }
-        if strategy == MergeStrategy::Replace || self.endpoint == "https://api.openai.com/v1" {
-            self.endpoint = other.endpoint.clone();
-        }
-        if other.api_key.is_some() {
-            self.api_key = other.api_key.clone();
-        }
-        if strategy == MergeStrategy::Replace || self.max_tokens == 1000 {
-            self.max_tokens = other.max_tokens;
-        }
-        if strategy == MergeStrategy::Replace || self.temperature == 0.0 {
-            self.temperature = other.temperature;
-        }
         if strategy == MergeStrategy::Replace || self.top_k == 3 {
             self.top_k = other.top_k;
         }
@@ -223,7 +220,7 @@ impl Merge for StorageConfig {
     }
 }
 
-impl Merge for ConcurrencyConfig {
+impl Merge for ThrottleConfig {
     fn merge(&mut self, other: &Self, strategy: MergeStrategy) {
         if strategy == MergeStrategy::Replace || self.max_concurrent_requests == 10 {
             self.max_concurrent_requests = other.max_concurrent_requests;
@@ -316,12 +313,12 @@ mod tests {
         let mut overlay = Config::default();
 
         overlay.retrieval.top_k = 10;
-        overlay.summary.model = "gpt-4o".to_string();
+        overlay.llm.model = "gpt-4o".to_string();
 
         base.merge(&overlay, MergeStrategy::Replace);
 
         assert_eq!(base.retrieval.top_k, 10);
-        assert_eq!(base.summary.model, "gpt-4o");
+        assert_eq!(base.llm.model, "gpt-4o");
     }
 
     #[test]
@@ -345,10 +342,10 @@ mod tests {
         let mut base = Config::default();
         let mut overlay = Config::default();
 
-        overlay.summary.api_key = Some("test-key".to_string());
+        overlay.llm.api_key = Some("test-key".to_string());
 
         base.merge(&overlay, MergeStrategy::Replace);
 
-        assert_eq!(base.summary.api_key, Some("test-key".to_string()));
+        assert_eq!(base.llm.api_key, Some("test-key".to_string()));
     }
 }
