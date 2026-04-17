@@ -290,7 +290,9 @@ impl IndexerClient {
     ///
     /// This is an associated function — it does not depend on client state.
     /// Stores content and logic fingerprints from the pipeline options.
-    pub fn to_persisted(
+    ///
+    /// Uses async file I/O to avoid blocking the tokio runtime.
+    pub async fn to_persisted(
         doc: IndexedDocument,
         pipeline_options: &PipelineOptions,
     ) -> PersistedDocument {
@@ -303,9 +305,9 @@ impl IndexerClient {
             )
             .with_description(doc.description.clone().unwrap_or_default());
 
-        // Compute content fingerprint for incremental indexing
+        // Compute content fingerprint for incremental indexing (async I/O)
         if let Some(ref path) = doc.source_path {
-            if let Ok(bytes) = std::fs::read(path) {
+            if let Ok(bytes) = tokio::fs::read(path).await {
                 let fp = crate::utils::fingerprint::Fingerprint::from_bytes(&bytes);
                 meta = meta.with_fingerprint(fp);
             }

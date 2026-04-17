@@ -37,7 +37,7 @@
 //! # }
 //! ```
 
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, sync::Arc, sync::atomic::{AtomicBool, Ordering}};
 
 use futures::StreamExt;
 use tracing::info;
@@ -96,6 +96,9 @@ pub struct Engine {
 
     /// Central metrics hub for unified collection.
     metrics_hub: Arc<MetricsHub>,
+
+    /// Whether the document graph needs rebuilding (set after index, consumed in query).
+    graph_dirty: Arc<AtomicBool>,
 }
 
 impl Engine {
@@ -132,6 +135,7 @@ impl Engine {
             workspace: workspace_client,
             events,
             metrics_hub: Arc::new(MetricsHub::with_defaults()),
+            graph_dirty: Arc::new(AtomicBool::new(false)),
         })
     }
 
@@ -174,10 +178,9 @@ impl Engine {
             )));
         }
 
-        if !items.is_empty() {
-            if let Err(e) = self.rebuild_graph().await {
-                tracing::warn!("Graph rebuild failed: {e}");
-            }
+        // Mark graph as dirty — will be lazily rebuilt on next query()
+        if !items.is_empty() && self.config.graph.enabled {
+            self.graph_dirty.store(true, Ordering::Relaxed);
         }
 
         Ok(IndexResult::with_partial(items, failed))
@@ -304,7 +307,7 @@ impl Engine {
         old_id: Option<&str>,
     ) -> (Vec<IndexItem>, Vec<FailedItem>) {
         let item = Self::build_index_item(&doc);
-        let persisted = IndexerClient::to_persisted(doc, pipeline_options);
+        let persisted = IndexerClient::to_persisted(doc, pipeline_options).await;
 
         if let Err(e) = self.workspace.save(&persisted).await {
             return (
@@ -351,8 +354,16 @@ impl Engine {
         let doc_ids = self.resolve_scope(&ctx.scope).await?;
         let mut options = ctx.to_retrieve_options(&self.config);
 
-        // Load document graph for graph-aware retrieval (if enabled)
+        // Lazy graph rebuild: only rebuild if index() marked it dirty
         if self.config.graph.enabled {
+            if self.graph_dirty.swap(false, Ordering::Relaxed) {
+                if let Err(e) = self.rebuild_graph().await {
+                    tracing::warn!("Graph rebuild failed: {e}");
+                    // Re-mark dirty so next query retries
+                    self.graph_dirty.store(true, Ordering::Relaxed);
+                }
+            }
+            // Load (now up-to-date) graph for retrieval
             if let Ok(Some(graph)) = self.workspace.get_graph().await {
                 options = options.with_document_graph(Arc::new(graph));
             }
@@ -591,7 +602,7 @@ impl Engine {
         }
 
         // Incremental mode: load stored document and delegate to resolver
-        let current_bytes = match std::fs::read(path) {
+        let current_bytes = match tokio::fs::read(path).await {
             Ok(b) => b,
             Err(_) => return Ok(IndexAction::FullIndex { existing_id: None }),
         };
@@ -666,6 +677,7 @@ impl Clone for Engine {
             workspace: self.workspace.clone(),
             events: self.events.clone(),
             metrics_hub: Arc::clone(&self.metrics_hub),
+            graph_dirty: Arc::clone(&self.graph_dirty),
         }
     }
 }
