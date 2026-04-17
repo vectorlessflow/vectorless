@@ -133,8 +133,15 @@ impl IndexerClient {
         let format = Self::format_from_mode(&pipeline_options.mode);
 
         let input = IndexInput::file(&path);
-        self.run_pipeline(input, format, &path.display().to_string(), name, Some(&path), pipeline_options)
-            .await
+        self.run_pipeline(
+            input,
+            format,
+            &path.display().to_string(),
+            name,
+            Some(&path),
+            pipeline_options,
+        )
+        .await
     }
 
     /// Index from content string.
@@ -158,8 +165,15 @@ impl IndexerClient {
         }
 
         let input = IndexInput::content(content);
-        self.run_pipeline(input, format, name.unwrap_or("content"), name, None, pipeline_options)
-            .await
+        self.run_pipeline(
+            input,
+            format,
+            name.unwrap_or("content"),
+            name,
+            None,
+            pipeline_options,
+        )
+        .await
     }
 
     /// Index from binary data.
@@ -189,8 +203,15 @@ impl IndexerClient {
         );
 
         let input = IndexInput::bytes(bytes);
-        self.run_pipeline(input, format, name.unwrap_or("bytes"), name, None, pipeline_options)
-            .await
+        self.run_pipeline(
+            input,
+            format,
+            name.unwrap_or("bytes"),
+            name,
+            None,
+            pipeline_options,
+        )
+        .await
     }
 
     /// Common pipeline execution: emit events → run pipeline → build result.
@@ -203,8 +224,9 @@ impl IndexerClient {
         path: Option<&Path>,
         pipeline_options: PipelineOptions,
     ) -> Result<IndexedDocument> {
-        self.events
-            .emit_index(IndexEvent::Started { path: source_label.to_string() });
+        self.events.emit_index(IndexEvent::Started {
+            path: source_label.to_string(),
+        });
 
         let doc_id = Uuid::new_v4().to_string();
         self.events

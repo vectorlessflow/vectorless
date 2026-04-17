@@ -37,7 +37,11 @@
 //! # }
 //! ```
 
-use std::{collections::HashMap, sync::Arc, sync::atomic::{AtomicBool, Ordering}};
+use std::{
+    collections::HashMap,
+    sync::Arc,
+    sync::atomic::{AtomicBool, Ordering},
+};
 
 use futures::StreamExt;
 use tracing::info;
@@ -120,8 +124,7 @@ impl Engine {
         let indexer = indexer.with_events(events.clone());
 
         // Create retriever client
-        let retriever =
-            RetrieverClient::new(retriever).with_events(events.clone());
+        let retriever = RetrieverClient::new(retriever).with_events(events.clone());
 
         // Create workspace client
         let workspace_client = WorkspaceClient::new(workspace)
@@ -247,10 +250,19 @@ impl Engine {
             }
             Ok(IndexAction::FullIndex { existing_id }) => {
                 let pipeline_options = self.build_pipeline_options(options, source);
-                match self.indexer.index(source, name, pipeline_options.clone()).await {
+                match self
+                    .indexer
+                    .index(source, name, pipeline_options.clone())
+                    .await
+                {
                     Ok(doc) => {
-                        self.index_and_persist(doc, &pipeline_options, &source_label, existing_id.as_deref())
-                            .await
+                        self.index_and_persist(
+                            doc,
+                            &pipeline_options,
+                            &source_label,
+                            existing_id.as_deref(),
+                        )
+                        .await
                     }
                     Err(e) => {
                         tracing::warn!("Failed to index {}: {}", source_label, e);
@@ -274,7 +286,8 @@ impl Engine {
                 {
                     Ok(mut doc) => {
                         doc.id = existing_id.clone();
-                        self.index_and_persist(doc, &pipeline_options, &source_label, None).await
+                        self.index_and_persist(doc, &pipeline_options, &source_label, None)
+                            .await
                     }
                     Err(e) => {
                         tracing::warn!("Incremental update failed for {}: {}", source_label, e);
@@ -493,11 +506,10 @@ impl Engine {
         &self,
         doc_id: &str,
     ) -> Result<(DocumentTree, Option<crate::document::ReasoningIndex>)> {
-        let doc = self
-            .workspace
-            .load(doc_id)
-            .await?
-            .ok_or_else(|| Error::DocumentNotFound(format!("Document not found: {}", doc_id)))?;
+        let doc =
+            self.workspace.load(doc_id).await?.ok_or_else(|| {
+                Error::DocumentNotFound(format!("Document not found: {}", doc_id))
+            })?;
 
         Ok((doc.tree, doc.reasoning_index))
     }
