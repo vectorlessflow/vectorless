@@ -20,8 +20,7 @@
 //! cargo run --example flow
 //! ```
 
-use vectorless::EngineBuilder;
-use vectorless::client::{IndexContext, IndexOptions, QueryContext};
+use vectorless::{EngineBuilder, IndexContext, IndexOptions, QueryContext};
 
 /// Sample markdown content for demonstration.
 const SAMPLE_MARKDOWN: &str = r#"

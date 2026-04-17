@@ -37,7 +37,7 @@ vectorless = "0.1"
 ```
 
 ```rust
-use vectorless::client::{EngineBuilder, IndexContext, QueryContext};
+use vectorless::{EngineBuilder, IndexContext, QueryContext};
 
 #[tokio::main]
 async fn main() -> vectorless::Result<()> {

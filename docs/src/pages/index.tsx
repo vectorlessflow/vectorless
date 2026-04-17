@@ -107,7 +107,7 @@ async def main():
 
 asyncio.run(main())`;
 
-const RUST_CODE = `use vectorless::client::{EngineBuilder, IndexContext, QueryContext};
+const RUST_CODE = `use vectorless::{EngineBuilder, IndexContext, QueryContext};
 
 #[tokio::main]
 async fn main() -> vectorless::Result<()> {

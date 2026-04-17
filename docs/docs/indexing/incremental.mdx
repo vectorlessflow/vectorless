@@ -32,7 +32,7 @@ result = await engine.index(ctx)
 ### Rust
 
 ```rust
-use vectorless::client::{IndexContext, IndexMode};
+use vectorless::{IndexContext, IndexMode};
 
 let ctx = IndexContext::from_path("./report.pdf")
     .with_mode(IndexMode::Incremental);

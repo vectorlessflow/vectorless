@@ -40,13 +40,13 @@
 
 // ── Modules ──────────────────────────────────────────────────────────────────
 
-pub mod client;
-pub mod config;
-pub mod document;
-pub mod error;
-pub mod events;
-pub mod graph;
-pub mod metrics;
+mod client;
+mod config;
+mod document;
+mod error;
+mod events;
+mod graph;
+mod metrics;
 
 mod index;
 mod llm;
