@@ -17,7 +17,7 @@ use super::stream::RetrieveEventReceiver;
 use super::types::{RetrieveOptions, RetrieveResponse};
 use crate::document::{DocumentTree, ReasoningIndex};
 use crate::llm::LlmClient;
-use crate::memo::MemoStore;
+use crate::llm::memo::MemoStore;
 use crate::retrieval::pilot::{LlmPilot, PilotConfig};
 
 /// Pipeline-based retriever using the stage architecture.

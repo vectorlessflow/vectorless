@@ -33,6 +33,7 @@ pub(crate) mod config;
 mod error;
 mod executor;
 mod fallback;
+pub(crate) mod memo;
 mod pool;
 pub(crate) mod throttle;
 

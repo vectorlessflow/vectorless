@@ -13,7 +13,7 @@ use crate::document::NodeId;
 use crate::error::Result;
 use crate::index::incremental;
 use crate::llm::LlmClient;
-use crate::memo::{MemoKey, MemoStore};
+use crate::llm::memo::{MemoKey, MemoStore};
 use crate::utils::fingerprint::Fingerprint;
 
 use super::{IndexStage, StageResult};

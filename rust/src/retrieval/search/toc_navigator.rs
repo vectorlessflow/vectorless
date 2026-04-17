@@ -15,7 +15,7 @@ use tracing::{debug, info, warn};
 use crate::document::DocumentTree;
 use crate::document::NodeId;
 use crate::llm::LlmClient;
-use crate::memo::MemoStore;
+use crate::llm::memo::MemoStore;
 use crate::retrieval::pilot::NodeScorer;
 
 /// A navigation cue produced by the ToCNavigator.
