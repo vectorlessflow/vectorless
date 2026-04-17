@@ -763,6 +763,7 @@ impl Engine {
                 enable_synonym_expansion: options.enable_synonym_expansion,
                 ..ReasoningIndexConfig::default()
             },
+            concurrency: self.config.llm.throttle.to_runtime_config(),
             ..Default::default()
         }
     }

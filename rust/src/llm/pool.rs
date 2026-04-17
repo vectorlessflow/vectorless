@@ -68,11 +68,27 @@ impl LlmPool {
             }
         };
 
+        // Build clients first
+        let index = Arc::new(LlmClient::new(make_config(&config.index)));
+        let retrieval = Arc::new(LlmClient::new(make_config(&config.retrieval)));
+        let pilot = Arc::new(LlmClient::new(make_config(&config.pilot)));
+
+        // Attach shared throttle controller from config
+        let concurrency_config = config.throttle.to_runtime_config();
+        let controller = Arc::new(ConcurrencyController::new(concurrency_config));
+
         Self {
-            index: Arc::new(LlmClient::new(make_config(&config.index))),
-            retrieval: Arc::new(LlmClient::new(make_config(&config.retrieval))),
-            pilot: Arc::new(LlmClient::new(make_config(&config.pilot))),
-            concurrency: None,
+            index: Arc::new(
+                LlmClient::new(index.config().clone()).with_shared_concurrency(controller.clone()),
+            ),
+            retrieval: Arc::new(
+                LlmClient::new(retrieval.config().clone())
+                    .with_shared_concurrency(controller.clone()),
+            ),
+            pilot: Arc::new(
+                LlmClient::new(pilot.config().clone()).with_shared_concurrency(controller.clone()),
+            ),
+            concurrency: Some(controller),
         }
     }
 
