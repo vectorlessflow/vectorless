@@ -355,7 +355,7 @@ mod tests {
 
     #[test]
     fn test_client_with_concurrency() {
-        use super::throttle::ConcurrencyConfig;
+        use crate::llm::throttle::ConcurrencyConfig;
 
         let controller = ConcurrencyController::new(ConcurrencyConfig::conservative());
         let client = LlmClient::for_model("gpt-4o-mini").with_concurrency(controller);

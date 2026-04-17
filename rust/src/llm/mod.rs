@@ -40,4 +40,3 @@ pub use client::LlmClient;
 pub use error::LlmResult;
 pub use executor::LlmExecutor;
 pub use pool::LlmPool;
-pub(crate) use throttle::{ConcurrencyConfig, ConcurrencyController};

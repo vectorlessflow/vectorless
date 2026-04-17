@@ -459,7 +459,7 @@ mod tests {
 
     #[test]
     fn test_executor_with_throttle() {
-        use super::throttle::ConcurrencyConfig;
+        use crate::llm::throttle::ConcurrencyConfig;
 
         let controller = ConcurrencyController::new(ConcurrencyConfig::conservative());
         let executor = LlmExecutor::for_model("gpt-4o-mini").with_throttle(controller);
