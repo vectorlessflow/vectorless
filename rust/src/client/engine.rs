@@ -40,8 +40,8 @@
 use std::{
     collections::HashMap,
     sync::Arc,
-    sync::atomic::{AtomicBool, AtomicU32, Ordering},
     sync::Mutex,
+    sync::atomic::{AtomicBool, AtomicU32, Ordering},
 };
 
 use futures::StreamExt;
@@ -66,7 +66,9 @@ use super::{
     indexer::IndexerClient,
     query_context::{QueryContext, QueryScope},
     retriever::RetrieverClient,
-    types::{DocumentInfo, FailedItem, IndexItem, IndexMode, IndexResult, QueryResult, QueryResultItem},
+    types::{
+        DocumentInfo, FailedItem, IndexItem, IndexMode, IndexResult, QueryResult, QueryResultItem,
+    },
     workspace::WorkspaceClient,
 };
 
@@ -261,7 +263,10 @@ impl Engine {
         if self.is_cancelled() {
             return (
                 Vec::new(),
-                vec![FailedItem::new(source.to_string(), "Operation cancelled".to_string())],
+                vec![FailedItem::new(
+                    source.to_string(),
+                    "Operation cancelled".to_string(),
+                )],
             );
         }
 
@@ -364,7 +369,9 @@ impl Engine {
                     .index_with_existing(source, name, pipeline_options.clone(), Some(tree))
                     .await
             } else {
-                self.indexer.index(source, name, pipeline_options.clone()).await
+                self.indexer
+                    .index(source, name, pipeline_options.clone())
+                    .await
             };
 
             match result {
@@ -463,10 +470,7 @@ impl Engine {
                     if should_try {
                         if let Err(e) = self.rebuild_graph().await {
                             let count = self.graph_fail_count.fetch_add(1, Ordering::Relaxed) + 1;
-                            tracing::warn!(
-                                count,
-                                "Graph rebuild failed: {e}"
-                            );
+                            tracing::warn!(count, "Graph rebuild failed: {e}");
                             // Re-mark dirty so next query retries
                             self.graph_dirty.store(true, Ordering::Relaxed);
                         } else {
@@ -504,14 +508,20 @@ impl Engine {
                                 return (doc_id, Err("Operation cancelled".to_string()));
                             }
 
-                            let (tree, reasoning_index) = match engine.get_structure(&doc_id).await {
+                            let (tree, reasoning_index) = match engine.get_structure(&doc_id).await
+                            {
                                 Ok(t) => t,
                                 Err(e) => return (doc_id, Err(e.to_string())),
                             };
 
                             match engine
                                 .retriever
-                                .query_with_reasoning_index(&tree, &query, &options, reasoning_index)
+                                .query_with_reasoning_index(
+                                    &tree,
+                                    &query,
+                                    &options,
+                                    reasoning_index,
+                                )
                                 .await
                             {
                                 Ok(mut result) => {
@@ -678,10 +688,12 @@ impl Engine {
         F: std::future::Future<Output = Result<T>>,
     {
         match timeout_secs {
-            Some(secs) => match tokio::time::timeout(std::time::Duration::from_secs(secs), fut).await {
-                Ok(result) => result,
-                Err(_) => Err(Error::Config(format!("Operation timed out after {secs}s"))),
-            },
+            Some(secs) => {
+                match tokio::time::timeout(std::time::Duration::from_secs(secs), fut).await {
+                    Ok(result) => result,
+                    Err(_) => Err(Error::Config(format!("Operation timed out after {secs}s"))),
+                }
+            }
             None => fut.await,
         }
     }
@@ -832,15 +844,14 @@ impl Engine {
         let doc_ids = self.workspace.inner().list_documents().await;
         let concurrency = self.config.llm.throttle.max_concurrent_requests;
 
-        let loaded: Vec<Option<PersistedDocument>> =
-            futures::stream::iter(doc_ids.iter().cloned())
-                .map(|doc_id| {
-                    let ws = self.workspace.clone();
-                    async move { ws.load(&doc_id).await.ok().flatten() }
-                })
-                .buffer_unordered(concurrency)
-                .collect()
-                .await;
+        let loaded: Vec<Option<PersistedDocument>> = futures::stream::iter(doc_ids.iter().cloned())
+            .map(|doc_id| {
+                let ws = self.workspace.clone();
+                async move { ws.load(&doc_id).await.ok().flatten() }
+            })
+            .buffer_unordered(concurrency)
+            .collect()
+            .await;
 
         let mut builder = crate::graph::DocumentGraphBuilder::new(self.config.graph.clone());
         for doc in loaded.into_iter().flatten() {
