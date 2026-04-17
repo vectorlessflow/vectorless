@@ -240,43 +240,11 @@ impl Engine {
                 )
             }
             Ok(IndexAction::FullIndex { existing_id }) => {
-                match self.indexer.index(source, name, options).await {
+                let pipeline_options = self.build_pipeline_options(options, source);
+                match self.indexer.index(source, name, pipeline_options).await {
                     Ok(doc) => {
-                        let pipeline_options = self.build_pipeline_options(options, doc.format);
-                        let metrics = doc.metrics.clone();
-                        let item = IndexItem::new(
-                            doc.id.clone(),
-                            doc.name.clone(),
-                            doc.format.clone(),
-                            doc.description.clone(),
-                            doc.page_count,
-                        )
-                        .with_source_path(
-                            doc.source_path
-                                .as_ref()
-                                .map(|p| p.to_string_lossy().to_string())
-                                .unwrap_or_default(),
-                        )
-                        .with_metrics_opt(metrics);
-                        let persisted = self
-                            .indexer
-                            .to_persisted_with_options(doc, &pipeline_options);
-
-                        if let Some(ref workspace) = self.workspace {
-                            if let Err(e) = workspace.save(&persisted).await {
-                                return (
-                                    Vec::new(),
-                                    vec![FailedItem::new(&source_label, e.to_string())],
-                                );
-                            }
-                            // Clean up old document after successful save (atomic: save-first, then remove old)
-                            if let Some(old_id) = &existing_id {
-                                let _ = workspace.remove(old_id).await;
-                            }
-                        }
-
-                        info!("Indexed document: {}", item.doc_id);
-                        (vec![item], Vec::new())
+                        self.index_and_persist(doc, &source_label, existing_id.as_deref())
+                            .await
                     }
                     Err(e) => {
                         tracing::warn!("Failed to index {}: {}", source_label, e);
@@ -292,45 +260,15 @@ impl Engine {
                 existing_id,
             }) => {
                 info!("Incremental update for: {}", source_label);
+                let pipeline_options = self.build_pipeline_options(options, source);
                 match self
                     .indexer
-                    .index_with_existing(source, name, options, Some(&old_tree))
+                    .index_with_existing(source, name, pipeline_options, Some(&old_tree))
                     .await
                 {
                     Ok(mut doc) => {
                         doc.id = existing_id.clone();
-                        let pipeline_options = self.build_pipeline_options(options, doc.format);
-                        let metrics = doc.metrics.clone();
-                        let item = IndexItem::new(
-                            doc.id.clone(),
-                            doc.name.clone(),
-                            doc.format.clone(),
-                            doc.description.clone(),
-                            doc.page_count,
-                        )
-                        .with_source_path(
-                            doc.source_path
-                                .as_ref()
-                                .map(|p| p.to_string_lossy().to_string())
-                                .unwrap_or_default(),
-                        )
-                        .with_metrics_opt(metrics);
-                        let persisted = self
-                            .indexer
-                            .to_persisted_with_options(doc, &pipeline_options);
-
-                        if let Some(ref workspace) = self.workspace {
-                            // save() is atomic (write-lock + put), no need to remove first
-                            if let Err(e) = workspace.save(&persisted).await {
-                                return (
-                                    Vec::new(),
-                                    vec![FailedItem::new(&source_label, e.to_string())],
-                                );
-                            }
-                        }
-
-                        info!("Incrementally updated: {}", item.doc_id);
-                        (vec![item], Vec::new())
+                        self.index_and_persist(doc, &source_label, None).await
                     }
                     Err(e) => {
                         tracing::warn!("Incremental update failed for {}: {}", source_label, e);
@@ -349,6 +287,55 @@ impl Engine {
                 )
             }
         }
+    }
+
+    /// Convert an [`IndexedDocument`] to an [`IndexItem`] and persist it.
+    ///
+    /// If `old_id` is provided, the old document is removed after a
+    /// successful save (atomic save-first, then remove old).
+    async fn index_and_persist(
+        &self,
+        doc: super::types::IndexedDocument,
+        source_label: &str,
+        old_id: Option<&str>,
+    ) -> (Vec<IndexItem>, Vec<FailedItem>) {
+        let pipeline_options = self.build_pipeline_options_from_doc(&doc);
+        let item = Self::build_index_item(&doc);
+        let persisted = IndexerClient::to_persisted(doc, &pipeline_options);
+
+        if let Some(ref workspace) = self.workspace {
+            if let Err(e) = workspace.save(&persisted).await {
+                return (
+                    Vec::new(),
+                    vec![FailedItem::new(source_label, e.to_string())],
+                );
+            }
+            // Clean up old document after successful save
+            if let Some(old_id) = old_id {
+                let _ = workspace.remove(old_id).await;
+            }
+        }
+
+        info!("Indexed document: {}", item.doc_id);
+        (vec![item], Vec::new())
+    }
+
+    /// Build an [`IndexItem`] from an [`IndexedDocument`](super::types::IndexedDocument).
+    fn build_index_item(doc: &super::types::IndexedDocument) -> IndexItem {
+        IndexItem::new(
+            doc.id.clone(),
+            doc.name.clone(),
+            doc.format.clone(),
+            doc.description.clone(),
+            doc.page_count,
+        )
+        .with_source_path(
+            doc.source_path
+                .as_ref()
+                .map(|p| p.to_string_lossy().to_string())
+                .unwrap_or_default(),
+        )
+        .with_metrics_opt(doc.metrics.clone())
     }
 
     // ============================================================
@@ -548,18 +535,31 @@ impl Engine {
         }
     }
 
-    /// Build pipeline options from client IndexOptions and detected format.
+    /// Build pipeline options for pipeline execution (with checkpoint dir).
+    ///
+    /// This is the single source of truth for pipeline configuration.
     fn build_pipeline_options(
         &self,
         options: &super::types::IndexOptions,
-        format: crate::index::parse::DocumentFormat,
+        source: &IndexSource,
     ) -> PipelineOptions {
-        use crate::index::SummaryStrategy;
-        let checkpoint_dir = Some(std::path::PathBuf::from(&self.config.storage.workspace_dir).join("checkpoints"));
+        use crate::index::{IndexMode, ReasoningIndexConfig, SummaryStrategy};
+
+        let format = match source {
+            IndexSource::Path(path) => {
+                self.indexer.detect_format_from_path(path).unwrap_or(crate::index::parse::DocumentFormat::Markdown)
+            }
+            IndexSource::Content { format, .. } => *format,
+            IndexSource::Bytes { format, .. } => *format,
+        };
+
+        let checkpoint_dir =
+            Some(std::path::PathBuf::from(&self.config.storage.workspace_dir).join("checkpoints"));
+
         PipelineOptions {
             mode: match format {
-                crate::index::parse::DocumentFormat::Markdown => crate::index::IndexMode::Markdown,
-                crate::index::parse::DocumentFormat::Pdf => crate::index::IndexMode::Pdf,
+                crate::index::parse::DocumentFormat::Markdown => IndexMode::Markdown,
+                crate::index::parse::DocumentFormat::Pdf => IndexMode::Pdf,
             },
             generate_ids: options.generate_ids,
             summary_strategy: if options.generate_summaries {
@@ -569,53 +569,38 @@ impl Engine {
             },
             generate_description: options.generate_description,
             checkpoint_dir,
+            reasoning_index: ReasoningIndexConfig {
+                enable_synonym_expansion: options.enable_synonym_expansion,
+                ..ReasoningIndexConfig::default()
+            },
             ..Default::default()
         }
     }
 
-    /// Rebuild the document graph after indexing, if graph is enabled.
-    async fn rebuild_graph(&self) -> Result<()> {
-        if !self.config.graph.enabled {
-            return Ok(());
+    /// Build pipeline options for persistence (fingerprint computation).
+    ///
+    /// Uses the document's detected format rather than re-detecting from source.
+    fn build_pipeline_options_from_doc(
+        &self,
+        doc: &super::types::IndexedDocument,
+    ) -> PipelineOptions {
+        use crate::index::{IndexMode, ReasoningIndexConfig, SummaryStrategy};
+
+        let checkpoint_dir =
+            Some(std::path::PathBuf::from(&self.config.storage.workspace_dir).join("checkpoints"));
+
+        PipelineOptions {
+            mode: match doc.format {
+                crate::index::parse::DocumentFormat::Markdown => IndexMode::Markdown,
+                crate::index::parse::DocumentFormat::Pdf => IndexMode::Pdf,
+            },
+            generate_ids: true,
+            summary_strategy: SummaryStrategy::full(),
+            generate_description: false,
+            checkpoint_dir,
+            reasoning_index: ReasoningIndexConfig::default(),
+            ..Default::default()
         }
-        let workspace = match self.workspace {
-            Some(ref ws) => ws,
-            None => return Ok(()),
-        };
-
-        // Load all documents and extract keyword profiles
-        let doc_ids = workspace.inner().list_documents().await;
-        let mut builder = crate::graph::DocumentGraphBuilder::new(self.config.graph.clone());
-
-        for doc_id in &doc_ids {
-            if let Some(doc) = workspace.load(doc_id).await? {
-                let keywords = Self::extract_keywords_from_doc(&doc);
-                builder.add_document(
-                    &doc.meta.id,
-                    &doc.meta.name,
-                    &doc.meta.format,
-                    doc.meta.node_count,
-                    keywords,
-                );
-            }
-        }
-
-        let graph = builder.build();
-        workspace.set_graph(&graph).await?;
-        Ok(())
-    }
-
-    /// Extract keyword → weight map from a persisted document's ReasoningIndex.
-    fn extract_keywords_from_doc(doc: &PersistedDocument) -> HashMap<String, f32> {
-        let mut keywords = HashMap::new();
-        if let Some(ref ri) = doc.reasoning_index {
-            for (kw, entries) in ri.all_topic_entries() {
-                let weight: f32 =
-                    entries.iter().map(|e| e.weight).sum::<f32>() / entries.len().max(1) as f32;
-                keywords.insert(kw.clone(), weight);
-            }
-        }
-        keywords
     }
 
     /// Resolve what action to take for a source.
@@ -676,7 +661,7 @@ impl Engine {
 
         let format = crate::index::parse::DocumentFormat::from_extension(&stored_doc.meta.format)
             .unwrap_or(crate::index::parse::DocumentFormat::Markdown);
-        let pipeline_options = self.build_pipeline_options(options, format);
+        let pipeline_options = self.build_pipeline_options(options, source);
 
         // If logic fingerprint changed, remove old doc before full reprocess
         let action =
@@ -686,6 +671,51 @@ impl Engine {
         // after successful save (save-first, then remove old).
 
         Ok(action)
+    }
+
+    /// Rebuild the document graph after indexing, if graph is enabled.
+    async fn rebuild_graph(&self) -> Result<()> {
+        if !self.config.graph.enabled {
+            return Ok(());
+        }
+        let workspace = match self.workspace {
+            Some(ref ws) => ws,
+            None => return Ok(()),
+        };
+
+        // Load all documents and extract keyword profiles
+        let doc_ids = workspace.inner().list_documents().await;
+        let mut builder = crate::graph::DocumentGraphBuilder::new(self.config.graph.clone());
+
+        for doc_id in &doc_ids {
+            if let Some(doc) = workspace.load(doc_id).await? {
+                let keywords = Self::extract_keywords_from_doc(&doc);
+                builder.add_document(
+                    &doc.meta.id,
+                    &doc.meta.name,
+                    &doc.meta.format,
+                    doc.meta.node_count,
+                    keywords,
+                );
+            }
+        }
+
+        let graph = builder.build();
+        workspace.set_graph(&graph).await?;
+        Ok(())
+    }
+
+    /// Extract keyword → weight map from a persisted document's ReasoningIndex.
+    fn extract_keywords_from_doc(doc: &PersistedDocument) -> HashMap<String, f32> {
+        let mut keywords = HashMap::new();
+        if let Some(ref ri) = doc.reasoning_index {
+            for (kw, entries) in ri.all_topic_entries() {
+                let weight: f32 =
+                    entries.iter().map(|e| e.weight).sum::<f32>() / entries.len().max(1) as f32;
+                keywords.insert(kw.clone(), weight);
+            }
+        }
+        keywords
     }
 }
 
