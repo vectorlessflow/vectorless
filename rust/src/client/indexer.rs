@@ -28,7 +28,7 @@ use uuid::Uuid;
 
 use crate::error::{Error, Result};
 use crate::index::parse::DocumentFormat;
-use crate::index::{IndexInput, PipelineExecutor, PipelineOptions};
+use crate::index::{IndexInput, IndexMode, PipelineExecutor, PipelineOptions};
 use crate::llm::LlmClient;
 use crate::storage::{DocumentMeta, PersistedDocument};
 
@@ -104,6 +104,8 @@ impl IndexerClient {
     }
 
     /// Index from a file path.
+    ///
+    /// Uses the format from `PipelineOptions.mode` — no redundant detection.
     async fn index_from_path(
         &self,
         path: &Path,
@@ -127,27 +129,12 @@ impl IndexerClient {
             tracing::warn!("{}", warning);
         }
 
-        // Emit start event
-        self.events.emit_index(IndexEvent::Started {
-            path: path.display().to_string(),
-        });
+        // Resolve format from pipeline options (set by Engine) — no re-detection
+        let format = Self::format_from_mode(&pipeline_options.mode);
 
-        // Generate document ID
-        let doc_id = Uuid::new_v4().to_string();
-
-        // Detect format from extension
-        let format = self.detect_format_from_path(&path)?;
-        self.events
-            .emit_index(IndexEvent::FormatDetected { format });
-
-        info!("Indexing {:?} document: {}", format, path.display());
-
-        // Create pipeline input and execute
         let input = IndexInput::file(&path);
-        let mut executor = (self.executor_factory)();
-        let result = executor.execute(input, pipeline_options).await?;
-
-        self.build_indexed_document(doc_id, result, format, name, Some(&path))
+        self.run_pipeline(input, format, &path.display().to_string(), name, Some(&path), pipeline_options)
+            .await
     }
 
     /// Index from content string.
@@ -170,21 +157,9 @@ impl IndexerClient {
             ));
         }
 
-        self.events.emit_index(IndexEvent::Started {
-            path: name.unwrap_or("content").to_string(),
-        });
-
-        let doc_id = Uuid::new_v4().to_string();
-        self.events
-            .emit_index(IndexEvent::FormatDetected { format });
-
-        info!("Indexing {:?} document from content", format);
-
         let input = IndexInput::content(content);
-        let mut executor = (self.executor_factory)();
-        let result = executor.execute(input, pipeline_options).await?;
-
-        self.build_indexed_document(doc_id, result, format, name, None)
+        self.run_pipeline(input, format, name.unwrap_or("content"), name, None, pipeline_options)
+            .await
     }
 
     /// Index from binary data.
@@ -207,14 +182,6 @@ impl IndexerClient {
             ));
         }
 
-        self.events.emit_index(IndexEvent::Started {
-            path: name.unwrap_or("bytes").to_string(),
-        });
-
-        let doc_id = Uuid::new_v4().to_string();
-        self.events
-            .emit_index(IndexEvent::FormatDetected { format });
-
         info!(
             "Indexing {:?} document from bytes ({} bytes)",
             format,
@@ -222,10 +189,33 @@ impl IndexerClient {
         );
 
         let input = IndexInput::bytes(bytes);
+        self.run_pipeline(input, format, name.unwrap_or("bytes"), name, None, pipeline_options)
+            .await
+    }
+
+    /// Common pipeline execution: emit events → run pipeline → build result.
+    async fn run_pipeline(
+        &self,
+        input: IndexInput,
+        format: DocumentFormat,
+        source_label: &str,
+        name: Option<&str>,
+        path: Option<&Path>,
+        pipeline_options: PipelineOptions,
+    ) -> Result<IndexedDocument> {
+        self.events
+            .emit_index(IndexEvent::Started { path: source_label.to_string() });
+
+        let doc_id = Uuid::new_v4().to_string();
+        self.events
+            .emit_index(IndexEvent::FormatDetected { format });
+
+        info!("Indexing {:?} document: {}", format, source_label);
+
         let mut executor = (self.executor_factory)();
         let result = executor.execute(input, pipeline_options).await?;
 
-        self.build_indexed_document(doc_id, result, format, name, None)
+        self.build_indexed_document(doc_id, result, format, name, path)
     }
 
     /// Build indexed document from pipeline result.
@@ -275,6 +265,18 @@ impl IndexerClient {
         self.events.emit_index(IndexEvent::Complete { doc_id });
 
         Ok(doc)
+    }
+
+    /// Resolve `DocumentFormat` from `PipelineOptions.mode`.
+    ///
+    /// Falls back to Markdown for `Auto` mode (the engine resolves
+    /// `Auto` to a concrete format before calling the indexer).
+    fn format_from_mode(mode: &IndexMode) -> DocumentFormat {
+        match mode {
+            IndexMode::Markdown => DocumentFormat::Markdown,
+            IndexMode::Pdf => DocumentFormat::Pdf,
+            IndexMode::Auto => DocumentFormat::Markdown,
+        }
     }
 
     /// Detect document format from file extension.

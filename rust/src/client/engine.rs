@@ -89,7 +89,7 @@ pub struct Engine {
     retriever: RetrieverClient,
 
     /// Workspace client for persistence.
-    workspace: Option<WorkspaceClient>,
+    workspace: WorkspaceClient,
 
     /// Event emitter.
     events: EventEmitter,
@@ -118,7 +118,7 @@ impl Engine {
 
         // Create retriever client
         let retriever =
-            RetrieverClient::new(retriever, Arc::clone(&config)).with_events(events.clone());
+            RetrieverClient::new(retriever).with_events(events.clone());
 
         // Create workspace client
         let workspace_client = WorkspaceClient::new(workspace)
@@ -129,7 +129,7 @@ impl Engine {
             config,
             indexer,
             retriever,
-            workspace: Some(workspace_client),
+            workspace: workspace_client,
             events,
             metrics_hub: Arc::new(MetricsHub::with_defaults()),
         })
@@ -244,9 +244,9 @@ impl Engine {
             }
             Ok(IndexAction::FullIndex { existing_id }) => {
                 let pipeline_options = self.build_pipeline_options(options, source);
-                match self.indexer.index(source, name, pipeline_options).await {
+                match self.indexer.index(source, name, pipeline_options.clone()).await {
                     Ok(doc) => {
-                        self.index_and_persist(doc, &source_label, existing_id.as_deref())
+                        self.index_and_persist(doc, &pipeline_options, &source_label, existing_id.as_deref())
                             .await
                     }
                     Err(e) => {
@@ -266,12 +266,12 @@ impl Engine {
                 let pipeline_options = self.build_pipeline_options(options, source);
                 match self
                     .indexer
-                    .index_with_existing(source, name, pipeline_options, Some(&old_tree))
+                    .index_with_existing(source, name, pipeline_options.clone(), Some(&old_tree))
                     .await
                 {
                     Ok(mut doc) => {
                         doc.id = existing_id.clone();
-                        self.index_and_persist(doc, &source_label, None).await
+                        self.index_and_persist(doc, &pipeline_options, &source_label, None).await
                     }
                     Err(e) => {
                         tracing::warn!("Incremental update failed for {}: {}", source_label, e);
@@ -299,24 +299,22 @@ impl Engine {
     async fn index_and_persist(
         &self,
         doc: super::types::IndexedDocument,
+        pipeline_options: &PipelineOptions,
         source_label: &str,
         old_id: Option<&str>,
     ) -> (Vec<IndexItem>, Vec<FailedItem>) {
-        let pipeline_options = self.build_pipeline_options_from_doc(&doc);
         let item = Self::build_index_item(&doc);
-        let persisted = IndexerClient::to_persisted(doc, &pipeline_options);
+        let persisted = IndexerClient::to_persisted(doc, pipeline_options);
 
-        if let Some(ref workspace) = self.workspace {
-            if let Err(e) = workspace.save(&persisted).await {
-                return (
-                    Vec::new(),
-                    vec![FailedItem::new(source_label, e.to_string())],
-                );
-            }
-            // Clean up old document after successful save
-            if let Some(old_id) = old_id {
-                let _ = workspace.remove(old_id).await;
-            }
+        if let Err(e) = self.workspace.save(&persisted).await {
+            return (
+                Vec::new(),
+                vec![FailedItem::new(source_label, e.to_string())],
+            );
+        }
+        // Clean up old document after successful save
+        if let Some(old_id) = old_id {
+            let _ = self.workspace.remove(old_id).await;
         }
 
         info!("Indexed document: {}", item.doc_id);
@@ -355,10 +353,8 @@ impl Engine {
 
         // Load document graph for graph-aware retrieval (if enabled)
         if self.config.graph.enabled {
-            if let Some(ref workspace) = self.workspace {
-                if let Ok(Some(graph)) = workspace.get_graph().await {
-                    options = options.with_document_graph(Arc::new(graph));
-                }
+            if let Ok(Some(graph)) = self.workspace.get_graph().await {
+                options = options.with_document_graph(Arc::new(graph));
             }
         }
 
@@ -441,44 +437,24 @@ impl Engine {
 
     /// Get a list of all indexed documents.
     pub async fn list(&self) -> Result<Vec<DocumentInfo>> {
-        let workspace = self
-            .workspace
-            .as_ref()
-            .ok_or_else(|| Error::Config("No workspace configured".to_string()))?;
-
-        workspace.list().await
+        self.workspace.list().await
     }
 
     /// Remove a document from the workspace.
     pub async fn remove(&self, doc_id: &str) -> Result<bool> {
-        let workspace = self
-            .workspace
-            .as_ref()
-            .ok_or_else(|| Error::Config("No workspace configured".to_string()))?;
-
-        workspace.remove(doc_id).await
+        self.workspace.remove(doc_id).await
     }
 
     /// Check if a document exists in the workspace.
     pub async fn exists(&self, doc_id: &str) -> Result<bool> {
-        let workspace = self
-            .workspace
-            .as_ref()
-            .ok_or_else(|| Error::Config("No workspace configured".to_string()))?;
-
-        workspace.exists(doc_id).await
+        self.workspace.exists(doc_id).await
     }
 
     /// Remove all documents from the workspace.
     ///
     /// Returns the number of documents removed.
     pub async fn clear(&self) -> Result<usize> {
-        let workspace = self
-            .workspace
-            .as_ref()
-            .ok_or_else(|| Error::Config("No workspace configured".to_string()))?;
-
-        workspace.clear().await
+        self.workspace.clear().await
     }
 
     /// Get the cross-document relationship graph.
@@ -486,12 +462,7 @@ impl Engine {
     /// The graph is automatically rebuilt after indexing documents.
     /// Returns `None` if no graph has been built yet.
     pub async fn get_graph(&self) -> Result<Option<crate::graph::DocumentGraph>> {
-        let workspace = self
-            .workspace
-            .as_ref()
-            .ok_or_else(|| Error::Config("No workspace configured".to_string()))?;
-
-        workspace.get_graph().await
+        self.workspace.get_graph().await
     }
 
     /// Generate a complete metrics report.
@@ -511,12 +482,8 @@ impl Engine {
         &self,
         doc_id: &str,
     ) -> Result<(DocumentTree, Option<crate::document::ReasoningIndex>)> {
-        let workspace = self
+        let doc = self
             .workspace
-            .as_ref()
-            .ok_or_else(|| Error::Config("No workspace configured".to_string()))?;
-
-        let doc = workspace
             .load(doc_id)
             .await?
             .ok_or_else(|| Error::DocumentNotFound(format!("Document not found: {}", doc_id)))?;
@@ -581,42 +548,13 @@ impl Engine {
         }
     }
 
-    /// Build pipeline options for persistence (fingerprint computation).
-    ///
-    /// Uses the document's detected format rather than re-detecting from source.
-    fn build_pipeline_options_from_doc(
-        &self,
-        doc: &super::types::IndexedDocument,
-    ) -> PipelineOptions {
-        use crate::index::{IndexMode, ReasoningIndexConfig, SummaryStrategy};
-
-        let checkpoint_dir =
-            Some(std::path::PathBuf::from(&self.config.storage.workspace_dir).join("checkpoints"));
-
-        PipelineOptions {
-            mode: match doc.format {
-                crate::index::parse::DocumentFormat::Markdown => IndexMode::Markdown,
-                crate::index::parse::DocumentFormat::Pdf => IndexMode::Pdf,
-            },
-            generate_ids: true,
-            summary_strategy: SummaryStrategy::full(),
-            generate_description: false,
-            checkpoint_dir,
-            reasoning_index: ReasoningIndexConfig::default(),
-            ..Default::default()
-        }
-    }
-
     /// Resolve what action to take for a source.
     async fn resolve_index_action(
         &self,
         source: &IndexSource,
         options: &super::types::IndexOptions,
     ) -> Result<IndexAction> {
-        let workspace = match self.workspace {
-            Some(ref ws) => ws,
-            None => return Ok(IndexAction::FullIndex { existing_id: None }),
-        };
+        let workspace = &self.workspace;
 
         // Force mode always re-indexes from scratch
         if options.mode == IndexMode::Force {
@@ -682,17 +620,13 @@ impl Engine {
         if !self.config.graph.enabled {
             return Ok(());
         }
-        let workspace = match self.workspace {
-            Some(ref ws) => ws,
-            None => return Ok(()),
-        };
 
         // Load all documents and extract keyword profiles
-        let doc_ids = workspace.inner().list_documents().await;
+        let doc_ids = self.workspace.inner().list_documents().await;
         let mut builder = crate::graph::DocumentGraphBuilder::new(self.config.graph.clone());
 
         for doc_id in &doc_ids {
-            if let Some(doc) = workspace.load(doc_id).await? {
+            if let Some(doc) = self.workspace.load(doc_id).await? {
                 let keywords = Self::extract_keywords_from_doc(&doc);
                 builder.add_document(
                     &doc.meta.id,
@@ -705,7 +639,7 @@ impl Engine {
         }
 
         let graph = builder.build();
-        workspace.set_graph(&graph).await?;
+        self.workspace.set_graph(&graph).await?;
         Ok(())
     }
 
@@ -738,9 +672,7 @@ impl Clone for Engine {
 
 impl std::fmt::Debug for Engine {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Engine")
-            .field("has_workspace", &self.workspace.is_some())
-            .finish_non_exhaustive()
+        f.debug_struct("Engine").finish_non_exhaustive()
     }
 }
 
