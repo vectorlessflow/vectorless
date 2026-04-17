@@ -47,8 +47,8 @@
 use serde::{Deserialize, Serialize};
 use tracing::{debug, info};
 
-use crate::llm::{LlmClient, LlmExecutor};
 use crate::llm::memo::{MemoKey, MemoOpType, MemoStore, MemoValue};
+use crate::llm::{LlmClient, LlmExecutor};
 use crate::utils::fingerprint::Fingerprint;
 
 /// Sub-query resulting from decomposition.
@@ -269,30 +269,27 @@ impl QueryDecomposer {
         info!("Decomposing complex query: '{}'", query);
 
         // Try LLM-based decomposition if available
-        let result = if self.config.use_llm && (self.llm_client.is_some() || self.llm_executor.is_some()) {
-            match self.llm_decompose(query).await {
-                Ok(result) => result,
-                Err(e) => {
-                    debug!(
-                        "LLM decomposition failed, falling back to rule-based: {}",
-                        e
-                    );
-                    self.rule_based_decompose(query)?
+        let result =
+            if self.config.use_llm && (self.llm_client.is_some() || self.llm_executor.is_some()) {
+                match self.llm_decompose(query).await {
+                    Ok(result) => result,
+                    Err(e) => {
+                        debug!(
+                            "LLM decomposition failed, falling back to rule-based: {}",
+                            e
+                        );
+                        self.rule_based_decompose(query)?
+                    }
                 }
-            }
-        } else {
-            self.rule_based_decompose(query)?
-        };
+            } else {
+                self.rule_based_decompose(query)?
+            };
 
         // Cache the result
         if let Some(ref store) = self.memo_store {
             let cache_key = Self::build_cache_key(query);
             if let Ok(json) = serde_json::to_value(&CachedDecomposition::from_result(&result)) {
-                store.put_with_tokens(
-                    cache_key,
-                    MemoValue::Json(json),
-                    (query.len() / 4) as u64,
-                );
+                store.put_with_tokens(cache_key, MemoValue::Json(json), (query.len() / 4) as u64);
             }
         }
 

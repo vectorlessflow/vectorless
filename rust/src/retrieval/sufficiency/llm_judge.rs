@@ -171,11 +171,7 @@ Be conservative - only mark as sufficient if you're confident the content answer
         if let Some(ref store) = self.memo_store {
             let cache_key = self.build_cache_key(query, content);
             let tokens = (prompt.len() / 4) as u64;
-            store.put_with_tokens(
-                cache_key,
-                MemoValue::Text(format!("{:?}", result)),
-                tokens,
-            );
+            store.put_with_tokens(cache_key, MemoValue::Text(format!("{:?}", result)), tokens);
         }
 
         result

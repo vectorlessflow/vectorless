@@ -426,7 +426,8 @@ impl MemoStore {
         }
 
         // Restore stats
-        self.stats.load_from(data.stats.hits, data.stats.misses, data.stats.tokens_saved);
+        self.stats
+            .load_from(data.stats.hits, data.stats.misses, data.stats.tokens_saved);
 
         info!(
             "Loaded memo store with {} entries from {:?}",

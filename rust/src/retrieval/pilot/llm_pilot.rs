@@ -11,8 +11,8 @@ use std::sync::Arc;
 use tracing::{debug, info, warn};
 
 use crate::document::{DocumentTree, NodeId};
-use crate::llm::{LlmClient, LlmExecutor};
 use crate::llm::memo::{MemoKey, MemoStore, MemoValue};
+use crate::llm::{LlmClient, LlmExecutor};
 use crate::utils::fingerprint::Fingerprint;
 
 use super::budget::BudgetController;

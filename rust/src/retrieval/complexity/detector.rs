@@ -60,8 +60,7 @@ impl ComplexityDetector {
         }
 
         let result = if let Some(ref client) = self.llm_client {
-            if let Some(complexity) =
-                crate::retrieval::pilot::detect_with_llm(client, query).await
+            if let Some(complexity) = crate::retrieval::pilot::detect_with_llm(client, query).await
             {
                 complexity
             } else {
