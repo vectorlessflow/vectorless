@@ -166,7 +166,7 @@ impl IndexStage for OptimizeStage {
     }
 
     fn depends_on(&self) -> Vec<&'static str> {
-        vec!["enrich"]
+        vec!["enrich", "navigation_index"]
     }
 
     fn access_pattern(&self) -> AccessPattern {

@@ -226,7 +226,7 @@ impl IndexStage for NavigationIndexStage {
 
         info!(
             "[navigation_index] Complete: {} nav entries, {} child routes in {}ms",
-            duration, nav_entries_count, child_routes_count,
+            nav_entries_count, child_routes_count, duration,
         );
 
         ctx.navigation_index = Some(nav_index);
