@@ -11,15 +11,27 @@ use crate::retrieval::agent::state::State;
 
 /// Execute `ls` — list children of the current node.
 pub fn ls(ctx: &DocContext, state: &State) -> ToolResult {
+    let mut output = String::new();
+
+    // Show NavEntry for current node (overview, question hints)
+    if let Some(entry) = ctx.nav_entry(state.current_node) {
+        output.push_str(&format!("Current section: {}\n", entry.overview));
+        if !entry.question_hints.is_empty() {
+            output.push_str(&format!(
+                "Can answer: {}\n",
+                entry.question_hints.join(", ")
+            ));
+        }
+        output.push('\n');
+    }
+
     match ctx.ls(state.current_node) {
         Some(routes) => {
             if routes.is_empty() {
-                return ToolResult::ok(
-                    "(leaf node — no children)\nUse cd .. to go back or done to finish.",
-                );
+                output.push_str("(leaf node — no children)\nUse cd .. to go back or done to finish.");
+                return ToolResult::ok(output);
             }
 
-            let mut output = String::new();
             for (i, route) in routes.iter().enumerate() {
                 output.push_str(&format!(
                     "[{}] {} — {} ({} leaves)\n",
@@ -31,12 +43,25 @@ pub fn ls(ctx: &DocContext, state: &State) -> ToolResult {
             }
             ToolResult::ok(output)
         }
-        None => ToolResult::ok("(no navigation data for this node)\nUse cd .. to go back."),
+        None => {
+            output.push_str("(no navigation data for this node)\nUse cd .. to go back.");
+            ToolResult::ok(output)
+        }
     }
 }
 
 /// Execute `cd <target>` — navigate into a child node.
+///
+/// Supports:
+/// - Relative names (child of current node): `cd "Getting Started"`
+/// - Absolute paths starting with `/`: `cd /root/Chapter 1/Section 1.2`
 pub fn cd(target: &str, ctx: &DocContext, state: &mut State) -> ToolResult {
+    // Absolute path: starts with /
+    if target.starts_with('/') {
+        return cd_absolute(target, ctx, state);
+    }
+
+    // Relative: resolve from current node
     match command::resolve_target_extended(target, ctx.nav_index, state.current_node, ctx.tree) {
         Some(node_id) => {
             let title = ctx.node_title(node_id).unwrap_or(target).to_string();
@@ -48,6 +73,52 @@ pub fn cd(target: &str, ctx: &DocContext, state: &mut State) -> ToolResult {
             target
         )),
     }
+}
+
+/// Navigate using an absolute path (e.g., `/root/Chapter 1/Section 1.2`).
+fn cd_absolute(path: &str, ctx: &DocContext, state: &mut State) -> ToolResult {
+    let segments: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
+
+    if segments.is_empty() {
+        return ToolResult::fail("Empty absolute path.".to_string());
+    }
+
+    // Start from root
+    let root = ctx.root();
+    let mut current = root;
+
+    // Skip "root" if the first segment matches it
+    let start_idx = if !segments.is_empty() && segments[0].eq_ignore_ascii_case("root") {
+        1
+    } else {
+        0
+    };
+
+    let mut breadcrumb = vec!["root".to_string()];
+
+    for segment in &segments[start_idx..] {
+        match command::resolve_target_extended(segment, ctx.nav_index, current, ctx.tree) {
+            Some(node_id) => {
+                let title = ctx.node_title(node_id).unwrap_or(*segment).to_string();
+                breadcrumb.push(title);
+                current = node_id;
+            }
+            None => {
+                return ToolResult::fail(format!(
+                    "Path segment '{}' not found. Stopped at: /{}",
+                    segment,
+                    breadcrumb.join("/")
+                ));
+            }
+        }
+    }
+
+    // Update state
+    state.breadcrumb = breadcrumb;
+    state.current_node = current;
+    state.visited.insert(current);
+
+    ToolResult::ok(format!("Entered: {}", state.path_str()))
 }
 
 /// Execute `cd ..` — navigate back to parent.

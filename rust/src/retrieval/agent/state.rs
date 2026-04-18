@@ -31,7 +31,16 @@ pub struct State {
     pub max_rounds: u32,
     /// Feedback from the last executed command (injected into next prompt).
     pub last_feedback: String,
+    /// Structured description of what information is still missing.
+    /// Updated after `check` returns "insufficient".
+    pub missing_info: String,
+    /// ReAct history: summary of each round's command + result.
+    /// Keeps last N entries for prompt injection.
+    pub history: Vec<String>,
 }
+
+/// Maximum number of history entries to keep for prompt injection.
+const MAX_HISTORY_ENTRIES: usize = 6;
 
 impl State {
     /// Create a new state starting at the given root node.
@@ -44,6 +53,8 @@ impl State {
             remaining: max_rounds,
             max_rounds,
             last_feedback: String::new(),
+            missing_info: String::new(),
+            history: Vec::new(),
         }
     }
 
@@ -76,6 +87,38 @@ impl State {
     /// Add a piece of evidence.
     pub fn add_evidence(&mut self, evidence: Evidence) {
         self.evidence.push(evidence);
+    }
+
+    /// Push a history entry (command + result summary).
+    /// Keeps only the last `MAX_HISTORY_ENTRIES` entries.
+    pub fn push_history(&mut self, entry: String) {
+        if self.history.len() >= MAX_HISTORY_ENTRIES {
+            self.history.remove(0);
+        }
+        self.history.push(entry);
+    }
+
+    /// Format history as text for prompt injection.
+    pub fn history_text(&self) -> String {
+        if self.history.is_empty() {
+            return "(no history yet)".to_string();
+        }
+        self.history
+            .iter()
+            .enumerate()
+            .map(|(i, h)| format!("{}. {}", i + 1, h))
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    /// Format visited node titles as text for prompt injection.
+    pub fn visited_titles_text(&self) -> String {
+        if self.visited.is_empty() {
+            return "(none)".to_string();
+        }
+        // Note: we don't store titles for visited nodes, just IDs.
+        // This is a placeholder that shows count. Titles are resolved in the prompt builder.
+        format!("({} nodes visited)", self.visited.len())
     }
 
     /// Format the breadcrumb as a path string (e.g., "root/Chapter 1/Section 1.2").

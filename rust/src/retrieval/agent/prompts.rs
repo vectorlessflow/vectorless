@@ -31,6 +31,10 @@ pub struct NavigationParams<'a> {
     pub remaining: u32,
     /// Maximum rounds.
     pub max_rounds: u32,
+    /// ReAct history of recent rounds.
+    pub history: &'a str,
+    /// Titles of already-visited nodes.
+    pub visited_titles: &'a str,
 }
 
 pub fn subagent_navigation(params: &NavigationParams) -> (String, String) {
@@ -60,6 +64,18 @@ pub fn subagent_navigation(params: &NavigationParams) -> (String, String) {
         format!("\nLast command result:\n{}\n", params.last_feedback)
     };
 
+    let history_section = if params.history == "(no history yet)" {
+        String::new()
+    } else {
+        format!("\nPrevious rounds:\n{}\n", params.history)
+    };
+
+    let visited_section = if params.visited_titles == "(none)" {
+        String::new()
+    } else {
+        format!("\nAlready visited (do not re-read these): {}", params.visited_titles)
+    };
+
     let system = format!(
         "You are a document navigation assistant. You navigate inside a document to find \
          information that answers the user's question.
@@ -78,6 +94,7 @@ Rules:
 - Output exactly ONE command per response, nothing else.
 - Always ls before cd — observe before descending.
 - Content from cat is automatically saved as evidence — don't re-cat the same node.
+- Do not cat or cd into nodes you have already visited.
 - When evidence is sufficient, use check to verify, then done to finish.
 - If the current branch has nothing relevant, use cd .. to go back.
 - If you're at the root and no children seem relevant, use done."
@@ -89,8 +106,8 @@ User question: {query}{task_section}
 
 Current position: /{breadcrumb}
 Collected evidence:
-{evidence_summary}{missing_section}
-
+{evidence_summary}{missing_section}{visited_section}
+{history_section}
 Remaining rounds: {remaining}/{max_rounds}
 
 Command:"
@@ -397,6 +414,8 @@ mod tests {
             last_feedback: "[1] Q1 Report — Q1 data (5 leaves)\n[2] Q2 Report — Q2 data (5 leaves)",
             remaining: 5,
             max_rounds: 8,
+            history: "(no history yet)",
+            visited_titles: "(none)",
         };
 
         let (system, user) = subagent_navigation(&params);
@@ -420,6 +439,8 @@ mod tests {
             last_feedback: "",
             remaining: 8,
             max_rounds: 8,
+            history: "(no history yet)",
+            visited_titles: "(none)",
         };
 
         let (_, user) = subagent_navigation(&params);

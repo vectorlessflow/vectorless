@@ -99,12 +99,49 @@ pub async fn run(
     };
 
     if dispatches.is_empty() {
-        info!("No relevant documents found for dispatch");
-        emitter.emit_completed(0, orch_llm_calls, 0);
-        return Ok(Output::empty());
-    }
+        info!("No dispatches from initial analysis — retrying with expanded context");
 
-    state.analyze_done = true;
+        // Second LLM pass: provide per-document keyword hit details to encourage deeper analysis
+        let expanded_find = format_expanded_find_context(query, ws);
+        let (system, user) = expanded_analysis_prompt(query, &doc_cards_text, &expanded_find);
+
+        match llm.complete(&system, &user).await {
+            Ok(second_output) => {
+                orch_llm_calls += 1;
+                if let Some(second_dispatches) = parse_dispatch_plan(&second_output, ws.doc_count())
+                {
+                    if !second_dispatches.is_empty() {
+                        info!(
+                            docs = second_dispatches.len(),
+                            "Second analysis produced dispatches"
+                        );
+                        state.analyze_done = true;
+                        dispatch_and_collect(
+                            query,
+                            &second_dispatches,
+                            ws,
+                            config,
+                            llm,
+                            &mut state,
+                            emitter,
+                        )
+                        .await;
+                    }
+                }
+            }
+            Err(e) => {
+                warn!(error = %e, "Second analysis LLM call failed");
+            }
+        }
+
+        if state.all_evidence.is_empty() {
+            info!("No relevant documents found after expanded analysis");
+            emitter.emit_completed(0, orch_llm_calls, 0);
+            return Ok(Output::empty());
+        }
+    } else {
+        state.analyze_done = true;
+    }
 
     // --- Phase 2: Dispatch ---
     info!(
@@ -514,6 +551,73 @@ fn format_evidence_as_answer(evidence: &[super::config::Evidence]) -> String {
         })
         .collect::<Vec<_>>()
         .join("\n\n")
+}
+
+/// Format per-document keyword hit details for the expanded analysis prompt.
+fn format_expanded_find_context(query: &str, ws: &WorkspaceContext<'_>) -> String {
+    let keywords = extract_keywords(query);
+    if keywords.is_empty() {
+        return "(no keywords to search)".to_string();
+    }
+
+    let mut output = String::new();
+    for (doc_idx, doc) in ws.docs.iter().enumerate() {
+        let hits = doc.find_all(&keywords);
+        if hits.is_empty() {
+            continue;
+        }
+        let doc_name = doc.doc_name;
+        output.push_str(&format!("Document [{}] {} keyword matches:\n", doc_idx + 1, doc_name));
+        for hit in &hits {
+            for entry in &hit.entries {
+                let title = doc.node_title(entry.node_id).unwrap_or("?");
+                let summary = doc
+                    .nav_entry(entry.node_id)
+                    .map(|e| e.overview.as_str())
+                    .unwrap_or("");
+                output.push_str(&format!(
+                    "  keyword '{}' → {} (depth {}, weight {:.2})",
+                    hit.keyword, title, entry.depth, entry.weight
+                ));
+                if !summary.is_empty() {
+                    output.push_str(&format!(" — {}", summary));
+                }
+                output.push('\n');
+            }
+        }
+        output.push('\n');
+    }
+
+    if output.is_empty() {
+        "(no keyword matches across documents)".to_string()
+    } else {
+        output
+    }
+}
+
+/// Build the expanded analysis prompt for the second LLM pass.
+fn expanded_analysis_prompt(query: &str, doc_cards: &str, expanded_find: &str) -> (String, String) {
+    let system =
+        "You are a multi-document retrieval coordinator. The initial analysis did not identify \
+         relevant documents. Review the detailed keyword matching results below and reconsider \
+         which documents may contain relevant information.
+
+Output format — for each relevant document, output a block:
+- doc: <number>
+  reason: <why this document is relevant>
+  task: <what specific information to find in this document>
+
+Only include documents that are likely to contain relevant information."
+            .to_string();
+
+    let user = format!(
+        "Available documents:\n{doc_cards}\n\n\
+         Detailed keyword matching results:\n{expanded_find}\n\n\
+         User question: {query}\n\n\
+         Relevant documents:"
+    );
+
+    (system, user)
 }
 
 #[cfg(test)]

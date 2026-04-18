@@ -25,7 +25,6 @@ use super::prompts::{
     parse_sufficiency_response, subagent_dispatch, subagent_navigation,
 };
 use super::state::State;
-use super::tools::common;
 use super::tools::subagent as tools;
 
 /// Run the SubAgent loop on a single document.
@@ -95,15 +94,19 @@ pub async fn run(
                 breadcrumb: &state.path_str(),
             })
         } else {
+            // Resolve visited node titles for prompt
+            let visited_titles = format_visited_titles(&state, ctx);
             subagent_navigation(&NavigationParams {
                 query,
                 task,
                 breadcrumb: &state.path_str(),
                 evidence_summary: &state.evidence_summary(),
-                missing_info: "",
+                missing_info: &state.missing_info,
                 last_feedback: &state.last_feedback,
                 remaining: state.remaining,
                 max_rounds: state.max_rounds,
+                history: &state.history_text(),
+                visited_titles: &visited_titles,
             })
         };
 
@@ -142,6 +145,14 @@ pub async fn run(
         let success = !matches!(step, Step::ForceDone(_));
         emitter.emit_round(round_num, &cmd_str, success);
 
+        // Push to ReAct history
+        let feedback_preview = if state.last_feedback.len() > 120 {
+            format!("{}...", &state.last_feedback[..120])
+        } else {
+            state.last_feedback.clone()
+        };
+        state.push_history(format!("{} → {}", cmd_str, feedback_preview));
+
         // Check termination
         match step {
             Step::Done => {
@@ -163,6 +174,7 @@ pub async fn run(
     }
 
     // --- Phase 3: Answer synthesis ---
+    let missing_info = state.missing_info.clone();
     let mut output = state.into_output(llm_calls);
 
     if config.enable_synthesis && !output.evidence.is_empty() {
@@ -175,7 +187,7 @@ pub async fn run(
         let (system, user) = answer_synthesis(&SynthesisParams {
             query,
             evidence_text: &evidence_text,
-            missing_info: "",
+            missing_info: &missing_info,
         });
 
         match llm.complete(&system, &user).await {
@@ -346,8 +358,23 @@ async fn execute_command(
         Command::Find { keyword } => {
             let result = match ctx.find(keyword) {
                 Some(hit) => {
-                    let formatted = common::format_find_result(keyword, &[hit]);
-                    ToolResultLike::ok(formatted)
+                    let mut output = format!("Results for '{}':\n", keyword);
+                    for entry in &hit.entries {
+                        let title = ctx.node_title(entry.node_id).unwrap_or("unknown");
+                        let summary = ctx
+                            .nav_entry(entry.node_id)
+                            .map(|e| e.overview.as_str())
+                            .unwrap_or("");
+                        output.push_str(&format!(
+                            "  - {} (depth {}, weight {:.2})",
+                            title, entry.depth, entry.weight
+                        ));
+                        if !summary.is_empty() {
+                            output.push_str(&format!(" — {}", summary));
+                        }
+                        output.push('\n');
+                    }
+                    ToolResultLike::ok(output)
                 }
                 None => ToolResultLike::ok(format!("No results for '{}'", keyword)),
             };
@@ -381,6 +408,16 @@ async fn execute_command(
                             "Evidence is sufficient. Use done to finish.".to_string();
                         Step::Done
                     } else {
+                        // Extract what's missing from the LLM response
+                        let reason = response
+                            .trim()
+                            .strip_prefix("INSUFFICIENT")
+                            .unwrap_or(response.trim())
+                            .trim()
+                            .trim_start_matches(|c: char| c == '-' || c == ' ');
+                        if !reason.is_empty() {
+                            state.missing_info = reason.to_string();
+                        }
                         state.last_feedback =
                             format!("Evidence not yet sufficient: {}", response.trim());
                         Step::Continue
@@ -410,6 +447,19 @@ impl ToolResultLike {
     fn ok(feedback: String) -> Self {
         Self { feedback }
     }
+}
+
+/// Resolve visited NodeIds to their titles for prompt injection.
+fn format_visited_titles(state: &State, ctx: &DocContext<'_>) -> String {
+    if state.visited.is_empty() {
+        return "(none)".to_string();
+    }
+    state
+        .visited
+        .iter()
+        .filter_map(|&node_id| ctx.node_title(node_id).map(|t| t.to_string()))
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 /// Format evidence items for the synthesis prompt.
