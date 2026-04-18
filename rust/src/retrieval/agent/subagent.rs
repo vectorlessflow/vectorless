@@ -57,7 +57,7 @@ pub async fn run(
     // --- Phase 0: Fast path ---
     if config.enable_fast_path {
         if let Some(output) = fast_path(query, ctx, config, emitter) {
-            info!(doc = ctx.doc_name, "Fast path hit");
+            info!(doc = ctx.doc_name, "Fast path hit — skipping navigation");
             emitter.emit_completed(
                 output.evidence.len(),
                 output.metrics.llm_calls,
@@ -65,9 +65,11 @@ pub async fn run(
             );
             return Ok(output);
         }
+        debug!(doc = ctx.doc_name, "Fast path miss — entering navigation loop");
     }
 
     // --- Phase 1: Bird's-eye view ---
+    debug!(doc = ctx.doc_name, "Phase 1: bird's-eye view (ls root)");
     let mut state = State::new(ctx.root(), config.max_rounds);
     let ls_result = tools::ls(ctx, &state);
     state.last_feedback = ls_result.feedback;
@@ -164,6 +166,11 @@ pub async fn run(
     let mut output = state.into_output(llm_calls);
 
     if config.enable_synthesis && !output.evidence.is_empty() {
+        debug!(
+            doc = ctx.doc_name,
+            evidence = output.evidence.len(),
+            "Phase 3: synthesizing answer from evidence"
+        );
         let evidence_text = format_evidence_for_synthesis(&output.evidence);
         let (system, user) = answer_synthesis(&SynthesisParams {
             query,
@@ -175,16 +182,23 @@ pub async fn run(
             Ok(answer) => {
                 output.answer = answer.trim().to_string();
                 output.metrics.llm_calls += 1;
+                info!(
+                    doc = ctx.doc_name,
+                    answer_len = output.answer.len(),
+                    "Synthesis complete"
+                );
                 emitter.emit_synthesis(output.answer.len());
             }
             Err(e) => {
-                warn!(doc = ctx.doc_name, error = %e, "Synthesis LLM call failed");
+                warn!(doc = ctx.doc_name, error = %e, "Synthesis LLM call failed — using raw evidence");
                 output.answer = format_evidence_as_answer(&output.evidence);
             }
         }
     } else if !output.evidence.is_empty() {
-        // No synthesis — just concatenate evidence
+        debug!(doc = ctx.doc_name, "Synthesis disabled — concatenating raw evidence");
         output.answer = format_evidence_as_answer(&output.evidence);
+    } else {
+        info!(doc = ctx.doc_name, "No evidence collected — returning empty output");
     }
 
     emitter.emit_completed(
@@ -310,6 +324,14 @@ async fn execute_command(
             // Emit evidence event if new evidence was added
             if state.evidence.len() > evidence_before {
                 if let Some(ev) = state.evidence.last() {
+                    info!(
+                        doc = ctx.doc_name,
+                        node = %ev.node_title,
+                        path = %ev.source_path,
+                        len = ev.content.len(),
+                        total = state.evidence.len(),
+                        "Evidence collected"
+                    );
                     emitter.emit_evidence(
                         &ev.node_title,
                         &ev.source_path,
@@ -347,6 +369,12 @@ async fn execute_command(
                 Ok(response) => {
                     *llm_calls += 1;
                     let sufficient = parse_sufficiency_response(&response);
+                    info!(
+                        doc = ctx.doc_name,
+                        sufficient,
+                        evidence = state.evidence.len(),
+                        "Sufficiency check"
+                    );
                     emitter.emit_sufficiency(sufficient, state.evidence.len());
                     if sufficient {
                         state.last_feedback =

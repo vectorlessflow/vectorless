@@ -10,7 +10,7 @@
 //! 4. Integrate: merge evidence, check cross-doc sufficiency, optionally re-dispatch
 //! 5. Synthesis: LLM generates final cross-doc answer
 
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
 use crate::llm::LlmClient;
 use crate::retrieval::scoring::bm25::extract_keywords;
@@ -47,7 +47,7 @@ pub async fn run(
     // --- Phase 0: Fast path ---
     if config.enable_fast_path {
         if let Some(output) = fast_path(query, ws, config, emitter) {
-            info!("Orchestrator fast path hit");
+            info!("Orchestrator fast path hit — skipping dispatch");
             emitter.emit_completed(
                 output.evidence.len(),
                 output.metrics.llm_calls,
@@ -58,6 +58,7 @@ pub async fn run(
     }
 
     // --- Phase 1: Analyze ---
+    debug!("Phase 1: analyzing doc cards and cross-doc keywords");
     let doc_cards_text = orch_tools::ls_docs(ws).feedback;
     let keywords = extract_keywords(query);
     let find_text = if keywords.is_empty() {
@@ -66,7 +67,7 @@ pub async fn run(
         orch_tools::find_cross(&keywords, ws).feedback
     };
 
-    info!(keywords = ?keywords, "Orchestrator analyzing");
+    info!(keywords = ?keywords, "Phase 1: analyzing");
 
     let (system, user) = orchestrator_analysis(&OrchestratorAnalysisParams {
         query,
@@ -98,28 +99,33 @@ pub async fn run(
     };
 
     if dispatches.is_empty() {
-        info!("Orchestrator: no relevant documents found");
+        info!("No relevant documents found for dispatch");
         emitter.emit_completed(0, orch_llm_calls, 0);
         return Ok(Output::empty());
     }
 
-    info!(
-        docs = dispatches.len(),
-        docs_list = ?dispatches.iter().map(|d| d.doc_idx).collect::<Vec<_>>(),
-        "Orchestrator dispatching"
-    );
-
     state.analyze_done = true;
 
     // --- Phase 2: Dispatch ---
+    info!(
+        docs = dispatches.len(),
+        docs_list = ?dispatches.iter().map(|d| d.doc_idx).collect::<Vec<_>>(),
+        "Phase 2: dispatching SubAgents"
+    );
     dispatch_and_collect(query, &dispatches, ws, config, llm, &mut state, emitter).await;
 
     // --- Phase 3: Integrate ---
     if state.all_evidence.is_empty() {
-        info!("Orchestrator: no evidence collected from any SubAgent");
+        info!("No evidence collected from any SubAgent");
         emitter.emit_completed(0, orch_llm_calls, 0);
         return Ok(state.into_output(String::new()));
     }
+
+    info!(
+        evidence = state.all_evidence.len(),
+        sub_results = state.sub_results.len(),
+        "Phase 3: integrating cross-doc evidence"
+    );
 
     let mut retries = 0;
     while retries < MAX_INTEGRATE_RETRIES {
@@ -127,6 +133,12 @@ pub async fn run(
         let evidence_summary = format_evidence_summary(&state.all_evidence);
         let sufficient = check_cross_doc_sufficiency(query, &evidence_summary, llm).await;
         orch_llm_calls += 1;
+        info!(
+            sufficient,
+            evidence = state.all_evidence.len(),
+            retry = retries,
+            "Cross-doc sufficiency check"
+        );
         emitter.emit_sufficiency(sufficient, state.all_evidence.len());
 
         if sufficient {
@@ -161,6 +173,7 @@ pub async fn run(
     }
 
     // Cross-doc integration via LLM
+    debug!("Integrating sub-results via LLM");
     let integration_text = format_integration_text(&state.sub_results);
     let (system, _) = orchestrator_integration(&OrchestratorIntegrationParams {
         query,
@@ -185,6 +198,10 @@ pub async fn run(
     orch_llm_calls += 1;
 
     // --- Phase 4: Synthesis ---
+    debug!(
+        evidence = state.all_evidence.len(),
+        "Phase 4: synthesizing final answer"
+    );
     let evidence_text = format_evidence_for_synthesis(&state.all_evidence);
     let answer = if config.enable_synthesis {
         let (sys, usr) = answer_synthesis(&SynthesisParams {
@@ -195,6 +212,7 @@ pub async fn run(
         match llm.complete(&sys, &usr).await {
             Ok(a) => {
                 orch_llm_calls += 1;
+                info!(answer_len = a.len(), "Synthesis complete");
                 emitter.emit_synthesis(a.len());
                 a.trim().to_string()
             }
