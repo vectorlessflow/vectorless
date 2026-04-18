@@ -605,6 +605,9 @@ impl PipelineOrchestrator {
                 if reader_ap.writes_reasoning_index {
                     ctx.reasoning_index = reader_ctx.reasoning_index;
                 }
+                if reader_ap.writes_navigation_index {
+                    ctx.navigation_index = reader_ctx.navigation_index;
+                }
                 if reader_ap.writes_description {
                     ctx.description = reader_ctx.description;
                 }
