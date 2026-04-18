@@ -1210,6 +1210,48 @@ impl RetrievalOrchestrator {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::retrieval::pipeline::context::PipelineContext;
+
+    /// A simple no-op stage for testing.
+    struct StubStage {
+        name: &'static str,
+        deps: Vec<&'static str>,
+        pri: i32,
+    }
+
+    impl StubStage {
+        fn new(name: &'static str) -> Self {
+            Self {
+                name,
+                deps: vec![],
+                pri: 100,
+            }
+        }
+        fn with_deps(mut self, deps: Vec<&'static str>) -> Self {
+            self.deps = deps;
+            self
+        }
+        fn with_priority(mut self, pri: i32) -> Self {
+            self.pri = pri;
+            self
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl RetrievalStage for StubStage {
+        fn name(&self) -> &str {
+            self.name
+        }
+        fn depends_on(&self) -> Vec<&'static str> {
+            self.deps.clone()
+        }
+        fn priority(&self) -> i32 {
+            self.pri
+        }
+        async fn execute(&self, _ctx: &mut PipelineContext) -> Result<StageOutcome> {
+            Ok(StageOutcome::Continue)
+        }
+    }
 
     #[test]
     fn test_orchestrator_creation() {
@@ -1222,5 +1264,168 @@ mod tests {
         let orchestrator = RetrievalOrchestrator::new();
         let names = orchestrator.stage_names().unwrap();
         assert!(names.is_empty());
+    }
+
+    #[test]
+    fn test_resolve_order_linear_dependency() {
+        let orch = RetrievalOrchestrator::new()
+            .stage(StubStage::new("a"))
+            .stage(StubStage::new("b").with_deps(vec!["a"]))
+            .stage(StubStage::new("c").with_deps(vec!["b"]));
+
+        let order = orch.resolve_order().unwrap();
+        let names: Vec<&str> = order.iter().map(|&i| orch.stages[i].stage.name()).collect();
+        assert_eq!(names, vec!["a", "b", "c"]);
+    }
+
+    #[test]
+    fn test_resolve_order_parallel_no_deps() {
+        let orch = RetrievalOrchestrator::new()
+            .stage(StubStage::new("x").with_priority(10))
+            .stage(StubStage::new("y").with_priority(20))
+            .stage(StubStage::new("z").with_priority(30));
+
+        let order = orch.resolve_order().unwrap();
+        let names: Vec<&str> = order.iter().map(|&i| orch.stages[i].stage.name()).collect();
+        // Sorted by priority when no dependency relationship
+        assert_eq!(names, vec!["x", "y", "z"]);
+    }
+
+    #[test]
+    fn test_resolve_order_missing_dependency() {
+        let orch = RetrievalOrchestrator::new()
+            .stage(StubStage::new("a").with_deps(vec!["nonexistent"]));
+
+        let result = orch.resolve_order();
+        assert!(result.is_err(), "Should fail on missing dependency");
+    }
+
+    #[test]
+    fn test_resolve_order_circular_dependency() {
+        let orch = RetrievalOrchestrator::new()
+            .stage(StubStage::new("a").with_deps(vec!["b"]))
+            .stage(StubStage::new("b").with_deps(vec!["a"]));
+
+        let result = orch.resolve_order();
+        assert!(result.is_err(), "Should detect circular dependency");
+    }
+
+    #[test]
+    fn test_execution_groups_single_group() {
+        // Three stages with no deps → all in one group (parallelizable)
+        let orch = RetrievalOrchestrator::new()
+            .stage(StubStage::new("p"))
+            .stage(StubStage::new("q"))
+            .stage(StubStage::new("r"));
+
+        let order = orch.resolve_order().unwrap();
+        let groups = orch.compute_execution_groups(&order);
+
+        assert_eq!(groups.len(), 1);
+        assert!(groups[0].parallel, "Single group with 3 stages should be parallelizable");
+        assert_eq!(groups[0].stage_indices.len(), 3);
+    }
+
+    #[test]
+    fn test_execution_groups_sequential() {
+        // A → B → C → three sequential groups
+        let orch = RetrievalOrchestrator::new()
+            .stage(StubStage::new("a"))
+            .stage(StubStage::new("b").with_deps(vec!["a"]))
+            .stage(StubStage::new("c").with_deps(vec!["b"]));
+
+        let order = orch.resolve_order().unwrap();
+        let groups = orch.compute_execution_groups(&order);
+
+        assert_eq!(groups.len(), 3);
+        for g in &groups {
+            assert!(!g.parallel, "Sequential stages should not be parallelizable");
+            assert_eq!(g.stage_indices.len(), 1);
+        }
+    }
+
+    #[test]
+    fn test_execution_groups_fan_out() {
+        // A → [B, C] (B and C both depend on A, can run in parallel)
+        let orch = RetrievalOrchestrator::new()
+            .stage(StubStage::new("a"))
+            .stage(StubStage::new("b").with_deps(vec!["a"]))
+            .stage(StubStage::new("c").with_deps(vec!["a"]));
+
+        let order = orch.resolve_order().unwrap();
+        let groups = orch.compute_execution_groups(&order);
+
+        assert_eq!(groups.len(), 2);
+        assert!(!groups[0].parallel, "First group has only 'a'");
+        assert!(groups[1].parallel, "Second group has B and C — parallelizable");
+        assert_eq!(groups[1].stage_indices.len(), 2);
+    }
+
+    #[test]
+    fn test_execution_groups_diamond() {
+        // A → B, A → C, B → D, C → D
+        let orch = RetrievalOrchestrator::new()
+            .stage(StubStage::new("a"))
+            .stage(StubStage::new("b").with_deps(vec!["a"]))
+            .stage(StubStage::new("c").with_deps(vec!["a"]))
+            .stage(StubStage::new("d").with_deps(vec!["b", "c"]));
+
+        let order = orch.resolve_order().unwrap();
+        let groups = orch.compute_execution_groups(&order);
+
+        assert_eq!(groups.len(), 3);
+        // Group 0: a
+        assert_eq!(groups[0].stage_indices.len(), 1);
+        // Group 1: b, c (parallel)
+        assert!(groups[1].parallel);
+        assert_eq!(groups[1].stage_indices.len(), 2);
+        // Group 2: d
+        assert_eq!(groups[2].stage_indices.len(), 1);
+    }
+
+    #[test]
+    fn test_get_execution_groups_public_api() {
+        let orch = RetrievalOrchestrator::new()
+            .stage(StubStage::new("x"))
+            .stage(StubStage::new("y").with_deps(vec!["x"]));
+
+        let groups = orch.get_execution_groups().unwrap();
+        assert_eq!(groups.len(), 2);
+    }
+
+    #[test]
+    fn test_find_stage_index_found() {
+        let orch = RetrievalOrchestrator::new()
+            .stage(StubStage::new("alpha"))
+            .stage(StubStage::new("beta"));
+
+        assert_eq!(orch.find_stage_index("alpha"), 0);
+        assert_eq!(orch.find_stage_index("beta"), 1);
+    }
+
+    #[test]
+    fn test_find_stage_index_missing_returns_zero() {
+        let orch = RetrievalOrchestrator::new()
+            .stage(StubStage::new("alpha"))
+            .stage(StubStage::new("beta"));
+
+        assert_eq!(orch.find_stage_index("gamma"), 0, "Missing stage defaults to 0");
+    }
+
+    #[test]
+    fn test_with_max_backtracks_and_iterations() {
+        let orch = RetrievalOrchestrator::new()
+            .with_max_backtracks(3)
+            .with_max_iterations(7);
+
+        assert_eq!(orch.max_backtracks, 3);
+        assert_eq!(orch.max_total_iterations, 7);
+    }
+
+    #[test]
+    fn test_execution_groups_empty() {
+        let orch = RetrievalOrchestrator::new();
+        let groups = orch.compute_execution_groups(&[]);
+        assert!(groups.is_empty());
     }
 }

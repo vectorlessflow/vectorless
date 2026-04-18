@@ -499,4 +499,164 @@ mod tests {
         assert!(stage.is_optional());
         assert_eq!(stage.depends_on(), vec!["enrich"]);
     }
+
+    #[test]
+    fn test_build_topic_paths_basic() {
+        use crate::document::ReasoningIndexConfig;
+
+        let mut tree = crate::document::DocumentTree::new("Root", "");
+        let root = tree.root();
+        let c1 = tree.add_child(root, "Machine Learning Introduction", "");
+        let c2 = tree.add_child(root, "Deep Learning Methods", "");
+
+        // Set summaries for keyword extraction
+        if let Some(n) = tree.get_mut(c1) {
+            n.summary = "An overview of machine learning algorithms".to_string();
+        }
+        if let Some(n) = tree.get_mut(c2) {
+            n.summary = "Advanced deep learning techniques".to_string();
+        }
+
+        let config = ReasoningIndexConfig::default();
+        let (topic_paths, keyword_count) = ReasoningIndexStage::build_topic_paths(&tree, &config);
+
+        assert!(keyword_count > 0, "Should extract keywords from title + summary");
+        assert!(!topic_paths.is_empty(), "Should build topic paths");
+
+        // "learning" appears in both titles → should be a keyword
+        assert!(
+            topic_paths.contains_key("learning"),
+            "Expected 'learning' in topic paths, got: {:?}",
+            topic_paths.keys().collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn test_build_topic_paths_weight_normalization() {
+        use crate::document::ReasoningIndexConfig;
+
+        let mut tree = crate::document::DocumentTree::new("Root", "");
+        let root = tree.root();
+        let _c1 = tree.add_child(root, "rust ownership", "rust borrowing rules");
+
+        let config = ReasoningIndexConfig::default();
+        let (topic_paths, _) = ReasoningIndexStage::build_topic_paths(&tree, &config);
+
+        // All weights should be in 0.0-1.0 range
+        for entries in topic_paths.values() {
+            for entry in entries {
+                assert!(
+                    entry.weight >= 0.0 && entry.weight <= 1.0,
+                    "Weight {} out of [0, 1] range",
+                    entry.weight
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_build_topic_paths_respects_max_keyword_entries() {
+        use crate::document::ReasoningIndexConfig;
+
+        let mut tree = crate::document::DocumentTree::new("Root", "");
+        let root = tree.root();
+
+        // Create many children with unique keywords
+        for i in 0..50 {
+            let c = tree.add_child(root, &format!("Section {} Alpha Beta Gamma Delta", i), "");
+            if let Some(n) = tree.get_mut(c) {
+                n.summary = format!("keywords unique{} special{} terms{}", i, i, i);
+            }
+        }
+
+        let mut config = ReasoningIndexConfig::default();
+        config.max_keyword_entries = 5;
+        let (topic_paths, keyword_count) =
+            ReasoningIndexStage::build_topic_paths(&tree, &config);
+
+        assert!(
+            keyword_count <= 5,
+            "Should respect max_keyword_entries, got {}",
+            keyword_count
+        );
+        assert_eq!(topic_paths.len(), keyword_count);
+    }
+
+    #[test]
+    fn test_build_section_map() {
+        let mut tree = crate::document::DocumentTree::new("Root", "");
+        let root = tree.root();
+        let c1 = tree.add_child(root, "Introduction", "content");
+        let c2 = tree.add_child(root, "Methods", "content");
+
+        // Set structure indices
+        if let Some(n) = tree.get_mut(c1) {
+            n.structure = "1".to_string();
+        }
+        if let Some(n) = tree.get_mut(c2) {
+            n.structure = "2".to_string();
+        }
+
+        let section_map = ReasoningIndexStage::build_section_map(&tree);
+
+        // Should index by title (lowercase) and structure index
+        assert!(section_map.contains_key("introduction"));
+        assert!(section_map.contains_key("methods"));
+        assert!(section_map.contains_key("1"));
+        assert!(section_map.contains_key("2"));
+        assert_eq!(section_map.len(), 4);
+    }
+
+    #[test]
+    fn test_build_summary_shortcut() {
+        let mut tree = crate::document::DocumentTree::new("Root", "");
+        let root = tree.root();
+        let c1 = tree.add_child(root, "S1", "summary 1");
+        let c2 = tree.add_child(root, "S2", "summary 2");
+
+        // Set root summary (not content — build_summary_shortcut reads summary field)
+        if let Some(n) = tree.get_mut(root) {
+            n.summary = "root summary text".to_string();
+        }
+        if let Some(n) = tree.get_mut(c1) {
+            n.summary = "first section summary".to_string();
+        }
+        if let Some(n) = tree.get_mut(c2) {
+            n.summary = "second section summary".to_string();
+        }
+
+        let shortcut = ReasoningIndexStage::build_summary_shortcut(&tree);
+        assert!(shortcut.is_some());
+
+        let sc = shortcut.unwrap();
+        assert_eq!(sc.root_node, root);
+        assert_eq!(sc.document_summary, "root summary text");
+        assert_eq!(sc.section_summaries.len(), 2);
+    }
+
+    #[test]
+    fn test_build_summary_shortcut_fallback_to_children() {
+        // Root has no summary → fallback to concatenating children
+        let mut tree = crate::document::DocumentTree::new("Root", "");
+        let root = tree.root();
+        let c1 = tree.add_child(root, "S1", "");
+        let c2 = tree.add_child(root, "S2", "");
+
+        if let Some(n) = tree.get_mut(c1) {
+            n.summary = "child summary 1".to_string();
+        }
+        if let Some(n) = tree.get_mut(c2) {
+            n.summary = "child summary 2".to_string();
+        }
+
+        let shortcut = ReasoningIndexStage::build_summary_shortcut(&tree);
+        assert!(shortcut.is_some());
+
+        let sc = shortcut.unwrap();
+        assert!(
+            sc.document_summary.contains("child summary 1"),
+            "Fallback should include child summaries"
+        );
+        assert!(sc.document_summary.contains("S1"));
+    }
 }
