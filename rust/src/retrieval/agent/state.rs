@@ -155,8 +155,7 @@ impl OrchestratorState {
     /// Collect a SubAgent result.
     pub fn collect_result(&mut self, result: Output) {
         self.total_llm_calls += result.metrics.llm_calls;
-        self.all_evidence
-            .extend(result.evidence.iter().cloned());
+        self.all_evidence.extend(result.evidence.iter().cloned());
         self.sub_results.push(result);
     }
 

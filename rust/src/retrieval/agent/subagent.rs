@@ -16,13 +16,13 @@ use tracing::{debug, info, warn};
 use crate::llm::LlmClient;
 use crate::retrieval::scoring::bm25::extract_keywords;
 
-use super::command::{parse_command, Command};
+use super::command::{Command, parse_command};
 use super::config::{Config, DocContext, Evidence, Output, Step};
 use super::context::FindHit;
 use super::events::EventEmitter;
 use super::prompts::{
-    answer_synthesis, check_sufficiency, parse_sufficiency_response, subagent_dispatch,
-    subagent_navigation, SynthesisParams, NavigationParams,
+    NavigationParams, SynthesisParams, answer_synthesis, check_sufficiency,
+    parse_sufficiency_response, subagent_dispatch, subagent_navigation,
 };
 use super::state::State;
 use super::tools::common;
@@ -124,7 +124,16 @@ pub async fn run(
         let round_num = config.max_rounds - state.remaining + 1;
 
         // Execute command
-        let step = execute_command(&command, ctx, &mut state, query, llm, &mut llm_calls, emitter).await;
+        let step = execute_command(
+            &command,
+            ctx,
+            &mut state,
+            query,
+            llm,
+            &mut llm_calls,
+            emitter,
+        )
+        .await;
 
         // Emit round event
         let cmd_str = format!("{:?}", command);
@@ -134,7 +143,11 @@ pub async fn run(
         // Check termination
         match step {
             Step::Done => {
-                info!(doc = ctx.doc_name, evidence = state.evidence.len(), "Navigation done");
+                info!(
+                    doc = ctx.doc_name,
+                    evidence = state.evidence.len(),
+                    "Navigation done"
+                );
                 break;
             }
             Step::ForceDone(reason) => {
@@ -192,7 +205,12 @@ pub async fn run(
 }
 
 /// Try the fast path: extract keywords → look up in ReasoningIndex → return if confident.
-fn fast_path(query: &str, ctx: &DocContext<'_>, config: &Config, emitter: &EventEmitter) -> Option<Output> {
+fn fast_path(
+    query: &str,
+    ctx: &DocContext<'_>,
+    config: &Config,
+    emitter: &EventEmitter,
+) -> Option<Output> {
     let keywords = extract_keywords(query);
     if keywords.is_empty() {
         return None;
@@ -207,7 +225,11 @@ fn fast_path(query: &str, ctx: &DocContext<'_>, config: &Config, emitter: &Event
     let best_entry = hits
         .iter()
         .flat_map(|hit| hit.entries.iter().map(|e| (hit.keyword.clone(), e)))
-        .max_by(|a, b| a.1.weight.partial_cmp(&b.1.weight).unwrap_or(std::cmp::Ordering::Equal))?;
+        .max_by(|a, b| {
+            a.1.weight
+                .partial_cmp(&b.1.weight)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        })?;
 
     if best_entry.1.weight < config.fast_path_threshold {
         debug!(
@@ -380,7 +402,12 @@ fn format_evidence_for_synthesis(evidence: &[Evidence]) -> String {
 fn format_evidence_as_answer(evidence: &[Evidence]) -> String {
     evidence
         .iter()
-        .map(|e| format!("**{}** (at {}):\n{}", e.node_title, e.source_path, e.content))
+        .map(|e| {
+            format!(
+                "**{}** (at {}):\n{}",
+                e.node_title, e.source_path, e.content
+            )
+        })
         .collect::<Vec<_>>()
         .join("\n\n")
 }

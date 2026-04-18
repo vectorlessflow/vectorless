@@ -19,9 +19,9 @@ use super::config::{Config, Output, WorkspaceContext};
 use super::context::FindHit;
 use super::events::EventEmitter;
 use super::prompts::{
+    DispatchEntry, OrchestratorAnalysisParams, OrchestratorIntegrationParams, SynthesisParams,
     answer_synthesis, check_sufficiency, orchestrator_analysis, orchestrator_integration,
-    parse_dispatch_plan, parse_sufficiency_response, DispatchEntry, OrchestratorAnalysisParams,
-    OrchestratorIntegrationParams, SynthesisParams,
+    parse_dispatch_plan, parse_sufficiency_response,
 };
 use super::state::OrchestratorState;
 use super::subagent;
@@ -134,7 +134,10 @@ pub async fn run(
         }
 
         if retries < MAX_INTEGRATE_RETRIES {
-            warn!(retry = retries, "Cross-doc evidence insufficient, supplementing");
+            warn!(
+                retry = retries,
+                "Cross-doc evidence insufficient, supplementing"
+            );
             retries += 1;
 
             // Supplemental: do additional find_cross and dispatch to uncovered docs
@@ -149,7 +152,8 @@ pub async fn run(
                 .collect();
 
             if !undispatched.is_empty() {
-                dispatch_and_collect(query, &undispatched, ws, config, llm, &mut state, emitter).await;
+                dispatch_and_collect(query, &undispatched, ws, config, llm, &mut state, emitter)
+                    .await;
             } else {
                 break; // no more docs to dispatch
             }
@@ -222,7 +226,12 @@ pub async fn run(
 }
 
 /// Try fast path across all documents.
-fn fast_path(query: &str, ws: &WorkspaceContext<'_>, config: &Config, emitter: &EventEmitter) -> Option<Output> {
+fn fast_path(
+    query: &str,
+    ws: &WorkspaceContext<'_>,
+    config: &Config,
+    emitter: &EventEmitter,
+) -> Option<Output> {
     let keywords = extract_keywords(query);
     if keywords.is_empty() {
         return None;
@@ -251,7 +260,10 @@ fn fast_path(query: &str, ws: &WorkspaceContext<'_>, config: &Config, emitter: &
     let (doc_idx, _, best_entry) = best?;
     let doc = ws.doc(doc_idx)?;
     let content = doc.cat(best_entry.node_id).unwrap_or("").to_string();
-    let title = doc.node_title(best_entry.node_id).unwrap_or("unknown").to_string();
+    let title = doc
+        .node_title(best_entry.node_id)
+        .unwrap_or("unknown")
+        .to_string();
 
     if content.is_empty() {
         return None;
@@ -310,7 +322,8 @@ async fn dispatch_and_collect(
 
             Some(async move {
                 emitter.emit_subagent_dispatched(doc_idx, &doc_name, &task);
-                let result = subagent::run(&query, Some(&task), doc, &config, &llm, &sub_emitter).await;
+                let result =
+                    subagent::run(&query, Some(&task), doc, &config, &llm, &sub_emitter).await;
                 (doc_idx, result)
             })
         })
@@ -339,11 +352,7 @@ async fn dispatch_and_collect(
 }
 
 /// Check cross-document evidence sufficiency via LLM.
-async fn check_cross_doc_sufficiency(
-    query: &str,
-    evidence_summary: &str,
-    llm: &LlmClient,
-) -> bool {
+async fn check_cross_doc_sufficiency(query: &str, evidence_summary: &str, llm: &LlmClient) -> bool {
     let (system, user) = check_sufficiency(query, evidence_summary);
     match llm.complete(&system, &user).await {
         Ok(response) => parse_sufficiency_response(&response),
@@ -394,7 +403,10 @@ fn format_evidence_for_synthesis(evidence: &[super::config::Evidence]) -> String
         .iter()
         .map(|e| {
             let doc = e.doc_name.as_deref().unwrap_or("unknown");
-            format!("[{}] ({} at {})\n{}", e.node_title, doc, e.source_path, e.content)
+            format!(
+                "[{}] ({} at {})\n{}",
+                e.node_title, doc, e.source_path, e.content
+            )
         })
         .collect::<Vec<_>>()
         .join("\n\n")
@@ -409,7 +421,12 @@ fn format_evidence_summary(evidence: &[super::config::Evidence]) -> String {
         .iter()
         .map(|e| {
             let doc = e.doc_name.as_deref().unwrap_or("unknown");
-            format!("- [{}] (from {}) {} chars", e.node_title, doc, e.content.len())
+            format!(
+                "- [{}] (from {}) {} chars",
+                e.node_title,
+                doc,
+                e.content.len()
+            )
         })
         .collect::<Vec<_>>()
         .join("\n")
@@ -472,7 +489,10 @@ fn format_evidence_as_answer(evidence: &[super::config::Evidence]) -> String {
         .iter()
         .map(|e| {
             let doc = e.doc_name.as_deref().unwrap_or("unknown");
-            format!("**{}** (from {} at {}):\n{}", e.node_title, doc, e.source_path, e.content)
+            format!(
+                "**{}** (from {} at {}):\n{}",
+                e.node_title, doc, e.source_path, e.content
+            )
         })
         .collect::<Vec<_>>()
         .join("\n\n")

@@ -211,7 +211,10 @@ impl IndexStage for OptimizeStage {
         // 2. Remove empty intermediate nodes
         let removed_count = Self::remove_empty_nodes(tree);
         if removed_count > 0 {
-            debug!("[optimize] Marked {} empty intermediate nodes", removed_count);
+            debug!(
+                "[optimize] Marked {} empty intermediate nodes",
+                removed_count
+            );
         }
 
         let duration = start.elapsed().as_millis() as u64;
@@ -240,9 +243,9 @@ impl IndexStage for OptimizeStage {
 mod tests {
     use super::*;
     use crate::document::DocumentTree;
+    use crate::index::PipelineOptions;
     use crate::index::pipeline::IndexContext;
     use crate::index::pipeline::IndexInput;
-    use crate::index::PipelineOptions;
 
     /// Create a tree with small leaf children under root for merge tests.
     ///
@@ -294,7 +297,9 @@ mod tests {
         // Leaf B should be marked as merged
         let children = tree.children(root);
         let leaf_b = children.iter().find(|&&id| {
-            tree.get(id).map(|n| n.title.starts_with("[MERGED")).unwrap_or(false)
+            tree.get(id)
+                .map(|n| n.title.starts_with("[MERGED"))
+                .unwrap_or(false)
         });
         assert!(leaf_b.is_some(), "Leaf B should be marked as merged");
     }
@@ -404,7 +409,10 @@ mod tests {
         let _c2 = tree.add_child(section, "C2", "b");
 
         let removed = OptimizeStage::remove_empty_nodes(&mut tree);
-        assert_eq!(removed, 0, "Nodes with multiple children should not be removed");
+        assert_eq!(
+            removed, 0,
+            "Nodes with multiple children should not be removed"
+        );
     }
 
     #[test]

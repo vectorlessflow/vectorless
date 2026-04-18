@@ -27,9 +27,9 @@ pub mod state;
 pub mod tools;
 
 // Sub-modules for loop implementations:
-pub mod subagent;
 pub mod orchestrator;
 pub mod prompts;
+pub mod subagent;
 
 pub use config::{Config, DocContext, Output, Scope, WorkspaceContext};
 pub use events::{AgentEvent, EventEmitter};

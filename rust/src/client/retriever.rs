@@ -208,8 +208,7 @@ mod tests {
 
     #[test]
     fn test_retriever_client_creation() {
-        let _client = RetrieverClient::new(LlmClient::new(
-            crate::llm::config::LlmConfig::default(),
-        ));
+        let _client =
+            RetrieverClient::new(LlmClient::new(crate::llm::config::LlmConfig::default()));
     }
 }

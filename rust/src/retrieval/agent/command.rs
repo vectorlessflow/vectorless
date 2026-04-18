@@ -39,10 +39,7 @@ pub fn parse_command(llm_output: &str) -> Command {
         .trim();
 
     // Remove common wrapping (markdown code blocks, etc.)
-    let line = line
-        .trim_start_matches('`')
-        .trim_end_matches('`')
-        .trim();
+    let line = line.trim_start_matches('`').trim_end_matches('`').trim();
 
     let parts: Vec<&str> = line.split_whitespace().collect();
 
@@ -227,10 +224,7 @@ mod tests {
     #[test]
     fn test_parse_multiline() {
         // Should parse the first non-empty line
-        assert_eq!(
-            parse_command("\n\nls\n\n// listing children"),
-            Command::Ls
-        );
+        assert_eq!(parse_command("\n\nls\n\n// listing children"), Command::Ls);
     }
 
     #[test]

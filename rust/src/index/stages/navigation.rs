@@ -70,7 +70,7 @@ impl NavigationIndexStage {
                     topic_tags: Vec::new(),
                     leaf_count: 0,
                     level: 0,
-                }
+                };
             }
         };
 
@@ -163,7 +163,9 @@ impl IndexStage for NavigationIndexStage {
 
         info!(
             "[navigation_index] Starting: {} total nodes ({} leaves, {} non-leaf)",
-            all_nodes.len(), leaf_count, non_leaf_count,
+            all_nodes.len(),
+            leaf_count,
+            non_leaf_count,
         );
 
         let mut nav_entries_count = 0usize;
@@ -171,7 +173,10 @@ impl IndexStage for NavigationIndexStage {
 
         // Phase 1: Pre-compute leaf counts for all nodes.
         // We compute once per node to avoid repeated traversals.
-        debug!("[navigation_index] Phase 1: Pre-computing leaf counts for {} nodes", all_nodes.len());
+        debug!(
+            "[navigation_index] Phase 1: Pre-computing leaf counts for {} nodes",
+            all_nodes.len()
+        );
         let mut leaf_counts: std::collections::HashMap<NodeId, usize> =
             std::collections::HashMap::with_capacity(all_nodes.len());
         for &node_id in &all_nodes {
@@ -179,7 +184,10 @@ impl IndexStage for NavigationIndexStage {
         }
 
         // Phase 2: Build NavEntry + ChildRoutes for each non-leaf node.
-        debug!("[navigation_index] Phase 2: Building NavEntry + ChildRoutes for {} non-leaf nodes", non_leaf_count);
+        debug!(
+            "[navigation_index] Phase 2: Building NavEntry + ChildRoutes for {} non-leaf nodes",
+            non_leaf_count
+        );
         let mut nav_index = NavigationIndex::new();
 
         for &node_id in &all_nodes {
@@ -257,11 +265,8 @@ impl IndexStage for NavigationIndexStage {
 
         let duration = start.elapsed().as_millis() as u64;
 
-        ctx.metrics.record_navigation_index(
-            duration,
-            nav_entries_count,
-            child_routes_count,
-        );
+        ctx.metrics
+            .record_navigation_index(duration, nav_entries_count, child_routes_count);
 
         info!(
             "[navigation_index] Complete: {} nav entries, {} child routes in {}ms",

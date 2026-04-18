@@ -48,10 +48,7 @@ impl<'a> DocContext<'a> {
 
     /// Search for multiple keywords, collecting all hits.
     pub fn find_all(&self, keywords: &[String]) -> Vec<FindHit> {
-        keywords
-            .iter()
-            .filter_map(|kw| self.find(kw))
-            .collect()
+        keywords.iter().filter_map(|kw| self.find(kw)).collect()
     }
 
     /// Get the root node ID.
@@ -81,9 +78,7 @@ impl<'a> WorkspaceContext<'a> {
         self.docs
             .iter()
             .enumerate()
-            .filter_map(|(idx, doc)| {
-                doc.find(keyword).map(|hit| (idx, hit))
-            })
+            .filter_map(|(idx, doc)| doc.find(keyword).map(|hit| (idx, hit)))
             .collect()
     }
 

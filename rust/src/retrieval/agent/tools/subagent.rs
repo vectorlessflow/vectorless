@@ -14,7 +14,9 @@ pub fn ls(ctx: &DocContext, state: &State) -> ToolResult {
     match ctx.ls(state.current_node) {
         Some(routes) => {
             if routes.is_empty() {
-                return ToolResult::ok("(leaf node — no children)\nUse cd .. to go back or done to finish.");
+                return ToolResult::ok(
+                    "(leaf node — no children)\nUse cd .. to go back or done to finish.",
+                );
             }
 
             let mut output = String::new();
@@ -35,17 +37,9 @@ pub fn ls(ctx: &DocContext, state: &State) -> ToolResult {
 
 /// Execute `cd <target>` — navigate into a child node.
 pub fn cd(target: &str, ctx: &DocContext, state: &mut State) -> ToolResult {
-    match command::resolve_target_extended(
-        target,
-        ctx.nav_index,
-        state.current_node,
-        ctx.tree,
-    ) {
+    match command::resolve_target_extended(target, ctx.nav_index, state.current_node, ctx.tree) {
         Some(node_id) => {
-            let title = ctx
-                .node_title(node_id)
-                .unwrap_or(target)
-                .to_string();
+            let title = ctx.node_title(node_id).unwrap_or(target).to_string();
             state.cd(node_id, &title);
             ToolResult::ok(format!("Entered: {}", state.path_str()))
         }
@@ -73,29 +67,23 @@ pub fn cd_up(ctx: &DocContext, state: &mut State) -> ToolResult {
 /// Execute `cat <target>` — read node content and collect as evidence.
 pub fn cat(target: &str, ctx: &DocContext, state: &mut State) -> ToolResult {
     // First resolve the target
-    let node_id = match command::resolve_target_extended(
-        target,
-        ctx.nav_index,
-        state.current_node,
-        ctx.tree,
-    ) {
-        Some(id) => id,
-        None => {
-            // Maybe it's the current node itself — check if target matches
-            return ToolResult::fail(format!(
-                "Target '{}' not found. Use ls to see available children.",
-                target
-            ));
-        }
-    };
+    let node_id =
+        match command::resolve_target_extended(target, ctx.nav_index, state.current_node, ctx.tree)
+        {
+            Some(id) => id,
+            None => {
+                // Maybe it's the current node itself — check if target matches
+                return ToolResult::fail(format!(
+                    "Target '{}' not found. Use ls to see available children.",
+                    target
+                ));
+            }
+        };
 
     // Read content
     match ctx.cat(node_id) {
         Some(content) => {
-            let title = ctx
-                .node_title(node_id)
-                .unwrap_or("unknown")
-                .to_string();
+            let title = ctx.node_title(node_id).unwrap_or("unknown").to_string();
 
             let content_string = content.to_string();
 
@@ -110,7 +98,11 @@ pub fn cat(target: &str, ctx: &DocContext, state: &mut State) -> ToolResult {
             state.visited.insert(node_id);
 
             let preview = if content_string.len() > 500 {
-                format!("{}...(truncated, {} chars total)", &content_string[..500], content_string.len())
+                format!(
+                    "{}...(truncated, {} chars total)",
+                    &content_string[..500],
+                    content_string.len()
+                )
             } else {
                 content_string
             };

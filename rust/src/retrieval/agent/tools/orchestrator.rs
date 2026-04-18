@@ -19,7 +19,12 @@ pub fn ls_docs(ctx: &WorkspaceContext) -> ToolResult {
     let mut output = format!("Available documents ({} total):\n\n", ctx.doc_count());
 
     for (idx, card) in &cards {
-        output.push_str(&format!("[{}] {} — {}\n", idx + 1, card.title, card.overview));
+        output.push_str(&format!(
+            "[{}] {} — {}\n",
+            idx + 1,
+            card.title,
+            card.overview
+        ));
 
         for sec in &card.sections {
             output.push_str(&format!(
@@ -36,10 +41,7 @@ pub fn ls_docs(ctx: &WorkspaceContext) -> ToolResult {
         }
 
         if !card.topic_tags.is_empty() {
-            output.push_str(&format!(
-                "    Topics: {}\n",
-                card.topic_tags.join(", ")
-            ));
+            output.push_str(&format!("    Topics: {}\n", card.topic_tags.join(", ")));
         }
 
         output.push('\n');
@@ -79,10 +81,7 @@ pub fn find_cross(keywords: &[String], ctx: &WorkspaceContext) -> ToolResult {
 
     let mut output = String::new();
     for (doc_idx, hits) in &results {
-        let doc_name = ctx
-            .doc(*doc_idx)
-            .map(|d| d.doc_name)
-            .unwrap_or("unknown");
+        let doc_name = ctx.doc(*doc_idx).map(|d| d.doc_name).unwrap_or("unknown");
         output.push_str(&format!("Document [{}] {}:\n", doc_idx + 1, doc_name));
 
         for hit in hits {

@@ -110,10 +110,7 @@ async fn main() -> vectorless::Result<()> {
         println!("  format:    {:?}", item.format);
 
         if let Some(desc) = &item.description {
-            println!(
-                "  summary:   {}...",
-                &desc[..desc.len().min(120)]
-            );
+            println!("  summary:   {}...", &desc[..desc.len().min(120)]);
         }
 
         if let Some(ref metrics) = item.metrics {
@@ -126,8 +123,14 @@ async fn main() -> vectorless::Result<()> {
             println!("  Split              {:>8}", metrics.split_time_ms);
             println!("  Enhance            {:>8}", metrics.enhance_time_ms);
             println!("  Enrich             {:>8}", metrics.enrich_time_ms);
-            println!("  Reasoning Index    {:>8}", metrics.reasoning_index_time_ms);
-            println!("  Navigation Index   {:>8}", metrics.navigation_index_time_ms);
+            println!(
+                "  Reasoning Index    {:>8}",
+                metrics.reasoning_index_time_ms
+            );
+            println!(
+                "  Navigation Index   {:>8}",
+                metrics.navigation_index_time_ms
+            );
             println!("  Optimize           {:>8}", metrics.optimize_time_ms);
             println!("  ─────────────────────────────");
             println!("  Total              {:>8}", metrics.total_time_ms());
@@ -137,7 +140,10 @@ async fn main() -> vectorless::Result<()> {
             println!("  Summaries generated:   {}", metrics.summaries_generated);
             println!("  Summaries failed:      {}", metrics.summaries_failed);
             println!("  LLM calls:             {}", metrics.llm_calls);
-            println!("  Tokens generated:      {}", metrics.total_tokens_generated);
+            println!(
+                "  Tokens generated:      {}",
+                metrics.total_tokens_generated
+            );
 
             println!("\n--- Navigation Index ---");
             println!("  Nav entries:           {}", metrics.nav_entries_indexed);

@@ -171,7 +171,13 @@ impl EventEmitter {
     }
 
     /// Emit an evidence-collected event.
-    pub fn emit_evidence(&self, node_title: &str, source_path: &str, content_len: usize, total: usize) {
+    pub fn emit_evidence(
+        &self,
+        node_title: &str,
+        source_path: &str,
+        content_len: usize,
+        total: usize,
+    ) {
         self.emit(AgentEvent::EvidenceCollected {
             node_title: node_title.to_string(),
             source_path: source_path.to_string(),
@@ -254,9 +260,23 @@ mod tests {
         let events: Vec<AgentEvent> = (0..4).map(|_| rx.blocking_recv().unwrap()).collect();
 
         assert!(matches!(&events[0], AgentEvent::Started { query, .. } if query == "what is X?"));
-        assert!(matches!(&events[1], AgentEvent::EvidenceCollected { node_title, .. } if node_title == "Intro"));
-        assert!(matches!(&events[2], AgentEvent::SufficiencyCheck { sufficient: true, .. }));
-        assert!(matches!(&events[3], AgentEvent::Completed { evidence_count: 1, .. }));
+        assert!(
+            matches!(&events[1], AgentEvent::EvidenceCollected { node_title, .. } if node_title == "Intro")
+        );
+        assert!(matches!(
+            &events[2],
+            AgentEvent::SufficiencyCheck {
+                sufficient: true,
+                ..
+            }
+        ));
+        assert!(matches!(
+            &events[3],
+            AgentEvent::Completed {
+                evidence_count: 1,
+                ..
+            }
+        ));
     }
 
     #[test]

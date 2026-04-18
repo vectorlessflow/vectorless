@@ -59,8 +59,7 @@ impl ReasoningIndexStage {
         tree: &crate::document::DocumentTree,
         config: &ReasoningIndexConfig,
     ) -> (HashMap<String, Vec<TopicEntry>>, usize) {
-        let mut keyword_nodes: HashMap<String, Vec<(NodeId, f32, usize)>> =
-            HashMap::new();
+        let mut keyword_nodes: HashMap<String, Vec<(NodeId, f32, usize)>> = HashMap::new();
 
         // Walk all nodes and extract keywords from title + summary
         for node_id in tree.traverse() {
@@ -107,13 +106,11 @@ impl ReasoningIndexStage {
         let keyword_count = sorted_keywords.len();
 
         // Build topic_paths: merge duplicate (keyword, node) pairs
-        let mut topic_paths: HashMap<String, Vec<TopicEntry>> =
-            HashMap::new();
+        let mut topic_paths: HashMap<String, Vec<TopicEntry>> = HashMap::new();
 
         for (keyword, entries) in sorted_keywords {
             // Merge duplicate node entries by summing weights
-            let mut merged: HashMap<NodeId, (f32, usize)> =
-                HashMap::new();
+            let mut merged: HashMap<NodeId, (f32, usize)> = HashMap::new();
             for (node_id, weight, depth) in entries {
                 let entry = merged.entry(node_id).or_insert((0.0, depth));
                 entry.0 += weight;
@@ -150,9 +147,7 @@ impl ReasoningIndexStage {
     }
 
     /// Build section map from depth-1 nodes.
-    fn build_section_map(
-        tree: &crate::document::DocumentTree,
-    ) -> HashMap<String, NodeId> {
+    fn build_section_map(tree: &crate::document::DocumentTree) -> HashMap<String, NodeId> {
         let mut section_map = HashMap::new();
         let root = tree.root();
         for child_id in tree.children(root) {
@@ -178,8 +173,8 @@ impl ReasoningIndexStage {
         max_keywords: usize,
         concurrency: usize,
     ) -> usize {
-        use std::collections::HashSet;
         use futures::StreamExt;
+        use std::collections::HashSet;
 
         let existing_keys: HashSet<String> = topic_paths.keys().cloned().collect();
         // Pick top keywords by entry count for synonym expansion
@@ -197,7 +192,8 @@ impl ReasoningIndexStage {
 
         tracing::info!(
             "[reasoning_index] Expanding synonyms for {} keywords (concurrency: {})",
-            keyword_count, concurrency,
+            keyword_count,
+            concurrency,
         );
 
         // Snapshot the source entries for each keyword before concurrent calls.
@@ -206,10 +202,7 @@ impl ReasoningIndexStage {
         let source_entries: HashMap<String, Vec<TopicEntry>> = ranked
             .iter()
             .map(|(kw, _): &(String, usize)| {
-                (
-                    kw.clone(),
-                    topic_paths.get(kw).cloned().unwrap_or_default(),
-                )
+                (kw.clone(), topic_paths.get(kw).cloned().unwrap_or_default())
             })
             .collect();
 
@@ -272,7 +265,11 @@ impl ReasoningIndexStage {
                     }
                 }
                 Err(error) => {
-                    tracing::warn!("[reasoning_index] Synonym expansion failed for '{}': {}", keyword, error);
+                    tracing::warn!(
+                        "[reasoning_index] Synonym expansion failed for '{}': {}",
+                        keyword,
+                        error
+                    );
                 }
             }
         }
@@ -379,7 +376,10 @@ impl IndexStage for ReasoningIndexStage {
 
         // 1. Build topic-to-path mapping
         let (mut topic_paths, keyword_count) = Self::build_topic_paths(tree, config);
-        let topic_count: usize = topic_paths.values().map(|v: &Vec<TopicEntry>| v.len()).sum();
+        let topic_count: usize = topic_paths
+            .values()
+            .map(|v: &Vec<TopicEntry>| v.len())
+            .sum();
         debug!(
             "[reasoning_index] Topic paths: {} keywords, {} entries",
             keyword_count, topic_count
@@ -391,8 +391,7 @@ impl IndexStage for ReasoningIndexStage {
                 let max_kw = (keyword_count / 4).max(20).min(100);
                 let concurrency = ctx.options.concurrency.max_concurrent_requests;
                 let count =
-                    Self::expand_synonyms(&mut topic_paths, llm_client, max_kw, concurrency)
-                        .await;
+                    Self::expand_synonyms(&mut topic_paths, llm_client, max_kw, concurrency).await;
                 if count > 0 {
                     info!("[reasoning_index] Expanded {} synonym keywords", count);
                 }
@@ -407,7 +406,10 @@ impl IndexStage for ReasoningIndexStage {
 
         // 2. Build section map
         let section_map = Self::build_section_map(tree);
-        debug!("[reasoning_index] Section map: {} entries", section_map.len());
+        debug!(
+            "[reasoning_index] Section map: {} entries",
+            section_map.len()
+        );
 
         // 3. Build summary shortcut
         let summary_shortcut = if config.build_summary_shortcut {
@@ -520,7 +522,10 @@ mod tests {
         let config = ReasoningIndexConfig::default();
         let (topic_paths, keyword_count) = ReasoningIndexStage::build_topic_paths(&tree, &config);
 
-        assert!(keyword_count > 0, "Should extract keywords from title + summary");
+        assert!(
+            keyword_count > 0,
+            "Should extract keywords from title + summary"
+        );
         assert!(!topic_paths.is_empty(), "Should build topic paths");
 
         // "learning" appears in both titles → should be a keyword
@@ -571,8 +576,7 @@ mod tests {
 
         let mut config = ReasoningIndexConfig::default();
         config.max_keyword_entries = 5;
-        let (topic_paths, keyword_count) =
-            ReasoningIndexStage::build_topic_paths(&tree, &config);
+        let (topic_paths, keyword_count) = ReasoningIndexStage::build_topic_paths(&tree, &config);
 
         assert!(
             keyword_count <= 5,

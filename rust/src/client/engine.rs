@@ -512,10 +512,8 @@ impl Engine {
                                 Err(e) => return (doc_id, Err(e.to_string())),
                             };
 
-                            let nav_index = doc.navigation_index
-                                .unwrap_or_default();
-                            let reasoning_index = doc.reasoning_index
-                                .unwrap_or_default();
+                            let nav_index = doc.navigation_index.unwrap_or_default();
+                            let reasoning_index = doc.reasoning_index.unwrap_or_default();
 
                             match engine
                                 .retriever
@@ -598,9 +596,8 @@ impl Engine {
         let (agent_tx, mut agent_rx) = crate::retrieval::agent::events::channel(
             crate::retrieval::agent::events::DEFAULT_AGENT_EVENT_BOUND,
         );
-        let (retrieve_tx, retrieve_rx) = crate::retrieval::stream::channel(
-            crate::retrieval::stream::DEFAULT_STREAM_BOUND,
-        );
+        let (retrieve_tx, retrieve_rx) =
+            crate::retrieval::stream::channel(crate::retrieval::stream::DEFAULT_STREAM_BOUND);
 
         // Spawn a task that translates AgentEvents → RetrieveEvents
         tokio::spawn(async move {
@@ -617,57 +614,71 @@ impl Engine {
                             "subagent".to_string()
                         },
                     },
-                    AgentEvent::FastPathHit { keyword, node_title, .. } => {
-                        RetrieveEvent::ContentFound {
-                            node_id: String::new(),
-                            title: node_title,
-                            preview: keyword,
-                            score: 1.0,
-                        }
-                    }
-                    AgentEvent::RoundCompleted { round, command, success: _ } => {
-                        RetrieveEvent::StageCompleted {
-                            stage: format!("round_{}_{}", round, command),
-                            elapsed_ms: 0,
-                        }
-                    }
-                    AgentEvent::EvidenceCollected { node_title, source_path, content_len, .. } => {
-                        RetrieveEvent::ContentFound {
-                            node_id: source_path,
-                            title: node_title,
-                            preview: String::new(),
-                            score: if content_len > 0 { 0.8 } else { 0.0 },
-                        }
-                    }
-                    AgentEvent::SufficiencyCheck { sufficient, evidence_count } => {
-                        RetrieveEvent::SufficiencyCheck {
-                            level: if sufficient {
-                                crate::retrieval::SufficiencyLevel::Sufficient
-                            } else {
-                                crate::retrieval::SufficiencyLevel::Insufficient
-                            },
-                            tokens: evidence_count,
-                        }
-                    }
-                    AgentEvent::SubAgentDispatched { doc_idx, doc_name, .. } => {
-                        RetrieveEvent::StageCompleted {
-                            stage: format!("dispatch_{}_{}", doc_idx, doc_name),
-                            elapsed_ms: 0,
-                        }
-                    }
-                    AgentEvent::SubAgentCompleted { doc_idx, evidence_count, success } => {
-                        RetrieveEvent::StageCompleted {
-                            stage: format!("subagent_{}_done_{}_{}", doc_idx, evidence_count, success),
-                            elapsed_ms: 0,
-                        }
-                    }
+                    AgentEvent::FastPathHit {
+                        keyword,
+                        node_title,
+                        ..
+                    } => RetrieveEvent::ContentFound {
+                        node_id: String::new(),
+                        title: node_title,
+                        preview: keyword,
+                        score: 1.0,
+                    },
+                    AgentEvent::RoundCompleted {
+                        round,
+                        command,
+                        success: _,
+                    } => RetrieveEvent::StageCompleted {
+                        stage: format!("round_{}_{}", round, command),
+                        elapsed_ms: 0,
+                    },
+                    AgentEvent::EvidenceCollected {
+                        node_title,
+                        source_path,
+                        content_len,
+                        ..
+                    } => RetrieveEvent::ContentFound {
+                        node_id: source_path,
+                        title: node_title,
+                        preview: String::new(),
+                        score: if content_len > 0 { 0.8 } else { 0.0 },
+                    },
+                    AgentEvent::SufficiencyCheck {
+                        sufficient,
+                        evidence_count,
+                    } => RetrieveEvent::SufficiencyCheck {
+                        level: if sufficient {
+                            crate::retrieval::SufficiencyLevel::Sufficient
+                        } else {
+                            crate::retrieval::SufficiencyLevel::Insufficient
+                        },
+                        tokens: evidence_count,
+                    },
+                    AgentEvent::SubAgentDispatched {
+                        doc_idx, doc_name, ..
+                    } => RetrieveEvent::StageCompleted {
+                        stage: format!("dispatch_{}_{}", doc_idx, doc_name),
+                        elapsed_ms: 0,
+                    },
+                    AgentEvent::SubAgentCompleted {
+                        doc_idx,
+                        evidence_count,
+                        success,
+                    } => RetrieveEvent::StageCompleted {
+                        stage: format!("subagent_{}_done_{}_{}", doc_idx, evidence_count, success),
+                        elapsed_ms: 0,
+                    },
                     AgentEvent::SynthesisCompleted { answer_len } => {
                         RetrieveEvent::StageCompleted {
                             stage: format!("synthesis_{}chars", answer_len),
                             elapsed_ms: 0,
                         }
                     }
-                    AgentEvent::Completed { evidence_count, llm_calls: _, rounds_used: _ } => {
+                    AgentEvent::Completed {
+                        evidence_count,
+                        llm_calls: _,
+                        rounds_used: _,
+                    } => {
                         let response = crate::retrieval::RetrieveResponse {
                             results: Vec::new(),
                             content: String::new(),
@@ -678,7 +689,9 @@ impl Engine {
                             reasoning_chain: crate::retrieval::ReasoningChain::default(),
                             tokens_used: 0,
                         };
-                        let _ = retrieve_tx.send(RetrieveEvent::Completed { response }).await;
+                        let _ = retrieve_tx
+                            .send(RetrieveEvent::Completed { response })
+                            .await;
                         break; // Completed is terminal
                     }
                     AgentEvent::Error { message } => {
@@ -706,7 +719,12 @@ impl Engine {
 
         tokio::spawn(async move {
             // Prepare owned indices (fill defaults for missing)
-            let owned_docs: Vec<(String, crate::storage::PersistedDocument, crate::document::NavigationIndex, crate::document::ReasoningIndex)> = docs
+            let owned_docs: Vec<(
+                String,
+                crate::storage::PersistedDocument,
+                crate::document::NavigationIndex,
+                crate::document::ReasoningIndex,
+            )> = docs
                 .into_iter()
                 .map(|(id, doc)| {
                     let nav = doc.navigation_index.clone().unwrap_or_default();
@@ -716,7 +734,8 @@ impl Engine {
                 .collect();
 
             if owned_docs.len() == 1 {
-                let (doc_id, doc, nav_index, reasoning_index) = owned_docs.into_iter().next().unwrap();
+                let (doc_id, doc, nav_index, reasoning_index) =
+                    owned_docs.into_iter().next().unwrap();
                 let doc_ctx = crate::retrieval::agent::DocContext {
                     tree: &doc.tree,
                     nav_index: &nav_index,
@@ -724,7 +743,8 @@ impl Engine {
                     doc_name: &doc_id,
                 };
                 let scope = crate::retrieval::agent::Scope::Single(doc_ctx);
-                let _ = crate::retrieval::agent::retrieve(&query, scope, &config, &llm, &emitter).await;
+                let _ =
+                    crate::retrieval::agent::retrieve(&query, scope, &config, &llm, &emitter).await;
             } else {
                 let doc_contexts: Vec<crate::retrieval::agent::DocContext> = owned_docs
                     .iter()
@@ -737,7 +757,8 @@ impl Engine {
                     .collect();
                 let ws = crate::retrieval::agent::WorkspaceContext::new(doc_contexts);
                 let scope = crate::retrieval::agent::Scope::Workspace(ws);
-                let _ = crate::retrieval::agent::retrieve(&query, scope, &config, &llm, &emitter).await;
+                let _ =
+                    crate::retrieval::agent::retrieve(&query, scope, &config, &llm, &emitter).await;
             }
         });
 

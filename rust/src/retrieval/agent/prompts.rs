@@ -57,10 +57,7 @@ pub fn subagent_navigation(params: &NavigationParams) -> (String, String) {
     let last_feedback_section = if params.last_feedback.is_empty() {
         String::new()
     } else {
-        format!(
-            "\nLast command result:\n{}\n",
-            params.last_feedback
-        )
+        format!("\nLast command result:\n{}\n", params.last_feedback)
     };
 
     let system = format!(
@@ -294,10 +291,9 @@ pub fn answer_synthesis(params: &SynthesisParams) -> (String, String) {
 
 /// Build the check prompt for LLM-based sufficiency evaluation.
 pub fn check_sufficiency(query: &str, evidence_summary: &str) -> (String, String) {
-    let system =
-        "You evaluate whether collected evidence is sufficient to answer a question. \
+    let system = "You evaluate whether collected evidence is sufficient to answer a question. \
          Respond with ONLY 'SUFFICIENT' or 'INSUFFICIENT' followed by a one-line reason."
-            .to_string();
+        .to_string();
 
     let user = format!(
         "Question: {query}\n\n\

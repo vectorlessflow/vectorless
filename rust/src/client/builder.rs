@@ -7,8 +7,8 @@
 //! [`Engine`] instances with sensible defaults.
 
 use crate::{
-    client::engine::Engine, client::retriever::RetrieverClient, config::Config, events::EventEmitter, metrics::MetricsHub,
-    storage::Workspace,
+    client::engine::Engine, client::retriever::RetrieverClient, config::Config,
+    events::EventEmitter, metrics::MetricsHub, storage::Workspace,
 };
 
 /// Builder for creating a [`Engine`] client.

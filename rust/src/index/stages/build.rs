@@ -263,11 +263,18 @@ impl IndexStage for BuildStage {
             return Ok(StageResult::success("build"));
         }
 
-        info!("[build] Starting: {} raw nodes, thinning={}", raw_nodes.len(), ctx.options.thinning.enabled);
+        info!(
+            "[build] Starting: {} raw nodes, thinning={}",
+            raw_nodes.len(),
+            ctx.options.thinning.enabled
+        );
 
         // Step 1: Calculate total tokens
         Self::calculate_total_tokens(&mut raw_nodes);
-        debug!("[build] Calculated total tokens for {} nodes", raw_nodes.len());
+        debug!(
+            "[build] Calculated total tokens for {} nodes",
+            raw_nodes.len()
+        );
 
         // Step 2: Apply thinning if enabled
         let _original_count = raw_nodes.len();
@@ -283,7 +290,12 @@ impl IndexStage for BuildStage {
         let skipped = nodes_before_merge - raw_nodes.len();
         ctx.metrics.nodes_skipped += skipped;
         if skipped > 0 {
-            debug!("[build] Thinning removed {} nodes ({} → {})", skipped, nodes_before_merge, raw_nodes.len());
+            debug!(
+                "[build] Thinning removed {} nodes ({} → {})",
+                skipped,
+                nodes_before_merge,
+                raw_nodes.len()
+            );
         }
 
         // Step 3: Build tree

@@ -101,9 +101,7 @@ impl NavigationIndex {
     pub fn root_entry(&self) -> Option<&NavEntry> {
         // The root should always be present if the index is non-empty.
         // Return the first entry with level 0.
-        self.nav_entries
-            .values()
-            .find(|e| e.level == 0)
+        self.nav_entries.values().find(|e| e.level == 0)
     }
 
     /// Iterate over all navigation entries.

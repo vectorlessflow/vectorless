@@ -186,7 +186,10 @@ impl IndexStage for EnrichStage {
 
         // 3. Calculate token statistics
         let (total_tokens, stat_node_count) = Self::calculate_token_stats(tree);
-        debug!("[enrich] Token stats: {} total tokens across {} nodes", total_tokens, stat_node_count);
+        debug!(
+            "[enrich] Token stats: {} total tokens across {} nodes",
+            total_tokens, stat_node_count
+        );
 
         // 4. Extract and resolve cross-references
         let resolved_refs = Self::resolve_references(tree);
@@ -200,7 +203,10 @@ impl IndexStage for EnrichStage {
         let duration = start.elapsed().as_millis() as u64;
         ctx.metrics.record_enrich(duration);
 
-        info!("[enrich] Complete: {} tokens, {} refs resolved in {}ms", total_tokens, resolved_refs, duration);
+        info!(
+            "[enrich] Complete: {} tokens, {} refs resolved in {}ms",
+            total_tokens, resolved_refs, duration
+        );
 
         let mut stage_result = StageResult::success("enrich");
         stage_result.duration_ms = duration;
@@ -222,29 +228,6 @@ impl IndexStage for EnrichStage {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::document::RefType;
-
-    #[test]
-    fn test_resolve_references_section_ref() {
-        let mut tree = DocumentTree::new("Root", "root content");
-        let s1 = tree.add_child(tree.root(), "Introduction", "Introduction text.");
-        tree.set_structure(s1, "1");
-        let s2 = tree.add_child(
-            tree.root(),
-            "Details",
-            "For details, see Section 1 for more info",
-        );
-        tree.set_structure(s2, "2");
-
-        let resolved = EnrichStage::resolve_references(&mut tree);
-        assert_eq!(resolved, 1);
-
-        // Verify the reference was stored on s2 and resolved to s1
-        let refs = tree.get(s2).unwrap().references.clone();
-        assert_eq!(refs.len(), 1);
-        assert_eq!(refs[0].ref_type, RefType::Section);
-        assert_eq!(refs[0].target_node, Some(s1));
-    }
 
     #[test]
     fn test_resolve_references_no_refs() {

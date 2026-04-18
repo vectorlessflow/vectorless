@@ -28,10 +28,10 @@ mod tree;
 pub use navigation::{ChildRoute, DocCard, NavEntry, NavigationIndex, SectionCard};
 pub use node::{NodeId, TreeNode};
 pub use reasoning::{
-    ReasoningIndex, ReasoningIndexBuilder, ReasoningIndexConfig, SectionSummary,
-    SummaryShortcut, TopicEntry,
+    ReasoningIndex, ReasoningIndexBuilder, ReasoningIndexConfig, SectionSummary, SummaryShortcut,
+    TopicEntry,
 };
-pub use reference::{RefType, ReferenceExtractor};
+pub use reference::ReferenceExtractor;
 pub use structure::{DocumentStructure, StructureNode};
 pub use toc::{TocConfig, TocEntry, TocNode, TocView};
 pub use tree::{DocumentTree, RetrievalIndex};
