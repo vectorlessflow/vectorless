@@ -3,18 +3,9 @@
 
 //! Search algorithms for tree traversal.
 //!
-//! This module contains only tree traversal strategies (Beam, MCTS, Greedy).
-//! All scoring intelligence lives in the `pilot` module.
-//! BM25 and keyword utilities live in the `scoring` module.
+//! This module is being phased out in favor of the agent-based retrieval system.
+//! The agent directly navigates the tree using ls/cd/cat commands.
 
-mod beam;
-mod greedy;
-mod mcts;
-mod toc_navigator;
-mod r#trait;
-
-pub use beam::BeamSearch;
-pub use greedy::PurePilotSearch;
-pub use mcts::MctsSearch;
-pub use toc_navigator::{SearchCue, ToCNavigator};
-pub use r#trait::{SearchConfig, SearchResult, SearchTree};
+// Module intentionally left empty.
+// Search strategies (beam, mcts, greedy, toc_navigator) have been replaced
+// by the agent-based retrieval system in `retrieval/agent/`.

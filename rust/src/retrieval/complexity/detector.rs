@@ -59,17 +59,7 @@ impl ComplexityDetector {
             }
         }
 
-        let result = if let Some(ref client) = self.llm_client {
-            if let Some(complexity) = crate::retrieval::pilot::detect_with_llm(client, query).await
-            {
-                complexity
-            } else {
-                tracing::warn!("LLM complexity detection failed, falling back to heuristic");
-                self.detect_heuristic(query)
-            }
-        } else {
-            self.detect_heuristic(query)
-        };
+        let result = self.detect_heuristic(query);
 
         // Cache the result
         if let Some(ref store) = self.memo_store {

@@ -57,7 +57,7 @@ use crate::{
         incremental::{self, IndexAction},
     },
     metrics::MetricsHub,
-    retrieval::{PipelineRetriever, RetrieveEventReceiver},
+    retrieval::RetrieveEventReceiver,
     storage::{PersistedDocument, Workspace},
 };
 

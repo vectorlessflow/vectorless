@@ -32,7 +32,7 @@
 }
 
 .heroTitleEmphasis {
-  color: var(--text);
+  color: var(--primary);
 }
 
 .heroTitleLight {
@@ -222,7 +222,7 @@
 .demoCodeHeader {
   padding: 0.75rem 1.25rem;
   background: #0E1117;
-  border-bottom: 1px solid #2A2E34;
+  border-bottom: 1px solid #252A30;
   display: flex;
   align-items: center;
   gap: 0.75rem;
@@ -305,7 +305,7 @@
 }
 
 .hlComment {
-  color: #5E6673;
+  color: #6B7280;
   font-style: italic;
 }
 
@@ -319,7 +319,7 @@
 
 .terminalOutput {
   background: #0E1117;
-  border-top: 1px solid #2A2E34;
+  border-top: 1px solid #252A30;
   padding: 1rem 2rem;
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
   font-size: 0.78rem;
@@ -647,7 +647,7 @@
 
 /* ===== Dark theme overrides ===== */
 [data-theme='dark'] .heroTitleEmphasis {
-  color: var(--primary-light);
+  color: var(--primary);
 }
 
 [data-theme='dark'] .heroTitleLight {

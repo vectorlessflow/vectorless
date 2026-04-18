@@ -27,15 +27,20 @@
 }
 
 .navbarLogo {
-  height: 40px;
+  height: 30px;
   width: auto;
 }
 
 .logo {
-  font-size: 1.6rem;
-  font-weight: 800;
+  font-size: 1.3rem;
+  font-weight: 600;
+  font-family: 'Inter', 'Libre Franklin', -apple-system, BlinkMacSystemFont, sans-serif;
   letter-spacing: -0.02em;
-  color: var(--primary);
+  color: #111827;
+}
+
+[data-theme='dark'] .logo {
+  color: #D0D6E4;
 }
 
 /* Center: navigation links */
