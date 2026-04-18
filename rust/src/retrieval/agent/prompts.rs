@@ -81,19 +81,26 @@ pub fn subagent_navigation(params: &NavigationParams) -> (String, String) {
          information that answers the user's question.
 
 Available commands:
-- ls              List children at current position (with summaries and leaf counts)
-- cd <name>       Enter a child node
-- cd ..           Go back to parent node
-- cat <name>      Read node content (automatically collected as evidence)
-- find <keyword>  Search for a keyword in the document
-- pwd             Show current navigation path
-- check           Evaluate if collected evidence is sufficient
-- done            End navigation
+- ls                List children at current position (with summaries and leaf counts)
+- cd <name>         Enter a child node (supports absolute paths like /root/Section)
+- cd ..             Go back to parent node
+- cat <name>        Read node content (automatically collected as evidence)
+- head <name>       Preview first 20 lines of a node (does NOT collect evidence)
+- find <keyword>    Search for a keyword in the document index
+- findtree <pattern> Search for nodes by title pattern (case-insensitive)
+- grep <pattern>    Regex search across all content in current subtree
+- wc <name>         Show content size (lines, words, chars)
+- pwd               Show current navigation path
+- check             Evaluate if collected evidence is sufficient
+- done              End navigation
 
 Rules:
 - Output exactly ONE command per response, nothing else.
 - Always ls before cd — observe before descending.
 - Content from cat is automatically saved as evidence — don't re-cat the same node.
+- Use head to preview a node before cat to avoid collecting irrelevant large content.
+- Use grep when find doesn't locate a specific term — grep searches actual content.
+- Use findtree to discover nodes by name across the entire document.
 - Do not cat or cd into nodes you have already visited.
 - When evidence is sufficient, use check to verify, then done to finish.
 - If the current branch has nothing relevant, use cd .. to go back.
@@ -183,12 +190,15 @@ pub fn subagent_dispatch(params: &SubagentDispatchParams) -> (String, String) {
         "You are a document navigation assistant. You are searching inside the document \
          \"{doc_name}\" for specific information.
 
-Available commands: ls, cd <name>, cd .., cat <name>, find <keyword>, pwd, check, done
+Available commands: ls, cd <name>, cd .., cat <name>, head <name>, find <keyword>, \
+findtree <pattern>, grep <regex>, wc <name>, pwd, check, done
 
 Rules:
 - Output exactly ONE command per response.
 - Always ls before cd.
 - Content from cat is automatically saved as evidence.
+- Use head to preview before cat for large nodes.
+- Use grep to search content when find doesn't match.
 - When evidence is sufficient, use check then done."
     );
 

@@ -435,6 +435,30 @@ async fn execute_command(
             state.last_feedback = "Navigation complete.".to_string();
             Step::Done
         }
+
+        Command::Grep { pattern } => {
+            let result = tools::grep(pattern, ctx, state);
+            state.last_feedback = result.feedback;
+            Step::Continue
+        }
+
+        Command::Head { target, lines } => {
+            let result = tools::head(target, *lines, ctx, state);
+            state.last_feedback = result.feedback;
+            Step::Continue
+        }
+
+        Command::FindTree { pattern } => {
+            let result = tools::find_tree(pattern, ctx);
+            state.last_feedback = result.feedback;
+            Step::Continue
+        }
+
+        Command::Wc { target } => {
+            let result = tools::wc(target, ctx, state);
+            state.last_feedback = result.feedback;
+            Step::Continue
+        }
     }
 }
 

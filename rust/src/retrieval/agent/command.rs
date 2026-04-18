@@ -20,8 +20,16 @@ pub enum Command {
     CdUp,
     /// Read node content (collects as evidence).
     Cat { target: String },
-    /// Search for a keyword in the document.
+    /// Search for a keyword in the ReasoningIndex.
     Find { keyword: String },
+    /// Regex search across node content in the current subtree.
+    Grep { pattern: String },
+    /// Preview first N lines of a node without collecting evidence.
+    Head { target: String, lines: usize },
+    /// Search for nodes by title pattern in the tree.
+    FindTree { pattern: String },
+    /// Show node content size (lines, chars).
+    Wc { target: String },
     /// Show current navigation path.
     Pwd,
     /// Evaluate evidence sufficiency.
@@ -64,6 +72,36 @@ pub fn parse_command(llm_output: &str) -> Command {
         },
         ["find", _keyword, ..] => Command::Find {
             keyword: parts[1..].join(" "),
+        },
+        ["grep", pattern] => Command::Grep {
+            pattern: (*pattern).to_string(),
+        },
+        ["grep", _pattern, ..] => Command::Grep {
+            pattern: parts[1..].join(" "),
+        },
+        ["head", target] => Command::Head {
+            target: (*target).to_string(),
+            lines: 20, // default
+        },
+        ["head", "-n", n, target @ ..] => Command::Head {
+            target: target.join(" "),
+            lines: n.parse().unwrap_or(20),
+        },
+        ["head", target, ..] => Command::Head {
+            target: parts[1..].join(" "),
+            lines: 20,
+        },
+        ["findtree", pattern] => Command::FindTree {
+            pattern: (*pattern).to_string(),
+        },
+        ["findtree", _pattern, ..] => Command::FindTree {
+            pattern: parts[1..].join(" "),
+        },
+        ["wc", target] => Command::Wc {
+            target: (*target).to_string(),
+        },
+        ["wc", _target, ..] => Command::Wc {
+            target: parts[1..].join(" "),
         },
         ["pwd"] => Command::Pwd,
         ["check"] => Command::Check,
@@ -342,5 +380,71 @@ mod tests {
         let nav_index = NavigationIndex::new();
         let tree = crate::document::DocumentTree::new("Root", "");
         assert!(resolve_target("anything", &nav_index, tree.root()).is_none());
+    }
+
+    #[test]
+    fn test_parse_grep() {
+        assert_eq!(
+            parse_command("grep EBITDA"),
+            Command::Grep {
+                pattern: "EBITDA".to_string()
+            }
+        );
+        assert_eq!(
+            parse_command("grep revenue.*2024"),
+            Command::Grep {
+                pattern: "revenue.*2024".to_string()
+            }
+        );
+    }
+
+    #[test]
+    fn test_parse_head() {
+        assert_eq!(
+            parse_command("head Installation"),
+            Command::Head {
+                target: "Installation".to_string(),
+                lines: 20
+            }
+        );
+        assert_eq!(
+            parse_command("head -n 5 API Reference"),
+            Command::Head {
+                target: "API Reference".to_string(),
+                lines: 5
+            }
+        );
+    }
+
+    #[test]
+    fn test_parse_findtree() {
+        assert_eq!(
+            parse_command("findtree revenue"),
+            Command::FindTree {
+                pattern: "revenue".to_string()
+            }
+        );
+        assert_eq!(
+            parse_command("findtree API Reference"),
+            Command::FindTree {
+                pattern: "API Reference".to_string()
+            }
+        );
+    }
+
+    #[test]
+    fn test_parse_wc() {
+        assert_eq!(
+            parse_command("wc Installation"),
+            Command::Wc {
+                target: "Installation".to_string()
+            }
+        );
+        assert_eq!(
+            parse_command("wc API Reference"),
+            Command::Wc {
+                target: "API Reference".to_string()
+            }
+        );
     }
 }
