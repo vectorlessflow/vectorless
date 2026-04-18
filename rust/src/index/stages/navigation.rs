@@ -83,8 +83,8 @@ impl NavigationIndexStage {
 
         NavEntry {
             overview,
-            question_hints: Vec::new(), // Will be populated when Enhance extracts these
-            topic_tags: Vec::new(),     // Will be populated when Enhance adds routing_keywords
+            question_hints: node.question_hints.clone(),
+            topic_tags: node.routing_keywords.clone(),
             leaf_count,
             level: node.depth,
         }

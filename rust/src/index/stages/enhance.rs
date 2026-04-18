@@ -67,6 +67,49 @@ impl EnhanceStage {
         self
     }
 
+    /// Parse structured navigation response from LLM.
+    ///
+    /// Expected format:
+    /// ```text
+    /// OVERVIEW: <text>
+    /// QUESTIONS: q1, q2, q3
+    /// TAGS: tag1, tag2, tag3
+    /// ```
+    ///
+    /// Falls back gracefully: if markers are missing, the entire response
+    /// becomes the overview and questions/tags remain empty.
+    fn parse_structured_nav_response(response: &str) -> (String, Vec<String>, Vec<String>) {
+        let mut overview = String::new();
+        let mut questions: Vec<String> = Vec::new();
+        let mut tags: Vec<String> = Vec::new();
+
+        for line in response.lines() {
+            let line = line.trim();
+            if let Some(rest) = line.strip_prefix("OVERVIEW:") {
+                overview = rest.trim().to_string();
+            } else if let Some(rest) = line.strip_prefix("QUESTIONS:") {
+                questions = rest
+                    .split(',')
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty())
+                    .collect();
+            } else if let Some(rest) = line.strip_prefix("TAGS:") {
+                tags = rest
+                    .split(',')
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty())
+                    .collect();
+            }
+        }
+
+        // Fallback: if no OVERVIEW marker found, use entire response as overview
+        if overview.is_empty() {
+            overview = response.trim().to_string();
+        }
+
+        (overview, questions, tags)
+    }
+
     /// Check if summary generation is needed based on strategy.
     fn needs_summaries(&self, ctx: &IndexContext) -> bool {
         match &ctx.options.summary_strategy {
@@ -265,8 +308,8 @@ impl IndexStage for EnhanceStage {
                 concurrency
             );
 
-            // Collect results: (NodeId, Result<String>)
-            let results: Vec<(NodeId, std::result::Result<String, String>)> =
+            // Collect results: (NodeId, is_leaf, Result<String>)
+            let results: Vec<(NodeId, bool, std::result::Result<String, String>)> =
                 futures::stream::iter(pending_llm)
                     .map(|pending| {
                         let generator = Arc::clone(&generator);
@@ -278,7 +321,7 @@ impl IndexStage for EnhanceStage {
                                     pending.is_leaf,
                                 )
                                 .await;
-                            (pending.node_id, result.map_err(|e| e.to_string()))
+                            (pending.node_id, pending.is_leaf, result.map_err(|e| e.to_string()))
                         }
                     })
                     .buffer_unordered(concurrency)
@@ -286,16 +329,30 @@ impl IndexStage for EnhanceStage {
                     .await;
 
             // Write results back to tree
-            for (node_id, result) in results {
+            for (node_id, is_leaf, result) in results {
                 ctx.metrics.increment_llm_calls();
                 match result {
-                    Ok(summary) => {
-                        if summary.is_empty() {
+                    Ok(response) => {
+                        if response.is_empty() {
                             failed += 1;
                         } else {
                             ctx.metrics
-                                .add_tokens_generated(crate::utils::estimate_tokens(&summary));
-                            tree.set_summary(node_id, &summary);
+                                .add_tokens_generated(crate::utils::estimate_tokens(&response));
+
+                            if is_leaf {
+                                // Leaf node: response is a plain content summary
+                                tree.set_summary(node_id, &response);
+                            } else {
+                                // Non-leaf node: response is structured (OVERVIEW/QUESTIONS/TAGS)
+                                let (overview, questions, tags) =
+                                    Self::parse_structured_nav_response(&response);
+                                tree.set_summary(node_id, &overview);
+
+                                if let Some(node) = tree.get_mut(node_id) {
+                                    node.question_hints = questions;
+                                    node.routing_keywords = tags;
+                                }
+                            }
                             generated += 1;
                             ctx.metrics.increment_summaries();
                         }
@@ -330,5 +387,56 @@ impl IndexStage for EnhanceStage {
             .insert("summaries_failed".to_string(), serde_json::json!(failed));
 
         Ok(stage_result)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_structured_nav_response_full() {
+        let response = "\
+OVERVIEW: This section covers payment integration and billing configuration.
+QUESTIONS: How to set up payments?, What currencies are supported?, How to configure invoices?
+TAGS: payments, billing, invoices, currency";
+
+        let (overview, questions, tags) = EnhanceStage::parse_structured_nav_response(response);
+
+        assert!(overview.contains("payment integration"));
+        assert_eq!(questions.len(), 3);
+        assert!(questions[0].contains("set up payments"));
+        assert_eq!(tags.len(), 4);
+        assert_eq!(tags[0], "payments");
+    }
+
+    #[test]
+    fn test_parse_structured_nav_response_partial() {
+        // Only overview, no questions or tags
+        let response = "OVERVIEW: A general introduction to the system.";
+        let (overview, questions, tags) = EnhanceStage::parse_structured_nav_response(response);
+
+        assert!(overview.contains("general introduction"));
+        assert!(questions.is_empty());
+        assert!(tags.is_empty());
+    }
+
+    #[test]
+    fn test_parse_structured_nav_response_fallback() {
+        // No markers at all — fallback to entire response as overview
+        let response = "This is just a plain summary without any markers.";
+        let (overview, questions, tags) = EnhanceStage::parse_structured_nav_response(response);
+
+        assert_eq!(overview, response.trim());
+        assert!(questions.is_empty());
+        assert!(tags.is_empty());
+    }
+
+    #[test]
+    fn test_parse_structured_nav_response_empty() {
+        let (overview, questions, tags) = EnhanceStage::parse_structured_nav_response("");
+        assert!(overview.is_empty());
+        assert!(questions.is_empty());
+        assert!(tags.is_empty());
     }
 }
