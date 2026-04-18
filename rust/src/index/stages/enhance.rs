@@ -110,7 +110,7 @@ impl IndexStage for EnhanceStage {
         let start = Instant::now();
 
         info!(
-            "EnhanceStage: llm_client={}, strategy={:?}",
+            "[enhance] Starting: llm_client={}, strategy={:?}",
             self.llm_client.is_some(),
             ctx.options.summary_strategy
         );
@@ -118,7 +118,7 @@ impl IndexStage for EnhanceStage {
         // Check if we need summaries
         if !self.needs_summaries(ctx) {
             info!(
-                "Summary generation skipped (strategy: {:?})",
+                "[enhance] Skipped: strategy={:?}",
                 ctx.options.summary_strategy
             );
             return Ok(StageResult::success("enhance"));
@@ -128,7 +128,7 @@ impl IndexStage for EnhanceStage {
         let llm_client = match &self.llm_client {
             Some(client) => client,
             None => {
-                warn!("No LLM client configured, skipping summary generation");
+                warn!("[enhance] No LLM client, skipping summary generation");
                 return Ok(StageResult::success("enhance"));
             }
         };
@@ -137,12 +137,10 @@ impl IndexStage for EnhanceStage {
         let tree = match ctx.tree.as_mut() {
             Some(t) => t,
             None => {
-                warn!("No tree built, skipping enhance stage");
+                warn!("[enhance] No tree built, skipping");
                 return Ok(StageResult::success("enhance"));
             }
         };
-
-        info!("Using summary strategy: {:?}", ctx.options.summary_strategy);
 
         // Create summary generator (shared via Arc for concurrent use)
         let generator = Arc::new(
@@ -168,12 +166,12 @@ impl IndexStage for EnhanceStage {
                 ctx.metrics.increment_summaries();
             }
             info!(
-                "Incremental: {} of {} nodes unchanged, reusing summaries",
+                "[enhance] Incremental: {} of {} nodes unchanged, reusing summaries",
                 applied, total_nodes,
             );
         }
 
-        info!("Processing {} nodes for summary generation", total_nodes);
+        info!("[enhance] Processing {} nodes for summary generation", total_nodes);
 
         // === Phase 1: Collect pending nodes (cache hits applied immediately) ===
         let strategy = ctx.options.summary_strategy.clone();
@@ -219,7 +217,7 @@ impl IndexStage for EnhanceStage {
                     if !cached.is_empty() {
                         tree.set_summary(node_id, &cached);
                         debug!(
-                            "Using cached summary for node: {} ({} chars)",
+                            "[enhance] Cache hit: '{}' ({} chars)",
                             node.title,
                             cached.len()
                         );
@@ -237,7 +235,7 @@ impl IndexStage for EnhanceStage {
             if shortcut_threshold > 0 && token_count > 0 && token_count <= shortcut_threshold {
                 tree.set_summary(node_id, &node.content);
                 debug!(
-                    "Shortcut: using original content as summary for '{}' ({} tokens)",
+                    "[enhance] Shortcut: '{}' ({} tokens, using original content)",
                     node.title, token_count
                 );
                 ctx.metrics.increment_summaries();
@@ -262,7 +260,7 @@ impl IndexStage for EnhanceStage {
 
         if !pending_llm.is_empty() {
             info!(
-                "Generating summaries for {} nodes (concurrency: {})",
+                "[enhance] Generating summaries for {} nodes (concurrency: {})",
                 pending_llm.len(),
                 concurrency
             );
@@ -303,7 +301,7 @@ impl IndexStage for EnhanceStage {
                         }
                     }
                     Err(e) => {
-                        warn!("Failed to generate summary: {}", e);
+                        warn!("[enhance] LLM summary failed: {}", e);
                         failed += 1;
                     }
                 }
@@ -317,7 +315,7 @@ impl IndexStage for EnhanceStage {
         }
 
         info!(
-            "Generated {} summaries ({} shortcut, {} failed, {} skipped no content, {} skipped tokens) in {}ms",
+            "[enhance] Complete: {} summaries ({} shortcut, {} failed, {} no-content, {} skipped-tokens) in {}ms",
             generated, shortcut_used, failed, skipped_no_content, skipped_tokens, duration
         );
 

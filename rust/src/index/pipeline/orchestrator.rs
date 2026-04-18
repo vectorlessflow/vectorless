@@ -25,7 +25,7 @@
 
 use std::collections::HashMap;
 use std::time::Instant;
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 
 use crate::error::Result;
 
@@ -450,15 +450,19 @@ impl PipelineOrchestrator {
         // Resolve execution order
         let order = self.resolve_order()?;
         let stage_names: Vec<&str> = order.iter().map(|&i| self.stages[i].stage.name()).collect();
-        info!("Execution order: {:?}", stage_names);
+        info!("[pipeline] Execution order: {:?}", stage_names);
 
         // Compute execution groups for potential parallelization
         let groups = self.compute_execution_groups(&order);
-        info!(
-            "Execution groups: {} ({} parallelizable)",
-            groups.len(),
-            groups.iter().filter(|g| g.parallel).count()
-        );
+        let parallel_count = groups.iter().filter(|g| g.parallel).count();
+        if parallel_count > 0 {
+            info!(
+                "[pipeline] {} execution groups ({} parallelizable)",
+                groups.len(), parallel_count
+            );
+        } else {
+            debug!("[pipeline] {} execution groups (all sequential)", groups.len());
+        }
 
         // Create context
         let mut opts = options;
@@ -679,8 +683,10 @@ impl PipelineOrchestrator {
 
         let total_duration = total_start.elapsed().as_millis() as u64;
         info!(
-            "Orchestrated pipeline completed in {}ms for document {}",
-            total_duration, ctx.name
+            "[pipeline] Complete: {} stages in {}ms for '{}'",
+            ctx.stage_results.len(),
+            total_duration,
+            ctx.name,
         );
 
         // Clear checkpoint on successful completion

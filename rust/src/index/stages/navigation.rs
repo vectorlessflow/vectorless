@@ -15,7 +15,7 @@
 //! Enhance stage. This stage only reads and restructures that data.
 
 use std::time::Instant;
-use tracing::info;
+use tracing::{debug, info, warn};
 
 use crate::document::{ChildRoute, DocumentTree, NavEntry, NavigationIndex, NodeId};
 use crate::error::Result;
@@ -152,18 +152,26 @@ impl IndexStage for NavigationIndexStage {
         let tree = match ctx.tree.as_ref() {
             Some(t) => t,
             None => {
+                warn!("[navigation_index] No tree, cannot build index");
                 return Ok(StageResult::failure("navigation_index", "Tree not built"));
             }
         };
 
-        info!("Building navigation index...");
-
         let all_nodes = tree.traverse();
+        let leaf_count = all_nodes.iter().filter(|&&id| tree.is_leaf(id)).count();
+        let non_leaf_count = all_nodes.len() - leaf_count;
+
+        info!(
+            "[navigation_index] Starting: {} total nodes ({} leaves, {} non-leaf)",
+            all_nodes.len(), leaf_count, non_leaf_count,
+        );
+
         let mut nav_entries_count = 0usize;
         let mut child_routes_count = 0usize;
 
         // Phase 1: Pre-compute leaf counts for all nodes.
         // We compute once per node to avoid repeated traversals.
+        debug!("[navigation_index] Phase 1: Pre-computing leaf counts for {} nodes", all_nodes.len());
         let mut leaf_counts: std::collections::HashMap<NodeId, usize> =
             std::collections::HashMap::with_capacity(all_nodes.len());
         for &node_id in &all_nodes {
@@ -171,6 +179,7 @@ impl IndexStage for NavigationIndexStage {
         }
 
         // Phase 2: Build NavEntry + ChildRoutes for each non-leaf node.
+        debug!("[navigation_index] Phase 2: Building NavEntry + ChildRoutes for {} non-leaf nodes", non_leaf_count);
         let mut nav_index = NavigationIndex::new();
 
         for &node_id in &all_nodes {
@@ -179,10 +188,10 @@ impl IndexStage for NavigationIndexStage {
                 continue;
             }
 
-            let leaf_count = leaf_counts.get(&node_id).copied().unwrap_or(0);
+            let lc = *leaf_counts.get(&node_id).unwrap_or(&0);
 
             // Build navigation entry for this non-leaf node
-            let nav_entry = Self::build_nav_entry(tree, node_id, leaf_count);
+            let nav_entry = Self::build_nav_entry(tree, node_id, lc);
             nav_index.add_entry(node_id, nav_entry);
             nav_entries_count += 1;
 
@@ -191,11 +200,18 @@ impl IndexStage for NavigationIndexStage {
             let mut routes = Vec::with_capacity(child_ids.len());
 
             for child_id in child_ids {
-                let child_leaf_count = leaf_counts.get(&child_id).copied().unwrap_or(0);
-                let route = Self::build_child_route(tree, child_id, child_leaf_count);
+                let child_lc = *leaf_counts.get(&child_id).unwrap_or(&0);
+                let route = Self::build_child_route(tree, child_id, child_lc);
                 routes.push(route);
                 child_routes_count += 1;
             }
+
+            debug!(
+                "[navigation_index]   node '{}' → {} child routes ({} leaves in subtree)",
+                tree.get(node_id).map(|n| n.title.as_str()).unwrap_or("?"),
+                routes.len(),
+                lc,
+            );
 
             nav_index.add_child_routes(node_id, routes);
         }
@@ -209,7 +225,7 @@ impl IndexStage for NavigationIndexStage {
         );
 
         info!(
-            "Navigation index built in {}ms ({} nav entries, {} child routes)",
+            "[navigation_index] Complete: {} nav entries, {} child routes in {}ms",
             duration, nav_entries_count, child_routes_count,
         );
 

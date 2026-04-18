@@ -5,7 +5,7 @@
 
 use super::{AccessPattern, async_trait};
 use std::time::Instant;
-use tracing::info;
+use tracing::{debug, info};
 
 use crate::document::NodeId;
 use crate::error::Result;
@@ -182,7 +182,7 @@ impl IndexStage for OptimizeStage {
 
         let config = &ctx.options.optimization;
         if !config.enabled {
-            info!("Tree optimization disabled, skipping");
+            debug!("[optimize] Disabled, skipping");
             return Ok(StageResult::success("optimize"));
         }
 
@@ -191,25 +191,36 @@ impl IndexStage for OptimizeStage {
             .as_mut()
             .ok_or_else(|| crate::Error::IndexBuild("Tree not built".to_string()))?;
 
+        let node_count = tree.node_count();
+        info!(
+            "[optimize] Starting: {} nodes, merge_threshold={}",
+            node_count, config.merge_leaf_threshold,
+        );
+
         let mut merged_count = 0;
 
         // 1. Merge small leaves
         if config.merge_leaf_threshold > 0 {
             merged_count =
                 Self::merge_small_leaves(tree, config.merge_leaf_threshold, &mut ctx.metrics);
-            info!("Merged {} small leaf nodes", merged_count);
+            if merged_count > 0 {
+                debug!("[optimize] Merged {} small leaf nodes", merged_count);
+            }
         }
 
         // 2. Remove empty intermediate nodes
         let removed_count = Self::remove_empty_nodes(tree);
         if removed_count > 0 {
-            info!("Marked {} empty intermediate nodes", removed_count);
+            debug!("[optimize] Marked {} empty intermediate nodes", removed_count);
         }
 
         let duration = start.elapsed().as_millis() as u64;
         ctx.metrics.record_optimize(duration);
 
-        info!("Optimized tree in {}ms", duration);
+        info!(
+            "[optimize] Complete: {} merged, {} emptied in {}ms",
+            merged_count, removed_count, duration
+        );
 
         let mut stage_result = StageResult::success("optimize");
         stage_result.duration_ms = duration;

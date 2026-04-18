@@ -5,7 +5,7 @@
 
 use std::collections::HashSet;
 use std::time::Instant;
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
 use crate::error::Result;
 
@@ -245,6 +245,9 @@ impl IndexStage for ValidateStage {
     async fn execute(&mut self, ctx: &mut IndexContext) -> Result<StageResult> {
         let start = Instant::now();
 
+        let node_count = ctx.tree.as_ref().map(|t| t.node_count()).unwrap_or(0);
+        info!("[validate] Starting: {} nodes", node_count);
+
         let issues = self.validate_tree(ctx);
 
         let warnings = issues
@@ -264,11 +267,15 @@ impl IndexStage for ValidateStage {
             }
         }
 
+        if warnings == 0 && errors == 0 {
+            debug!("[validate] No issues found");
+        }
+
         let duration = start.elapsed().as_millis() as u64;
         ctx.metrics.record_validate(duration);
 
         info!(
-            "Validated tree: {} warnings, {} errors in {}ms",
+            "[validate] Complete: {} warnings, {} errors in {}ms",
             warnings, errors, duration
         );
 

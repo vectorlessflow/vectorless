@@ -8,7 +8,7 @@
 //! [`ReasoningIndex`] from the document tree's TOC, summaries, and keywords.
 
 use std::time::Instant;
-use tracing::info;
+use tracing::{debug, info, warn};
 
 use crate::document::{
     NodeId, ReasoningIndexBuilder, ReasoningIndexConfig, SectionSummary, SummaryShortcut,
@@ -311,7 +311,7 @@ impl IndexStage for ReasoningIndexStage {
 
         // Check if enabled via pipeline options
         if !ctx.options.reasoning_index.enabled {
-            info!("Reasoning index stage disabled, skipping");
+            info!("[reasoning_index] Disabled, skipping");
             return Ok(StageResult::success("reasoning_index"));
         }
 
@@ -321,17 +321,23 @@ impl IndexStage for ReasoningIndexStage {
         let tree = match ctx.tree.as_ref() {
             Some(t) => t,
             None => {
+                warn!("[reasoning_index] No tree, cannot build index");
                 return Ok(StageResult::failure("reasoning_index", "Tree not built"));
             }
         };
 
-        info!("Building reasoning index...");
+        info!(
+            "[reasoning_index] Starting: synonyms={}, summary_shortcut={}, max_keywords={}",
+            config.enable_synonym_expansion,
+            config.build_summary_shortcut,
+            config.max_keyword_entries,
+        );
 
         // 1. Build topic-to-path mapping
         let (mut topic_paths, keyword_count) = Self::build_topic_paths(tree, config);
         let topic_count: usize = topic_paths.values().map(|v| v.len()).sum();
-        info!(
-            "Built topic paths: {} keywords, {} topic entries",
+        debug!(
+            "[reasoning_index] Topic paths: {} keywords, {} entries",
             keyword_count, topic_count
         );
 
@@ -340,10 +346,12 @@ impl IndexStage for ReasoningIndexStage {
             if let Some(ref llm_client) = ctx.llm_client {
                 let max_kw = (keyword_count / 4).max(20).min(100);
                 let count = Self::expand_synonyms(&mut topic_paths, llm_client, max_kw).await;
-                info!("Expanded {} synonym keywords", count);
+                if count > 0 {
+                    info!("[reasoning_index] Expanded {} synonym keywords", count);
+                }
                 count
             } else {
-                info!("Synonym expansion enabled but no LLM client available");
+                debug!("[reasoning_index] Synonym expansion enabled but no LLM client");
                 0
             }
         } else {
@@ -352,13 +360,13 @@ impl IndexStage for ReasoningIndexStage {
 
         // 2. Build section map
         let section_map = Self::build_section_map(tree);
-        info!("Built section map with {} entries", section_map.len());
+        debug!("[reasoning_index] Section map: {} entries", section_map.len());
 
         // 3. Build summary shortcut
         let summary_shortcut = if config.build_summary_shortcut {
             let shortcut = Self::build_summary_shortcut(tree);
             if shortcut.is_some() {
-                info!("Built summary shortcut");
+                debug!("[reasoning_index] Built summary shortcut");
             }
             shortcut
         } else {
@@ -387,12 +395,12 @@ impl IndexStage for ReasoningIndexStage {
             .record_reasoning_index(duration, topic_count, keyword_count);
 
         info!(
-            "Reasoning index built in {}ms ({} keywords, {} topic entries, {} sections, {} synonyms)",
-            duration,
+            "[reasoning_index] Complete: {} keywords, {} topics, {} sections, {} synonyms in {}ms",
             keyword_count,
             topic_count,
             reasoning_index.section_count(),
             synonym_count,
+            duration,
         );
 
         ctx.reasoning_index = Some(reasoning_index);

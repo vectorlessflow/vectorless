@@ -5,7 +5,7 @@
 
 use super::async_trait;
 use std::time::Instant;
-use tracing::info;
+use tracing::{debug, info};
 
 use crate::document::{DocumentTree, NodeId};
 use crate::error::Result;
@@ -259,13 +259,15 @@ impl IndexStage for BuildStage {
         let mut raw_nodes = std::mem::take(&mut ctx.raw_nodes);
 
         if raw_nodes.is_empty() {
+            info!("[build] No raw nodes, skipping");
             return Ok(StageResult::success("build"));
         }
 
-        info!("Building tree from {} raw nodes", raw_nodes.len());
+        info!("[build] Starting: {} raw nodes, thinning={}", raw_nodes.len(), ctx.options.thinning.enabled);
 
         // Step 1: Calculate total tokens
         Self::calculate_total_tokens(&mut raw_nodes);
+        debug!("[build] Calculated total tokens for {} nodes", raw_nodes.len());
 
         // Step 2: Apply thinning if enabled
         let _original_count = raw_nodes.len();
@@ -280,6 +282,9 @@ impl IndexStage for BuildStage {
 
         let skipped = nodes_before_merge - raw_nodes.len();
         ctx.metrics.nodes_skipped += skipped;
+        if skipped > 0 {
+            debug!("[build] Thinning removed {} nodes ({} → {})", skipped, nodes_before_merge, raw_nodes.len());
+        }
 
         // Step 3: Build tree
         let mut tree = self.build_tree(raw_nodes, ctx);
@@ -289,6 +294,8 @@ impl IndexStage for BuildStage {
             self.assign_node_ids(&mut tree);
         }
 
+        let node_count = tree.node_count();
+
         // Store tree in context
         ctx.tree = Some(tree);
 
@@ -296,10 +303,8 @@ impl IndexStage for BuildStage {
         ctx.metrics.record_build(duration);
 
         info!(
-            "Built tree with {} nodes (skipped {} via thinning) in {}ms",
-            ctx.tree.as_ref().map(|t| t.node_count()).unwrap_or(0),
-            skipped,
-            duration
+            "[build] Complete: {} nodes (skipped {} via thinning) in {}ms",
+            node_count, skipped, duration
         );
 
         let mut stage_result = StageResult::success("build");
