@@ -28,13 +28,14 @@ pub mod tools;
 // Sub-modules for loop implementations (Phase 3/4):
 // pub mod subagent;
 // pub mod orchestrator;
-// pub mod prompts;
+pub mod prompts;
 
 pub use command::Command;
 pub use config::{
     Config, DocContext, Evidence, Metrics, Output, Scope, Step, WorkspaceContext,
 };
 pub use context::FindHit;
+pub use prompts::{DispatchEntry, parse_dispatch_plan, parse_sufficiency_response};
 pub use state::{OrchestratorState, State};
 
 /// Retrieve information from documents using the agent.
