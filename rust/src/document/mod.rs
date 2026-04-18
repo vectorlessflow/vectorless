@@ -25,7 +25,7 @@ mod structure;
 mod toc;
 mod tree;
 
-pub use navigation::{ChildRoute, NavEntry, NavigationIndex};
+pub use navigation::{ChildRoute, DocCard, NavEntry, NavigationIndex, SectionCard};
 pub use node::{NodeId, TreeNode};
 pub use reasoning::{
     HotNodeEntry, ReasoningIndex, ReasoningIndexBuilder, ReasoningIndexConfig, SectionSummary,

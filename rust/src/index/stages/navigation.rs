@@ -216,6 +216,45 @@ impl IndexStage for NavigationIndexStage {
             nav_index.add_child_routes(node_id, routes);
         }
 
+        // Phase 3: Build DocCard from root-level data (already computed, zero LLM).
+        // Provides a compact document summary for multi-document Orchestrator Agent.
+        if let Some(root_entry) = nav_index.get_entry(tree.root()) {
+            let sections: Vec<crate::document::SectionCard> = nav_index
+                .get_child_routes(tree.root())
+                .map(|routes| {
+                    routes
+                        .iter()
+                        .map(|r| crate::document::SectionCard {
+                            title: r.title.clone(),
+                            description: r.description.clone(),
+                            leaf_count: r.leaf_count,
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+
+            let doc_card = crate::document::DocCard {
+                title: tree
+                    .get(tree.root())
+                    .map(|n| n.title.clone())
+                    .unwrap_or_default(),
+                overview: root_entry.overview.clone(),
+                question_hints: root_entry.question_hints.clone(),
+                topic_tags: root_entry.topic_tags.clone(),
+                sections,
+                total_leaves: root_entry.leaf_count,
+            };
+            nav_index.set_doc_card(doc_card);
+
+            debug!(
+                "[navigation_index] Phase 3: Built DocCard — {} sections, {} total leaves",
+                nav_index.doc_card().map(|c| c.sections.len()).unwrap_or(0),
+                nav_index.doc_card().map(|c| c.total_leaves).unwrap_or(0),
+            );
+        } else {
+            debug!("[navigation_index] Phase 3: Skipped DocCard (no root entry)");
+        }
+
         let duration = start.elapsed().as_millis() as u64;
 
         ctx.metrics.record_navigation_index(
