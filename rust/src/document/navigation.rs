@@ -39,15 +39,16 @@ use super::node::NodeId;
 /// allowing the Agent to make routing decisions without accessing the
 /// content layer (DocumentTree).
 ///
-/// Serialized as a list of `(NodeId, NavEntry)` / `(NodeId, Vec<ChildRoute>)`
-/// pairs to avoid JSON's string-key requirement for map keys (indextree's
-/// `NodeId` serializes as an integer).
-#[derive(Debug, Clone)]
+/// `HashMap<NodeId, _>` fields use `serde_helpers` (Vec pairs) because
+/// serde_json cannot deserialize integer-keyed maps.
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NavigationIndex {
     /// Navigation entry for each non-leaf node.
+    #[serde(with = "super::serde_helpers")]
     nav_entries: HashMap<NodeId, NavEntry>,
 
     /// Child routes for each non-leaf node.
+    #[serde(with = "super::serde_helpers")]
     child_routes: HashMap<NodeId, Vec<ChildRoute>>,
 }
 
@@ -112,74 +113,6 @@ impl NavigationIndex {
     /// Check if the index is empty.
     pub fn is_empty(&self) -> bool {
         self.nav_entries.is_empty()
-    }
-}
-
-// Custom Serialize/Deserialize to handle HashMap<NodeId, _> in JSON.
-// serde_json requires map keys to be strings, but indextree::NodeId serializes
-// as an integer. We convert to/from Vec<(NodeId, V)> pairs.
-
-impl Serialize for NavigationIndex {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        use serde::ser::SerializeStruct;
-
-        // Convert HashMaps to sorted Vecs for deterministic output
-        let mut entries: Vec<_> = self.nav_entries.iter().collect();
-        entries.sort_by_key(|(id, _)| usize::from(id.0));
-
-        let mut routes: Vec<_> = self.child_routes.iter().collect();
-        routes.sort_by_key(|(id, _)| usize::from(id.0));
-
-        #[derive(Serialize)]
-        struct Helper {
-            nav_entries: Vec<(NodeId, NavEntry)>,
-            child_routes: Vec<(NodeId, Vec<ChildRoute>)>,
-        }
-
-        let helper = Helper {
-            nav_entries: entries.into_iter().map(|(k, v)| (*k, v.clone())).collect(),
-            child_routes: routes
-                .into_iter()
-                .map(|(k, v)| (*k, v.clone()))
-                .collect(),
-        };
-
-        let mut s = serializer.serialize_struct("NavigationIndex", 2)?;
-        s.serialize_field("nav_entries", &helper.nav_entries)?;
-        s.serialize_field("child_routes", &helper.child_routes)?;
-        s.end()
-    }
-}
-
-impl<'de> Deserialize<'de> for NavigationIndex {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        #[derive(Deserialize)]
-        struct Helper {
-            nav_entries: Vec<(NodeId, NavEntry)>,
-            child_routes: Vec<(NodeId, Vec<ChildRoute>)>,
-        }
-
-        let helper = Helper::deserialize(deserializer)?;
-
-        let nav_entries: HashMap<NodeId, NavEntry> = helper
-            .nav_entries
-            .into_iter()
-            .collect();
-        let child_routes: HashMap<NodeId, Vec<ChildRoute>> = helper
-            .child_routes
-            .into_iter()
-            .collect();
-
-        Ok(NavigationIndex {
-            nav_entries,
-            child_routes,
-        })
     }
 }
 

@@ -20,6 +20,7 @@ mod navigation;
 mod node;
 mod reasoning;
 mod reference;
+mod serde_helpers;
 mod structure;
 mod toc;
 mod tree;
