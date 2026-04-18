@@ -38,14 +38,16 @@ use super::node::NodeId;
 /// Contains pre-computed navigation metadata for every non-leaf node,
 /// allowing the Agent to make routing decisions without accessing the
 /// content layer (DocumentTree).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+///
+/// Serialized as a list of `(NodeId, NavEntry)` / `(NodeId, Vec<ChildRoute>)`
+/// pairs to avoid JSON's string-key requirement for map keys (indextree's
+/// `NodeId` serializes as an integer).
+#[derive(Debug, Clone)]
 pub struct NavigationIndex {
     /// Navigation entry for each non-leaf node.
-    /// Key = NodeId of the non-leaf node.
     nav_entries: HashMap<NodeId, NavEntry>,
 
     /// Child routes for each non-leaf node.
-    /// Key = NodeId of the parent, Value = route info for each child.
     child_routes: HashMap<NodeId, Vec<ChildRoute>>,
 }
 
@@ -110,6 +112,74 @@ impl NavigationIndex {
     /// Check if the index is empty.
     pub fn is_empty(&self) -> bool {
         self.nav_entries.is_empty()
+    }
+}
+
+// Custom Serialize/Deserialize to handle HashMap<NodeId, _> in JSON.
+// serde_json requires map keys to be strings, but indextree::NodeId serializes
+// as an integer. We convert to/from Vec<(NodeId, V)> pairs.
+
+impl Serialize for NavigationIndex {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+
+        // Convert HashMaps to sorted Vecs for deterministic output
+        let mut entries: Vec<_> = self.nav_entries.iter().collect();
+        entries.sort_by_key(|(id, _)| usize::from(id.0));
+
+        let mut routes: Vec<_> = self.child_routes.iter().collect();
+        routes.sort_by_key(|(id, _)| usize::from(id.0));
+
+        #[derive(Serialize)]
+        struct Helper {
+            nav_entries: Vec<(NodeId, NavEntry)>,
+            child_routes: Vec<(NodeId, Vec<ChildRoute>)>,
+        }
+
+        let helper = Helper {
+            nav_entries: entries.into_iter().map(|(k, v)| (*k, v.clone())).collect(),
+            child_routes: routes
+                .into_iter()
+                .map(|(k, v)| (*k, v.clone()))
+                .collect(),
+        };
+
+        let mut s = serializer.serialize_struct("NavigationIndex", 2)?;
+        s.serialize_field("nav_entries", &helper.nav_entries)?;
+        s.serialize_field("child_routes", &helper.child_routes)?;
+        s.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for NavigationIndex {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        struct Helper {
+            nav_entries: Vec<(NodeId, NavEntry)>,
+            child_routes: Vec<(NodeId, Vec<ChildRoute>)>,
+        }
+
+        let helper = Helper::deserialize(deserializer)?;
+
+        let nav_entries: HashMap<NodeId, NavEntry> = helper
+            .nav_entries
+            .into_iter()
+            .collect();
+        let child_routes: HashMap<NodeId, Vec<ChildRoute>> = helper
+            .child_routes
+            .into_iter()
+            .collect();
+
+        Ok(NavigationIndex {
+            nav_entries,
+            child_routes,
+        })
     }
 }
 
@@ -278,5 +348,139 @@ mod tests {
         let root_entry = index.root_entry().unwrap();
         assert_eq!(root_entry.level, 0);
         assert_eq!(root_entry.leaf_count, 10);
+    }
+
+    #[test]
+    fn test_get_entry_nonexistent() {
+        let index = NavigationIndex::new();
+        let tree = build_small_tree();
+        // Leaf node should never have an entry
+        let children: Vec<NodeId> = tree.children_iter(tree.root()).collect();
+        assert!(index.get_entry(children[0]).is_none());
+    }
+
+    #[test]
+    fn test_get_child_routes_nonexistent() {
+        let index = NavigationIndex::new();
+        let tree = build_small_tree();
+        assert!(index.get_child_routes(tree.root()).is_none());
+    }
+
+    #[test]
+    fn test_default_trait() {
+        let index = NavigationIndex::default();
+        assert!(index.is_empty());
+    }
+
+    #[test]
+    fn test_entries_iterator() {
+        let tree = build_small_tree();
+        let root = tree.root();
+        let children: Vec<NodeId> = tree.children_iter(root).collect();
+
+        let mut index = NavigationIndex::new();
+        index.add_entry(
+            root,
+            NavEntry {
+                overview: "Root".to_string(),
+                question_hints: vec![],
+                topic_tags: vec![],
+                leaf_count: 2,
+                level: 0,
+            },
+        );
+        index.add_entry(
+            children[1], // Child2 is non-leaf
+            NavEntry {
+                overview: "Child2".to_string(),
+                question_hints: vec![],
+                topic_tags: vec![],
+                leaf_count: 1,
+                level: 1,
+            },
+        );
+
+        let all_entries: Vec<_> = index.entries().collect();
+        assert_eq!(all_entries.len(), 2);
+    }
+
+    #[test]
+    fn test_all_child_routes_iterator() {
+        let tree = build_small_tree();
+        let root = tree.root();
+        let children: Vec<NodeId> = tree.children_iter(root).collect();
+
+        let mut index = NavigationIndex::new();
+        index.add_child_routes(
+            root,
+            vec![ChildRoute {
+                node_id: children[0],
+                title: "C1".to_string(),
+                description: "d".to_string(),
+                leaf_count: 1,
+            }],
+        );
+
+        let all_routes: Vec<_> = index.all_child_routes().collect();
+        assert_eq!(all_routes.len(), 1);
+        assert_eq!(all_routes[0].1.len(), 1);
+    }
+
+    #[test]
+    fn test_serialization_roundtrip() {
+        let tree = build_small_tree();
+        let root = tree.root();
+        let children: Vec<NodeId> = tree.children_iter(root).collect();
+
+        let mut index = NavigationIndex::new();
+        index.add_entry(
+            root,
+            NavEntry {
+                overview: "Root overview".to_string(),
+                question_hints: vec!["What is this?".to_string()],
+                topic_tags: vec!["intro".to_string(), "guide".to_string()],
+                leaf_count: 2,
+                level: 0,
+            },
+        );
+        index.add_child_routes(
+            root,
+            vec![
+                ChildRoute {
+                    node_id: children[0],
+                    title: "Child1".to_string(),
+                    description: "First child desc".to_string(),
+                    leaf_count: 1,
+                },
+                ChildRoute {
+                    node_id: children[1],
+                    title: "Child2".to_string(),
+                    description: "Second child desc".to_string(),
+                    leaf_count: 1,
+                },
+            ],
+        );
+
+        // Serialize
+        let json = serde_json::to_string(&index).expect("serialization failed");
+
+        // Deserialize
+        let deserialized: NavigationIndex =
+            serde_json::from_str(&json).expect("deserialization failed");
+
+        // Verify data survived round-trip
+        assert_eq!(deserialized.entry_count(), 1);
+        assert_eq!(deserialized.total_child_routes(), 2);
+
+        let entry = deserialized.get_entry(root).unwrap();
+        assert_eq!(entry.overview, "Root overview");
+        assert_eq!(entry.question_hints.len(), 1);
+        assert_eq!(entry.topic_tags.len(), 2);
+        assert_eq!(entry.leaf_count, 2);
+        assert_eq!(entry.level, 0);
+
+        let routes = deserialized.get_child_routes(root).unwrap();
+        assert_eq!(routes[0].title, "Child1");
+        assert_eq!(routes[1].title, "Child2");
     }
 }

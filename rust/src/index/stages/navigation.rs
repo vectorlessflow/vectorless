@@ -315,4 +315,189 @@ mod tests {
         assert!(!ap.writes_tree);
         assert!(!ap.writes_reasoning_index);
     }
+
+    #[tokio::test]
+    async fn test_execute_end_to_end() {
+        // Build a 3-level tree: Root -> [Sec1 -> [1.1, 1.2], Sec2 -> [2.1]]
+        let mut tree = DocumentTree::new("Root", "root content");
+        let root = tree.root();
+        let sec1 = tree.add_child(root, "Section 1", "s1 content");
+        let _sec1_1 = tree.add_child(sec1, "Section 1.1", "s1.1 content");
+        let _sec1_2 = tree.add_child(sec1, "Section 1.2", "s1.2 content");
+        let sec2 = tree.add_child(root, "Section 2", "s2 content");
+        let _sec2_1 = tree.add_child(sec2, "Section 2.1", "s2.1 content");
+
+        tree.set_summary(root, "A comprehensive guide");
+        tree.set_summary(sec1, "Getting started");
+
+        // Build context with the tree
+        let mut ctx = IndexContext::new(
+            crate::index::pipeline::IndexInput::content("test"),
+            crate::index::config::PipelineOptions::default(),
+        );
+        ctx.tree = Some(tree);
+
+        // Execute the stage
+        let mut stage = NavigationIndexStage::new();
+        let result = stage.execute(&mut ctx).await;
+
+        assert!(result.is_ok());
+        let stage_result = result.unwrap();
+        assert!(stage_result.success);
+        assert_eq!(
+            stage_result.metadata["nav_entries"],
+            serde_json::json!(3) // root, sec1, sec2
+        );
+        assert_eq!(
+            stage_result.metadata["child_routes"],
+            serde_json::json!(5) // root→2 + sec1→2 + sec2→1
+        );
+
+        // Verify the index structure
+        let nav_index = ctx.navigation_index.unwrap();
+        assert_eq!(nav_index.entry_count(), 3); // 3 non-leaf nodes
+        assert_eq!(nav_index.total_child_routes(), 5);
+
+        // Root entry
+        let root_id = ctx.tree.as_ref().unwrap().root();
+        let root_entry = nav_index.get_entry(root_id).unwrap();
+        assert_eq!(root_entry.overview, "A comprehensive guide");
+        assert_eq!(root_entry.leaf_count, 3);
+        assert_eq!(root_entry.level, 0);
+
+        // Root child routes
+        let root_routes = nav_index.get_child_routes(root_id).unwrap();
+        assert_eq!(root_routes.len(), 2);
+        assert_eq!(root_routes[0].title, "Section 1");
+        assert_eq!(root_routes[0].leaf_count, 2);
+        assert_eq!(root_routes[1].title, "Section 2");
+        assert_eq!(root_routes[1].leaf_count, 1);
+    }
+
+    #[tokio::test]
+    async fn test_execute_single_leaf_tree() {
+        // Single node = root is leaf → no non-leaf nodes → empty index
+        let tree = DocumentTree::new("Root", "content");
+
+        let mut ctx = IndexContext::new(
+            crate::index::pipeline::IndexInput::content("test"),
+            crate::index::config::PipelineOptions::default(),
+        );
+        ctx.tree = Some(tree);
+
+        let mut stage = NavigationIndexStage::new();
+        let result = stage.execute(&mut ctx).await;
+
+        assert!(result.is_ok());
+        assert!(stage_result_is_success(&result));
+
+        let nav_index = ctx.navigation_index.unwrap();
+        assert_eq!(nav_index.entry_count(), 0);
+        assert_eq!(nav_index.total_child_routes(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_execute_no_tree() {
+        let ctx = IndexContext::new(
+            crate::index::pipeline::IndexInput::content("test"),
+            crate::index::config::PipelineOptions::default(),
+        );
+        // ctx.tree is None
+
+        let mut stage = NavigationIndexStage::new();
+        // Can't move ctx since tree is None, construct manually
+        let mut ctx = ctx;
+        ctx.tree = None;
+
+        let result = stage.execute(&mut ctx).await.unwrap();
+        assert!(!result.success);
+        assert!(ctx.navigation_index.is_none());
+    }
+
+    #[test]
+    fn test_build_child_route_no_summary_has_content() {
+        // Node with content but no summary → description = truncated content
+        let mut tree = DocumentTree::new("Root", "");
+        let root = tree.root();
+        let child = tree.add_child(root, "Child", "this is a long content string that exceeds 100 characters and should be truncated when used as a fallback description for the child route");
+
+        let route = NavigationIndexStage::build_child_route(&tree, child, 1);
+        assert_eq!(route.title, "Child");
+        // description should be truncated content, not the full string
+        assert!(route.description.len() <= 100);
+        assert!(route.description.starts_with("this is a long"));
+    }
+
+    #[test]
+    fn test_build_child_route_no_summary_no_content() {
+        // Node with neither summary nor content → description = title
+        let mut tree = DocumentTree::new("Root", "");
+        let root = tree.root();
+        let child = tree.add_child(root, "Orphan Section", "");
+        // Clear any auto-generated content
+        tree.set_summary(child, "");
+
+        let route = NavigationIndexStage::build_child_route(&tree, child, 1);
+        assert_eq!(route.title, "Orphan Section");
+        // Fallback: description = title when no summary and no content
+        assert_eq!(route.description, "Orphan Section");
+    }
+
+    #[test]
+    fn test_build_child_route_with_summary() {
+        let mut tree = DocumentTree::new("Root", "");
+        let root = tree.root();
+        let child = tree.add_child(root, "Child", "some content");
+        tree.set_summary(child, "A concise summary");
+
+        let route = NavigationIndexStage::build_child_route(&tree, child, 1);
+        assert_eq!(route.description, "A concise summary");
+    }
+
+    #[test]
+    fn test_build_nav_entry_depth_tracking() {
+        // Verify that depth/level is correctly captured from the tree
+        let mut tree = DocumentTree::new("Root", "");
+        let root = tree.root();
+        let sec1 = tree.add_child(root, "S1", "");
+        let sec1_1 = tree.add_child(sec1, "S1.1", "leaf");
+        tree.set_summary(root, "Root overview");
+        tree.set_summary(sec1, "Section overview");
+
+        let root_entry = NavigationIndexStage::build_nav_entry(&tree, root, 3);
+        assert_eq!(root_entry.level, 0);
+
+        let sec1_entry = NavigationIndexStage::build_nav_entry(&tree, sec1, 1);
+        assert_eq!(sec1_entry.level, 1);
+
+        // Leaf node should still return valid NavEntry if called
+        let leaf_entry = NavigationIndexStage::build_nav_entry(&tree, sec1_1, 1);
+        assert_eq!(leaf_entry.level, 2);
+        assert_eq!(leaf_entry.overview, "S1.1"); // no summary → fallback to title
+    }
+
+    #[test]
+    fn test_count_leaves_subtree() {
+        // Verify leaf count is correct for a subtree, not the entire tree
+        let mut tree = DocumentTree::new("Root", "");
+        let root = tree.root();
+        let sec1 = tree.add_child(root, "S1", "");
+        let _s1a = tree.add_child(sec1, "S1.A", "leaf");
+        let _s1b = tree.add_child(sec1, "S1.B", "leaf");
+        let _s1c = tree.add_child(sec1, "S1.C", "leaf");
+        let sec2 = tree.add_child(root, "S2", "");
+        let _s2a = tree.add_child(sec2, "S2.A", "leaf");
+
+        // sec1 subtree has 3 leaves
+        assert_eq!(NavigationIndexStage::count_leaves(&tree, sec1), 3);
+        // sec2 subtree has 1 leaf
+        assert_eq!(NavigationIndexStage::count_leaves(&tree, sec2), 1);
+        // root has 4 leaves total
+        assert_eq!(NavigationIndexStage::count_leaves(&tree, root), 4);
+    }
+
+    /// Helper to check success without destructuring.
+    fn stage_result_is_success(result: &Result<StageResult>) -> bool {
+        result.as_ref().map(|r| r.success).unwrap_or(false)
+    }
 }
