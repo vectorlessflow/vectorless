@@ -176,7 +176,7 @@
 .demoCard {
   max-width: 1200px;
   margin: 0 auto;
-  background: #111317;
+  background: #161A1F;
   border-radius: 16px;
   border: 1px solid #252A30;
   overflow: hidden;
@@ -189,7 +189,7 @@
   gap: 1.5rem;
   padding: 0 1.25rem;
   border-bottom: 1px solid #252A30;
-  background: #111317;
+  background: #161A1F;
 }
 
 .demoTab {
@@ -216,12 +216,12 @@
 }
 
 .demoPanel {
-  background: #0E1117;
+  background: #111317;
 }
 
 .demoCodeHeader {
   padding: 0.75rem 1.25rem;
-  background: #0E1117;
+  background: #111317;
   border-bottom: 1px solid #252A30;
   display: flex;
   align-items: center;
@@ -279,7 +279,7 @@
   font-size: 0.85rem;
   line-height: 1.75;
   color: #EDF2F8;
-  background: #0E1117;
+  background: #111317;
 }
 
 .demoPre code {
@@ -318,7 +318,7 @@
 }
 
 .terminalOutput {
-  background: #0E1117;
+  background: #111317;
   border-top: 1px solid #252A30;
   padding: 1rem 2rem;
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
@@ -352,7 +352,7 @@
 
 .installBar {
   padding: 1rem 2rem;
-  background: #111317;
+  background: #161A1F;
   border-top: 1px solid #252A30;
   display: flex;
   align-items: center;
@@ -365,7 +365,7 @@
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
   font-size: 0.75rem;
   color: #9AA4BF;
-  background: #0E1117;
+  background: #111317;
   padding: 0.4rem 1rem;
   border-radius: 8px;
   border: 1px solid #252A30;
@@ -424,7 +424,7 @@
 
 .caseCard {
   flex: 0 0 calc(65% - 0.75rem);
-  background: #111317;
+  background: #161A1F;
   border: 1px solid #252A30;
   border-radius: 16px;
   padding: 3rem 3rem 2.5rem;
@@ -462,7 +462,7 @@
 }
 
 .caseQuery {
-  background: #0E1117;
+  background: #111317;
   border-radius: 12px;
   padding: 1.5rem 1.75rem;
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
@@ -544,7 +544,7 @@
 
 /* ===== CTA ===== */
 .sectionCtaDark {
-  background: #0E1117;
+  background: #111317;
   padding: 3rem 1.5rem;
 }
 
@@ -560,7 +560,7 @@
   font-weight: 700;
   letter-spacing: -0.02em;
   margin: 0 0 1rem;
-  color: var(--text);
+  color: var(--primary);
 }
 
 .ctaDesc {
@@ -609,7 +609,7 @@
 }
 
 .ctaInstallItem {
-  background: #111317;
+  background: #161A1F;
   border: 1px solid #252A30;
   border-radius: 12px;
   padding: 0.65rem 1.25rem;

@@ -37,5 +37,4 @@ mod builder;
 mod config;
 mod scorer;
 
-pub use aggregator::{CandidateNode, ContentAggregator};
 pub use config::{ContentAggregatorConfig, OutputFormatConfig, ScoringStrategyConfig};

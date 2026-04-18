@@ -16,23 +16,20 @@
 //! ```
 
 mod context;
-mod decompose;
-mod reference;
 mod retriever;
 pub mod stream;
 mod types;
 
 pub mod agent;
-pub mod cache;
 pub mod complexity;
 pub mod content;
 pub mod scoring;
-pub mod search;
 pub mod sufficiency;
 
-pub use context::{PruningStrategy, TokenEstimation};
-pub use retriever::RetrievalContext;
 pub use types::*;
+
+// Re-exports for types.rs inter-module references
+pub use context::{PruningStrategy, TokenEstimation};
 
 // Sufficiency exports
 pub use sufficiency::SufficiencyLevel;

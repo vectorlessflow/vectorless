@@ -34,17 +34,18 @@
   --ifm-color-primary-lighter: #FCD34D;
   --ifm-color-primary-lightest: #FDE68A;
   --ifm-code-font-size: 95%;
+  --ifm-background-color: #FFFFFF;
   --docusaurus-highlighted-code-line-bg: rgba(245, 158, 11, 0.08);
 }
 
 [data-theme='dark'] {
   --text: #EDF2F8;
   --text-light: #9AA4BF;
-  --bg: #0A0C10;
-  --bg-secondary: #111317;
-  --bg-offset: #111317;
-  --card-bg: #111317;
-  --border: #252A30;
+  --bg: #141720;
+  --bg-secondary: #1A1F27;
+  --bg-offset: #1A1F27;
+  --card-bg: #1E2430;
+  --border: #2A3040;
   --primary-soft: rgba(245, 158, 11, 0.12);
   --code-bg: #0E1117;
   --code-text: #CBD5E1;
@@ -59,6 +60,7 @@
   --ifm-color-primary-lighter: #FDE68A;
   --ifm-color-primary-lightest: #FEF3C7;
   --docusaurus-highlighted-code-line-bg: rgba(245, 158, 11, 0.15);
+  --ifm-background-color: #141720;
 }
 
 /* ===== Navbar ===== */
@@ -108,9 +110,8 @@
 }
 
 [data-theme='dark'] .navbar {
-  background-color: rgba(10, 12, 16, 0.85) !important;
+  background-color: var(--bg) !important;
   border-bottom-color: var(--border) !important;
-  backdrop-filter: blur(12px);
 }
 
 [data-theme='dark'] .navbar__title {

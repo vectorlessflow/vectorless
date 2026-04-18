@@ -460,7 +460,6 @@ impl Engine {
 
         self.with_timeout(timeout_secs, async move {
             let doc_ids = self.resolve_scope(&ctx.scope).await?;
-            let mut options = ctx.to_retrieve_options(&self.config);
 
             // Lazy graph rebuild: only rebuild if index() marked it dirty
             if self.config.graph.enabled {
@@ -485,10 +484,6 @@ impl Engine {
                             fail_count
                         );
                     }
-                }
-                // Load (now up-to-date) graph for retrieval
-                if let Ok(Some(graph)) = self.workspace.get_graph().await {
-                    options = options.with_document_graph(Arc::new(graph));
                 }
             }
 
@@ -608,7 +603,6 @@ impl Engine {
         );
 
         // Spawn a task that translates AgentEvents → RetrieveEvents
-        let query_for_relay = query.clone();
         tokio::spawn(async move {
             use crate::retrieval::agent::AgentEvent;
             use crate::retrieval::stream::RetrieveEvent;
@@ -631,7 +625,7 @@ impl Engine {
                             score: 1.0,
                         }
                     }
-                    AgentEvent::RoundCompleted { round, command, success } => {
+                    AgentEvent::RoundCompleted { round, command, success: _ } => {
                         RetrieveEvent::StageCompleted {
                             stage: format!("round_{}_{}", round, command),
                             elapsed_ms: 0,
@@ -648,9 +642,9 @@ impl Engine {
                     AgentEvent::SufficiencyCheck { sufficient, evidence_count } => {
                         RetrieveEvent::SufficiencyCheck {
                             level: if sufficient {
-                                crate::retrieval::types::SufficiencyLevel::Sufficient
+                                crate::retrieval::SufficiencyLevel::Sufficient
                             } else {
-                                crate::retrieval::types::SufficiencyLevel::Insufficient
+                                crate::retrieval::SufficiencyLevel::Insufficient
                             },
                             tokens: evidence_count,
                         }
@@ -673,14 +667,16 @@ impl Engine {
                             elapsed_ms: 0,
                         }
                     }
-                    AgentEvent::Completed { evidence_count, llm_calls, rounds_used } => {
-                        let response = crate::retrieval::types::RetrieveResponse {
-                            query: query_for_relay.clone(),
+                    AgentEvent::Completed { evidence_count, llm_calls: _, rounds_used: _ } => {
+                        let response = crate::retrieval::RetrieveResponse {
+                            results: Vec::new(),
+                            content: String::new(),
                             confidence: if evidence_count > 0 { 0.8 } else { 0.0 },
-                            evidence_count,
-                            llm_calls,
-                            rounds_used,
-                            answer: String::new(),
+                            is_sufficient: true,
+                            strategy_used: "agent".to_string(),
+                            complexity: crate::retrieval::complexity::QueryComplexity::Simple,
+                            reasoning_chain: crate::retrieval::ReasoningChain::default(),
+                            tokens_used: 0,
                         };
                         let _ = retrieve_tx.send(RetrieveEvent::Completed { response }).await;
                         break; // Completed is terminal
@@ -713,8 +709,8 @@ impl Engine {
             let owned_docs: Vec<(String, crate::storage::PersistedDocument, crate::document::NavigationIndex, crate::document::ReasoningIndex)> = docs
                 .into_iter()
                 .map(|(id, doc)| {
-                    let nav = doc.navigation_index.unwrap_or_default();
-                    let ridx = doc.reasoning_index.unwrap_or_default();
+                    let nav = doc.navigation_index.clone().unwrap_or_default();
+                    let ridx = doc.reasoning_index.clone().unwrap_or_default();
                     (id, doc, nav, ridx)
                 })
                 .collect();

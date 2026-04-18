@@ -9,4 +9,4 @@
 
 pub mod bm25;
 
-pub use bm25::{Bm25Engine, Bm25Params, FieldDocument, STOPWORDS, extract_keywords};
+pub use bm25::{Bm25Params, STOPWORDS, extract_keywords};
