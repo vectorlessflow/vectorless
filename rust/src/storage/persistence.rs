@@ -16,7 +16,7 @@ use std::io::{BufReader, BufWriter, Write};
 use std::path::{Path, PathBuf};
 
 use crate::Error;
-use crate::document::{DocumentTree, ReasoningIndex};
+use crate::document::{DocumentTree, NavigationIndex, ReasoningIndex};
 use crate::error::Result;
 
 /// Current format version for persisted documents.
@@ -228,6 +228,10 @@ pub struct PersistedDocument {
     /// Pre-computed reasoning index for retrieval acceleration.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reasoning_index: Option<ReasoningIndex>,
+
+    /// Navigation index for Agent-based retrieval.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub navigation_index: Option<NavigationIndex>,
 }
 
 impl PersistedDocument {
@@ -239,6 +243,7 @@ impl PersistedDocument {
             tree,
             pages: Vec::new(),
             reasoning_index: None,
+            navigation_index: None,
         }
     }
 

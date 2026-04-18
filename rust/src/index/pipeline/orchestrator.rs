@@ -25,7 +25,7 @@
 
 use std::collections::HashMap;
 use std::time::Instant;
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 
 use crate::error::Result;
 
@@ -450,15 +450,19 @@ impl PipelineOrchestrator {
         // Resolve execution order
         let order = self.resolve_order()?;
         let stage_names: Vec<&str> = order.iter().map(|&i| self.stages[i].stage.name()).collect();
-        info!("Execution order: {:?}", stage_names);
+        info!("[pipeline] Execution order: {:?}", stage_names);
 
         // Compute execution groups for potential parallelization
         let groups = self.compute_execution_groups(&order);
-        info!(
-            "Execution groups: {} ({} parallelizable)",
-            groups.len(),
-            groups.iter().filter(|g| g.parallel).count()
-        );
+        let parallel_count = groups.iter().filter(|g| g.parallel).count();
+        if parallel_count > 0 {
+            info!(
+                "[pipeline] {} execution groups ({} parallelizable)",
+                groups.len(), parallel_count
+            );
+        } else {
+            debug!("[pipeline] {} execution groups (all sequential)", groups.len());
+        }
 
         // Create context
         let mut opts = options;
@@ -509,19 +513,15 @@ impl PipelineOrchestrator {
         // Execute each group
         for (group_idx, group) in groups.iter().enumerate() {
             if group.parallel {
-                info!(
-                    "Executing parallel group {} with {} stages: {:?}",
-                    group_idx,
-                    group.stage_indices.len(),
-                    group
-                        .stage_indices
-                        .iter()
-                        .map(|&i| self.stages[i].stage.name())
-                        .collect::<Vec<_>>()
-                );
+                let names: Vec<&str> = group
+                    .stage_indices
+                    .iter()
+                    .map(|&i| self.stages[i].stage.name())
+                    .collect();
+                info!("[pipeline] Parallel group {}: {:?}", group_idx, names);
             }
 
-            if group.parallel && group.stage_indices.len() == 2 {
+            if group.parallel && !group.stage_indices.is_empty() {
                 // Check if all stages in this group are already completed (from checkpoint)
                 let all_completed = group.stage_indices.iter().all(|&idx| {
                     let name = self.stages[idx].stage.name();
@@ -533,99 +533,121 @@ impl PipelineOrchestrator {
                         .iter()
                         .map(|&i| self.stages[i].stage.name())
                         .collect();
-                    info!("Skipping already completed parallel group: {:?}", names);
+                    info!("[pipeline] Skipping completed parallel group: {:?}", names);
                     continue;
                 }
 
-                // === Parallel execution for 2-stage groups ===
-                // One stage gets the main ctx (mutates tree), the other
-                // gets a cloned snapshot (read-only). Results are merged back.
-                let idx_a = group.stage_indices[0];
-                let idx_b = group.stage_indices[1];
+                // === N-stage parallel execution ===
+                //
+                // At most one stage may write_tree — it gets the main ctx.
+                // All other stages get cloned contexts with tree snapshots.
+                // All stages run concurrently via futures::future::join_all.
+                // After all complete, outputs are merged back by AccessPattern.
 
-                // Determine which stage reads tree (gets snapshot) vs writes tree (gets ctx)
-                // using AccessPattern instead of hardcoded name checks.
-                let (writer_idx, reader_idx) = {
-                    let ap_a = self.stages[idx_a].stage.access_pattern();
-                    let ap_b = self.stages[idx_b].stage.access_pattern();
-                    // The stage that writes tree gets the main ctx;
-                    // the other (read-only on tree) gets a clone.
-                    if ap_b.writes_tree && !ap_a.writes_tree {
-                        (idx_b, idx_a) // b writes tree, a is reader
+                // Identify the tree writer (if any)
+                let tree_writer_idx: Option<usize> = group
+                    .stage_indices
+                    .iter()
+                    .find(|&&idx| self.stages[idx].stage.access_pattern().writes_tree)
+                    .copied();
+
+                // For each stage, prepare (stage, context) pair.
+                // Swap out stages from self.stages to get owned Box<dyn IndexStage>.
+                let mut entries: Vec<ParallelEntry> = Vec::with_capacity(group.stage_indices.len());
+
+                for &idx in &group.stage_indices {
+                    let stage =
+                        std::mem::replace(&mut self.stages[idx].stage, Box::new(NopStage));
+                    let name = stage.name().to_string();
+                    let policy = stage.failure_policy();
+                    let access = stage.access_pattern();
+
+                    let stage_ctx = if Some(idx) == tree_writer_idx {
+                        // Tree writer gets a placeholder; we'll use &mut ctx directly
+                        None
                     } else {
-                        (idx_a, idx_b) // a writes tree (or both/neither write), b is reader
+                        // Reader gets a cloned context
+                        let mut clone = IndexContext::new(
+                            IndexInput::content(""),
+                            ctx.options.clone(),
+                        );
+                        clone.tree = ctx.tree.clone();
+                        clone.existing_tree = ctx.existing_tree.clone();
+                        clone.doc_id = ctx.doc_id.clone();
+                        clone.name = ctx.name.clone();
+                        clone.format = ctx.format;
+                        clone.source_path = ctx.source_path.clone();
+                        if let Some(ref llm) = ctx.llm_client {
+                            clone.llm_client = Some(llm.clone());
+                        }
+                        Some(clone)
+                    };
+
+                    entries.push(ParallelEntry {
+                        idx,
+                        stage,
+                        ctx: stage_ctx,
+                        name,
+                        policy,
+                        access,
+                    });
+                }
+
+                let parallel_names: Vec<&str> = entries.iter().map(|e| e.name.as_str()).collect();
+                info!("[pipeline] Executing in parallel: {:?}", parallel_names);
+
+                // Split into writer and readers
+                let mut writer_entry: Option<ParallelEntry> = None;
+                let mut reader_entries: Vec<ParallelEntry> = Vec::new();
+                for entry in entries {
+                    if entry.ctx.is_none() {
+                        writer_entry = Some(entry);
+                    } else {
+                        reader_entries.push(entry);
                     }
-                };
-
-                // Clone tree snapshot for the reader stage
-                let tree_snapshot = ctx.tree.clone();
-                let options_snapshot = ctx.options.clone();
-                let existing_tree_snapshot = ctx.existing_tree.clone();
-
-                // Take both stages out to avoid double &mut self
-                let mut stage_writer =
-                    std::mem::replace(&mut self.stages[writer_idx].stage, Box::new(NopStage));
-                let mut stage_reader =
-                    std::mem::replace(&mut self.stages[reader_idx].stage, Box::new(NopStage));
-
-                let writer_name = stage_writer.name().to_string();
-                let reader_name = stage_reader.name().to_string();
-                let writer_policy = stage_writer.failure_policy();
-                let reader_policy = stage_reader.failure_policy();
-
-                info!("Parallel: executing {} ∥ {}", writer_name, reader_name);
-
-                // Build a minimal context clone for the reader stage
-                let mut reader_ctx = IndexContext::new(IndexInput::content(""), options_snapshot);
-                reader_ctx.tree = tree_snapshot;
-                reader_ctx.existing_tree = existing_tree_snapshot;
-                reader_ctx.doc_id = ctx.doc_id.clone();
-                reader_ctx.name = ctx.name.clone();
-                reader_ctx.format = ctx.format;
-                reader_ctx.source_path = ctx.source_path.clone();
-
-                // Execute both stages concurrently
-                let (writer_result, reader_result) = tokio::join!(
-                    Self::execute_stage_with_policy(&mut stage_writer, &mut ctx),
-                    Self::execute_stage_with_policy(&mut stage_reader, &mut reader_ctx),
-                );
-
-                // Put stages back
-                self.stages[writer_idx].stage = stage_writer;
-                self.stages[reader_idx].stage = stage_reader;
-
-                // Handle writer result
-                Self::handle_stage_result(writer_result, &writer_name, &writer_policy, &mut ctx)?;
-
-                // Handle reader result
-                Self::handle_stage_result(reader_result, &reader_name, &reader_policy, &mut ctx)?;
-
-                // Merge reader's outputs back based on its AccessPattern
-                let reader_ap = self.stages[reader_idx].stage.access_pattern();
-                if reader_ap.writes_reasoning_index {
-                    ctx.reasoning_index = reader_ctx.reasoning_index;
                 }
-                if reader_ap.writes_description {
-                    ctx.description = reader_ctx.description;
-                }
-                // Merge additive metrics
-                ctx.metrics.llm_calls += reader_ctx.metrics.llm_calls;
-                ctx.metrics.summaries_generated += reader_ctx.metrics.summaries_generated;
-                ctx.metrics.total_tokens_generated += reader_ctx.metrics.total_tokens_generated;
-                ctx.metrics.nodes_processed += reader_ctx.metrics.nodes_processed;
-                if reader_ctx.metrics.reasoning_index_time_ms > 0 {
-                    ctx.metrics.record_reasoning_index(
-                        reader_ctx.metrics.reasoning_index_time_ms,
-                        reader_ctx.metrics.topics_indexed,
-                        reader_ctx.metrics.keywords_indexed,
+
+                // Execute writer on main ctx concurrently with readers.
+                // Move each reader's stage+ctx into an owned async block.
+                // All futures are !Send (Box<dyn IndexStage>), but join_all
+                // works fine on the same thread.
+
+                let reader_futs: Vec<std::pin::Pin<Box<dyn std::future::Future<Output = (ParallelEntry, std::result::Result<StageResult, crate::error::Error>)>>>> = reader_entries.into_iter().map(|mut entry| {
+                    Box::pin(async move {
+                        let res = Self::execute_stage_with_policy(&mut entry.stage, entry.ctx.as_mut().unwrap()).await;
+                        (entry, res)
+                    }) as std::pin::Pin<Box<dyn std::future::Future<Output = _>>>
+                }).collect();
+
+                // If there's a tree writer, run it concurrently with readers.
+                // If no tree writer (all readers), just run readers.
+                if let Some(mut we) = writer_entry {
+                    // Run writer + readers concurrently.
+                    // The writer borrows &mut ctx; readers use their own cloned ctxs.
+                    let (writer_res, completed_readers) = tokio::join!(
+                        Self::execute_stage_with_policy(&mut we.stage, &mut ctx),
+                        futures::future::join_all(reader_futs),
                     );
+
+                    // Put writer stage back and handle result
+                    self.stages[we.idx].stage = we.stage;
+                    Self::handle_stage_result(writer_res, &we.name, &we.policy, &mut ctx)?;
+
+                    // Process reader results
+                    for (re, reader_res) in completed_readers {
+                        Self::merge_reader_outputs(&mut ctx, &re);
+                        self.stages[re.idx].stage = re.stage;
+                        Self::handle_stage_result(reader_res, &re.name, &re.policy, &mut ctx)?;
+                    }
+                } else {
+                    // All readers, no writer
+                    let completed_readers = futures::future::join_all(reader_futs).await;
+                    for (re, reader_res) in completed_readers {
+                        Self::merge_reader_outputs(&mut ctx, &re);
+                        self.stages[re.idx].stage = re.stage;
+                        Self::handle_stage_result(reader_res, &re.name, &re.policy, &mut ctx)?;
+                    }
                 }
-                if reader_ctx.metrics.optimize_time_ms > 0 {
-                    ctx.metrics
-                        .record_optimize(reader_ctx.metrics.optimize_time_ms);
-                }
-                ctx.metrics.nodes_merged += reader_ctx.metrics.nodes_merged;
-                ctx.metrics.nodes_skipped += reader_ctx.metrics.nodes_skipped;
             } else {
                 // === Sequential execution (single stage or non-parallel group) ===
                 for &idx in &group.stage_indices {
@@ -676,8 +698,10 @@ impl PipelineOrchestrator {
 
         let total_duration = total_start.elapsed().as_millis() as u64;
         info!(
-            "Orchestrated pipeline completed in {}ms for document {}",
-            total_duration, ctx.name
+            "[pipeline] Complete: {} stages in {}ms for '{}'",
+            ctx.stage_results.len(),
+            total_duration,
+            ctx.name,
         );
 
         // Clear checkpoint on successful completion
@@ -690,6 +714,60 @@ impl PipelineOrchestrator {
 
         // Finalize result
         Ok(ctx.finalize())
+    }
+
+    /// Merge a reader stage's outputs back into the main context.
+    ///
+    /// Reads the reader's AccessPattern to know which fields to copy,
+    /// and merges additive metrics (LLM calls, tokens, etc.).
+    fn merge_reader_outputs(ctx: &mut IndexContext, reader: &ParallelEntry) {
+        if reader.access.writes_reasoning_index {
+            if let Some(ref rctx) = reader.ctx {
+                ctx.reasoning_index = rctx.reasoning_index.clone();
+            }
+        }
+        if reader.access.writes_navigation_index {
+            if let Some(ref rctx) = reader.ctx {
+                ctx.navigation_index = rctx.navigation_index.clone();
+            }
+        }
+        if reader.access.writes_description {
+            if let Some(ref rctx) = reader.ctx {
+                ctx.description = rctx.description.clone();
+            }
+        }
+        // Merge additive metrics from reader
+        if let Some(ref rctx) = reader.ctx {
+            ctx.metrics.llm_calls += rctx.metrics.llm_calls;
+            ctx.metrics.summaries_generated += rctx.metrics.summaries_generated;
+            ctx.metrics.total_tokens_generated += rctx.metrics.total_tokens_generated;
+            ctx.metrics.nodes_processed += rctx.metrics.nodes_processed;
+            ctx.metrics.nodes_merged += rctx.metrics.nodes_merged;
+            ctx.metrics.nodes_skipped += rctx.metrics.nodes_skipped;
+            if rctx.metrics.reasoning_index_time_ms > 0 {
+                ctx.metrics.record_reasoning_index(
+                    rctx.metrics.reasoning_index_time_ms,
+                    rctx.metrics.topics_indexed,
+                    rctx.metrics.keywords_indexed,
+                );
+            }
+            if rctx.metrics.optimize_time_ms > 0 {
+                ctx.metrics.record_optimize(rctx.metrics.optimize_time_ms);
+            }
+            if rctx.metrics.navigation_index_time_ms > 0 {
+                ctx.metrics.record_navigation_index(
+                    rctx.metrics.navigation_index_time_ms,
+                    rctx.metrics.nav_entries_indexed,
+                    rctx.metrics.child_routes_indexed,
+                );
+            }
+            if rctx.metrics.enhance_time_ms > 0 {
+                ctx.metrics.record_enhance(rctx.metrics.enhance_time_ms);
+            }
+            if rctx.metrics.enrich_time_ms > 0 {
+                ctx.metrics.record_enrich(rctx.metrics.enrich_time_ms);
+            }
+        }
     }
 
     /// Save a checkpoint of the current pipeline state.
@@ -751,6 +829,27 @@ impl IndexStage for NopStage {
     async fn execute(&mut self, _ctx: &mut IndexContext) -> Result<StageResult> {
         Ok(StageResult::success("_nop"))
     }
+}
+
+/// Owned entry for parallel stage execution.
+///
+/// Each stage in a parallel group is swapped out from the orchestrator's
+/// stages vec into this struct, along with its own cloned context.
+/// After execution, the stage is swapped back and outputs are merged.
+struct ParallelEntry {
+    /// Index into orchestrator's stages vec (for swapping back).
+    idx: usize,
+    /// The owned stage implementation.
+    stage: Box<dyn IndexStage>,
+    /// Cloned context for reader stages; None for the tree writer
+    /// (which uses the main ctx directly).
+    ctx: Option<IndexContext>,
+    /// Stage name (captured before swap).
+    name: String,
+    /// Failure policy (captured before swap).
+    policy: FailurePolicy,
+    /// Access pattern (captured before swap).
+    access: crate::index::stages::AccessPattern,
 }
 
 /// Builder for creating custom stage configurations.

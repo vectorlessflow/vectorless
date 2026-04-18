@@ -16,13 +16,16 @@
 //! - [`NodeReference`] - In-document reference (e.g., "see Appendix G")
 //! - [`RefType`] - Type of reference (Section, Appendix, Table, etc.)
 
+mod navigation;
 mod node;
 mod reasoning;
 mod reference;
+mod serde_helpers;
 mod structure;
 mod toc;
 mod tree;
 
+pub use navigation::{ChildRoute, NavEntry, NavigationIndex};
 pub use node::{NodeId, TreeNode};
 pub use reasoning::{
     HotNodeEntry, ReasoningIndex, ReasoningIndexBuilder, ReasoningIndexConfig, SectionSummary,

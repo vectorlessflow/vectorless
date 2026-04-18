@@ -7,8 +7,9 @@
 //! calculates metadata) and before OptimizeStage. It builds a
 //! [`ReasoningIndex`] from the document tree's TOC, summaries, and keywords.
 
+use std::collections::HashMap;
 use std::time::Instant;
-use tracing::info;
+use tracing::{debug, info, warn};
 
 use crate::document::{
     NodeId, ReasoningIndexBuilder, ReasoningIndexConfig, SectionSummary, SummaryShortcut,
@@ -57,9 +58,9 @@ impl ReasoningIndexStage {
     fn build_topic_paths(
         tree: &crate::document::DocumentTree,
         config: &ReasoningIndexConfig,
-    ) -> (std::collections::HashMap<String, Vec<TopicEntry>>, usize) {
-        let mut keyword_nodes: std::collections::HashMap<String, Vec<(NodeId, f32, usize)>> =
-            std::collections::HashMap::new();
+    ) -> (HashMap<String, Vec<TopicEntry>>, usize) {
+        let mut keyword_nodes: HashMap<String, Vec<(NodeId, f32, usize)>> =
+            HashMap::new();
 
         // Walk all nodes and extract keywords from title + summary
         for node_id in tree.traverse() {
@@ -106,13 +107,13 @@ impl ReasoningIndexStage {
         let keyword_count = sorted_keywords.len();
 
         // Build topic_paths: merge duplicate (keyword, node) pairs
-        let mut topic_paths: std::collections::HashMap<String, Vec<TopicEntry>> =
-            std::collections::HashMap::new();
+        let mut topic_paths: HashMap<String, Vec<TopicEntry>> =
+            HashMap::new();
 
         for (keyword, entries) in sorted_keywords {
             // Merge duplicate node entries by summing weights
-            let mut merged: std::collections::HashMap<NodeId, (f32, usize)> =
-                std::collections::HashMap::new();
+            let mut merged: HashMap<NodeId, (f32, usize)> =
+                HashMap::new();
             for (node_id, weight, depth) in entries {
                 let entry = merged.entry(node_id).or_insert((0.0, depth));
                 entry.0 += weight;
@@ -151,8 +152,8 @@ impl ReasoningIndexStage {
     /// Build section map from depth-1 nodes.
     fn build_section_map(
         tree: &crate::document::DocumentTree,
-    ) -> std::collections::HashMap<String, NodeId> {
-        let mut section_map = std::collections::HashMap::new();
+    ) -> HashMap<String, NodeId> {
+        let mut section_map = HashMap::new();
         let root = tree.root();
         for child_id in tree.children(root) {
             if let Some(node) = tree.get(child_id) {
@@ -166,55 +167,98 @@ impl ReasoningIndexStage {
         section_map
     }
 
-    /// Expand keywords with LLM-generated synonyms.
+    /// Expand keywords with LLM-generated synonyms (concurrent).
     ///
     /// For each existing keyword in `topic_paths`, ask the LLM for synonymous
     /// search terms. Synonym entries inherit the same node mappings but with
     /// a reduced weight (0.6x) to reflect the indirect match.
     async fn expand_synonyms(
-        topic_paths: &mut std::collections::HashMap<String, Vec<TopicEntry>>,
+        topic_paths: &mut HashMap<String, Vec<TopicEntry>>,
         llm_client: &LlmClient,
         max_keywords: usize,
+        concurrency: usize,
     ) -> usize {
         use std::collections::HashSet;
+        use futures::StreamExt;
 
         let existing_keys: HashSet<String> = topic_paths.keys().cloned().collect();
         // Pick top keywords by entry count for synonym expansion
         let mut ranked: Vec<(String, usize)> = topic_paths
             .iter()
-            .map(|(k, v)| (k.clone(), v.len()))
+            .map(|(k, v): (&String, &Vec<TopicEntry>)| (k.clone(), v.len()))
             .collect();
         ranked.sort_by(|a, b| b.1.cmp(&a.1));
         ranked.truncate(max_keywords);
 
-        let mut synonym_count = 0;
+        let keyword_count = ranked.len();
+        if keyword_count == 0 {
+            return 0;
+        }
 
-        for (keyword, _) in &ranked {
-            let prompt = format!(
-                "List up to 5 synonyms or related search terms for \"{}\". \
-                 Return only the terms separated by commas, no numbering, no explanation.",
-                keyword
-            );
+        tracing::info!(
+            "[reasoning_index] Expanding synonyms for {} keywords (concurrency: {})",
+            keyword_count, concurrency,
+        );
 
-            match llm_client
-                .complete(
-                    "You are a thesaurus assistant. Return only comma-separated synonyms.",
-                    &prompt,
+        // Snapshot the source entries for each keyword before concurrent calls.
+        // We need this because `topic_paths` is immutably borrowed during LLM calls
+        // and we write results back afterwards.
+        let source_entries: HashMap<String, Vec<TopicEntry>> = ranked
+            .iter()
+            .map(|(kw, _): &(String, usize)| {
+                (
+                    kw.clone(),
+                    topic_paths.get(kw).cloned().unwrap_or_default(),
                 )
-                .await
-            {
-                Ok(response) => {
-                    let synonyms: Vec<String> = response
-                        .to_lowercase()
-                        .split(',')
-                        .map(|s| s.trim().to_string())
-                        .filter(|s| !s.is_empty() && s.len() >= 2 && !existing_keys.contains(s))
-                        .collect();
+            })
+            .collect();
 
-                    if let Some(entries) = topic_paths.get(keyword) {
-                        let source_entries = entries.clone();
+        // Concurrent LLM calls
+        let results: Vec<(String, std::result::Result<Vec<String>, String>)> =
+            futures::stream::iter(ranked.into_iter().map(|(kw, _)| kw))
+                .map(|keyword| {
+                    let client = llm_client.clone();
+                    async move {
+                        let prompt = format!(
+                            "List up to 5 synonyms or related search terms for \"{}\". \
+                             Return only the terms separated by commas, no numbering, no explanation.",
+                            keyword
+                        );
+                        match client
+                            .complete(
+                                "You are a thesaurus assistant. Return only comma-separated synonyms.",
+                                &prompt,
+                            )
+                            .await
+                        {
+                            Ok(response) => {
+                                let synonyms: Vec<String> = response
+                                    .to_lowercase()
+                                    .split(',')
+                                    .map(|s| s.trim().to_string())
+                                    .filter(|s| !s.is_empty() && s.len() >= 2)
+                                    .collect();
+                                (keyword, Ok(synonyms))
+                            }
+                            Err(e) => (keyword, Err(e.to_string())),
+                        }
+                    }
+                })
+                .buffer_unordered(concurrency)
+                .collect()
+                .await;
+
+        // Write results back
+        let mut synonym_count = 0;
+        for (keyword, result) in results {
+            match result {
+                Ok(synonyms) => {
+                    if let Some(entries) = source_entries.get(&keyword) {
                         for syn in synonyms {
-                            let synonym_entries: Vec<TopicEntry> = source_entries
+                            if existing_keys.contains(&syn) {
+                                continue;
+                            }
+                            let synonym_entries: Vec<TopicEntry> = entries
                                 .iter()
                                 .map(|e| TopicEntry {
                                     node_id: e.node_id,
@@ -227,8 +271,8 @@ impl ReasoningIndexStage {
                         }
                     }
                 }
-                Err(e) => {
-                    tracing::warn!("Synonym expansion failed for '{}': {}", keyword, e);
+                Err(error) => {
+                    tracing::warn!("[reasoning_index] Synonym expansion failed for '{}': {}", keyword, error);
                 }
             }
         }
@@ -311,7 +355,7 @@ impl IndexStage for ReasoningIndexStage {
 
         // Check if enabled via pipeline options
         if !ctx.options.reasoning_index.enabled {
-            info!("Reasoning index stage disabled, skipping");
+            info!("[reasoning_index] Disabled, skipping");
             return Ok(StageResult::success("reasoning_index"));
         }
 
@@ -321,17 +365,23 @@ impl IndexStage for ReasoningIndexStage {
         let tree = match ctx.tree.as_ref() {
             Some(t) => t,
             None => {
+                warn!("[reasoning_index] No tree, cannot build index");
                 return Ok(StageResult::failure("reasoning_index", "Tree not built"));
             }
         };
 
-        info!("Building reasoning index...");
+        info!(
+            "[reasoning_index] Starting: synonyms={}, summary_shortcut={}, max_keywords={}",
+            config.enable_synonym_expansion,
+            config.build_summary_shortcut,
+            config.max_keyword_entries,
+        );
 
         // 1. Build topic-to-path mapping
         let (mut topic_paths, keyword_count) = Self::build_topic_paths(tree, config);
-        let topic_count: usize = topic_paths.values().map(|v| v.len()).sum();
-        info!(
-            "Built topic paths: {} keywords, {} topic entries",
+        let topic_count: usize = topic_paths.values().map(|v: &Vec<TopicEntry>| v.len()).sum();
+        debug!(
+            "[reasoning_index] Topic paths: {} keywords, {} entries",
             keyword_count, topic_count
         );
 
@@ -339,11 +389,16 @@ impl IndexStage for ReasoningIndexStage {
         let synonym_count = if config.enable_synonym_expansion {
             if let Some(ref llm_client) = ctx.llm_client {
                 let max_kw = (keyword_count / 4).max(20).min(100);
-                let count = Self::expand_synonyms(&mut topic_paths, llm_client, max_kw).await;
-                info!("Expanded {} synonym keywords", count);
+                let concurrency = ctx.options.concurrency.max_concurrent_requests;
+                let count =
+                    Self::expand_synonyms(&mut topic_paths, llm_client, max_kw, concurrency)
+                        .await;
+                if count > 0 {
+                    info!("[reasoning_index] Expanded {} synonym keywords", count);
+                }
                 count
             } else {
-                info!("Synonym expansion enabled but no LLM client available");
+                debug!("[reasoning_index] Synonym expansion enabled but no LLM client");
                 0
             }
         } else {
@@ -352,13 +407,13 @@ impl IndexStage for ReasoningIndexStage {
 
         // 2. Build section map
         let section_map = Self::build_section_map(tree);
-        info!("Built section map with {} entries", section_map.len());
+        debug!("[reasoning_index] Section map: {} entries", section_map.len());
 
         // 3. Build summary shortcut
         let summary_shortcut = if config.build_summary_shortcut {
             let shortcut = Self::build_summary_shortcut(tree);
             if shortcut.is_some() {
-                info!("Built summary shortcut");
+                debug!("[reasoning_index] Built summary shortcut");
             }
             shortcut
         } else {
@@ -387,12 +442,12 @@ impl IndexStage for ReasoningIndexStage {
             .record_reasoning_index(duration, topic_count, keyword_count);
 
         info!(
-            "Reasoning index built in {}ms ({} keywords, {} topic entries, {} sections, {} synonyms)",
-            duration,
+            "[reasoning_index] Complete: {} keywords, {} topics, {} sections, {} synonyms in {}ms",
             keyword_count,
             topic_count,
             reasoning_index.section_count(),
             synonym_count,
+            duration,
         );
 
         ctx.reasoning_index = Some(reasoning_index);
@@ -443,5 +498,165 @@ mod tests {
         assert_eq!(stage.name(), "reasoning_index");
         assert!(stage.is_optional());
         assert_eq!(stage.depends_on(), vec!["enrich"]);
+    }
+
+    #[test]
+    fn test_build_topic_paths_basic() {
+        use crate::document::ReasoningIndexConfig;
+
+        let mut tree = crate::document::DocumentTree::new("Root", "");
+        let root = tree.root();
+        let c1 = tree.add_child(root, "Machine Learning Introduction", "");
+        let c2 = tree.add_child(root, "Deep Learning Methods", "");
+
+        // Set summaries for keyword extraction
+        if let Some(n) = tree.get_mut(c1) {
+            n.summary = "An overview of machine learning algorithms".to_string();
+        }
+        if let Some(n) = tree.get_mut(c2) {
+            n.summary = "Advanced deep learning techniques".to_string();
+        }
+
+        let config = ReasoningIndexConfig::default();
+        let (topic_paths, keyword_count) = ReasoningIndexStage::build_topic_paths(&tree, &config);
+
+        assert!(keyword_count > 0, "Should extract keywords from title + summary");
+        assert!(!topic_paths.is_empty(), "Should build topic paths");
+
+        // "learning" appears in both titles → should be a keyword
+        assert!(
+            topic_paths.contains_key("learning"),
+            "Expected 'learning' in topic paths, got: {:?}",
+            topic_paths.keys().collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn test_build_topic_paths_weight_normalization() {
+        use crate::document::ReasoningIndexConfig;
+
+        let mut tree = crate::document::DocumentTree::new("Root", "");
+        let root = tree.root();
+        let _c1 = tree.add_child(root, "rust ownership", "rust borrowing rules");
+
+        let config = ReasoningIndexConfig::default();
+        let (topic_paths, _) = ReasoningIndexStage::build_topic_paths(&tree, &config);
+
+        // All weights should be in 0.0-1.0 range
+        for entries in topic_paths.values() {
+            for entry in entries {
+                assert!(
+                    entry.weight >= 0.0 && entry.weight <= 1.0,
+                    "Weight {} out of [0, 1] range",
+                    entry.weight
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_build_topic_paths_respects_max_keyword_entries() {
+        use crate::document::ReasoningIndexConfig;
+
+        let mut tree = crate::document::DocumentTree::new("Root", "");
+        let root = tree.root();
+
+        // Create many children with unique keywords
+        for i in 0..50 {
+            let c = tree.add_child(root, &format!("Section {} Alpha Beta Gamma Delta", i), "");
+            if let Some(n) = tree.get_mut(c) {
+                n.summary = format!("keywords unique{} special{} terms{}", i, i, i);
+            }
+        }
+
+        let mut config = ReasoningIndexConfig::default();
+        config.max_keyword_entries = 5;
+        let (topic_paths, keyword_count) =
+            ReasoningIndexStage::build_topic_paths(&tree, &config);
+
+        assert!(
+            keyword_count <= 5,
+            "Should respect max_keyword_entries, got {}",
+            keyword_count
+        );
+        assert_eq!(topic_paths.len(), keyword_count);
+    }
+
+    #[test]
+    fn test_build_section_map() {
+        let mut tree = crate::document::DocumentTree::new("Root", "");
+        let root = tree.root();
+        let c1 = tree.add_child(root, "Introduction", "content");
+        let c2 = tree.add_child(root, "Methods", "content");
+
+        // Set structure indices
+        if let Some(n) = tree.get_mut(c1) {
+            n.structure = "1".to_string();
+        }
+        if let Some(n) = tree.get_mut(c2) {
+            n.structure = "2".to_string();
+        }
+
+        let section_map = ReasoningIndexStage::build_section_map(&tree);
+
+        // Should index by title (lowercase) and structure index
+        assert!(section_map.contains_key("introduction"));
+        assert!(section_map.contains_key("methods"));
+        assert!(section_map.contains_key("1"));
+        assert!(section_map.contains_key("2"));
+        assert_eq!(section_map.len(), 4);
+    }
+
+    #[test]
+    fn test_build_summary_shortcut() {
+        let mut tree = crate::document::DocumentTree::new("Root", "");
+        let root = tree.root();
+        let c1 = tree.add_child(root, "S1", "summary 1");
+        let c2 = tree.add_child(root, "S2", "summary 2");
+
+        // Set root summary (not content — build_summary_shortcut reads summary field)
+        if let Some(n) = tree.get_mut(root) {
+            n.summary = "root summary text".to_string();
+        }
+        if let Some(n) = tree.get_mut(c1) {
+            n.summary = "first section summary".to_string();
+        }
+        if let Some(n) = tree.get_mut(c2) {
+            n.summary = "second section summary".to_string();
+        }
+
+        let shortcut = ReasoningIndexStage::build_summary_shortcut(&tree);
+        assert!(shortcut.is_some());
+
+        let sc = shortcut.unwrap();
+        assert_eq!(sc.root_node, root);
+        assert_eq!(sc.document_summary, "root summary text");
+        assert_eq!(sc.section_summaries.len(), 2);
+    }
+
+    #[test]
+    fn test_build_summary_shortcut_fallback_to_children() {
+        // Root has no summary → fallback to concatenating children
+        let mut tree = crate::document::DocumentTree::new("Root", "");
+        let root = tree.root();
+        let c1 = tree.add_child(root, "S1", "");
+        let c2 = tree.add_child(root, "S2", "");
+
+        if let Some(n) = tree.get_mut(c1) {
+            n.summary = "child summary 1".to_string();
+        }
+        if let Some(n) = tree.get_mut(c2) {
+            n.summary = "child summary 2".to_string();
+        }
+
+        let shortcut = ReasoningIndexStage::build_summary_shortcut(&tree);
+        assert!(shortcut.is_some());
+
+        let sc = shortcut.unwrap();
+        assert!(
+            sc.document_summary.contains("child summary 1"),
+            "Fallback should include child summaries"
+        );
+        assert!(sc.document_summary.contains("S1"));
     }
 }

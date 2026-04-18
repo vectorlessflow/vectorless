@@ -428,6 +428,8 @@ mod tests {
             physical_index: None,
             token_count: None,
             references: Vec::new(),
+            routing_keywords: Vec::new(),
+            question_hints: Vec::new(),
         };
         NodeId(arena.new_node(node))
     }
