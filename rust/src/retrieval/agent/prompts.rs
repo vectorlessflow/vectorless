@@ -35,6 +35,8 @@ pub struct NavigationParams<'a> {
     pub history: &'a str,
     /// Titles of already-visited nodes.
     pub visited_titles: &'a str,
+    /// Navigation plan from bird's-eye analysis (empty if no plan).
+    pub plan: &'a str,
 }
 
 pub fn subagent_navigation(params: &NavigationParams) -> (String, String) {
@@ -76,6 +78,12 @@ pub fn subagent_navigation(params: &NavigationParams) -> (String, String) {
         format!("\nAlready visited (do not re-read these): {}", params.visited_titles)
     };
 
+    let plan_section = if params.plan.is_empty() {
+        String::new()
+    } else {
+        format!("\nNavigation plan (follow this as guidance, adapt if needed):\n{}\n", params.plan)
+    };
+
     let system = format!(
         "You are a document navigation assistant. You navigate inside a document to find \
          information that answers the user's question.
@@ -113,7 +121,7 @@ User question: {query}{task_section}
 
 Current position: /{breadcrumb}
 Collected evidence:
-{evidence_summary}{missing_section}{visited_section}
+{evidence_summary}{missing_section}{visited_section}{plan_section}
 {history_section}
 Remaining rounds: {remaining}/{max_rounds}
 
@@ -426,6 +434,7 @@ mod tests {
             max_rounds: 8,
             history: "(no history yet)",
             visited_titles: "(none)",
+            plan: "",
         };
 
         let (system, user) = subagent_navigation(&params);
@@ -451,6 +460,7 @@ mod tests {
             max_rounds: 8,
             history: "(no history yet)",
             visited_titles: "(none)",
+            plan: "",
         };
 
         let (_, user) = subagent_navigation(&params);

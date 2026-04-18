@@ -37,6 +37,12 @@ pub struct State {
     /// ReAct history: summary of each round's command + result.
     /// Keeps last N entries for prompt injection.
     pub history: Vec<String>,
+    /// Navigation plan generated after bird's-eye view (Phase 1.5).
+    /// Injected into subsequent prompts as guidance (non-binding).
+    pub plan: String,
+    /// Number of consecutive rounds without new evidence.
+    /// Used for stuck detection.
+    pub rounds_since_evidence: u32,
 }
 
 /// Maximum number of history entries to keep for prompt injection.
@@ -55,6 +61,8 @@ impl State {
             last_feedback: String::new(),
             missing_info: String::new(),
             history: Vec::new(),
+            plan: String::new(),
+            rounds_since_evidence: 0,
         }
     }
 

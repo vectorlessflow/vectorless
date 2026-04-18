@@ -73,15 +73,54 @@ pub async fn run(
     let ls_result = tools::ls(ctx, &state);
     state.last_feedback = ls_result.feedback;
 
+    // --- Phase 1.5: Navigation planning ---
+    // One LLM call to generate a tentative navigation plan from the bird's-eye view.
+    // The plan is non-binding guidance injected into subsequent prompts.
+    if state.remaining > 0 {
+        let plan_prompt = build_plan_prompt(query, task, &state.last_feedback, ctx.doc_name);
+        match llm.complete(&plan_prompt.0, &plan_prompt.1).await {
+            Ok(plan_output) => {
+                llm_calls += 1;
+                let plan_text = plan_output.trim().to_string();
+                if !plan_text.is_empty() {
+                    info!(
+                        doc = ctx.doc_name,
+                        plan_len = plan_text.len(),
+                        "Navigation plan generated"
+                    );
+                    state.plan = plan_text;
+                }
+            }
+            Err(e) => {
+                warn!(doc = ctx.doc_name, error = %e, "Plan LLM call failed — continuing without plan");
+            }
+        }
+    }
+
     // If this SubAgent was dispatched with a task, use dispatch prompt for first round
     let use_dispatch_prompt = task.is_some();
 
     // --- Phase 2: Navigation loop ---
+    /// Rounds without new evidence before triggering stuck warning.
+    const STUCK_THRESHOLD: u32 = 3;
+
     loop {
         // Budget check
         if state.remaining == 0 {
             info!(doc = ctx.doc_name, "Budget exhausted");
             break;
+        }
+
+        // Stuck detection: inject warning if no progress
+        if state.rounds_since_evidence >= STUCK_THRESHOLD {
+            let stuck_warning = format!(
+                "\n[Warning: No new evidence collected in {} rounds. \
+                 Consider using grep, findtree, or cd .. to explore a different path.]",
+                state.rounds_since_evidence
+            );
+            if !state.last_feedback.contains("[Warning:") {
+                state.last_feedback.push_str(&stuck_warning);
+            }
         }
 
         // Build prompt
@@ -107,6 +146,7 @@ pub async fn run(
                 max_rounds: state.max_rounds,
                 history: &state.history_text(),
                 visited_titles: &visited_titles,
+                plan: &state.plan,
             })
         };
 
@@ -122,11 +162,35 @@ pub async fn run(
         };
         llm_calls += 1;
 
-        // Parse command
+        // Parse command — detect parse failures (command confidence)
         let command = parse_command(&llm_output);
+        let llm_trimmed = llm_output.trim();
+        let is_parse_failure = matches!(command, Command::Ls)
+            && !llm_trimmed.starts_with("ls")
+            && !llm_trimmed.is_empty();
+
+        if is_parse_failure {
+            // Preserve LLM's raw output as feedback — it may contain reasoning
+            debug!(doc = ctx.doc_name, raw = %llm_trimmed, "Parse failure — preserving raw output");
+            let raw_preview = if llm_trimmed.len() > 200 {
+                format!("{}...", &llm_trimmed[..200])
+            } else {
+                llm_trimmed.to_string()
+            };
+            state.last_feedback = format!(
+                "Your output was not recognized as a valid command:\n\"{}\"\n\n\
+                 Please output exactly one command (ls, cd, cat, head, find, findtree, grep, wc, pwd, check, or done).",
+                raw_preview
+            );
+            // Don't consume a round for parse failures
+            state.push_history(format!("(unrecognized) → parse failure"));
+            continue;
+        }
+
         debug!(doc = ctx.doc_name, ?command, "Parsed command");
 
         let round_num = config.max_rounds - state.remaining + 1;
+        let evidence_before = state.evidence.len();
 
         // Execute command
         let step = execute_command(
@@ -139,6 +203,13 @@ pub async fn run(
             emitter,
         )
         .await;
+
+        // Update stuck counter
+        if state.evidence.len() > evidence_before {
+            state.rounds_since_evidence = 0;
+        } else {
+            state.rounds_since_evidence += 1;
+        }
 
         // Emit round event
         let cmd_str = format!("{:?}", command);
@@ -471,6 +542,31 @@ impl ToolResultLike {
     fn ok(feedback: String) -> Self {
         Self { feedback }
     }
+}
+
+/// Build the navigation planning prompt (Phase 1.5).
+///
+/// One-shot LLM call after bird's-eye view to generate a tentative navigation plan.
+fn build_plan_prompt(query: &str, task: Option<&str>, ls_output: &str, doc_name: &str) -> (String, String) {
+    let task_section = match task {
+        Some(t) => format!("\nYour specific task: {}", t),
+        None => String::new(),
+    };
+
+    let system = "You are a document navigation planner. Given a user question and the top-level \
+         document structure, output a brief navigation plan: which sections to visit and in what order. \
+         The plan should be 2-5 steps. Each step should be a specific action like \
+         \"cd to X, then cat Y\" or \"grep for Z in subtree\". \
+         Output only the plan, nothing else.".to_string();
+
+    let user = format!(
+        "Document: {doc_name}\n\
+         Top-level structure:\n{ls_output}\n\
+         User question: {query}{task_section}\n\n\
+         Navigation plan:"
+    );
+
+    (system, user)
 }
 
 /// Resolve visited NodeIds to their titles for prompt injection.
