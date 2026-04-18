@@ -55,6 +55,7 @@ mod retriever;
 pub mod stream;
 mod types;
 
+pub mod agent;
 pub mod cache;
 pub mod complexity;
 pub mod content;
