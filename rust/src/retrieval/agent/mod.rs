@@ -25,9 +25,9 @@ pub mod context;
 pub mod state;
 pub mod tools;
 
-// Sub-modules for loop implementations (Phase 3/4):
-// pub mod subagent;
-// pub mod orchestrator;
+// Sub-modules for loop implementations:
+pub mod subagent;
+pub mod orchestrator;
 pub mod prompts;
 
 pub use command::Command;
@@ -44,13 +44,20 @@ pub use state::{OrchestratorState, State};
 /// Based on the [`Scope`], it routes to either:
 /// - Direct SubAgent (single document)
 /// - Orchestrator + SubAgents (workspace/multi-doc)
-///
-/// Currently returns a placeholder. Full implementation in Phase 3/4.
 pub async fn retrieve(
-    _query: &str,
-    _scope: Scope<'_>,
-    _config: &Config,
+    query: &str,
+    scope: Scope<'_>,
+    config: &Config,
+    llm: &crate::llm::LlmClient,
 ) -> crate::error::Result<Output> {
-    // Phase 3/4: wire up subagent and orchestrator loops
-    todo!("agent retrieve — implement in Phase 3/4")
+    match scope {
+        Scope::Single(doc_ctx) => {
+            // User specified a document → SubAgent directly
+            subagent::run(query, None, &doc_ctx, config, llm).await
+        }
+        Scope::Workspace(ws_ctx) => {
+            // Multi-doc / workspace → Orchestrator
+            orchestrator::run(query, &ws_ctx, config, llm).await
+        }
+    }
 }
