@@ -2,65 +2,69 @@
  * Any CSS included here will be global. The classic template
  * bundles Infima by default. Infima is a CSS framework designed to
  * work well for content-centric websites.
+ *
+ * Color scheme: dark-first with amber accent.
  */
 
 :root {
-  --primary: #AF788B;
-  --primary-dark: #8B5E6F;
-  --primary-deeper: #6E4556;
-  --primary-light: #C9A0AE;
-  --primary-soft: rgba(175, 120, 139, 0.12);
-  --text: #1e293b;
-  --text-light: #5a4a52;
-  --bg: #ffffff;
-  --bg-secondary: #F5EBEE;
-  --bg-offset: #F6F8FA;
-  --card-bg: #FAF5F7;
-  --border: #E2E8F0;
+  --primary: #F59E0B;
+  --primary-dark: #D97706;
+  --primary-deeper: #B45309;
+  --primary-light: #FBBF24;
+  --primary-soft: rgba(245, 158, 11, 0.12);
+  --accent-tech: #5E6AD2;
+  --accent-green: #10B981;
+  --text: #1F2937;
+  --text-light: #6B7280;
+  --bg: #FFFFFF;
+  --bg-secondary: #F9FAFB;
+  --bg-offset: #F3F4F6;
+  --card-bg: #FFFFFF;
+  --border: #E5E7EB;
   --code-bg: #0F172A;
   --code-text: #E2E8F0;
-  --code-comment: #6272A4;
-  --code-keyword: #FF79C6;
+  --code-comment: #6B7280;
+  --code-keyword: #5E6AD2;
 
-  --ifm-color-primary: #AF788B;
-  --ifm-color-primary-dark: #8B5E6F;
-  --ifm-color-primary-darker: #7a5062;
-  --ifm-color-primary-darkest: #6E4556;
-  --ifm-color-primary-light: #C9A0AE;
-  --ifm-color-primary-lighter: #d3b0bb;
-  --ifm-color-primary-lightest: #e8d0d8;
+  --ifm-color-primary: #F59E0B;
+  --ifm-color-primary-dark: #D97706;
+  --ifm-color-primary-darker: #B45309;
+  --ifm-color-primary-darkest: #92400E;
+  --ifm-color-primary-light: #FBBF24;
+  --ifm-color-primary-lighter: #FCD34D;
+  --ifm-color-primary-lightest: #FDE68A;
   --ifm-code-font-size: 95%;
-  --docusaurus-highlighted-code-line-bg: rgba(175, 120, 139, 0.1);
+  --docusaurus-highlighted-code-line-bg: rgba(245, 158, 11, 0.08);
 }
 
 [data-theme='dark'] {
-  --text: #EEF2FF;
-  --text-light: #8B9AB0;
+  --text: #EDF2F8;
+  --text-light: #9AA4BF;
   --bg: #0A0C10;
-  --bg-secondary: #11151A;
-  --bg-offset: #11151A;
-  --card-bg: #11151A;
-  --border: #1E293B;
-  --primary-soft: rgba(201, 160, 174, 0.15);
-  --code-bg: #010409;
-  --code-text: #E2E8F0;
-  --code-comment: #6272A4;
-  --code-keyword: #FF79C6;
+  --bg-secondary: #111317;
+  --bg-offset: #111317;
+  --card-bg: #111317;
+  --border: #252A30;
+  --primary-soft: rgba(245, 158, 11, 0.12);
+  --code-bg: #0E1117;
+  --code-text: #CBD5E1;
+  --code-comment: #6B7280;
+  --code-keyword: #5E6AD2;
 
-  --ifm-color-primary: #C9A0AE;
-  --ifm-color-primary-dark: #b88d9d;
-  --ifm-color-primary-darker: #af7f91;
-  --ifm-color-primary-darkest: #96637A;
-  --ifm-color-primary-light: #d3b0bb;
-  --ifm-color-primary-lighter: #ddc0cb;
-  --ifm-color-primary-lightest: #ebd5dc;
-  --docusaurus-highlighted-code-line-bg: rgba(175, 120, 139, 0.2);
+  --ifm-color-primary: #FBBF24;
+  --ifm-color-primary-dark: #F59E0B;
+  --ifm-color-primary-darker: #D97706;
+  --ifm-color-primary-darkest: #B45309;
+  --ifm-color-primary-light: #FCD34D;
+  --ifm-color-primary-lighter: #FDE68A;
+  --ifm-color-primary-lightest: #FEF3C7;
+  --docusaurus-highlighted-code-line-bg: rgba(245, 158, 11, 0.15);
 }
 
 /* ===== Navbar ===== */
 .navbar {
   background-color: var(--bg) !important;
-  border-bottom: none !important;
+  border-bottom: 1px solid var(--border) !important;
   box-shadow: none !important;
   height: 68px !important;
   padding: 0 1.5rem !important;
@@ -68,7 +72,7 @@
 
 .navbar__inner {
   height: 68px !important;
-  max-width: 1200px;
+  max-width: 1280px;
   margin: 0 auto;
 }
 
@@ -80,7 +84,7 @@
   font-size: 1.4rem !important;
   font-weight: 700 !important;
   color: var(--text) !important;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.3px;
 }
 
 .navbar__logo {
@@ -96,16 +100,17 @@
 }
 
 .navbar__link:hover {
-  color: var(--primary-dark) !important;
+  color: var(--primary) !important;
 }
 
 .navbar__link--active {
-  color: var(--primary-dark) !important;
+  color: var(--primary) !important;
 }
 
 [data-theme='dark'] .navbar {
-  background-color: var(--bg) !important;
-  border-bottom: none !important;
+  background-color: rgba(10, 12, 16, 0.85) !important;
+  border-bottom-color: var(--border) !important;
+  backdrop-filter: blur(12px);
 }
 
 [data-theme='dark'] .navbar__title {
@@ -117,11 +122,11 @@
 }
 
 [data-theme='dark'] .navbar__link:hover {
-  color: var(--primary-light) !important;
+  color: var(--primary) !important;
 }
 
 [data-theme='dark'] .navbar__link--active {
-  color: var(--primary-light) !important;
+  color: var(--primary) !important;
 }
 
 /* ===== Footer ===== */

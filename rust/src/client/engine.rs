@@ -129,7 +129,7 @@ impl Engine {
     pub(crate) async fn with_components(
         config: Config,
         workspace: Workspace,
-        retriever: PipelineRetriever,
+        retriever: RetrieverClient,
         indexer: IndexerClient,
         events: EventEmitter,
         metrics_hub: Arc<MetricsHub>,
@@ -139,8 +139,8 @@ impl Engine {
         // Attach event emitter to indexer
         let indexer = indexer.with_events(events.clone());
 
-        // Create retriever client
-        let retriever = RetrieverClient::new(retriever).with_events(events.clone());
+        // Attach event emitter to retriever
+        let retriever = retriever.with_events(events.clone());
 
         // Create workspace client
         let workspace_client = WorkspaceClient::new(workspace)
@@ -501,7 +501,6 @@ impl Engine {
                 futures::stream::iter(doc_ids.into_iter())
                     .map(|doc_id| {
                         let engine = self.clone();
-                        let options = options.clone();
                         let query = query.clone();
                         let cancelled = Arc::clone(&cancelled);
                         async move {
@@ -509,19 +508,28 @@ impl Engine {
                                 return (doc_id, Err("Operation cancelled".to_string()));
                             }
 
-                            let (tree, reasoning_index) = match engine.get_structure(&doc_id).await
-                            {
-                                Ok(t) => t,
+                            let doc = match engine.workspace.load(&doc_id).await {
+                                Ok(Some(d)) => d,
+                                Ok(None) => {
+                                    let err = format!("Document not found: {}", doc_id);
+                                    return (doc_id, Err(err));
+                                }
                                 Err(e) => return (doc_id, Err(e.to_string())),
                             };
 
+                            let nav_index = doc.navigation_index
+                                .unwrap_or_default();
+                            let reasoning_index = doc.reasoning_index
+                                .unwrap_or_default();
+
                             match engine
                                 .retriever
-                                .query_with_reasoning_index(
-                                    &tree,
+                                .query_single(
+                                    &doc.tree,
+                                    &nav_index,
+                                    &reasoning_index,
                                     &query,
-                                    &options,
-                                    reasoning_index,
+                                    &doc_id,
                                 )
                                 .await
                             {
@@ -569,28 +577,17 @@ impl Engine {
     /// Query a document with streaming results.
     ///
     /// Returns a receiver that yields retrieval events
-    /// as the retrieval pipeline progresses through each stage.
+    /// as the retrieval agent progresses through navigation.
     ///
     /// Only supports single-document scope (via `with_doc_ids` with one ID).
+    ///
+    /// Note: Streaming is not yet fully implemented in the agent system.
+    /// Use `query()` for now and track progress via event handlers.
     pub async fn query_stream(&self, ctx: QueryContext) -> Result<RetrieveEventReceiver> {
-        let doc_id = match &ctx.scope {
-            QueryScope::Documents(ids) if ids.len() == 1 => ids[0].clone(),
-            _ => {
-                return Err(Error::Config(
-                    "query_stream requires a single doc_id via with_doc_ids".to_string(),
-                ));
-            }
-        };
-
-        let (tree, _reasoning_index) = self.get_structure(&doc_id).await?;
-        let options = ctx.to_retrieve_options(&self.config);
-
-        let rx = self
-            .retriever
-            .query_stream(&tree, &ctx.query, &options)
-            .await?;
-
-        Ok(rx)
+        // Streaming not yet implemented for agent-based retrieval
+        Err(Error::Config(
+            "query_stream is not yet implemented for the agent-based retrieval system. Use query() instead.".to_string(),
+        ))
     }
 
     // ============================================================

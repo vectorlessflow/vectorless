@@ -7,8 +7,8 @@
 //! [`Engine`] instances with sensible defaults.
 
 use crate::{
-    client::engine::Engine, config::Config, events::EventEmitter, metrics::MetricsHub,
-    retrieval::PipelineRetriever, storage::Workspace,
+    client::engine::Engine, client::retriever::RetrieverClient, config::Config, events::EventEmitter, metrics::MetricsHub,
+    storage::Workspace,
 };
 
 /// Builder for creating a [`Engine`] client.
@@ -195,17 +195,8 @@ impl EngineBuilder {
         // Indexer uses pool.index()
         let indexer = crate::client::indexer::IndexerClient::with_llm(pool.index().clone());
 
-        // Retriever uses pool.retrieval()
-        let retrieval_config = config.retrieval.clone();
-        let mut retriever =
-            PipelineRetriever::new().with_max_iterations(retrieval_config.search.max_iterations);
-        retriever = retriever.with_llm_client(pool.retrieval().clone());
-
-        // Configure content aggregator if enabled
-        if retrieval_config.content.enabled {
-            retriever =
-                retriever.with_content_config(retrieval_config.content.to_aggregator_config());
-        }
+        // Retriever uses pool.retrieval() via agent system
+        let retriever = RetrieverClient::new(pool.retrieval().clone());
 
         // Build engine
         let events = self.events.unwrap_or_default();

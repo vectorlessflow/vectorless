@@ -1,1 +1,0 @@
-Classify this query: {query}
