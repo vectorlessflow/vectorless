@@ -16,9 +16,10 @@ use tracing::{debug, info, warn};
 use crate::llm::LlmClient;
 use crate::retrieval::scoring::bm25::extract_keywords;
 
-use super::command::{parse_command, resolve_target_extended, Command};
+use super::command::{parse_command, Command};
 use super::config::{Config, DocContext, Evidence, Output, Step};
 use super::context::FindHit;
+use super::events::EventEmitter;
 use super::prompts::{
     answer_synthesis, check_sufficiency, parse_sufficiency_response, subagent_dispatch,
     subagent_navigation, SynthesisParams, NavigationParams,
@@ -40,7 +41,11 @@ pub async fn run(
     ctx: &DocContext<'_>,
     config: &Config,
     llm: &LlmClient,
+    emitter: &EventEmitter,
 ) -> crate::error::Result<Output> {
+    let is_multi_doc = task.is_some();
+    emitter.emit_started(query, is_multi_doc);
+
     info!(
         doc = ctx.doc_name,
         task = task.unwrap_or("(full query)"),
@@ -51,8 +56,13 @@ pub async fn run(
 
     // --- Phase 0: Fast path ---
     if config.enable_fast_path {
-        if let Some(output) = fast_path(query, ctx, config) {
+        if let Some(output) = fast_path(query, ctx, config, emitter) {
             info!(doc = ctx.doc_name, "Fast path hit");
+            emitter.emit_completed(
+                output.evidence.len(),
+                output.metrics.llm_calls,
+                output.metrics.rounds_used,
+            );
             return Ok(output);
         }
     }
@@ -111,8 +121,15 @@ pub async fn run(
         let command = parse_command(&llm_output);
         debug!(doc = ctx.doc_name, ?command, "Parsed command");
 
+        let round_num = config.max_rounds - state.remaining + 1;
+
         // Execute command
-        let step = execute_command(&command, ctx, &mut state, query, llm, &mut llm_calls).await;
+        let step = execute_command(&command, ctx, &mut state, query, llm, &mut llm_calls, emitter).await;
+
+        // Emit round event
+        let cmd_str = format!("{:?}", command);
+        let success = !matches!(step, Step::ForceDone(_));
+        emitter.emit_round(round_num, &cmd_str, success);
 
         // Check termination
         match step {
@@ -145,6 +162,7 @@ pub async fn run(
             Ok(answer) => {
                 output.answer = answer.trim().to_string();
                 output.metrics.llm_calls += 1;
+                emitter.emit_synthesis(output.answer.len());
             }
             Err(e) => {
                 warn!(doc = ctx.doc_name, error = %e, "Synthesis LLM call failed");
@@ -155,6 +173,12 @@ pub async fn run(
         // No synthesis — just concatenate evidence
         output.answer = format_evidence_as_answer(&output.evidence);
     }
+
+    emitter.emit_completed(
+        output.evidence.len(),
+        output.metrics.llm_calls,
+        output.metrics.rounds_used,
+    );
 
     info!(
         doc = ctx.doc_name,
@@ -168,7 +192,7 @@ pub async fn run(
 }
 
 /// Try the fast path: extract keywords → look up in ReasoningIndex → return if confident.
-fn fast_path(query: &str, ctx: &DocContext<'_>, config: &Config) -> Option<Output> {
+fn fast_path(query: &str, ctx: &DocContext<'_>, config: &Config, emitter: &EventEmitter) -> Option<Output> {
     let keywords = extract_keywords(query);
     if keywords.is_empty() {
         return None;
@@ -213,6 +237,8 @@ fn fast_path(query: &str, ctx: &DocContext<'_>, config: &Config) -> Option<Outpu
         "Fast path hit"
     );
 
+    emitter.emit_fast_path(&best_entry.0, &title, best_entry.1.weight);
+
     Some(Output::fast_path(
         content.clone(),
         vec![Evidence {
@@ -234,6 +260,7 @@ async fn execute_command(
     query: &str,
     llm: &LlmClient,
     llm_calls: &mut u32,
+    emitter: &EventEmitter,
 ) -> Step {
     match command {
         Command::Ls => {
@@ -255,8 +282,20 @@ async fn execute_command(
         }
 
         Command::Cat { target } => {
+            let evidence_before = state.evidence.len();
             let result = tools::cat(target, ctx, state);
             state.last_feedback = result.feedback;
+            // Emit evidence event if new evidence was added
+            if state.evidence.len() > evidence_before {
+                if let Some(ev) = state.evidence.last() {
+                    emitter.emit_evidence(
+                        &ev.node_title,
+                        &ev.source_path,
+                        ev.content.len(),
+                        state.evidence.len(),
+                    );
+                }
+            }
             Step::Continue
         }
 
@@ -286,6 +325,7 @@ async fn execute_command(
                 Ok(response) => {
                     *llm_calls += 1;
                     let sufficient = parse_sufficiency_response(&response);
+                    emitter.emit_sufficiency(sufficient, state.evidence.len());
                     if sufficient {
                         state.last_feedback =
                             "Evidence is sufficient. Use done to finish.".to_string();
@@ -387,9 +427,10 @@ mod tests {
             doc_name: "test",
         };
         let config = Config::default();
+        let emitter = EventEmitter::noop();
 
         // Query with only stopwords won't extract keywords
-        let result = fast_path("the a an", &ctx, &config);
+        let result = fast_path("the a an", &ctx, &config, &emitter);
         assert!(result.is_none());
     }
 
@@ -405,8 +446,9 @@ mod tests {
             doc_name: "test",
         };
         let config = Config::default();
+        let emitter = EventEmitter::noop();
 
-        let result = fast_path("revenue finance", &ctx, &config);
+        let result = fast_path("revenue finance", &ctx, &config, &emitter);
         assert!(result.is_none());
     }
 }

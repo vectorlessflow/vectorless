@@ -579,15 +579,173 @@ impl Engine {
     /// Returns a receiver that yields retrieval events
     /// as the retrieval agent progresses through navigation.
     ///
-    /// Only supports single-document scope (via `with_doc_ids` with one ID).
-    ///
-    /// Note: Streaming is not yet fully implemented in the agent system.
-    /// Use `query()` for now and track progress via event handlers.
+    /// Supports single-document and multi-document scope.
+    /// Events are translated from the agent's internal [`AgentEvent`](retrieval::agent::AgentEvent)
+    /// into the public [`RetrieveEvent`] stream.
     pub async fn query_stream(&self, ctx: QueryContext) -> Result<RetrieveEventReceiver> {
-        // Streaming not yet implemented for agent-based retrieval
-        Err(Error::Config(
-            "query_stream is not yet implemented for the agent-based retrieval system. Use query() instead.".to_string(),
-        ))
+        self.check_cancel()?;
+        let _guard = self.inc_active();
+
+        let doc_ids = self.resolve_scope(&ctx.scope).await?;
+        let query = ctx.query.clone();
+
+        // Load all requested documents
+        let mut docs = Vec::new();
+        for doc_id in &doc_ids {
+            let doc = match self.workspace.load(doc_id).await? {
+                Some(d) => d,
+                None => return Err(Error::Config(format!("Document not found: {}", doc_id))),
+            };
+            docs.push((doc_id.clone(), doc));
+        }
+
+        // Create agent event channel
+        let (agent_tx, mut agent_rx) = crate::retrieval::agent::events::channel(
+            crate::retrieval::agent::events::DEFAULT_AGENT_EVENT_BOUND,
+        );
+        let (retrieve_tx, retrieve_rx) = crate::retrieval::stream::channel(
+            crate::retrieval::stream::DEFAULT_STREAM_BOUND,
+        );
+
+        // Spawn a task that translates AgentEvents → RetrieveEvents
+        let query_for_relay = query.clone();
+        tokio::spawn(async move {
+            use crate::retrieval::agent::AgentEvent;
+            use crate::retrieval::stream::RetrieveEvent;
+
+            while let Some(event) = agent_rx.recv().await {
+                let translated = match event {
+                    AgentEvent::Started { query, multi_doc } => RetrieveEvent::Started {
+                        query,
+                        strategy: if multi_doc {
+                            "orchestrator".to_string()
+                        } else {
+                            "subagent".to_string()
+                        },
+                    },
+                    AgentEvent::FastPathHit { keyword, node_title, .. } => {
+                        RetrieveEvent::ContentFound {
+                            node_id: String::new(),
+                            title: node_title,
+                            preview: keyword,
+                            score: 1.0,
+                        }
+                    }
+                    AgentEvent::RoundCompleted { round, command, success } => {
+                        RetrieveEvent::StageCompleted {
+                            stage: format!("round_{}_{}", round, command),
+                            elapsed_ms: 0,
+                        }
+                    }
+                    AgentEvent::EvidenceCollected { node_title, source_path, content_len, .. } => {
+                        RetrieveEvent::ContentFound {
+                            node_id: source_path,
+                            title: node_title,
+                            preview: String::new(),
+                            score: if content_len > 0 { 0.8 } else { 0.0 },
+                        }
+                    }
+                    AgentEvent::SufficiencyCheck { sufficient, evidence_count } => {
+                        RetrieveEvent::SufficiencyCheck {
+                            level: if sufficient {
+                                crate::retrieval::types::SufficiencyLevel::Sufficient
+                            } else {
+                                crate::retrieval::types::SufficiencyLevel::Insufficient
+                            },
+                            tokens: evidence_count,
+                        }
+                    }
+                    AgentEvent::SubAgentDispatched { doc_idx, doc_name, .. } => {
+                        RetrieveEvent::StageCompleted {
+                            stage: format!("dispatch_{}_{}", doc_idx, doc_name),
+                            elapsed_ms: 0,
+                        }
+                    }
+                    AgentEvent::SubAgentCompleted { doc_idx, evidence_count, success } => {
+                        RetrieveEvent::StageCompleted {
+                            stage: format!("subagent_{}_done_{}_{}", doc_idx, evidence_count, success),
+                            elapsed_ms: 0,
+                        }
+                    }
+                    AgentEvent::SynthesisCompleted { answer_len } => {
+                        RetrieveEvent::StageCompleted {
+                            stage: format!("synthesis_{}chars", answer_len),
+                            elapsed_ms: 0,
+                        }
+                    }
+                    AgentEvent::Completed { evidence_count, llm_calls, rounds_used } => {
+                        let response = crate::retrieval::types::RetrieveResponse {
+                            query: query_for_relay.clone(),
+                            confidence: if evidence_count > 0 { 0.8 } else { 0.0 },
+                            evidence_count,
+                            llm_calls,
+                            rounds_used,
+                            answer: String::new(),
+                        };
+                        let _ = retrieve_tx.send(RetrieveEvent::Completed { response }).await;
+                        break; // Completed is terminal
+                    }
+                    AgentEvent::Error { message } => {
+                        let _ = retrieve_tx.send(RetrieveEvent::Error { message }).await;
+                        break; // Error is terminal
+                    }
+                };
+
+                // For non-terminal events, send the translated event
+                if !matches!(
+                    translated,
+                    RetrieveEvent::Completed { .. } | RetrieveEvent::Error { .. }
+                ) {
+                    if retrieve_tx.send(translated).await.is_err() {
+                        break; // Receiver dropped
+                    }
+                }
+            }
+        });
+
+        // Run the agent in a background task
+        let config = self.retriever.config().clone();
+        let llm = self.retriever.llm().clone();
+        let emitter = crate::retrieval::agent::EventEmitter::new(agent_tx);
+
+        tokio::spawn(async move {
+            // Prepare owned indices (fill defaults for missing)
+            let owned_docs: Vec<(String, crate::storage::PersistedDocument, crate::document::NavigationIndex, crate::document::ReasoningIndex)> = docs
+                .into_iter()
+                .map(|(id, doc)| {
+                    let nav = doc.navigation_index.unwrap_or_default();
+                    let ridx = doc.reasoning_index.unwrap_or_default();
+                    (id, doc, nav, ridx)
+                })
+                .collect();
+
+            if owned_docs.len() == 1 {
+                let (doc_id, doc, nav_index, reasoning_index) = owned_docs.into_iter().next().unwrap();
+                let doc_ctx = crate::retrieval::agent::DocContext {
+                    tree: &doc.tree,
+                    nav_index: &nav_index,
+                    reasoning_index: &reasoning_index,
+                    doc_name: &doc_id,
+                };
+                let scope = crate::retrieval::agent::Scope::Single(doc_ctx);
+                let _ = crate::retrieval::agent::retrieve(&query, scope, &config, &llm, &emitter).await;
+            } else {
+                let doc_contexts: Vec<crate::retrieval::agent::DocContext> = owned_docs
+                    .iter()
+                    .map(|(id, doc, nav, ridx)| crate::retrieval::agent::DocContext {
+                        tree: &doc.tree,
+                        nav_index: nav,
+                        reasoning_index: ridx,
+                        doc_name: id.as_str(),
+                    })
+                    .collect();
+                let ws = crate::retrieval::agent::WorkspaceContext::new(doc_contexts);
+                let scope = crate::retrieval::agent::Scope::Workspace(ws);
+                let _ = crate::retrieval::agent::retrieve(&query, scope, &config, &llm, &emitter).await;
+            }
+        });
+
+        Ok(retrieve_rx)
     }
 
     // ============================================================

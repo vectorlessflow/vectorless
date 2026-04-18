@@ -10,13 +10,14 @@
 //! 4. Integrate: merge evidence, check cross-doc sufficiency, optionally re-dispatch
 //! 5. Synthesis: LLM generates final cross-doc answer
 
-use tracing::{debug, info, warn};
+use tracing::{info, warn};
 
 use crate::llm::LlmClient;
 use crate::retrieval::scoring::bm25::extract_keywords;
 
 use super::config::{Config, Output, WorkspaceContext};
 use super::context::FindHit;
+use super::events::EventEmitter;
 use super::prompts::{
     answer_synthesis, check_sufficiency, orchestrator_analysis, orchestrator_integration,
     parse_dispatch_plan, parse_sufficiency_response, DispatchEntry, OrchestratorAnalysisParams,
@@ -35,16 +36,23 @@ pub async fn run(
     ws: &WorkspaceContext<'_>,
     config: &Config,
     llm: &LlmClient,
+    emitter: &EventEmitter,
 ) -> crate::error::Result<Output> {
     info!(docs = ws.doc_count(), "Orchestrator starting");
+    emitter.emit_started(query, true);
 
     let mut state = OrchestratorState::new();
     let mut orch_llm_calls: u32 = 0;
 
     // --- Phase 0: Fast path ---
     if config.enable_fast_path {
-        if let Some(output) = fast_path(query, ws, config) {
+        if let Some(output) = fast_path(query, ws, config, emitter) {
             info!("Orchestrator fast path hit");
+            emitter.emit_completed(
+                output.evidence.len(),
+                output.metrics.llm_calls,
+                output.metrics.rounds_used,
+            );
             return Ok(output);
         }
     }
@@ -70,8 +78,9 @@ pub async fn run(
         Ok(output) => output,
         Err(e) => {
             warn!(error = %e, "Orchestrator analysis LLM call failed");
+            emitter.emit_error(&e.to_string());
             // Fallback: dispatch to all documents with the original query
-            return fallback_dispatch_all(query, ws, config, llm).await;
+            return fallback_dispatch_all(query, ws, config, llm, emitter).await;
         }
     };
     orch_llm_calls += 1;
@@ -83,12 +92,14 @@ pub async fn run(
             info!("Orchestrator: analysis indicates already answered");
             let mut output = Output::empty();
             output.answer = "Already answered by cross-document search.".to_string();
+            emitter.emit_completed(0, orch_llm_calls, 0);
             return Ok(output);
         }
     };
 
     if dispatches.is_empty() {
         info!("Orchestrator: no relevant documents found");
+        emitter.emit_completed(0, orch_llm_calls, 0);
         return Ok(Output::empty());
     }
 
@@ -101,11 +112,12 @@ pub async fn run(
     state.analyze_done = true;
 
     // --- Phase 2: Dispatch ---
-    dispatch_and_collect(query, &dispatches, ws, config, llm, &mut state).await;
+    dispatch_and_collect(query, &dispatches, ws, config, llm, &mut state, emitter).await;
 
     // --- Phase 3: Integrate ---
     if state.all_evidence.is_empty() {
         info!("Orchestrator: no evidence collected from any SubAgent");
+        emitter.emit_completed(0, orch_llm_calls, 0);
         return Ok(state.into_output(String::new()));
     }
 
@@ -115,6 +127,7 @@ pub async fn run(
         let evidence_summary = format_evidence_summary(&state.all_evidence);
         let sufficient = check_cross_doc_sufficiency(query, &evidence_summary, llm).await;
         orch_llm_calls += 1;
+        emitter.emit_sufficiency(sufficient, state.all_evidence.len());
 
         if sufficient {
             break;
@@ -136,7 +149,7 @@ pub async fn run(
                 .collect();
 
             if !undispatched.is_empty() {
-                dispatch_and_collect(query, &undispatched, ws, config, llm, &mut state).await;
+                dispatch_and_collect(query, &undispatched, ws, config, llm, &mut state, emitter).await;
             } else {
                 break; // no more docs to dispatch
             }
@@ -178,6 +191,7 @@ pub async fn run(
         match llm.complete(&sys, &usr).await {
             Ok(a) => {
                 orch_llm_calls += 1;
+                emitter.emit_synthesis(a.len());
                 a.trim().to_string()
             }
             Err(e) => {
@@ -192,6 +206,12 @@ pub async fn run(
     let mut output = state.into_output(answer);
     output.metrics.llm_calls += orch_llm_calls;
 
+    emitter.emit_completed(
+        output.evidence.len(),
+        output.metrics.llm_calls,
+        output.metrics.rounds_used,
+    );
+
     info!(
         evidence = output.evidence.len(),
         llm_calls = output.metrics.llm_calls,
@@ -202,7 +222,7 @@ pub async fn run(
 }
 
 /// Try fast path across all documents.
-fn fast_path(query: &str, ws: &WorkspaceContext<'_>, config: &Config) -> Option<Output> {
+fn fast_path(query: &str, ws: &WorkspaceContext<'_>, config: &Config, emitter: &EventEmitter) -> Option<Output> {
     let keywords = extract_keywords(query);
     if keywords.is_empty() {
         return None;
@@ -239,6 +259,8 @@ fn fast_path(query: &str, ws: &WorkspaceContext<'_>, config: &Config) -> Option<
 
     info!(doc_idx, node = %title, weight = best_entry.weight, "Cross-doc fast path hit");
 
+    emitter.emit_fast_path(&keywords.join(","), &title, best_entry.weight);
+
     Some(Output::fast_path(
         content.clone(),
         vec![super::config::Evidence {
@@ -258,6 +280,7 @@ async fn dispatch_and_collect(
     config: &Config,
     llm: &LlmClient,
     state: &mut OrchestratorState,
+    emitter: &EventEmitter,
 ) {
     // Build futures for each dispatch
     let futures: Vec<_> = dispatches
@@ -276,13 +299,19 @@ async fn dispatch_and_collect(
             let query = query.to_string();
             let task = dispatch.task.clone();
             let config = config.for_subagent();
+            let doc_idx = dispatch.doc_idx;
+            let doc_name = doc.doc_name.to_string();
 
             // Clone LlmClient for each sub-agent
             let llm = llm.clone();
 
+            // Each SubAgent gets a noop emitter (orchestrator emits its own events)
+            let sub_emitter = EventEmitter::noop();
+
             Some(async move {
-                let result = subagent::run(&query, Some(&task), doc, &config, &llm).await;
-                (dispatch.doc_idx, result)
+                emitter.emit_subagent_dispatched(doc_idx, &doc_name, &task);
+                let result = subagent::run(&query, Some(&task), doc, &config, &llm, &sub_emitter).await;
+                (doc_idx, result)
             })
         })
         .collect();
@@ -298,10 +327,12 @@ async fn dispatch_and_collect(
                     evidence = output.evidence.len(),
                     "SubAgent completed"
                 );
+                emitter.emit_subagent_completed(doc_idx, output.evidence.len(), true);
                 state.collect_result(output);
             }
             Err(e) => {
                 warn!(doc_idx, error = %e, "SubAgent failed");
+                emitter.emit_subagent_completed(doc_idx, 0, false);
             }
         }
     }
@@ -390,6 +421,7 @@ async fn fallback_dispatch_all(
     ws: &WorkspaceContext<'_>,
     config: &Config,
     llm: &LlmClient,
+    emitter: &EventEmitter,
 ) -> crate::error::Result<Output> {
     warn!("Falling back to dispatch-all");
 
@@ -402,9 +434,10 @@ async fn fallback_dispatch_all(
         .collect();
 
     let mut state = OrchestratorState::new();
-    dispatch_and_collect(query, &dispatches, ws, config, llm, &mut state).await;
+    dispatch_and_collect(query, &dispatches, ws, config, llm, &mut state, emitter).await;
 
     if state.all_evidence.is_empty() {
+        emitter.emit_completed(0, 0, 0);
         return Ok(state.into_output(String::new()));
     }
 
@@ -417,11 +450,20 @@ async fn fallback_dispatch_all(
     });
 
     let answer = match llm.complete(&sys, &usr).await {
-        Ok(a) => a.trim().to_string(),
+        Ok(a) => {
+            emitter.emit_synthesis(a.len());
+            a.trim().to_string()
+        }
         Err(_) => format_evidence_as_answer(&state.all_evidence),
     };
 
-    Ok(state.into_output(answer))
+    let output = state.into_output(answer);
+    emitter.emit_completed(
+        output.evidence.len(),
+        output.metrics.llm_calls,
+        output.metrics.rounds_used,
+    );
+    Ok(output)
 }
 
 /// Format evidence as a simple answer (fallback).

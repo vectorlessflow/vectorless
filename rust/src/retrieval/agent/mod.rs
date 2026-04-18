@@ -22,6 +22,7 @@
 pub mod command;
 pub mod config;
 pub mod context;
+pub mod events;
 pub mod state;
 pub mod tools;
 
@@ -35,6 +36,7 @@ pub use config::{
     Config, DocContext, Evidence, Metrics, Output, Scope, Step, WorkspaceContext,
 };
 pub use context::FindHit;
+pub use events::{AgentEvent, AgentEventReceiver, EventEmitter};
 pub use prompts::{DispatchEntry, parse_dispatch_plan, parse_sufficiency_response};
 pub use state::{OrchestratorState, State};
 
@@ -49,15 +51,16 @@ pub async fn retrieve(
     scope: Scope<'_>,
     config: &Config,
     llm: &crate::llm::LlmClient,
+    emitter: &EventEmitter,
 ) -> crate::error::Result<Output> {
     match scope {
         Scope::Single(doc_ctx) => {
             // User specified a document → SubAgent directly
-            subagent::run(query, None, &doc_ctx, config, llm).await
+            subagent::run(query, None, &doc_ctx, config, llm, emitter).await
         }
         Scope::Workspace(ws_ctx) => {
             // Multi-doc / workspace → Orchestrator
-            orchestrator::run(query, &ws_ctx, config, llm).await
+            orchestrator::run(query, &ws_ctx, config, llm, emitter).await
         }
     }
 }

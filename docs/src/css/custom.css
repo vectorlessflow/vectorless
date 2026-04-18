@@ -64,7 +64,7 @@
 /* ===== Navbar ===== */
 .navbar {
   background-color: var(--bg) !important;
-  border-bottom: 1px solid var(--border) !important;
+  border-bottom: none !important;
   box-shadow: none !important;
   height: 68px !important;
   padding: 0 1.5rem !important;

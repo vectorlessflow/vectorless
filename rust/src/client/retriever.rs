@@ -13,7 +13,7 @@ use crate::document::{DocumentTree, NavigationIndex, ReasoningIndex};
 use crate::error::{Error, Result};
 use crate::events::{EventEmitter, QueryEvent};
 use crate::llm::LlmClient;
-use crate::retrieval::agent;
+use crate::retrieval::agent::{self, events::EventEmitter as AgentEventEmitter};
 
 /// Document retrieval client.
 ///
@@ -51,6 +51,16 @@ impl RetrieverClient {
         self
     }
 
+    /// Get a reference to the agent configuration.
+    pub fn config(&self) -> &agent::Config {
+        &self.config
+    }
+
+    /// Get a reference to the LLM client.
+    pub fn llm(&self) -> &LlmClient {
+        &self.llm
+    }
+
     /// Query a single document tree.
     #[tracing::instrument(skip_all, fields(question = %question))]
     pub async fn query_single(
@@ -75,7 +85,8 @@ impl RetrieverClient {
         };
 
         let scope = agent::Scope::Single(doc_ctx);
-        let output = agent::retrieve(question, scope, &self.config, &self.llm)
+        let emitter = AgentEventEmitter::noop();
+        let output = agent::retrieve(question, scope, &self.config, &self.llm, &emitter)
             .await
             .map_err(|e| Error::Retrieval(e.to_string()))?;
 
@@ -114,8 +125,9 @@ impl RetrieverClient {
 
         let ws = agent::WorkspaceContext::new(doc_contexts);
         let scope = agent::Scope::Workspace(ws);
+        let emitter = AgentEventEmitter::noop();
 
-        let output = agent::retrieve(question, scope, &self.config, &self.llm)
+        let output = agent::retrieve(question, scope, &self.config, &self.llm, &emitter)
             .await
             .map_err(|e| Error::Retrieval(e.to_string()))?;
 

@@ -10,6 +10,7 @@
 .navbarBrand {
   display: flex;
   align-items: center;
+  gap: 10px;
   flex-shrink: 0;
   margin-right: 24rem;
 }
@@ -37,6 +38,7 @@
   font-family: 'Inter', 'Libre Franklin', -apple-system, BlinkMacSystemFont, sans-serif;
   letter-spacing: -0.02em;
   color: #111827;
+  line-height: 1;
 }
 
 [data-theme='dark'] .logo {
@@ -55,9 +57,14 @@
 .navbarCenter :global(.navbar__link) {
   font-size: 0.875rem;
   font-weight: 400;
+  color: #374151;
   padding: 0;
   text-decoration: none;
   transition: opacity 0.15s ease;
+}
+
+[data-theme='dark'] .navbarCenter :global(.navbar__link) {
+  color: #C8D0E0;
 }
 
 .navbarCenter :global(.navbar__link:hover) {
