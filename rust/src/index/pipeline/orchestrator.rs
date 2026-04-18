@@ -612,11 +612,11 @@ impl PipelineOrchestrator {
                 // All futures are !Send (Box<dyn IndexStage>), but join_all
                 // works fine on the same thread.
 
-                let reader_futs: Vec<std::pin::Pin<Box<dyn std::future::Future<Output = (ParallelEntry, std::result::Result<StageResult, crate::error::Error>)>>>> = reader_entries.into_iter().map(|mut entry| {
+                let reader_futs: Vec<std::pin::Pin<Box<dyn std::future::Future<Output = (ParallelEntry, std::result::Result<StageResult, crate::error::Error>)> + Send>>> = reader_entries.into_iter().map(|mut entry| {
                     Box::pin(async move {
                         let res = Self::execute_stage_with_policy(&mut entry.stage, entry.ctx.as_mut().unwrap()).await;
                         (entry, res)
-                    }) as std::pin::Pin<Box<dyn std::future::Future<Output = _>>>
+                    }) as std::pin::Pin<Box<dyn std::future::Future<Output = _> + Send>>
                 }).collect();
 
                 // If there's a tree writer, run it concurrently with readers.
