@@ -8,8 +8,12 @@ use serde::{Deserialize, Serialize};
 /// Agent configuration.
 #[derive(Debug, Clone)]
 pub struct Config {
-    /// Maximum navigation rounds per SubAgent loop.
+    /// Maximum navigation rounds per SubAgent loop (ls/cd/cat/grep/head/find etc.).
+    /// `check` does NOT count against this budget.
     pub max_rounds: u32,
+    /// Hard cap on total LLM calls per SubAgent (planning + nav + check + synthesis).
+    /// Prevents runaway costs regardless of max_rounds. 0 = no limit.
+    pub max_llm_calls: u32,
     /// Enable fast-path (keyword lookup before full navigation).
     pub enable_fast_path: bool,
     /// Enable answer synthesis after evidence collection.
@@ -22,6 +26,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             max_rounds: 8,
+            max_llm_calls: 15,
             enable_fast_path: true,
             enable_synthesis: true,
             fast_path_threshold: 0.85,
@@ -39,6 +44,7 @@ impl Config {
     pub fn for_subagent(&self) -> Self {
         Self {
             max_rounds: self.max_rounds,
+            max_llm_calls: self.max_llm_calls,
             enable_fast_path: self.enable_fast_path,
             enable_synthesis: true,
             fast_path_threshold: self.fast_path_threshold,
@@ -68,6 +74,7 @@ impl Output {
                 llm_calls: 0,
                 nodes_visited: 0,
                 fast_path_hit: true,
+                budget_exhausted: false,
             },
         }
     }
@@ -98,14 +105,16 @@ pub struct Evidence {
 /// Agent execution metrics.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Metrics {
-    /// Number of navigation rounds used.
+    /// Number of navigation rounds used (ls/cd/cat/grep etc., excludes check).
     pub rounds_used: u32,
-    /// Number of LLM calls made.
+    /// Number of LLM calls made (includes planning + nav + check + synthesis).
     pub llm_calls: u32,
     /// Number of distinct nodes visited.
     pub nodes_visited: usize,
     /// Whether the fast-path was hit.
     pub fast_path_hit: bool,
+    /// Whether the LLM call budget was exhausted.
+    pub budget_exhausted: bool,
 }
 
 /// Step result from the navigation loop.

@@ -48,10 +48,20 @@ pub async fn run(
     info!(
         doc = ctx.doc_name,
         task = task.unwrap_or("(full query)"),
+        max_rounds = config.max_rounds,
+        max_llm_calls = config.max_llm_calls,
         "SubAgent starting"
     );
 
     let mut llm_calls: u32 = 0;
+    let max_llm = config.max_llm_calls;
+
+    /// Helper: check if we've hit the LLM call budget.
+    macro_rules! llm_budget_exhausted {
+        () => {
+            max_llm > 0 && llm_calls >= max_llm
+        };
+    }
 
     // --- Phase 0: Fast path ---
     if config.enable_fast_path {
@@ -76,7 +86,7 @@ pub async fn run(
     // --- Phase 1.5: Navigation planning ---
     // One LLM call to generate a tentative navigation plan from the bird's-eye view.
     // The plan is non-binding guidance injected into subsequent prompts.
-    if state.remaining > 0 {
+    if state.remaining > 0 && !llm_budget_exhausted!() {
         let plan_prompt = build_plan_prompt(query, task, &state.last_feedback, ctx.doc_name);
         match llm.complete(&plan_prompt.0, &plan_prompt.1).await {
             Ok(plan_output) => {
@@ -105,9 +115,20 @@ pub async fn run(
     const STUCK_THRESHOLD: u32 = 3;
 
     loop {
-        // Budget check
+        // Navigation budget check
         if state.remaining == 0 {
-            info!(doc = ctx.doc_name, "Budget exhausted");
+            info!(doc = ctx.doc_name, "Navigation budget exhausted");
+            break;
+        }
+
+        // Hard LLM call budget check
+        if llm_budget_exhausted!() {
+            info!(
+                doc = ctx.doc_name,
+                llm_calls,
+                max_llm,
+                "LLM call budget exhausted"
+            );
             break;
         }
 
@@ -120,6 +141,17 @@ pub async fn run(
             );
             if !state.last_feedback.contains("[Warning:") {
                 state.last_feedback.push_str(&stuck_warning);
+            }
+        }
+
+        // Mid-budget checkpoint: remind LLM to check if it hasn't yet
+        let half_budget = state.max_rounds / 2;
+        let rounds_used = state.max_rounds - state.remaining;
+        if rounds_used == half_budget && !state.check_called && state.remaining > 1 {
+            if !state.last_feedback.contains("[Hint:") {
+                state.last_feedback.push_str(
+                    "\n[Hint: You've used half your budget. Consider running `check` to evaluate if collected evidence is sufficient.]",
+                );
             }
         }
 
@@ -155,6 +187,7 @@ pub async fn run(
             Ok(output) => output,
             Err(e) => {
                 warn!(doc = ctx.doc_name, error = %e, "LLM call failed in nav loop");
+                llm_calls += 1;
                 state.dec_round();
                 state.last_feedback = "LLM error occurred, retrying.".to_string();
                 continue;
@@ -182,7 +215,7 @@ pub async fn run(
                  Please output exactly one command (ls, cd, cat, head, find, findtree, grep, wc, pwd, check, or done).",
                 raw_preview
             );
-            // Don't consume a round for parse failures
+            // Don't consume a navigation round for parse failures (but LLM call already counted above)
             state.push_history(format!("(unrecognized) → parse failure"));
             continue;
         }
@@ -191,6 +224,7 @@ pub async fn run(
 
         let round_num = config.max_rounds - state.remaining + 1;
         let evidence_before = state.evidence.len();
+        let is_check = matches!(command, Command::Check);
 
         // Execute command
         let step = execute_command(
@@ -204,11 +238,14 @@ pub async fn run(
         )
         .await;
 
-        // Update stuck counter
-        if state.evidence.len() > evidence_before {
-            state.rounds_since_evidence = 0;
-        } else {
-            state.rounds_since_evidence += 1;
+        // Only consume navigation budget for non-check commands
+        // (check is a verification action, not navigation — it shouldn't compete for nav budget)
+        if !is_check {
+            state.rounds_since_evidence = if state.evidence.len() > evidence_before {
+                0
+            } else {
+                state.rounds_since_evidence + 1
+            };
         }
 
         // Emit round event
@@ -239,14 +276,21 @@ pub async fn run(
                 break;
             }
             Step::Continue => {
-                state.dec_round();
+                // Only consume navigation budget for non-check commands.
+                // check is verification, not exploration — it shouldn't compete
+                // with ls/cd/cat for the navigation budget.
+                if !is_check {
+                    state.dec_round();
+                }
             }
         }
     }
 
+    let budget_exhausted = state.remaining == 0 || llm_budget_exhausted!();
+
     // --- Phase 3: Answer synthesis ---
     let missing_info = state.missing_info.clone();
-    let mut output = state.into_output(llm_calls);
+    let mut output = state.into_output_with_budget(llm_calls, budget_exhausted);
 
     if config.enable_synthesis && !output.evidence.is_empty() {
         debug!(
@@ -466,6 +510,7 @@ async fn execute_command(
             match llm.complete(&system, &user).await {
                 Ok(response) => {
                     *llm_calls += 1;
+                    state.check_called = true;
                     let sufficient = parse_sufficiency_response(&response);
                     info!(
                         doc = ctx.doc_name,
@@ -488,6 +533,8 @@ async fn execute_command(
                             .trim_start_matches(|c: char| c == '-' || c == ' ');
                         if !reason.is_empty() {
                             state.missing_info = reason.to_string();
+                            // Plan failed — clear it so react decisions take over
+                            state.plan.clear();
                         }
                         state.last_feedback =
                             format!("Evidence not yet sufficient: {}", response.trim());

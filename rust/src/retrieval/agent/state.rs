@@ -43,6 +43,9 @@ pub struct State {
     /// Number of consecutive rounds without new evidence.
     /// Used for stuck detection.
     pub rounds_since_evidence: u32,
+    /// Whether the `check` command has been called at least once.
+    /// Used to trigger mid-budget checkpoint reminder.
+    pub check_called: bool,
 }
 
 /// Maximum number of history entries to keep for prompt injection.
@@ -63,6 +66,7 @@ impl State {
             history: Vec::new(),
             plan: String::new(),
             rounds_since_evidence: 0,
+            check_called: false,
         }
     }
 
@@ -148,6 +152,11 @@ impl State {
 
     /// Convert this state into an Output (consuming the state).
     pub fn into_output(self, llm_calls: u32) -> Output {
+        self.into_output_with_budget(llm_calls, false)
+    }
+
+    /// Convert this state into an Output (consuming the state), with budget flag.
+    pub fn into_output_with_budget(self, llm_calls: u32, budget_exhausted: bool) -> Output {
         Output {
             answer: String::new(), // filled by synthesis
             evidence: self.evidence,
@@ -156,6 +165,7 @@ impl State {
                 llm_calls,
                 nodes_visited: self.visited.len(),
                 fast_path_hit: false,
+                budget_exhausted,
             },
         }
     }
@@ -221,6 +231,7 @@ impl OrchestratorState {
                     .map(|r| r.metrics.nodes_visited)
                     .sum(),
                 fast_path_hit: false,
+                budget_exhausted: false,
             },
         }
     }
