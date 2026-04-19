@@ -64,20 +64,33 @@ pub async fn run(
     }
 
     // --- Phase 0: Fast path ---
+    // Preserve ReasoningIndex hits from fast_path for planning enrichment.
+    let mut preserved_hits: Vec<FindHit> = Vec::new();
     if config.enable_fast_path {
-        if let Some(output) = fast_path(query, ctx, config, emitter) {
-            info!(doc = ctx.doc_name, "Fast path hit — skipping navigation");
-            emitter.emit_completed(
-                output.evidence.len(),
-                output.metrics.llm_calls,
-                output.metrics.rounds_used,
-            );
-            return Ok(output);
+        match fast_path(query, ctx, config, emitter) {
+            FastPathResult::Hit(output) => {
+                info!(doc = ctx.doc_name, "Fast path hit — skipping navigation");
+                emitter.emit_completed(
+                    output.evidence.len(),
+                    output.metrics.llm_calls,
+                    output.metrics.rounds_used,
+                );
+                return Ok(output);
+            }
+            FastPathResult::Miss(hits) => {
+                if !hits.is_empty() {
+                    debug!(
+                        doc = ctx.doc_name,
+                        hit_count = hits.len(),
+                        "Fast path miss — preserving {} keyword hits for planning",
+                        hits.len()
+                    );
+                    preserved_hits = hits;
+                } else {
+                    debug!(doc = ctx.doc_name, "Fast path miss — no keyword hits");
+                }
+            }
         }
-        debug!(
-            doc = ctx.doc_name,
-            "Fast path miss — entering navigation loop"
-        );
     }
 
     // --- Phase 1: Bird's-eye view ---
@@ -113,7 +126,7 @@ pub async fn run(
     // One LLM call to generate a tentative navigation plan from the bird's-eye view.
     // The plan is non-binding guidance injected into subsequent prompts.
     if state.remaining > 0 && !llm_budget_exhausted!() {
-        let plan_prompt = build_plan_prompt(query, task, &state.last_feedback, ctx.doc_name);
+        let plan_prompt = build_plan_prompt(query, task, &state.last_feedback, ctx.doc_name, &preserved_hits, ctx);
         match llm.complete(&plan_prompt.0, &plan_prompt.1).await {
             Ok(plan_output) => {
                 llm_calls += 1;
@@ -382,21 +395,36 @@ pub async fn run(
     Ok(output)
 }
 
+/// Result of the fast-path attempt.
+///
+/// On hit: returns the output directly.
+/// On miss: returns the keyword hits from ReasoningIndex so the planning phase can use them.
+enum FastPathResult {
+    /// Fast path hit — high-confidence direct answer.
+    Hit(Output),
+    /// Fast path miss, but ReasoningIndex returned keyword hits.
+    /// These hits are valuable context for Phase 1.5 planning.
+    Miss(Vec<FindHit>),
+}
+
 /// Try the fast path: extract keywords → look up in ReasoningIndex → return if confident.
+///
+/// When the best hit is below threshold, returns `Miss` with the hits so they can
+/// be injected into the planning prompt — avoiding a redundant index lookup.
 fn fast_path(
     query: &str,
     ctx: &DocContext<'_>,
     config: &Config,
     emitter: &EventEmitter,
-) -> Option<Output> {
+) -> FastPathResult {
     let keywords = extract_keywords(query);
     if keywords.is_empty() {
-        return None;
+        return FastPathResult::Miss(Vec::new());
     }
 
     let hits: Vec<FindHit> = ctx.find_all(&keywords);
     if hits.is_empty() {
-        return None;
+        return FastPathResult::Miss(Vec::new());
     }
 
     // Find the best matching node
@@ -407,39 +435,43 @@ fn fast_path(
             a.1.weight
                 .partial_cmp(&b.1.weight)
                 .unwrap_or(std::cmp::Ordering::Equal)
-        })?;
+        });
 
-    if best_entry.1.weight < config.fast_path_threshold {
+    let Some((best_kw, best)) = best_entry else {
+        return FastPathResult::Miss(hits);
+    };
+
+    if best.weight < config.fast_path_threshold {
         debug!(
-            keyword = %best_entry.0,
-            weight = best_entry.1.weight,
+            keyword = %best_kw,
+            weight = best.weight,
             threshold = config.fast_path_threshold,
-            "Fast path: best hit below threshold"
+            "Fast path: best hit below threshold — passing hits to planning"
         );
-        return None;
+        return FastPathResult::Miss(hits);
     }
 
     // Read content from the best node
-    let content = ctx.cat(best_entry.1.node_id).unwrap_or("").to_string();
+    let content = ctx.cat(best.node_id).unwrap_or("").to_string();
     let title = ctx
-        .node_title(best_entry.1.node_id)
+        .node_title(best.node_id)
         .unwrap_or("unknown")
         .to_string();
 
     if content.is_empty() {
-        return None;
+        return FastPathResult::Miss(hits);
     }
 
     info!(
-        keyword = %best_entry.0,
+        keyword = %best_kw,
         node = %title,
-        weight = best_entry.1.weight,
+        weight = best.weight,
         "Fast path hit"
     );
 
-    emitter.emit_fast_path(&best_entry.0, &title, best_entry.1.weight);
+    emitter.emit_fast_path(&best_kw, &title, best.weight);
 
-    Some(Output::fast_path(
+    FastPathResult::Hit(Output::fast_path(
         content.clone(),
         vec![Evidence {
             source_path: title.clone(),
@@ -634,26 +666,59 @@ async fn execute_command(
 /// Build the navigation planning prompt (Phase 1.5).
 ///
 /// One-shot LLM call after bird's-eye view to generate a tentative navigation plan.
+/// Enriched with keyword hits from the ReasoningIndex (preserved from fast-path miss).
 fn build_plan_prompt(
     query: &str,
     task: Option<&str>,
     ls_output: &str,
     doc_name: &str,
+    keyword_hits: &[FindHit],
+    ctx: &DocContext<'_>,
 ) -> (String, String) {
     let task_section = match task {
         Some(t) => format!("\nYour specific task: {}", t),
         None => String::new(),
     };
 
-    let system = "You are a document navigation planner. Given a user question and the top-level \
-         document structure, output a brief navigation plan: which sections to visit and in what order. \
+    // Format keyword hits for the planning prompt.
+    // Shows which nodes matched which keywords and at what depth/weight.
+    let keyword_section = if keyword_hits.is_empty() {
+        String::new()
+    } else {
+        let mut section = String::from("\nKeyword index matches (use these to prioritize navigation):\n");
+        for hit in keyword_hits {
+            let mut entries = hit.entries.clone();
+            entries.sort_by(|a, b| {
+                b.weight
+                    .partial_cmp(&a.weight)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            });
+            // Dedup by node_id, keep highest weight
+            let mut seen = std::collections::HashSet::new();
+            for entry in &entries {
+                if !seen.insert(entry.node_id) {
+                    continue;
+                }
+                let title = ctx.node_title(entry.node_id).unwrap_or("unknown");
+                section.push_str(&format!(
+                    "  - keyword '{}' → node \"{}\" (depth {}, weight {:.2})\n",
+                    hit.keyword, title, entry.depth, entry.weight
+                ));
+            }
+        }
+        section
+    };
+
+    let system = "You are a document navigation planner. Given a user question, the top-level \
+         document structure, and keyword index matches, output a brief navigation plan: which \
+         sections to visit and in what order. Prioritize sections that matched keywords. \
          The plan should be 2-5 steps. Each step should be a specific action like \
          \"cd to X, then cat Y\" or \"grep for Z in subtree\". \
          Output only the plan, nothing else.".to_string();
 
     let user = format!(
         "Document: {doc_name}\n\
-         Top-level structure:\n{ls_output}\n\
+         Top-level structure:\n{ls_output}{keyword_section}\
          User question: {query}{task_section}\n\n\
          Navigation plan:"
     );
@@ -777,7 +842,7 @@ mod tests {
 
         // Query with only stopwords won't extract keywords
         let result = fast_path("the a an", &ctx, &config, &emitter);
-        assert!(result.is_none());
+        assert!(matches!(result, FastPathResult::Miss(ref hits) if hits.is_empty()));
     }
 
     #[test]
@@ -795,6 +860,6 @@ mod tests {
         let emitter = EventEmitter::noop();
 
         let result = fast_path("revenue finance", &ctx, &config, &emitter);
-        assert!(result.is_none());
+        assert!(matches!(result, FastPathResult::Miss(ref hits) if hits.is_empty()));
     }
 }
