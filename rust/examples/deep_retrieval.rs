@@ -149,9 +149,7 @@ At 14:52 UTC on Day 17, thruster cluster B3 (one of eight attitude control clust
 ///     ground intervention?"
 ///     → Requires combining anomaly timelines and thruster redundancy info.
 const QUERIES: &[&str] = &[
-    "How much delta-V budget remains after the Day 17 thruster failure, and is it enough to complete the mission?",
-    "What is the total power generation margin at end-of-life for Satellite Alpha compared to its minimum operational requirement?",
-    "If the primary S-band transponder fails permanently, what is the maximum duration before the backup must activate?",
+    "where can i find the backup landing zone",
 ];
 
 #[tokio::main]
