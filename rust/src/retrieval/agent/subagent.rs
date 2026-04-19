@@ -14,6 +14,7 @@
 use tracing::{debug, info, warn};
 
 use crate::llm::LlmClient;
+use crate::retrieval::complexity::QueryComplexity;
 use crate::retrieval::scoring::bm25::extract_keywords;
 
 use super::command::{Command, parse_command};
@@ -100,25 +101,41 @@ pub async fn run(
     // --- Phase 1: Bird's-eye view ---
     debug!(doc = ctx.doc_name, "Phase 1: bird's-eye view (ls root)");
 
-    // Adaptive budget: scale max_rounds based on document depth.
-    // Depth 0-2: use config as-is (8 rounds)
-    // Depth 3-4: +2 rounds per extra level
-    // Depth 5+: cap at 1.5x the configured max_rounds
+    // Adaptive budget: adjust max_rounds and max_llm_calls based on:
+    // 1. Query complexity (heuristic: keywords + word count, zero-cost)
+    // 2. Document depth (deeper trees need more rounds)
     let doc_depth = ctx.tree.max_depth();
-    let adaptive_rounds = if doc_depth <= 2 {
-        config.max_rounds
-    } else {
-        let extra = (doc_depth - 2) * 2; // 2 extra rounds per level beyond 2
-        let capped = config.max_rounds + extra as u32;
-        capped.min((config.max_rounds as f32 * 1.5).ceil() as u32)
+    let complexity = detect_query_complexity(query);
+    let base_rounds = match complexity {
+        QueryComplexity::Simple => (config.max_rounds * 6 / 10).max(4),  // ~60% of default
+        QueryComplexity::Medium => config.max_rounds,                    // default
+        QueryComplexity::Complex => (config.max_rounds * 15 / 10).max(10), // ~150% of default
     };
-    if adaptive_rounds != config.max_rounds {
+    let base_llm = match complexity {
+        QueryComplexity::Simple => (config.max_llm_calls * 6 / 10).max(6),
+        QueryComplexity::Medium => config.max_llm_calls,
+        QueryComplexity::Complex => (config.max_llm_calls * 14 / 10).max(12),
+    };
+    let max_llm = base_llm;
+
+    // Then scale for deep documents on top of complexity-adjusted base.
+    let adaptive_rounds = if doc_depth <= 2 {
+        base_rounds
+    } else {
+        let extra = (doc_depth - 2) * 2;
+        let capped = base_rounds + extra as u32;
+        capped.min((base_rounds as f32 * 1.5).ceil() as u32)
+    };
+    if adaptive_rounds != config.max_rounds || base_llm != config.max_llm_calls {
         info!(
             doc = ctx.doc_name,
             doc_depth,
-            configured = config.max_rounds,
-            adaptive = adaptive_rounds,
-            "Adaptive budget: deep document detected, increasing rounds"
+            complexity = ?complexity,
+            configured_rounds = config.max_rounds,
+            adaptive_rounds,
+            configured_llm = config.max_llm_calls,
+            adaptive_llm = max_llm,
+            "Adaptive budget: query complexity + document depth"
         );
     }
 
@@ -636,6 +653,28 @@ async fn execute_command(
 
         Command::Check => {
             let evidence_summary = state.evidence_summary();
+
+            // Heuristic pre-check: skip LLM call when evidence is obviously sufficient.
+            // Uses content length + quality indicators (from legacy ThresholdChecker).
+            let all_content: String = state.evidence.iter().map(|e| e.content.as_str()).collect();
+            let heuristic = heuristic_sufficiency(&all_content);
+            if heuristic.is_sufficient() && !all_content.is_empty() {
+                info!(
+                    doc = ctx.doc_name,
+                    evidence = state.evidence.len(),
+                    content_len = all_content.len(),
+                    quality = heuristic.quality_score,
+                    "Heuristic pre-check: sufficient (skipping LLM call)"
+                );
+                state.check_called = true;
+                state.check_count += 1;
+                emitter.emit_sufficiency(true, state.evidence.len());
+                state.last_feedback =
+                    "Evidence is sufficient. Use done to finish.".to_string();
+                return Step::Done;
+            }
+
+            // Fall through to LLM-based check
             let (system, user) = check_sufficiency(query, &evidence_summary);
 
             match llm.complete(&system, &user).await {
@@ -1074,6 +1113,150 @@ fn build_replan_prompt(
     (system, user)
 }
 
+/// Detect query complexity using heuristics (zero-cost, no LLM call).
+///
+/// Extracted from the legacy ComplexityDetector — pure function with
+/// no dependencies. Used to adapt navigation budget before entering the loop.
+fn detect_query_complexity(query: &str) -> QueryComplexity {
+    let query_lower = query.to_lowercase();
+    let word_count = estimate_word_count(query);
+
+    // Complex indicators (English + Chinese)
+    let complex_indicators = [
+        "compare", "contrast", "analyze", "evaluate", "synthesize",
+        "explain why", "how does", "relationship between", "cause and effect",
+        "对比", "分析", "评估", "综合", "为什么", "原因", "关系", "影响", "区别", "异同",
+    ];
+    for indicator in &complex_indicators {
+        if query_lower.contains(indicator) {
+            return QueryComplexity::Complex;
+        }
+    }
+
+    // Simple indicators
+    let simple_indicators = [
+        "what is", "define", "list", "who", "when", "where",
+        "什么是", "定义", "列表", "谁", "何时", "哪里", "在哪",
+    ];
+    for indicator in &simple_indicators {
+        if query_lower.contains(indicator) && word_count <= 15 {
+            return QueryComplexity::Simple;
+        }
+    }
+
+    // Multiple questions → complex
+    let question_marks = query.matches('?').count() + query.matches('？').count();
+    if question_marks > 1 {
+        return QueryComplexity::Complex;
+    }
+
+    // Word count classification
+    if word_count <= 5 {
+        QueryComplexity::Simple
+    } else if word_count <= 15 {
+        QueryComplexity::Medium
+    } else {
+        QueryComplexity::Complex
+    }
+}
+
+/// Estimate word count, handling both CJK and Latin text.
+fn estimate_word_count(text: &str) -> usize {
+    let mut count = 0usize;
+    let mut in_latin_word = false;
+    for ch in text.chars() {
+        if ch.is_whitespace() {
+            if in_latin_word {
+                count += 1;
+                in_latin_word = false;
+            }
+        } else if ch.is_ascii_alphanumeric() {
+            in_latin_word = true;
+        } else if is_cjk_char(ch) {
+            if in_latin_word {
+                count += 1;
+                in_latin_word = false;
+            }
+            count += 1;
+        } else if in_latin_word {
+            count += 1;
+            in_latin_word = false;
+        }
+    }
+    if in_latin_word {
+        count += 1;
+    }
+    count
+}
+
+/// Check if a character is CJK (Chinese/Japanese/Korean).
+fn is_cjk_char(ch: char) -> bool {
+    let cp = ch as u32;
+    (0x4E00..=0x9FFF).contains(&cp)
+        || (0x3400..=0x4DBF).contains(&cp)
+        || (0x20000..=0x2A6DF).contains(&cp)
+        || (0xF900..=0xFAFF).contains(&cp)
+        || (0x3000..=0x303F).contains(&cp)
+        || (0x3040..=0x309F).contains(&cp)
+        || (0x30A0..=0x30FF).contains(&cp)
+}
+
+/// Result of the heuristic sufficiency pre-check.
+struct SufficiencyHint {
+    /// Estimated token count (~4 chars per token).
+    estimated_tokens: usize,
+    /// Content quality score (0.0 - 1.0).
+    quality_score: f32,
+}
+
+impl SufficiencyHint {
+    /// Whether the heuristic considers evidence sufficient.
+    /// Requires both enough content AND reasonable quality.
+    fn is_sufficient(&self) -> bool {
+        self.estimated_tokens >= 500 && self.quality_score > 0.5
+    }
+}
+
+/// Heuristic sufficiency check — extracted from legacy ThresholdChecker.
+///
+/// Zero-cost check that can skip an LLM call when evidence is obviously sufficient.
+/// Uses content length and quality indicators (sentence structure, vocabulary diversity).
+fn heuristic_sufficiency(content: &str) -> SufficiencyHint {
+    let estimated_tokens = content.len() / 4;
+    let mut score = 0.0f32;
+
+    // Sentence endings (periods, question marks, exclamation marks)
+    let sentence_endings = content.matches('.').count()
+        + content.matches('?').count()
+        + content.matches('!').count()
+        + content.matches('。').count()
+        + content.matches('？').count()
+        + content.matches('！').count();
+    score += (sentence_endings as f32 * 0.05).min(0.3);
+
+    // Paragraph breaks
+    let paragraphs = content.matches("\n\n").count();
+    score += (paragraphs as f32 * 0.1).min(0.3);
+
+    // Structure markers
+    if content.contains(':') || content.contains('-') || content.contains('：') {
+        score += 0.1;
+    }
+
+    // Vocabulary diversity (penalize repetitive content)
+    let words: Vec<&str> = content.split_whitespace().collect();
+    if words.len() > 10 {
+        let unique_ratio = words.iter().collect::<std::collections::HashSet<_>>().len() as f32
+            / words.len() as f32;
+        score += unique_ratio * 0.3;
+    }
+
+    SufficiencyHint {
+        estimated_tokens,
+        quality_score: score.min(1.0),
+    }
+}
+
 /// Resolve visited NodeIds to their titles for prompt injection.
 fn format_visited_titles(state: &State, ctx: &DocContext<'_>) -> String {
     if state.visited.is_empty() {
@@ -1423,5 +1606,42 @@ mod tests {
         assert!(user.contains("Semantic hints"));
         assert!(user.contains("Revenue"));
         assert!(user.contains("What is the revenue?"));
+    }
+
+    // --- Complexity detection tests ---
+
+    #[test]
+    fn test_complexity_simple() {
+        assert_eq!(detect_query_complexity("What is revenue?"), QueryComplexity::Simple);
+        assert_eq!(detect_query_complexity("Define async"), QueryComplexity::Simple);
+        assert_eq!(detect_query_complexity("什么是向量检索"), QueryComplexity::Simple);
+        assert_eq!(detect_query_complexity("Q1 revenue"), QueryComplexity::Simple);
+    }
+
+    #[test]
+    fn test_complexity_complex() {
+        assert_eq!(
+            detect_query_complexity("Compare and contrast the different approaches to async programming"),
+            QueryComplexity::Complex
+        );
+        assert_eq!(
+            detect_query_complexity("What is the relationship between ownership and borrowing?"),
+            QueryComplexity::Complex
+        );
+        assert_eq!(detect_query_complexity("对比A和B的区别"), QueryComplexity::Complex);
+        assert_eq!(detect_query_complexity("分析索引和检索的关系"), QueryComplexity::Complex);
+    }
+
+    #[test]
+    fn test_complexity_multiple_questions() {
+        assert_eq!(
+            detect_query_complexity("What is X? How does Y work?"),
+            QueryComplexity::Complex
+        );
+    }
+
+    #[test]
+    fn test_complexity_medium() {
+        assert_eq!(detect_query_complexity("Show me the financial report summary"), QueryComplexity::Medium);
     }
 }
