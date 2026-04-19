@@ -3,12 +3,14 @@
 
 //! Prompt templates for the retrieval agent.
 //!
-//! Five prompts, one per role:
+//! Prompts for agent-level operations:
 //! 1. `subagent_navigation` — SubAgent nav loop, every round
 //! 2. `orchestrator_analysis` — Orchestrator Phase 1
 //! 3. `subagent_dispatch` — SubAgent first round (when dispatched by Orchestrator)
-//! 4. `orchestrator_integration` — Orchestrator Phase 3
-//! 5. `answer_synthesis` — final answer generation
+//! 4. `check_sufficiency` — evidence sufficiency evaluation
+//!
+//! Post-processing prompts (answer synthesis, multi-doc fusion) have been
+//! moved to `rerank/synthesis.rs` and `rerank/fusion.rs`.
 
 // ---------------------------------------------------------------------------
 // Prompt 1: SubAgent Navigation (used every round in the nav loop)
@@ -229,105 +231,7 @@ Command:"
 }
 
 // ---------------------------------------------------------------------------
-// Prompt 4: Orchestrator Integration (multi-doc Phase 3)
-// ---------------------------------------------------------------------------
-
-/// One sub-agent's results for the integration prompt.
-pub struct SubAgentSummary<'a> {
-    pub doc_name: &'a str,
-    pub evidence_count: usize,
-    pub evidence_text: &'a str,
-    pub answer: &'a str,
-}
-
-/// Parameters for the orchestrator integration prompt.
-pub struct OrchestratorIntegrationParams<'a> {
-    pub query: &'a str,
-    pub sub_results: &'a [SubAgentSummary<'a>],
-}
-
-pub fn orchestrator_integration(params: &OrchestratorIntegrationParams) -> (String, String) {
-    let query = params.query;
-
-    let system =
-        "You are a multi-document analysis assistant. You are given evidence independently \
-         collected from multiple documents. Your job is to integrate this evidence to answer \
-         the user's question.
-
-Requirements:
-- Mark the source document for each piece of information.
-- If different documents have conflicting data, point out the discrepancy.
-- If units or measurement criteria differ, explain the difference.
-- If evidence is missing for some aspect, state it clearly."
-            .to_string();
-
-    let mut evidence_sections = String::new();
-    for result in params.sub_results {
-        evidence_sections.push_str(&format!(
-            "## Document: {} ({} evidence items)\n{}\n",
-            result.doc_name, result.evidence_count, result.evidence_text
-        ));
-        if !result.answer.is_empty() {
-            evidence_sections.push_str(&format!("Sub-answer: {}\n", result.answer));
-        }
-        evidence_sections.push('\n');
-    }
-
-    let user = format!(
-        "User question: {query}\n\n\
-         Collected evidence:\n\
-         {evidence_sections}\n\
-         Integrated analysis:"
-    );
-
-    (system, user)
-}
-
-// ---------------------------------------------------------------------------
-// Prompt 5: Answer Synthesis
-// ---------------------------------------------------------------------------
-
-/// Parameters for the answer synthesis prompt.
-pub struct SynthesisParams<'a> {
-    pub query: &'a str,
-    /// All evidence items, pre-formatted.
-    pub evidence_text: &'a str,
-    /// What information might be missing (empty if complete).
-    pub missing_info: &'a str,
-}
-
-pub fn answer_synthesis(params: &SynthesisParams) -> (String, String) {
-    let query = params.query;
-    let evidence_text = params.evidence_text;
-
-    let system =
-        "You are an expert analyst. Based on the provided evidence, directly answer the user's \
-         question. Cite the source section for each piece of information you use. \
-         If the evidence is insufficient to fully answer the question, clearly state what is known \
-         and what is missing."
-            .to_string();
-
-    let missing_section = if params.missing_info.is_empty() {
-        String::new()
-    } else {
-        format!(
-            "\nNote: The following information may be missing: {}",
-            params.missing_info
-        )
-    };
-
-    let user = format!(
-        "User question: {query}\n\n\
-         Evidence:\n\
-         {evidence_text}{missing_section}\n\n\
-         Answer:"
-    );
-
-    (system, user)
-}
-
-// ---------------------------------------------------------------------------
-// Prompt 6: Check (evidence sufficiency evaluation)
+// Prompt 4: Check (evidence sufficiency evaluation)
 // ---------------------------------------------------------------------------
 
 /// Build the check prompt for LLM-based sufficiency evaluation.
@@ -507,46 +411,6 @@ mod tests {
         assert!(system.contains("2024 Annual Report"));
         assert!(user.contains("Compare revenue"));
         assert!(user.contains("Find 2024 revenue"));
-    }
-
-    #[test]
-    fn test_orchestrator_integration() {
-        let sub_a = SubAgentSummary {
-            doc_name: "2024 Report",
-            evidence_count: 2,
-            evidence_text: "[Revenue] $10.2M\n[Q1] $2.5M",
-            answer: "Revenue is $10.2M",
-        };
-        let sub_b = SubAgentSummary {
-            doc_name: "2023 Report",
-            evidence_count: 1,
-            evidence_text: "[Net Sales] $9.8M",
-            answer: "",
-        };
-
-        let params = OrchestratorIntegrationParams {
-            query: "Compare revenue",
-            sub_results: &[sub_a, sub_b],
-        };
-
-        let (_, user) = orchestrator_integration(&params);
-        assert!(user.contains("2024 Report"));
-        assert!(user.contains("2023 Report"));
-        assert!(user.contains("$10.2M"));
-        assert!(user.contains("$9.8M"));
-    }
-
-    #[test]
-    fn test_answer_synthesis() {
-        let params = SynthesisParams {
-            query: "What is the revenue?",
-            evidence_text: "[Revenue] $10.2M\n[Q1] $2.5M",
-            missing_info: "",
-        };
-
-        let (system, user) = answer_synthesis(&params);
-        assert!(system.contains("expert analyst"));
-        assert!(user.contains("$10.2M"));
     }
 
     #[test]

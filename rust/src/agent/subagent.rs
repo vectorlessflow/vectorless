@@ -23,9 +23,10 @@ use super::config::{Config, DocContext, Evidence, Output, Step};
 use super::context::FindHit;
 use super::events::EventEmitter;
 use super::prompts::{
-    NavigationParams, SynthesisParams, answer_synthesis, check_sufficiency,
+    NavigationParams, check_sufficiency,
     parse_sufficiency_response, subagent_dispatch, subagent_navigation,
 };
+use crate::rerank::synthesis::{SynthesisParams, answer_synthesis_prompt as answer_synthesis};
 use super::state::State;
 use super::tools::subagent as tools;
 

@@ -19,8 +19,8 @@ use super::config::{Config, Output, WorkspaceContext};
 use super::context::FindHit;
 use super::events::EventEmitter;
 use super::prompts::{
-    DispatchEntry, OrchestratorAnalysisParams, OrchestratorIntegrationParams, SynthesisParams,
-    answer_synthesis, check_sufficiency, orchestrator_analysis, orchestrator_integration,
+    DispatchEntry, OrchestratorAnalysisParams,
+    check_sufficiency, orchestrator_analysis,
     parse_dispatch_plan, parse_sufficiency_response,
 };
 use super::state::OrchestratorState;
@@ -130,10 +130,21 @@ pub async fn run(
             integrate(query, ws, config, llm, &mut state, emitter).await;
     }
 
-    // --- Phase 4: Synthesize ---
-    let (answer, synth_calls) =
-        synthesize(query, ws, config, llm, &state, emitter, skip_analysis).await;
+    // --- Phase 4: Rerank ---
+    let multi_doc = !skip_analysis || ws.doc_count() > 1;
+    let (answer, synth_calls) = crate::rerank::process(
+        query,
+        &state.all_evidence,
+        config,
+        llm,
+        multi_doc,
+        &state.sub_results,
+    )
+    .await;
     orch_llm_calls += synth_calls;
+    if !answer.is_empty() {
+        emitter.emit_synthesis(answer.len());
+    }
 
     let mut output = state.into_output(answer);
     output.metrics.llm_calls += orch_llm_calls;
@@ -331,129 +342,6 @@ async fn integrate(
     llm_calls
 }
 
-/// Phase 4: Synthesize the final answer from collected evidence.
-///
-/// For single user-specified doc: uses simple `answer_synthesis` prompt.
-/// For multi-doc or workspace: uses `orchestrator_integration` prompt.
-///
-/// Returns `(answer, llm_calls)`.
-async fn synthesize(
-    query: &str,
-    ws: &WorkspaceContext<'_>,
-    config: &Config,
-    llm: &LlmClient,
-    state: &OrchestratorState,
-    emitter: &EventEmitter,
-    skip_analysis: bool,
-) -> (String, u32) {
-    // Quality filter: drop SubAgent results with no meaningful evidence
-    const MIN_EVIDENCE_CHARS: usize = 50;
-    let quality_filtered: Vec<&Output> = state
-        .sub_results
-        .iter()
-        .filter(|result| {
-            if result.evidence.is_empty() {
-                return false;
-            }
-            result
-                .evidence
-                .iter()
-                .any(|e| e.content.len() >= MIN_EVIDENCE_CHARS)
-        })
-        .collect();
-
-    let filtered_count = state.sub_results.len() - quality_filtered.len();
-    if filtered_count > 0 {
-        info!(
-            filtered = filtered_count,
-            kept = quality_filtered.len(),
-            "Filtered low-quality SubAgent results"
-        );
-    }
-
-    if !config.enable_synthesis || quality_filtered.is_empty() {
-        return (format_evidence_as_answer(&state.all_evidence), 0);
-    }
-
-    // Single user-specified doc: simple synthesis
-    if skip_analysis && ws.doc_count() == 1 {
-        let evidence_text = format_evidence_for_synthesis(&state.all_evidence);
-        let (system, user) = answer_synthesis(&SynthesisParams {
-            query,
-            evidence_text: &evidence_text,
-            missing_info: "",
-        });
-        return match llm.complete(&system, &user).await {
-            Ok(a) => {
-                info!(answer_len = a.len(), "Synthesis complete");
-                emitter.emit_synthesis(a.len());
-                (a.trim().to_string(), 1)
-            }
-            Err(e) => {
-                warn!(error = %e, "Synthesis LLM call failed");
-                (format_evidence_as_answer(&state.all_evidence), 0)
-            }
-        };
-    }
-
-    // Multi-doc or workspace: orchestrator integration
-    struct SubResultData {
-        doc_name: String,
-        evidence_count: usize,
-        evidence_text: String,
-        answer: String,
-    }
-    let summaries: Vec<SubResultData> = quality_filtered
-        .iter()
-        .map(|result| {
-            let doc_name = result
-                .evidence
-                .first()
-                .and_then(|e| e.doc_name.clone())
-                .unwrap_or_else(|| "unknown".to_string());
-            let evidence_text = result
-                .evidence
-                .iter()
-                .map(|e| format!("[{}] {}", e.node_title, e.content))
-                .collect::<Vec<_>>()
-                .join("\n");
-            SubResultData {
-                evidence_count: result.evidence.len(),
-                doc_name,
-                evidence_text,
-                answer: result.answer.clone(),
-            }
-        })
-        .collect();
-
-    let summary_refs: Vec<super::prompts::SubAgentSummary<'_>> = summaries
-        .iter()
-        .map(|s| super::prompts::SubAgentSummary {
-            doc_name: &s.doc_name,
-            evidence_count: s.evidence_count,
-            evidence_text: &s.evidence_text,
-            answer: &s.answer,
-        })
-        .collect();
-
-    let (system, user) = orchestrator_integration(&OrchestratorIntegrationParams {
-        query,
-        sub_results: &summary_refs,
-    });
-
-    match llm.complete(&system, &user).await {
-        Ok(a) => {
-            info!(answer_len = a.len(), "Synthesis complete");
-            emitter.emit_synthesis(a.len());
-            (a.trim().to_string(), 1)
-        }
-        Err(e) => {
-            warn!(error = %e, "Orchestrator synthesis LLM call failed");
-            (format_evidence_as_answer(&state.all_evidence), 0)
-        }
-    }
-}
-
 /// Try fast path across all documents.
 fn fast_path(
     query: &str,
@@ -592,83 +480,6 @@ async fn check_cross_doc_sufficiency(query: &str, evidence_summary: &str, llm: &
     }
 }
 
-/// Format all sub-results for the integration prompt.
-fn format_integration_text(sub_results: &[Output]) -> String {
-    sub_results
-        .iter()
-        .enumerate()
-        .map(|(i, result)| {
-            let doc_name = result
-                .evidence
-                .first()
-                .and_then(|e| e.doc_name.clone())
-                .unwrap_or_else(|| format!("doc_{}", i));
-
-            let evidence_text = result
-                .evidence
-                .iter()
-                .map(|e| format!("[{}] {}", e.node_title, e.content))
-                .collect::<Vec<_>>()
-                .join("\n");
-
-            let mut section = format!(
-                "## Document: {} ({} evidence items)\n{}",
-                doc_name,
-                result.evidence.len(),
-                evidence_text
-            );
-            if !result.answer.is_empty() {
-                section.push_str(&format!("\nSub-answer: {}", result.answer));
-            }
-            section
-        })
-        .collect::<Vec<_>>()
-        .join("\n\n")
-}
-
-/// Maximum total characters for evidence in the orchestrator synthesis prompt.
-const ORCH_SYNTHESIS_EVIDENCE_CAP: usize = 10000;
-
-/// Format all evidence for the synthesis prompt, with a total character cap.
-fn format_evidence_for_synthesis(evidence: &[super::config::Evidence]) -> String {
-    let mut result = String::new();
-    for e in evidence {
-        let doc = e.doc_name.as_deref().unwrap_or("unknown");
-        let item = format!(
-            "[{}] ({} at {})\n{}",
-            e.node_title, doc, e.source_path, e.content
-        );
-        if result.len() + item.len() + 2 > ORCH_SYNTHESIS_EVIDENCE_CAP {
-            let remaining = ORCH_SYNTHESIS_EVIDENCE_CAP.saturating_sub(result.len());
-            if remaining > 50 {
-                result.push_str(&format!(
-                    "[{}] ({} at {})\n{}...[truncated]\n",
-                    e.node_title,
-                    doc,
-                    e.source_path,
-                    &e.content[..remaining.min(e.content.len())]
-                ));
-            }
-            let remaining_count = evidence.len()
-                - evidence
-                    .iter()
-                    .position(|x| x.node_title == e.node_title)
-                    .unwrap_or(0)
-                - 1;
-            if remaining_count > 0 {
-                result.push_str(&format!(
-                    "\n... and {} more evidence items truncated to fit budget.\n",
-                    remaining_count
-                ));
-            }
-            break;
-        }
-        result.push_str(&item);
-        result.push_str("\n\n");
-    }
-    result
-}
-
 /// Format evidence summary for sufficiency check.
 fn format_evidence_summary(evidence: &[super::config::Evidence]) -> String {
     if evidence.is_empty() {
@@ -715,23 +526,24 @@ async fn fallback_dispatch_all(
         return Ok(state.into_output(String::new()));
     }
 
-    // Simple synthesis
-    let evidence_text = format_evidence_for_synthesis(&state.all_evidence);
-    let (sys, usr) = answer_synthesis(&SynthesisParams {
+    // Use rerank pipeline for synthesis
+    let multi_doc = ws.doc_count() > 1;
+    let (answer, synth_calls) = crate::rerank::process(
         query,
-        evidence_text: &evidence_text,
-        missing_info: "",
-    });
+        &state.all_evidence,
+        config,
+        llm,
+        multi_doc,
+        &state.sub_results,
+    )
+    .await;
+    if !answer.is_empty() {
+        emitter.emit_synthesis(answer.len());
+    }
 
-    let answer = match llm.complete(&sys, &usr).await {
-        Ok(a) => {
-            emitter.emit_synthesis(a.len());
-            a.trim().to_string()
-        }
-        Err(_) => format_evidence_as_answer(&state.all_evidence),
-    };
+    let mut output = state.into_output(answer);
+    output.metrics.llm_calls += synth_calls;
 
-    let output = state.into_output(answer);
     emitter.emit_completed(
         output.evidence.len(),
         output.metrics.llm_calls,
@@ -742,21 +554,6 @@ async fn fallback_dispatch_all(
         output.metrics.evidence_chars,
     );
     Ok(output)
-}
-
-/// Format evidence as a simple answer (fallback).
-fn format_evidence_as_answer(evidence: &[super::config::Evidence]) -> String {
-    evidence
-        .iter()
-        .map(|e| {
-            let doc = e.doc_name.as_deref().unwrap_or("unknown");
-            format!(
-                "**{}** (from {} at {}):\n{}",
-                e.node_title, doc, e.source_path, e.content
-            )
-        })
-        .collect::<Vec<_>>()
-        .join("\n\n")
 }
 
 /// Format per-document keyword hit details for the expanded analysis prompt.
@@ -855,51 +652,6 @@ mod tests {
         assert!(summary.contains("doc1"));
         assert!(summary.contains("[B]"));
         assert!(summary.contains("doc2"));
-    }
-
-    #[test]
-    fn test_format_evidence_for_synthesis() {
-        let evidence = vec![super::super::config::Evidence {
-            source_path: "root/A".to_string(),
-            node_title: "A".to_string(),
-            content: "the answer".to_string(),
-            doc_name: Some("my_doc".to_string()),
-        }];
-        let formatted = format_evidence_for_synthesis(&evidence);
-        assert!(formatted.contains("[A]"));
-        assert!(formatted.contains("my_doc"));
-        assert!(formatted.contains("the answer"));
-    }
-
-    #[test]
-    fn test_format_integration_text() {
-        let output = Output {
-            answer: "sub answer".to_string(),
-            evidence: vec![super::super::config::Evidence {
-                source_path: "root/X".to_string(),
-                node_title: "X".to_string(),
-                content: "x content".to_string(),
-                doc_name: Some("doc_a".to_string()),
-            }],
-            metrics: super::super::config::Metrics::default(),
-        };
-        let formatted = format_integration_text(&[output]);
-        assert!(formatted.contains("[X]"));
-        assert!(formatted.contains("x content"));
-        assert!(formatted.contains("sub answer"));
-    }
-
-    #[test]
-    fn test_format_evidence_as_answer() {
-        let evidence = vec![super::super::config::Evidence {
-            source_path: "root/Y".to_string(),
-            node_title: "Y".to_string(),
-            content: "y content".to_string(),
-            doc_name: Some("doc_a".to_string()),
-        }];
-        let formatted = format_evidence_as_answer(&evidence);
-        assert!(formatted.contains("**Y**"));
-        assert!(formatted.contains("doc_a"));
     }
 
     #[test]
