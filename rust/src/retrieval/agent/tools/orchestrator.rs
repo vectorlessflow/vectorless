@@ -81,15 +81,27 @@ pub fn find_cross(keywords: &[String], ctx: &WorkspaceContext) -> ToolResult {
 
     let mut output = String::new();
     for (doc_idx, hits) in &results {
-        let doc_name = ctx.doc(*doc_idx).map(|d| d.doc_name).unwrap_or("unknown");
+        let doc = ctx.doc(*doc_idx);
+        let doc_name = doc.map(|d| d.doc_name).unwrap_or("unknown");
         output.push_str(&format!("Document [{}] {}:\n", doc_idx + 1, doc_name));
 
         for hit in hits {
             for entry in &hit.entries {
+                let title = doc
+                    .and_then(|d| d.node_title(entry.node_id))
+                    .unwrap_or("unknown");
+                let summary = doc
+                    .and_then(|d| d.nav_entry(entry.node_id))
+                    .map(|e| e.overview.as_str())
+                    .unwrap_or("");
                 output.push_str(&format!(
-                    "  keyword '{}' → node (depth {}, weight {:.2})\n",
-                    hit.keyword, entry.depth, entry.weight
+                    "  keyword '{}' → {} (depth {}, weight {:.2})",
+                    hit.keyword, title, entry.depth, entry.weight
                 ));
+                if !summary.is_empty() {
+                    output.push_str(&format!(" — {}", summary));
+                }
+                output.push('\n');
             }
         }
         output.push('\n');

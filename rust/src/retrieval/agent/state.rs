@@ -177,8 +177,6 @@ pub struct OrchestratorState {
     pub all_evidence: Vec<Evidence>,
     /// Whether the analysis phase is complete.
     pub analyze_done: bool,
-    /// Remaining integration retry count (max 1).
-    pub integrate_retries: u32,
     /// Total LLM calls across orchestrator + sub-agents.
     pub total_llm_calls: u32,
 }
@@ -191,7 +189,6 @@ impl OrchestratorState {
             sub_results: Vec::new(),
             all_evidence: Vec::new(),
             analyze_done: false,
-            integrate_retries: 1,
             total_llm_calls: 0,
         }
     }

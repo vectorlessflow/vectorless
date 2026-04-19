@@ -87,7 +87,7 @@ pub fn parse_command(llm_output: &str) -> Command {
             target: target.join(" "),
             lines: n.parse().unwrap_or(20),
         },
-        ["head", target, ..] => Command::Head {
+        ["head", _target, ..] => Command::Head {
             target: parts[1..].join(" "),
             lines: 20,
         },

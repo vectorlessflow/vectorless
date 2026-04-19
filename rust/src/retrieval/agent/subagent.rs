@@ -427,7 +427,7 @@ async fn execute_command(
         }
 
         Command::Find { keyword } => {
-            let result = match ctx.find(keyword) {
+            let feedback = match ctx.find(keyword) {
                 Some(hit) => {
                     let mut output = format!("Results for '{}':\n", keyword);
                     for entry in &hit.entries {
@@ -445,11 +445,11 @@ async fn execute_command(
                         }
                         output.push('\n');
                     }
-                    ToolResultLike::ok(output)
+                    output
                 }
-                None => ToolResultLike::ok(format!("No results for '{}'", keyword)),
+                None => format!("No results for '{}'", keyword),
             };
-            state.last_feedback = result.feedback;
+            state.last_feedback = feedback;
             Step::Continue
         }
 
@@ -530,17 +530,6 @@ async fn execute_command(
             state.last_feedback = result.feedback;
             Step::Continue
         }
-    }
-}
-
-/// Minimal result-like type for internal command results (avoids importing ToolResult).
-struct ToolResultLike {
-    feedback: String,
-}
-
-impl ToolResultLike {
-    fn ok(feedback: String) -> Self {
-        Self { feedback }
     }
 }
 

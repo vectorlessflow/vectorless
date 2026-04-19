@@ -151,6 +151,15 @@ pub fn cat(target: &str, ctx: &DocContext, state: &mut State) -> ToolResult {
             }
         };
 
+    // Guard: skip if already visited (prevents duplicate evidence)
+    if state.visited.contains(&node_id) {
+        let title = ctx.node_title(node_id).unwrap_or("unknown");
+        return ToolResult::ok(format!(
+            "[Already collected: {}]. Use a different target or cd to another branch.",
+            title
+        ));
+    }
+
     // Read content
     match ctx.cat(node_id) {
         Some(content) => {
@@ -600,7 +609,7 @@ mod tests {
     fn test_head_preview() {
         let (tree, nav, root) = build_rich_tree();
         let ctx = rich_ctx!(tree, nav);
-        let mut state = State::new(root, 8);
+        let state = State::new(root, 8);
 
         let result = head("Revenue", 2, &ctx, &state);
         assert!(result.success);

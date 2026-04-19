@@ -209,44 +209,25 @@ pub async fn run(
         }
     }
 
-    // Cross-doc integration via LLM
-    debug!("Integrating sub-results via LLM");
-    let integration_text = format_integration_text(&state.sub_results);
-    let (system, _) = orchestrator_integration(&OrchestratorIntegrationParams {
-        query,
-        sub_results: &[],
-    });
-    let integration_user = format!(
-        "User question: {query}\n\nCollected evidence:\n{integration_text}\n\nIntegrated analysis:"
-    );
-
-    let integrated = match llm.complete(&system, &integration_user).await {
-        Ok(output) => output,
-        Err(e) => {
-            warn!(error = %e, "Orchestrator integration LLM call failed");
-            state
-                .sub_results
-                .iter()
-                .map(|r| r.answer.clone())
-                .collect::<Vec<_>>()
-                .join("\n\n")
-        }
-    };
-    orch_llm_calls += 1;
-
-    // --- Phase 4: Synthesis ---
+    // --- Phase 3+4: Integrated synthesis (merged from two LLM calls into one) ---
     debug!(
         evidence = state.all_evidence.len(),
-        "Phase 4: synthesizing final answer"
+        "Phase 3: integrating and synthesizing cross-doc answer"
     );
-    let evidence_text = format_evidence_for_synthesis(&state.all_evidence);
     let answer = if config.enable_synthesis {
-        let (sys, usr) = answer_synthesis(&SynthesisParams {
+        let integration_text = format_integration_text(&state.sub_results);
+        let (system, _) = orchestrator_integration(&OrchestratorIntegrationParams {
             query,
-            evidence_text: &evidence_text,
-            missing_info: "",
+            sub_results: &[],
         });
-        match llm.complete(&sys, &usr).await {
+        let user = format!(
+            "User question: {query}\n\nCollected evidence:\n{integration_text}\n\n\
+             Provide a complete, well-structured answer. For each piece of information, \
+             cite the source document and section. If evidence is missing for some aspect, \
+             clearly state what is known and what is missing.\n\nAnswer:"
+        );
+
+        match llm.complete(&system, &user).await {
             Ok(a) => {
                 orch_llm_calls += 1;
                 info!(answer_len = a.len(), "Synthesis complete");
@@ -254,12 +235,12 @@ pub async fn run(
                 a.trim().to_string()
             }
             Err(e) => {
-                warn!(error = %e, "Synthesis LLM call failed, using integration output");
-                integrated.trim().to_string()
+                warn!(error = %e, "Orchestrator synthesis LLM call failed");
+                format_evidence_as_answer(&state.all_evidence)
             }
         }
     } else {
-        integrated.trim().to_string()
+        format_evidence_as_answer(&state.all_evidence)
     };
 
     let mut output = state.into_output(answer);
