@@ -149,16 +149,6 @@ impl State {
             .join("\n")
     }
 
-    /// Format visited node titles as text for prompt injection.
-    pub fn visited_titles_text(&self) -> String {
-        if self.visited.is_empty() {
-            return "(none)".to_string();
-        }
-        // Note: we don't store titles for visited nodes, just IDs.
-        // This is a placeholder that shows count. Titles are resolved in the prompt builder.
-        format!("({} nodes visited)", self.visited.len())
-    }
-
     /// Format the breadcrumb as a path string (e.g., "root/Chapter 1/Section 1.2").
     pub fn path_str(&self) -> String {
         self.breadcrumb.join("/")
