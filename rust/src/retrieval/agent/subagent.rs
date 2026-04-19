@@ -782,7 +782,9 @@ fn build_plan_prompt(
 
 /// Build the ancestor path string for a node (e.g., "root > Chapter 1 > Section 1.2").
 fn build_ancestor_path(node_id: crate::document::NodeId, ctx: &DocContext<'_>) -> String {
-    let path = ctx.tree.path_from_root(node_id);
+    // ancestors_iter returns [node, parent, ..., root], so reverse to get root-to-node order.
+    let mut path: Vec<crate::document::NodeId> = ctx.tree.ancestors_iter(node_id).collect();
+    path.reverse();
     path.iter()
         .filter_map(|&id| ctx.node_title(id))
         .collect::<Vec<_>>()
@@ -1061,5 +1063,219 @@ mod tests {
 
         let result = fast_path("revenue finance", &ctx, &config, &emitter);
         assert!(matches!(result, FastPathResult::Miss(ref hits) if hits.is_empty()));
+    }
+
+    // --- Tests for new features ---
+
+    /// Helper to build a tree with NavEntry metadata (question_hints, topic_tags).
+    fn build_semantic_test_tree() -> (
+        crate::document::DocumentTree,
+        crate::document::NavigationIndex,
+        crate::document::NodeId, // root
+        crate::document::NodeId, // revenue child
+        crate::document::NodeId, // expenses child
+    ) {
+        use crate::document::{ChildRoute, NavEntry};
+
+        let mut tree = crate::document::DocumentTree::new("Root", "root content");
+        let root = tree.root();
+        let revenue = tree.add_child(root, "Revenue", "revenue content");
+        let expenses = tree.add_child(root, "Expenses", "expense content");
+
+        let mut nav = crate::document::NavigationIndex::new();
+
+        // Root entry
+        nav.add_entry(
+            root,
+            NavEntry {
+                overview: "Annual financial report".to_string(),
+                question_hints: vec!["What is the financial overview?".to_string()],
+                topic_tags: vec!["finance".to_string()],
+                leaf_count: 4,
+                level: 0,
+            },
+        );
+
+        // Revenue entry with question_hints and topic_tags
+        nav.add_child_routes(
+            root,
+            vec![
+                ChildRoute {
+                    node_id: revenue,
+                    title: "Revenue".to_string(),
+                    description: "Revenue breakdown".to_string(),
+                    leaf_count: 2,
+                },
+                ChildRoute {
+                    node_id: expenses,
+                    title: "Expenses".to_string(),
+                    description: "Cost analysis".to_string(),
+                    leaf_count: 2,
+                },
+            ],
+        );
+        nav.add_entry(
+            revenue,
+            NavEntry {
+                overview: "Revenue figures for 2024".to_string(),
+                question_hints: vec![
+                    "What is the total revenue?".to_string(),
+                    "What was the Q1 revenue?".to_string(),
+                ],
+                topic_tags: vec!["revenue".to_string(), "sales".to_string(), "income".to_string()],
+                leaf_count: 2,
+                level: 1,
+            },
+        );
+        nav.add_entry(
+            expenses,
+            NavEntry {
+                overview: "Operating expenses".to_string(),
+                question_hints: vec!["What are the operating costs?".to_string()],
+                topic_tags: vec!["expenses".to_string(), "costs".to_string()],
+                leaf_count: 2,
+                level: 1,
+            },
+        );
+
+        (tree, nav, root, revenue, expenses)
+    }
+
+    #[test]
+    fn test_build_ancestor_path() {
+        let (tree, nav, root, revenue, _) = build_semantic_test_tree();
+        let ctx = DocContext {
+            tree: &tree,
+            nav_index: &nav,
+            reasoning_index: &crate::document::ReasoningIndex::default(),
+            doc_name: "test",
+        };
+
+        let path = build_ancestor_path(revenue, &ctx);
+        assert_eq!(path, "Root > Revenue");
+
+        let root_path = build_ancestor_path(root, &ctx);
+        assert_eq!(root_path, "Root");
+    }
+
+    #[test]
+    fn test_semantic_hints_keyword_match() {
+        let (tree, nav, _, _, _) = build_semantic_test_tree();
+        let ctx = DocContext {
+            tree: &tree,
+            nav_index: &nav,
+            reasoning_index: &crate::document::ReasoningIndex::default(),
+            doc_name: "test",
+        };
+
+        let keywords = extract_keywords("What is the revenue?");
+        let hints = build_semantic_hints(&keywords, &"what is the revenue".to_lowercase(), &ctx);
+
+        assert!(
+            hints.contains("Revenue"),
+            "Should match Revenue section, got: {}",
+            hints
+        );
+        assert!(
+            hints.contains("question") || hints.contains("topic"),
+            "Should show match type, got: {}",
+            hints
+        );
+    }
+
+    #[test]
+    fn test_semantic_hints_topic_match() {
+        let (tree, nav, _, _, _) = build_semantic_test_tree();
+        let ctx = DocContext {
+            tree: &tree,
+            nav_index: &nav,
+            reasoning_index: &crate::document::ReasoningIndex::default(),
+            doc_name: "test",
+        };
+
+        // "costs" should match the Expenses topic_tag
+        let keywords = extract_keywords("operating costs analysis");
+        let hints = build_semantic_hints(&keywords, &"operating costs analysis".to_lowercase(), &ctx);
+
+        assert!(
+            hints.contains("Expenses"),
+            "Should match Expenses section via topic tag 'costs', got: {}",
+            hints
+        );
+    }
+
+    #[test]
+    fn test_semantic_hints_no_match() {
+        let (tree, nav, _, _, _) = build_semantic_test_tree();
+        let ctx = DocContext {
+            tree: &tree,
+            nav_index: &nav,
+            reasoning_index: &crate::document::ReasoningIndex::default(),
+            doc_name: "test",
+        };
+
+        let keywords = extract_keywords("employee vacation policy");
+        let hints = build_semantic_hints(&keywords, &"employee vacation policy".to_lowercase(), &ctx);
+
+        assert!(
+            hints.is_empty(),
+            "Should not match anything for unrelated query, got: {}",
+            hints
+        );
+    }
+
+    #[test]
+    fn test_build_replan_prompt() {
+        let (tree, nav, root, _, _) = build_semantic_test_tree();
+        let mut state = State::new(root, 8);
+        state.missing_info = "Need Q2 revenue figures".to_string();
+        state.add_evidence(Evidence {
+            source_path: "root/Revenue".to_string(),
+            node_title: "Revenue".to_string(),
+            content: "Q1 revenue was $2.5M".to_string(),
+            doc_name: None,
+        });
+
+        let ctx = DocContext {
+            tree: &tree,
+            nav_index: &nav,
+            reasoning_index: &crate::document::ReasoningIndex::default(),
+            doc_name: "test",
+        };
+
+        let (system, user) = build_replan_prompt("What is total revenue?", None, &state, &ctx);
+
+        assert!(system.contains("re-planning"));
+        assert!(user.contains("What is total revenue?"));
+        assert!(user.contains("Q2 revenue"));
+        assert!(user.contains("[Revenue]"));
+        assert!(user.contains("Remaining rounds"));
+    }
+
+    #[test]
+    fn test_build_plan_prompt_with_semantic_hints() {
+        let (tree, nav, _, _, _) = build_semantic_test_tree();
+        let ctx = DocContext {
+            tree: &tree,
+            nav_index: &nav,
+            reasoning_index: &crate::document::ReasoningIndex::default(),
+            doc_name: "Financial Report",
+        };
+
+        let ls_output = "[1] Revenue — Revenue breakdown (2 leaves)\n[2] Expenses — Cost analysis (2 leaves)\n";
+
+        let (system, user) = build_plan_prompt(
+            "What is the revenue?",
+            None,
+            ls_output,
+            "Financial Report",
+            &[],
+            &ctx,
+        );
+
+        assert!(system.contains("semantic hints"));
+        assert!(user.contains("Semantic hints"));
+        assert!(user.contains("Revenue"));
+        assert!(user.contains("What is the revenue?"));
     }
 }
