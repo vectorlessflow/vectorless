@@ -74,6 +74,10 @@ pub async fn run(
                     output.evidence.len(),
                     output.metrics.llm_calls,
                     output.metrics.rounds_used,
+                    true,  // fast_path_hit
+                    false, // budget_exhausted
+                    false, // plan_generated
+                    0,     // evidence_chars
                 );
                 return Ok(output);
             }
@@ -137,6 +141,7 @@ pub async fn run(
                         plan_len = plan_text.len(),
                         "Navigation plan generated"
                     );
+                    emitter.emit_plan_generated(ctx.doc_name, plan_text.len());
                     state.plan = plan_text;
                     state.plan_generated = true;
                 }
@@ -180,6 +185,8 @@ pub async fn run(
                 state.rounds_since_evidence
             );
             state.last_feedback.push_str(&stuck_warning);
+            let round_num = state.max_rounds - state.remaining + 1;
+            emitter.emit_budget_warning("stuck", round_num);
         }
 
         // Mid-budget checkpoint: remind LLM to check if it hasn't yet
@@ -193,6 +200,7 @@ pub async fn run(
             state.last_feedback.push_str(
                 "\n[Hint: You've used half your budget. Consider running `check` to evaluate if collected evidence is sufficient.]",
             );
+            emitter.emit_budget_warning("half_budget", rounds_used);
         }
 
         // Build prompt
@@ -223,6 +231,7 @@ pub async fn run(
         };
 
         // LLM decision
+        let round_start = std::time::Instant::now();
         let llm_output = match llm.complete(&system, &user).await {
             Ok(output) => output,
             Err(e) => {
@@ -295,6 +304,7 @@ pub async fn run(
             && state.remaining >= 3
             && !llm_budget_exhausted!()
         {
+            let missing = state.missing_info.clone();
             let replan = build_replan_prompt(query, task, &state, ctx);
             match llm.complete(&replan.0, &replan.1).await {
                 Ok(new_plan) => {
@@ -306,6 +316,7 @@ pub async fn run(
                             plan_len = plan_text.len(),
                             "Re-plan generated after insufficient evidence"
                         );
+                        emitter.emit_replan_generated(ctx.doc_name, &missing, plan_text.len());
                         state.plan = plan_text;
                     }
                 }
@@ -326,7 +337,8 @@ pub async fn run(
         // Emit round event
         let cmd_str = format!("{:?}", command);
         let success = !matches!(step, Step::ForceDone(_));
-        emitter.emit_round(round_num, &cmd_str, success);
+        let round_elapsed = round_start.elapsed().as_millis() as u64;
+        emitter.emit_round(round_num, &cmd_str, success, round_elapsed);
 
         // Push to ReAct history
         let feedback_preview = if state.last_feedback.len() > 120 {
@@ -417,6 +429,10 @@ pub async fn run(
         output.evidence.len(),
         output.metrics.llm_calls,
         output.metrics.rounds_used,
+        output.metrics.fast_path_hit,
+        output.metrics.budget_exhausted,
+        output.metrics.plan_generated,
+        output.metrics.evidence_chars,
     );
 
     info!(

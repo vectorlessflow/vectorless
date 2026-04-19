@@ -55,6 +55,10 @@ pub async fn run(
                 output.evidence.len(),
                 output.metrics.llm_calls,
                 output.metrics.rounds_used,
+                true,  // fast_path_hit
+                false, // budget_exhausted
+                false, // plan_generated
+                0,     // evidence_chars
             );
             return Ok(output);
         }
@@ -96,7 +100,7 @@ pub async fn run(
             info!("Orchestrator: analysis indicates already answered");
             let mut output = Output::empty();
             output.answer = "Already answered by cross-document search.".to_string();
-            emitter.emit_completed(0, orch_llm_calls, 0);
+            emitter.emit_completed(0, orch_llm_calls, 0, false, false, false, 0);
             return Ok(output);
         }
     };
@@ -139,7 +143,7 @@ pub async fn run(
 
         if state.all_evidence.is_empty() {
             info!("No relevant documents found after expanded analysis");
-            emitter.emit_completed(0, orch_llm_calls, 0);
+            emitter.emit_completed(0, orch_llm_calls, 0, false, false, false, 0);
             return Ok(Output::empty());
         }
     } else {
@@ -157,7 +161,7 @@ pub async fn run(
     // --- Phase 3: Integrate ---
     if state.all_evidence.is_empty() {
         info!("No evidence collected from any SubAgent");
-        emitter.emit_completed(0, orch_llm_calls, 0);
+        emitter.emit_completed(0, orch_llm_calls, 0, false, false, false, 0);
         return Ok(state.into_output(
             "I was unable to find relevant information across the available documents to answer your question.".to_string()
         ));
@@ -318,6 +322,10 @@ pub async fn run(
         output.evidence.len(),
         output.metrics.llm_calls,
         output.metrics.rounds_used,
+        output.metrics.fast_path_hit,
+        output.metrics.budget_exhausted,
+        output.metrics.plan_generated,
+        output.metrics.evidence_chars,
     );
 
     info!(
@@ -586,7 +594,7 @@ async fn fallback_dispatch_all(
     dispatch_and_collect(query, &dispatches, ws, config, llm, &mut state, emitter).await;
 
     if state.all_evidence.is_empty() {
-        emitter.emit_completed(0, 0, 0);
+        emitter.emit_completed(0, 0, 0, false, false, false, 0);
         return Ok(state.into_output(String::new()));
     }
 
@@ -611,6 +619,10 @@ async fn fallback_dispatch_all(
         output.evidence.len(),
         output.metrics.llm_calls,
         output.metrics.rounds_used,
+        output.metrics.fast_path_hit,
+        output.metrics.budget_exhausted,
+        output.metrics.plan_generated,
+        output.metrics.evidence_chars,
     );
     Ok(output)
 }

@@ -38,6 +38,8 @@ pub enum AgentEvent {
         command: String,
         /// Whether the command succeeded.
         success: bool,
+        /// Wall-clock time for this round in milliseconds.
+        elapsed_ms: u64,
     },
 
     /// Evidence was collected from a node.
@@ -58,6 +60,32 @@ pub enum AgentEvent {
         sufficient: bool,
         /// Total evidence items.
         evidence_count: usize,
+    },
+
+    /// A navigation plan was generated (Phase 1.5).
+    PlanGenerated {
+        /// Document name.
+        doc_name: String,
+        /// Length of the generated plan text.
+        plan_len: usize,
+    },
+
+    /// A re-plan was triggered after check returned INSUFFICIENT.
+    ReplanGenerated {
+        /// Document name.
+        doc_name: String,
+        /// What information was missing (triggers the re-plan).
+        missing_info: String,
+        /// Length of the new plan text.
+        plan_len: usize,
+    },
+
+    /// A budget-related warning was injected (stuck detection or half-budget hint).
+    BudgetWarning {
+        /// Type of warning: "stuck" or "half_budget".
+        warning_type: String,
+        /// Current round number.
+        round: u32,
     },
 
     /// Sub-agent dispatched (orchestrator only).
@@ -94,6 +122,14 @@ pub enum AgentEvent {
         llm_calls: u32,
         /// Total navigation rounds used.
         rounds_used: u32,
+        /// Whether the fast-path was hit.
+        fast_path_hit: bool,
+        /// Whether the budget was exhausted.
+        budget_exhausted: bool,
+        /// Whether a navigation plan was generated.
+        plan_generated: bool,
+        /// Total characters of collected evidence.
+        evidence_chars: usize,
     },
 
     /// An error occurred.
@@ -162,11 +198,12 @@ impl EventEmitter {
     }
 
     /// Emit a round-completed event.
-    pub fn emit_round(&self, round: u32, command: &str, success: bool) {
+    pub fn emit_round(&self, round: u32, command: &str, success: bool, elapsed_ms: u64) {
         self.emit(AgentEvent::RoundCompleted {
             round,
             command: command.to_string(),
             success,
+            elapsed_ms,
         });
     }
 
@@ -218,11 +255,49 @@ impl EventEmitter {
     }
 
     /// Emit a completed event.
-    pub fn emit_completed(&self, evidence_count: usize, llm_calls: u32, rounds_used: u32) {
+    pub fn emit_completed(
+        &self,
+        evidence_count: usize,
+        llm_calls: u32,
+        rounds_used: u32,
+        fast_path_hit: bool,
+        budget_exhausted: bool,
+        plan_generated: bool,
+        evidence_chars: usize,
+    ) {
         self.emit(AgentEvent::Completed {
             evidence_count,
             llm_calls,
             rounds_used,
+            fast_path_hit,
+            budget_exhausted,
+            plan_generated,
+            evidence_chars,
+        });
+    }
+
+    /// Emit a plan-generated event.
+    pub fn emit_plan_generated(&self, doc_name: &str, plan_len: usize) {
+        self.emit(AgentEvent::PlanGenerated {
+            doc_name: doc_name.to_string(),
+            plan_len,
+        });
+    }
+
+    /// Emit a replan-generated event.
+    pub fn emit_replan_generated(&self, doc_name: &str, missing_info: &str, plan_len: usize) {
+        self.emit(AgentEvent::ReplanGenerated {
+            doc_name: doc_name.to_string(),
+            missing_info: missing_info.to_string(),
+            plan_len,
+        });
+    }
+
+    /// Emit a budget warning event.
+    pub fn emit_budget_warning(&self, warning_type: &str, round: u32) {
+        self.emit(AgentEvent::BudgetWarning {
+            warning_type: warning_type.to_string(),
+            round,
         });
     }
 
@@ -242,8 +317,11 @@ mod tests {
     fn test_noop_emitter() {
         let emitter = EventEmitter::noop();
         emitter.emit_started("test", false);
-        emitter.emit_round(1, "ls", true);
-        emitter.emit_completed(0, 0, 0);
+        emitter.emit_round(1, "ls", true, 50);
+        emitter.emit_completed(0, 0, 0, false, false, false, 0);
+        emitter.emit_plan_generated("test", 42);
+        emitter.emit_replan_generated("test", "missing data", 30);
+        emitter.emit_budget_warning("stuck", 5);
         // No panic — events silently dropped
     }
 
@@ -255,7 +333,7 @@ mod tests {
         emitter.emit_started("what is X?", false);
         emitter.emit_evidence("Intro", "root/Intro", 100, 1);
         emitter.emit_sufficiency(true, 1);
-        emitter.emit_completed(1, 3, 5);
+        emitter.emit_completed(1, 3, 5, false, false, true, 100);
 
         let events: Vec<AgentEvent> = (0..4).map(|_| rx.blocking_recv().unwrap()).collect();
 
@@ -274,6 +352,7 @@ mod tests {
             &events[3],
             AgentEvent::Completed {
                 evidence_count: 1,
+                plan_generated: true,
                 ..
             }
         ));

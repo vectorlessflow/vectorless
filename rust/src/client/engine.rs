@@ -628,9 +628,10 @@ impl Engine {
                         round,
                         command,
                         success: _,
+                        elapsed_ms,
                     } => RetrieveEvent::StageCompleted {
                         stage: format!("round_{}_{}", round, command),
-                        elapsed_ms: 0,
+                        elapsed_ms,
                     },
                     AgentEvent::EvidenceCollected {
                         node_title,
@@ -653,6 +654,32 @@ impl Engine {
                             crate::retrieval::SufficiencyLevel::Insufficient
                         },
                         tokens: evidence_count,
+                    },
+                    AgentEvent::PlanGenerated { doc_name, plan_len } => {
+                        RetrieveEvent::StageCompleted {
+                            stage: format!("plan_{}_{}chars", doc_name, plan_len),
+                            elapsed_ms: 0,
+                        }
+                    }
+                    AgentEvent::ReplanGenerated {
+                        doc_name,
+                        missing_info,
+                        plan_len,
+                    } => RetrieveEvent::StageCompleted {
+                        stage: format!(
+                            "replan_{}_{}_{}chars",
+                            doc_name,
+                            &missing_info[..missing_info.len().min(30)],
+                            plan_len
+                        ),
+                        elapsed_ms: 0,
+                    },
+                    AgentEvent::BudgetWarning {
+                        warning_type,
+                        round,
+                    } => RetrieveEvent::StageCompleted {
+                        stage: format!("budget_warning_{}_round_{}", warning_type, round),
+                        elapsed_ms: 0,
                     },
                     AgentEvent::SubAgentDispatched {
                         doc_idx, doc_name, ..
@@ -678,16 +705,23 @@ impl Engine {
                         evidence_count,
                         llm_calls: _,
                         rounds_used: _,
+                        fast_path_hit,
+                        budget_exhausted,
+                        plan_generated,
+                        evidence_chars,
                     } => {
                         let response = crate::retrieval::RetrieveResponse {
                             results: Vec::new(),
                             content: String::new(),
                             confidence: if evidence_count > 0 { 0.8 } else { 0.0 },
                             is_sufficient: true,
-                            strategy_used: "agent".to_string(),
+                            strategy_used: format!(
+                                "agent(fp={},plan={},budget={})",
+                                fast_path_hit, plan_generated, budget_exhausted
+                            ),
                             complexity: crate::retrieval::complexity::QueryComplexity::Simple,
                             reasoning_chain: crate::retrieval::ReasoningChain::default(),
-                            tokens_used: 0,
+                            tokens_used: evidence_chars,
                         };
                         let _ = retrieve_tx
                             .send(RetrieveEvent::Completed { response })
@@ -716,6 +750,8 @@ impl Engine {
         let config = self.retriever.config().clone();
         let llm = self.retriever.llm().clone();
         let emitter = crate::retrieval::agent::EventEmitter::new(agent_tx);
+        let metrics_hub = Arc::clone(&self.metrics_hub);
+        let start = std::time::Instant::now();
 
         tokio::spawn(async move {
             // Prepare owned indices (fill defaults for missing)
@@ -733,7 +769,7 @@ impl Engine {
                 })
                 .collect();
 
-            if owned_docs.len() == 1 {
+            let result = if owned_docs.len() == 1 {
                 let (doc_id, doc, nav_index, reasoning_index) =
                     owned_docs.into_iter().next().unwrap();
                 let doc_ctx = crate::retrieval::agent::DocContext {
@@ -743,8 +779,7 @@ impl Engine {
                     doc_name: &doc_id,
                 };
                 let scope = crate::retrieval::agent::Scope::Single(doc_ctx);
-                let _ =
-                    crate::retrieval::agent::retrieve(&query, scope, &config, &llm, &emitter).await;
+                crate::retrieval::agent::retrieve(&query, scope, &config, &llm, &emitter).await
             } else {
                 let doc_contexts: Vec<crate::retrieval::agent::DocContext> = owned_docs
                     .iter()
@@ -757,8 +792,18 @@ impl Engine {
                     .collect();
                 let ws = crate::retrieval::agent::WorkspaceContext::new(doc_contexts);
                 let scope = crate::retrieval::agent::Scope::Workspace(ws);
-                let _ =
-                    crate::retrieval::agent::retrieve(&query, scope, &config, &llm, &emitter).await;
+                crate::retrieval::agent::retrieve(&query, scope, &config, &llm, &emitter).await
+            };
+
+            // Bridge agent metrics into global MetricsHub
+            if let Ok(output) = result {
+                let m = &output.metrics;
+                let elapsed = start.elapsed();
+                metrics_hub.record_retrieval_query(
+                    m.rounds_used as u64,
+                    m.nodes_visited as u64,
+                    elapsed.as_millis() as u64,
+                );
             }
         });
 
