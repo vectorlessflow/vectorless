@@ -11,7 +11,7 @@ use tracing::info;
 use super::types::QueryResultItem;
 use crate::agent::{self, events::EventEmitter as AgentEventEmitter};
 use crate::document::{DocumentTree, NavigationIndex, ReasoningIndex};
-use crate::error::{Error, Result};
+use crate::error::Result;
 use crate::events::{EventEmitter, QueryEvent};
 use crate::llm::LlmClient;
 use crate::retrieval::{dispatcher, postprocessor};

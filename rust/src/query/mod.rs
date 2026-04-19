@@ -29,5 +29,4 @@ mod types;
 
 pub use budget::Budget;
 pub use complexity::detect_query_complexity;
-pub use text::{estimate_word_count, is_cjk_char};
-pub use types::{QueryComplexity, QueryIntent, QueryPlan, SubQuery};
+pub use types::{QueryComplexity, QueryPlan};

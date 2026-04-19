@@ -13,7 +13,6 @@ A hierarchical, reasoning-native document intelligence engine written in Rust.
   - `src/agent/` - Retrieval execution (SubAgent: doc navigation, Orchestrator: workspace analysis + multi-doc fusion)
   - `src/rerank/` - Result reranking and answer synthesis (dedup, scoring, fusion, synthesis)
   - `src/scoring/` - Scoring and ranking strategies (BM25, relevance scoring, score combination)
-  - `src/cache/` - Unified cache abstraction (trait + implementations)
   - `src/llm/` - LLM client (connection pool, memo/caching, throttle/rate-limiting, fallback)
   - `src/storage/` - Persistence (Workspace, LRU cache, backend abstraction file/memory)
   - `src/graph/` - Cross-document relationship graph

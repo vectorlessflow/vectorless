@@ -135,29 +135,9 @@ pub async fn fuse(query: &str, sub_results: &[&Output], llm: &LlmClient) -> (Str
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::agent::{Evidence, Metrics};
-
-    fn make_output(answer: &str, evidence_titles: &[&str]) -> Output {
-        let evidence: Vec<Evidence> = evidence_titles
-            .iter()
-            .enumerate()
-            .map(|(i, t)| Evidence {
-                source_path: format!("root/{}", t),
-                node_title: t.to_string(),
-                content: format!("Content about {}", t),
-                doc_name: Some(format!("doc_{}", i)),
-            })
-            .collect();
-        Output {
-            answer: answer.to_string(),
-            evidence,
-            metrics: Metrics::default(),
-        }
-    }
 
     #[test]
     fn test_fusion_prompt() {
-        let output = make_output("sub answer", &["A", "B"]);
         let summaries = [SubAgentSummary {
             doc_name: "doc1",
             evidence_count: 2,
