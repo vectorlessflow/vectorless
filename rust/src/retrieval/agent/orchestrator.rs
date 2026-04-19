@@ -28,7 +28,10 @@ use super::subagent;
 use super::tools::orchestrator as orch_tools;
 
 /// Maximum number of integration retries (supplemental dispatches).
-const MAX_INTEGRATE_RETRIES: u32 = 1;
+const MAX_INTEGRATE_RETRIES: u32 = 3;
+
+/// Maximum number of documents to dispatch per supplemental retry.
+const MAX_SUPPLEMENTAL_DISPATCH: usize = 3;
 
 /// Run the Orchestrator loop for multi-document retrieval.
 pub async fn run(
@@ -192,9 +195,10 @@ pub async fn run(
             retries += 1;
 
             // Supplemental: do additional find_cross and dispatch to uncovered docs
+            let max_dispatch = MAX_SUPPLEMENTAL_DISPATCH.min(ws.doc_count() - state.dispatched.len());
             let undispatched: Vec<DispatchEntry> = (0..ws.doc_count())
                 .filter(|i| !state.dispatched.contains(i))
-                .take(2) // limit supplemental dispatches
+                .take(max_dispatch)
                 .map(|idx| DispatchEntry {
                     doc_idx: idx,
                     reason: "Supplemental dispatch".to_string(),
@@ -216,7 +220,36 @@ pub async fn run(
         evidence = state.all_evidence.len(),
         "Phase 3: integrating and synthesizing cross-doc answer"
     );
-    let answer = if config.enable_synthesis {
+
+    // Filter out low-quality SubAgent results before synthesis.
+    // A result is considered low-quality if it has no evidence at all,
+    // or all evidence items are trivially short (likely boilerplate/navigation text).
+    const MIN_EVIDENCE_CHARS: usize = 50;
+    let quality_filtered: Vec<&Output> = state
+        .sub_results
+        .iter()
+        .filter(|result| {
+            if result.evidence.is_empty() {
+                return false;
+            }
+            // Keep if at least one evidence item has meaningful content
+            result
+                .evidence
+                .iter()
+                .any(|e| e.content.len() >= MIN_EVIDENCE_CHARS)
+        })
+        .collect();
+
+    let filtered_count = state.sub_results.len() - quality_filtered.len();
+    if filtered_count > 0 {
+        info!(
+            filtered = filtered_count,
+            kept = quality_filtered.len(),
+            "Filtered low-quality SubAgent results"
+        );
+    }
+
+    let answer = if config.enable_synthesis && !quality_filtered.is_empty() {
         // Build owned intermediate data for each sub-agent result, then borrow for prompt.
         struct SubResultData {
             doc_name: String,
@@ -224,8 +257,7 @@ pub async fn run(
             evidence_text: String,
             answer: String,
         }
-        let summaries: Vec<SubResultData> = state
-            .sub_results
+        let summaries: Vec<SubResultData> = quality_filtered
             .iter()
             .map(|result| {
                 let doc_name = result

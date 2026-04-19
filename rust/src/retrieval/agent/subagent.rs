@@ -723,7 +723,7 @@ fn build_plan_prompt(
     let query_lower = query.to_lowercase();
 
     // --- Keyword hits with ancestor path expansion ---
-    let keyword_section = if keyword_hits.is_empty() {
+    let mut keyword_section = if keyword_hits.is_empty() {
         String::new()
     } else {
         let mut section = String::from("\nKeyword index matches (use these to prioritize navigation):\n");
@@ -758,6 +758,14 @@ fn build_plan_prompt(
         section
     };
 
+    // --- Multi-level expansion: for deep keyword hits, show siblings at the target level ---
+    let deep_expansion = build_deep_expansion(keyword_hits, ctx);
+    if !deep_expansion.is_empty() {
+        if keyword_section.len() + deep_expansion.len() <= PLAN_CONTEXT_BUDGET {
+            keyword_section.push_str(&deep_expansion);
+        }
+    }
+
     // --- Semantic hints: match query against question_hints and topic_tags ---
     let semantic_section = build_semantic_hints(&query_keywords, &query_lower, ctx);
 
@@ -768,7 +776,13 @@ fn build_plan_prompt(
          like \"cd to X, then cat Y\" or \"grep for Z in subtree\". \
          Pay attention to 'Can answer' and 'Topics' annotations in the structure listing — \
          they indicate what questions each section addresses. \
-         Output only the plan, nothing else.".to_string();
+         Output only the plan, nothing else.\n\n\
+         Example plan for \"What is the Q1 revenue?\":\n\
+         1. cd to Revenue (matched keyword 'revenue')\n\
+         2. ls to see sub-sections\n\
+         3. cat Q1 Report\n\
+         4. check\n\
+         5. done".to_string();
 
     let user = format!(
         "Document: {doc_name}\n\
@@ -872,6 +886,118 @@ fn build_semantic_hints(
     }
 }
 
+/// For keyword hits that land in deep nodes (depth >= 2), expand the parent node's children
+/// so the planner sees the target level's full context — not just the root-level structure.
+fn build_deep_expansion(keyword_hits: &[FindHit], ctx: &DocContext<'_>) -> String {
+    if keyword_hits.is_empty() {
+        return String::new();
+    }
+
+    // Collect unique parent nodes of deep hits (depth >= 2)
+    let mut seen_parents = std::collections::HashSet::new();
+    let mut expansion = String::new();
+
+    for hit in keyword_hits {
+        for entry in &hit.entries {
+            if entry.depth < 2 {
+                continue;
+            }
+            // Get parent of the hit node
+            let parent = match ctx.parent(entry.node_id) {
+                Some(p) => p,
+                None => continue,
+            };
+            if !seen_parents.insert(parent) {
+                continue;
+            }
+            let routes = match ctx.ls(parent) {
+                Some(r) => r,
+                None => continue,
+            };
+            let parent_title = ctx.node_title(parent).unwrap_or("unknown");
+            expansion.push_str(&format!(
+                "Siblings near keyword hit '{}' (under {}):\n",
+                hit.keyword, parent_title
+            ));
+            for route in routes {
+                let marker = if ctx.node_title(entry.node_id) == Some(&route.title) {
+                    " ← keyword hit"
+                } else {
+                    ""
+                };
+                expansion.push_str(&format!(
+                    "  - {} ({} leaves){}\n",
+                    route.title, route.leaf_count, marker
+                ));
+            }
+            expansion.push('\n');
+            // Cap expansion at 500 chars
+            if expansion.len() > 500 {
+                expansion.push_str("  ... (more expansions truncated)\n");
+                break;
+            }
+        }
+        if expansion.len() > 500 {
+            break;
+        }
+    }
+
+    expansion
+}
+
+/// Build unvisited sibling branch hints for structured backtracking.
+///
+/// Shows:
+/// - Unvisited siblings of the current node (same-level alternatives)
+/// - Unvisited siblings of the parent node (if current branch seems exhausted)
+fn build_sibling_hints(state: &State, ctx: &DocContext<'_>) -> String {
+    let mut hints = String::new();
+
+    // 1. Unvisited siblings of current node
+    if let Some(parent) = ctx.parent(state.current_node) {
+        if let Some(routes) = ctx.ls(parent) {
+            let unvisited: Vec<&crate::document::ChildRoute> = routes
+                .iter()
+                .filter(|r| !state.visited.contains(&r.node_id))
+                .collect();
+            if !unvisited.is_empty() {
+                hints.push_str("Unvisited sibling branches at current level:\n");
+                for route in &unvisited {
+                    hints.push_str(&format!(
+                        "  - {} ({} leaves)\n",
+                        route.title, route.leaf_count
+                    ));
+                }
+            }
+        }
+
+        // 2. Also show parent-level siblings (aunt/uncle nodes) if not at root
+        if let Some(grandparent) = ctx.parent(parent) {
+            if let Some(routes) = ctx.ls(grandparent) {
+                let unvisited_parent_siblings: Vec<&crate::document::ChildRoute> = routes
+                    .iter()
+                    .filter(|r| !state.visited.contains(&r.node_id) && r.node_id != parent)
+                    .collect();
+                if !unvisited_parent_siblings.is_empty() {
+                    hints.push_str("Unvisited branches at parent level (cd .. then explore):\n");
+                    for route in &unvisited_parent_siblings {
+                        hints.push_str(&format!(
+                            "  - {} ({} leaves)\n",
+                            route.title, route.leaf_count
+                        ));
+                    }
+                }
+            }
+        }
+    }
+
+    if hints.is_empty() {
+        String::new()
+    } else {
+        format!("\n{}", hints)
+    }
+}
+
 /// Build a focused re-planning prompt when check returns INSUFFICIENT.
 ///
 /// Unlike the initial planning prompt (Phase 1.5) which starts from root-level structure,
@@ -903,6 +1029,9 @@ fn build_replan_prompt(
         _ => "Current position is a leaf node — consider cd .. to go back.\n".to_string(),
     };
 
+    // Show unvisited sibling branches for structured backtracking
+    let sibling_hints = build_sibling_hints(state, ctx);
+
     let system = "You are re-planning a document navigation strategy. The previous plan did not \
          find sufficient evidence. Given what's been found and what's still missing, generate a \
          focused 2-3 step plan. Each step should be a specific action like \
@@ -917,6 +1046,7 @@ fn build_replan_prompt(
          What's missing: {}\n\
          Already visited: {visited}\n\
          {current_children}\
+         {sibling_hints}\
          Remaining rounds: {}/{}\n\n\
          Revised navigation plan:",
         state.path_str(),
