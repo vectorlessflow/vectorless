@@ -33,16 +33,36 @@ const MAX_INTEGRATE_RETRIES: u32 = 3;
 /// Maximum number of documents to dispatch per supplemental retry.
 const MAX_SUPPLEMENTAL_DISPATCH: usize = 3;
 
+/// Outcome of the analyze phase (Phase 1).
+enum AnalyzeOutcome {
+    /// Produce dispatch entries for Phase 2.
+    Proceed {
+        dispatches: Vec<DispatchEntry>,
+        llm_calls: u32,
+    },
+    /// Cross-doc search already answered the query.
+    AlreadyAnswered { llm_calls: u32 },
+    /// No relevant documents found after expanded analysis.
+    NoResults { llm_calls: u32 },
+    /// Analysis LLM call failed — caller should fallback.
+    AnalysisFailed,
+}
+
 /// Run the Orchestrator loop for multi-document retrieval.
+///
+/// When `skip_analysis` is `true`, Phase 1 (LLM analysis of DocCards) is skipped
+/// and all documents are dispatched directly. This is used when the user has
+/// explicitly specified which documents to query.
 pub async fn run(
     query: &str,
     ws: &WorkspaceContext<'_>,
     config: &Config,
     llm: &LlmClient,
     emitter: &EventEmitter,
+    skip_analysis: bool,
 ) -> crate::error::Result<Output> {
-    info!(docs = ws.doc_count(), "Orchestrator starting");
-    emitter.emit_started(query, true);
+    info!(docs = ws.doc_count(), skip_analysis, "Orchestrator starting");
+    emitter.emit_started(query, ws.doc_count() > 1);
 
     let mut state = OrchestratorState::new();
     let mut orch_llm_calls: u32 = 0;
@@ -65,100 +85,38 @@ pub async fn run(
     }
 
     // --- Phase 1: Analyze ---
-    debug!("Phase 1: analyzing doc cards and cross-doc keywords");
-    let doc_cards_text = orch_tools::ls_docs(ws).feedback;
-    let keywords = extract_keywords(query);
-    let find_text = if keywords.is_empty() {
-        "(no keywords extracted)".to_string()
-    } else {
-        orch_tools::find_cross(&keywords, ws).feedback
-    };
-
-    info!(keywords = ?keywords, "Phase 1: analyzing");
-
-    let (system, user) = orchestrator_analysis(&OrchestratorAnalysisParams {
-        query,
-        doc_cards: &doc_cards_text,
-        find_results: &find_text,
-    });
-
-    let analysis_output = match llm.complete(&system, &user).await {
-        Ok(output) => output,
-        Err(e) => {
-            warn!(error = %e, "Orchestrator analysis LLM call failed");
-            emitter.emit_error(&e.to_string());
-            // Fallback: dispatch to all documents with the original query
+    let dispatches = match analyze(query, ws, config, llm, &mut state, emitter, skip_analysis).await {
+        AnalyzeOutcome::Proceed { dispatches, llm_calls } => {
+            orch_llm_calls += llm_calls;
+            dispatches
+        }
+        AnalyzeOutcome::AlreadyAnswered { llm_calls } => {
+            let mut output = Output::empty();
+            output.answer = "Already answered by cross-document search.".to_string();
+            emitter.emit_completed(0, orch_llm_calls + llm_calls, 0, false, false, false, 0);
+            return Ok(output);
+        }
+        AnalyzeOutcome::NoResults { llm_calls } => {
+            emitter.emit_completed(0, orch_llm_calls + llm_calls, 0, false, false, false, 0);
+            return Ok(Output::empty());
+        }
+        AnalyzeOutcome::AnalysisFailed => {
             return fallback_dispatch_all(query, ws, config, llm, emitter).await;
         }
     };
-    orch_llm_calls += 1;
-
-    // Check if already answered
-    let dispatches = match parse_dispatch_plan(&analysis_output, ws.doc_count()) {
-        Some(entries) => entries,
-        None => {
-            info!("Orchestrator: analysis indicates already answered");
-            let mut output = Output::empty();
-            output.answer = "Already answered by cross-document search.".to_string();
-            emitter.emit_completed(0, orch_llm_calls, 0, false, false, false, 0);
-            return Ok(output);
-        }
-    };
-
-    if dispatches.is_empty() {
-        info!("No dispatches from initial analysis — retrying with expanded context");
-
-        // Second LLM pass: provide per-document keyword hit details to encourage deeper analysis
-        let expanded_find = format_expanded_find_context(query, ws);
-        let (system, user) = expanded_analysis_prompt(query, &doc_cards_text, &expanded_find);
-
-        match llm.complete(&system, &user).await {
-            Ok(second_output) => {
-                orch_llm_calls += 1;
-                if let Some(second_dispatches) = parse_dispatch_plan(&second_output, ws.doc_count())
-                {
-                    if !second_dispatches.is_empty() {
-                        info!(
-                            docs = second_dispatches.len(),
-                            "Second analysis produced dispatches"
-                        );
-                        state.analyze_done = true;
-                        dispatch_and_collect(
-                            query,
-                            &second_dispatches,
-                            ws,
-                            config,
-                            llm,
-                            &mut state,
-                            emitter,
-                        )
-                        .await;
-                    }
-                }
-            }
-            Err(e) => {
-                warn!(error = %e, "Second analysis LLM call failed");
-            }
-        }
-
-        if state.all_evidence.is_empty() {
-            info!("No relevant documents found after expanded analysis");
-            emitter.emit_completed(0, orch_llm_calls, 0, false, false, false, 0);
-            return Ok(Output::empty());
-        }
-    } else {
-        state.analyze_done = true;
-    }
 
     // --- Phase 2: Dispatch ---
-    info!(
-        docs = dispatches.len(),
-        docs_list = ?dispatches.iter().map(|d| d.doc_idx).collect::<Vec<_>>(),
-        "Phase 2: dispatching SubAgents"
-    );
-    dispatch_and_collect(query, &dispatches, ws, config, llm, &mut state, emitter).await;
+    if !dispatches.is_empty() {
+        info!(
+            docs = dispatches.len(),
+            docs_list = ?dispatches.iter().map(|d| d.doc_idx).collect::<Vec<_>>(),
+            "Phase 2: dispatching SubAgents"
+        );
+        dispatch_and_collect(query, &dispatches, ws, config, llm, &mut state, emitter).await;
+    }
 
-    // --- Phase 3: Integrate ---
+    // --- Phase 3: Integrate (only when analysis was done) ---
+    // Skip cross-doc sufficiency checks when user specified documents.
     if state.all_evidence.is_empty() {
         info!("No evidence collected from any SubAgent");
         emitter.emit_completed(0, orch_llm_calls, 0, false, false, false, 0);
@@ -167,154 +125,15 @@ pub async fn run(
         ));
     }
 
-    info!(
-        evidence = state.all_evidence.len(),
-        sub_results = state.sub_results.len(),
-        "Phase 3: integrating cross-doc evidence"
-    );
-
-    let mut retries = 0;
-    while retries < MAX_INTEGRATE_RETRIES {
-        // Check cross-doc sufficiency
-        let evidence_summary = format_evidence_summary(&state.all_evidence);
-        let sufficient = check_cross_doc_sufficiency(query, &evidence_summary, llm).await;
-        orch_llm_calls += 1;
-        info!(
-            sufficient,
-            evidence = state.all_evidence.len(),
-            retry = retries,
-            "Cross-doc sufficiency check"
-        );
-        emitter.emit_sufficiency(sufficient, state.all_evidence.len());
-
-        if sufficient {
-            break;
-        }
-
-        if retries < MAX_INTEGRATE_RETRIES {
-            warn!(
-                retry = retries,
-                "Cross-doc evidence insufficient, supplementing"
-            );
-            retries += 1;
-
-            // Supplemental: do additional find_cross and dispatch to uncovered docs
-            let max_dispatch =
-                MAX_SUPPLEMENTAL_DISPATCH.min(ws.doc_count() - state.dispatched.len());
-            let undispatched: Vec<DispatchEntry> = (0..ws.doc_count())
-                .filter(|i| !state.dispatched.contains(i))
-                .take(max_dispatch)
-                .map(|idx| DispatchEntry {
-                    doc_idx: idx,
-                    reason: "Supplemental dispatch".to_string(),
-                    task: query.to_string(),
-                })
-                .collect();
-
-            if !undispatched.is_empty() {
-                dispatch_and_collect(query, &undispatched, ws, config, llm, &mut state, emitter)
-                    .await;
-            } else {
-                break; // no more docs to dispatch
-            }
-        }
+    if !skip_analysis {
+        orch_llm_calls +=
+            integrate(query, ws, config, llm, &mut state, emitter).await;
     }
 
-    // --- Phase 3+4: Integrated synthesis (merged from two LLM calls into one) ---
-    debug!(
-        evidence = state.all_evidence.len(),
-        "Phase 3: integrating and synthesizing cross-doc answer"
-    );
-
-    // Filter out low-quality SubAgent results before synthesis.
-    // A result is considered low-quality if it has no evidence at all,
-    // or all evidence items are trivially short (likely boilerplate/navigation text).
-    const MIN_EVIDENCE_CHARS: usize = 50;
-    let quality_filtered: Vec<&Output> = state
-        .sub_results
-        .iter()
-        .filter(|result| {
-            if result.evidence.is_empty() {
-                return false;
-            }
-            // Keep if at least one evidence item has meaningful content
-            result
-                .evidence
-                .iter()
-                .any(|e| e.content.len() >= MIN_EVIDENCE_CHARS)
-        })
-        .collect();
-
-    let filtered_count = state.sub_results.len() - quality_filtered.len();
-    if filtered_count > 0 {
-        info!(
-            filtered = filtered_count,
-            kept = quality_filtered.len(),
-            "Filtered low-quality SubAgent results"
-        );
-    }
-
-    let answer = if config.enable_synthesis && !quality_filtered.is_empty() {
-        // Build owned intermediate data for each sub-agent result, then borrow for prompt.
-        struct SubResultData {
-            doc_name: String,
-            evidence_count: usize,
-            evidence_text: String,
-            answer: String,
-        }
-        let summaries: Vec<SubResultData> = quality_filtered
-            .iter()
-            .map(|result| {
-                let doc_name = result
-                    .evidence
-                    .first()
-                    .and_then(|e| e.doc_name.clone())
-                    .unwrap_or_else(|| "unknown".to_string());
-                let evidence_text = result
-                    .evidence
-                    .iter()
-                    .map(|e| format!("[{}] {}", e.node_title, e.content))
-                    .collect::<Vec<_>>()
-                    .join("\n");
-                SubResultData {
-                    evidence_count: result.evidence.len(),
-                    doc_name,
-                    evidence_text,
-                    answer: result.answer.clone(),
-                }
-            })
-            .collect();
-
-        let summary_refs: Vec<super::prompts::SubAgentSummary<'_>> = summaries
-            .iter()
-            .map(|s| super::prompts::SubAgentSummary {
-                doc_name: &s.doc_name,
-                evidence_count: s.evidence_count,
-                evidence_text: &s.evidence_text,
-                answer: &s.answer,
-            })
-            .collect();
-
-        let (system, user) = orchestrator_integration(&OrchestratorIntegrationParams {
-            query,
-            sub_results: &summary_refs,
-        });
-
-        match llm.complete(&system, &user).await {
-            Ok(a) => {
-                orch_llm_calls += 1;
-                info!(answer_len = a.len(), "Synthesis complete");
-                emitter.emit_synthesis(a.len());
-                a.trim().to_string()
-            }
-            Err(e) => {
-                warn!(error = %e, "Orchestrator synthesis LLM call failed");
-                format_evidence_as_answer(&state.all_evidence)
-            }
-        }
-    } else {
-        format_evidence_as_answer(&state.all_evidence)
-    };
+    // --- Phase 4: Synthesize ---
+    let (answer, synth_calls) =
+        synthesize(query, ws, config, llm, &state, emitter, skip_analysis).await;
+    orch_llm_calls += synth_calls;
 
     let mut output = state.into_output(answer);
     output.metrics.llm_calls += orch_llm_calls;
@@ -336,6 +155,303 @@ pub async fn run(
     );
 
     Ok(output)
+}
+
+/// Phase 1: Analyze documents and produce a dispatch plan.
+///
+/// When `skip_analysis` is true, returns dispatch entries for all documents.
+/// When false, uses LLM to analyze DocCards and keyword hits, with an
+/// expanded analysis fallback if the initial pass produces no dispatches.
+///
+/// May mutate `state` during expanded analysis (dispatches SubAgents directly).
+async fn analyze(
+    query: &str,
+    ws: &WorkspaceContext<'_>,
+    config: &Config,
+    llm: &LlmClient,
+    state: &mut OrchestratorState,
+    emitter: &EventEmitter,
+    skip_analysis: bool,
+) -> AnalyzeOutcome {
+    if skip_analysis {
+        debug!("Phase 1: skipping (user-specified documents)");
+        let dispatches = (0..ws.doc_count())
+            .map(|idx| DispatchEntry {
+                doc_idx: idx,
+                reason: "User-specified document".to_string(),
+                task: query.to_string(),
+            })
+            .collect();
+        return AnalyzeOutcome::Proceed { dispatches, llm_calls: 0 };
+    }
+
+    debug!("Phase 1: analyzing doc cards and cross-doc keywords");
+    let mut llm_calls: u32 = 0;
+
+    let doc_cards_text = orch_tools::ls_docs(ws).feedback;
+    let keywords = extract_keywords(query);
+    let find_text = if keywords.is_empty() {
+        "(no keywords extracted)".to_string()
+    } else {
+        orch_tools::find_cross(&keywords, ws).feedback
+    };
+
+    info!(keywords = ?keywords, "Phase 1: analyzing");
+
+    let (system, user) = orchestrator_analysis(&OrchestratorAnalysisParams {
+        query,
+        doc_cards: &doc_cards_text,
+        find_results: &find_text,
+    });
+
+    let analysis_output = match llm.complete(&system, &user).await {
+        Ok(output) => output,
+        Err(e) => {
+            warn!(error = %e, "Orchestrator analysis LLM call failed");
+            emitter.emit_error(&e.to_string());
+            return AnalyzeOutcome::AnalysisFailed;
+        }
+    };
+    llm_calls += 1;
+
+    // Check if already answered
+    let dispatches = match parse_dispatch_plan(&analysis_output, ws.doc_count()) {
+        Some(entries) => entries,
+        None => {
+            info!("Orchestrator: analysis indicates already answered");
+            return AnalyzeOutcome::AlreadyAnswered { llm_calls };
+        }
+    };
+
+    if dispatches.is_empty() {
+        // Expanded analysis: retry with richer context
+        info!("No dispatches from initial analysis — retrying with expanded context");
+        let expanded_find = format_expanded_find_context(query, ws);
+        let (system, user) = expanded_analysis_prompt(query, &doc_cards_text, &expanded_find);
+
+        match llm.complete(&system, &user).await {
+            Ok(second_output) => {
+                llm_calls += 1;
+                if let Some(second_dispatches) =
+                    parse_dispatch_plan(&second_output, ws.doc_count())
+                {
+                    if !second_dispatches.is_empty() {
+                        info!(
+                            docs = second_dispatches.len(),
+                            "Second analysis produced dispatches"
+                        );
+                        state.analyze_done = true;
+                        dispatch_and_collect(
+                            query, &second_dispatches, ws, config, llm, state, emitter,
+                        )
+                        .await;
+                    }
+                }
+            }
+            Err(e) => {
+                warn!(error = %e, "Second analysis LLM call failed");
+            }
+        }
+
+        if state.all_evidence.is_empty() {
+            info!("No relevant documents found after expanded analysis");
+            return AnalyzeOutcome::NoResults { llm_calls };
+        }
+
+        // Already dispatched during expanded analysis, skip Phase 2
+        return AnalyzeOutcome::Proceed { dispatches: Vec::new(), llm_calls };
+    }
+
+    state.analyze_done = true;
+    AnalyzeOutcome::Proceed { dispatches, llm_calls }
+}
+
+/// Phase 3: Cross-doc sufficiency integration.
+///
+/// Checks if evidence from dispatched SubAgents is sufficient.
+/// If not, supplements by dispatching additional SubAgents to
+/// undispatched documents.
+///
+/// Returns the number of orchestrator-level LLM calls made.
+async fn integrate(
+    query: &str,
+    ws: &WorkspaceContext<'_>,
+    config: &Config,
+    llm: &LlmClient,
+    state: &mut OrchestratorState,
+    emitter: &EventEmitter,
+) -> u32 {
+    info!(
+        evidence = state.all_evidence.len(),
+        sub_results = state.sub_results.len(),
+        "Phase 3: integrating cross-doc evidence"
+    );
+
+    let mut llm_calls: u32 = 0;
+
+    let mut retries = 0;
+    while retries < MAX_INTEGRATE_RETRIES {
+        let evidence_summary = format_evidence_summary(&state.all_evidence);
+        let sufficient = check_cross_doc_sufficiency(query, &evidence_summary, llm).await;
+        llm_calls += 1;
+        info!(
+            sufficient,
+            evidence = state.all_evidence.len(),
+            retry = retries,
+            "Cross-doc sufficiency check"
+        );
+        emitter.emit_sufficiency(sufficient, state.all_evidence.len());
+
+        if sufficient {
+            break;
+        }
+
+        warn!(retry = retries, "Cross-doc evidence insufficient, supplementing");
+        retries += 1;
+
+        let max_dispatch =
+            MAX_SUPPLEMENTAL_DISPATCH.min(ws.doc_count() - state.dispatched.len());
+        let undispatched: Vec<DispatchEntry> = (0..ws.doc_count())
+            .filter(|i| !state.dispatched.contains(i))
+            .take(max_dispatch)
+            .map(|idx| DispatchEntry {
+                doc_idx: idx,
+                reason: "Supplemental dispatch".to_string(),
+                task: query.to_string(),
+            })
+            .collect();
+
+        if !undispatched.is_empty() {
+            dispatch_and_collect(query, &undispatched, ws, config, llm, state, emitter).await;
+        } else {
+            break;
+        }
+    }
+
+    llm_calls
+}
+
+/// Phase 4: Synthesize the final answer from collected evidence.
+///
+/// For single user-specified doc: uses simple `answer_synthesis` prompt.
+/// For multi-doc or workspace: uses `orchestrator_integration` prompt.
+///
+/// Returns `(answer, llm_calls)`.
+async fn synthesize(
+    query: &str,
+    ws: &WorkspaceContext<'_>,
+    config: &Config,
+    llm: &LlmClient,
+    state: &OrchestratorState,
+    emitter: &EventEmitter,
+    skip_analysis: bool,
+) -> (String, u32) {
+    // Quality filter: drop SubAgent results with no meaningful evidence
+    const MIN_EVIDENCE_CHARS: usize = 50;
+    let quality_filtered: Vec<&Output> = state
+        .sub_results
+        .iter()
+        .filter(|result| {
+            if result.evidence.is_empty() {
+                return false;
+            }
+            result
+                .evidence
+                .iter()
+                .any(|e| e.content.len() >= MIN_EVIDENCE_CHARS)
+        })
+        .collect();
+
+    let filtered_count = state.sub_results.len() - quality_filtered.len();
+    if filtered_count > 0 {
+        info!(
+            filtered = filtered_count,
+            kept = quality_filtered.len(),
+            "Filtered low-quality SubAgent results"
+        );
+    }
+
+    if !config.enable_synthesis || quality_filtered.is_empty() {
+        return (format_evidence_as_answer(&state.all_evidence), 0);
+    }
+
+    // Single user-specified doc: simple synthesis
+    if skip_analysis && ws.doc_count() == 1 {
+        let evidence_text = format_evidence_for_synthesis(&state.all_evidence);
+        let (system, user) = answer_synthesis(&SynthesisParams {
+            query,
+            evidence_text: &evidence_text,
+            missing_info: "",
+        });
+        return match llm.complete(&system, &user).await {
+            Ok(a) => {
+                info!(answer_len = a.len(), "Synthesis complete");
+                emitter.emit_synthesis(a.len());
+                (a.trim().to_string(), 1)
+            }
+            Err(e) => {
+                warn!(error = %e, "Synthesis LLM call failed");
+                (format_evidence_as_answer(&state.all_evidence), 0)
+            }
+        };
+    }
+
+    // Multi-doc or workspace: orchestrator integration
+    struct SubResultData {
+        doc_name: String,
+        evidence_count: usize,
+        evidence_text: String,
+        answer: String,
+    }
+    let summaries: Vec<SubResultData> = quality_filtered
+        .iter()
+        .map(|result| {
+            let doc_name = result
+                .evidence
+                .first()
+                .and_then(|e| e.doc_name.clone())
+                .unwrap_or_else(|| "unknown".to_string());
+            let evidence_text = result
+                .evidence
+                .iter()
+                .map(|e| format!("[{}] {}", e.node_title, e.content))
+                .collect::<Vec<_>>()
+                .join("\n");
+            SubResultData {
+                evidence_count: result.evidence.len(),
+                doc_name,
+                evidence_text,
+                answer: result.answer.clone(),
+            }
+        })
+        .collect();
+
+    let summary_refs: Vec<super::prompts::SubAgentSummary<'_>> = summaries
+        .iter()
+        .map(|s| super::prompts::SubAgentSummary {
+            doc_name: &s.doc_name,
+            evidence_count: s.evidence_count,
+            evidence_text: &s.evidence_text,
+            answer: &s.answer,
+        })
+        .collect();
+
+    let (system, user) = orchestrator_integration(&OrchestratorIntegrationParams {
+        query,
+        sub_results: &summary_refs,
+    });
+
+    match llm.complete(&system, &user).await {
+        Ok(a) => {
+            info!(answer_len = a.len(), "Synthesis complete");
+            emitter.emit_synthesis(a.len());
+            (a.trim().to_string(), 1)
+        }
+        Err(e) => {
+            warn!(error = %e, "Orchestrator synthesis LLM call failed");
+            (format_evidence_as_answer(&state.all_evidence), 0)
+        }
+    }
 }
 
 /// Try fast path across all documents.

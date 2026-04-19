@@ -85,7 +85,7 @@ impl RetrieverClient {
             doc_name,
         };
 
-        let scope = agent::Scope::Single(doc_ctx);
+        let scope = agent::Scope::Specified(vec![doc_ctx]);
         let emitter = AgentEventEmitter::noop();
         let output = dispatcher::dispatch(question, scope, &self.config, &self.llm, &emitter)
             .await?;

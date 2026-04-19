@@ -768,31 +768,18 @@ impl Engine {
                 })
                 .collect();
 
-            let result = if owned_docs.len() == 1 {
-                let (doc_id, doc, nav_index, reasoning_index) =
-                    owned_docs.into_iter().next().unwrap();
-                let doc_ctx = crate::agent::DocContext {
+            // All streaming queries are user-specified docs → always use Scope::Specified
+            let doc_contexts: Vec<crate::agent::DocContext> = owned_docs
+                .iter()
+                .map(|(id, doc, nav, ridx)| crate::agent::DocContext {
                     tree: &doc.tree,
-                    nav_index: &nav_index,
-                    reasoning_index: &reasoning_index,
-                    doc_name: &doc_id,
-                };
-                let scope = crate::agent::Scope::Single(doc_ctx);
-                crate::retrieval::dispatcher::dispatch(&query, scope, &config, &llm, &emitter).await
-            } else {
-                let doc_contexts: Vec<crate::agent::DocContext> = owned_docs
-                    .iter()
-                    .map(|(id, doc, nav, ridx)| crate::agent::DocContext {
-                        tree: &doc.tree,
-                        nav_index: nav,
-                        reasoning_index: ridx,
-                        doc_name: id.as_str(),
-                    })
-                    .collect();
-                let ws = crate::agent::WorkspaceContext::new(doc_contexts);
-                let scope = crate::agent::Scope::Workspace(ws);
-                crate::retrieval::dispatcher::dispatch(&query, scope, &config, &llm, &emitter).await
-            };
+                    nav_index: nav,
+                    reasoning_index: ridx,
+                    doc_name: id.as_str(),
+                })
+                .collect();
+            let scope = crate::agent::Scope::Specified(doc_contexts);
+            let result = crate::retrieval::dispatcher::dispatch(&query, scope, &config, &llm, &emitter).await;
 
             // Bridge agent metrics into global MetricsHub
             if let Ok(output) = result {

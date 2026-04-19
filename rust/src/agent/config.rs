@@ -148,11 +148,17 @@ pub enum Step {
     ForceDone(String),
 }
 
-/// Scope context — determines which path the agent takes.
+/// Scope context — determines which path the dispatcher takes.
+///
+/// Both variants go through the Orchestrator. The difference is:
+/// - `Specified`: user chose specific documents → skip Orchestrator analysis phase
+/// - `Workspace`: user didn't specify → Orchestrator analyzes DocCards to select docs
 pub enum Scope<'a> {
-    /// Single document — SubAgent runs directly, no Orchestrator.
-    Single(DocContext<'a>),
-    /// Workspace / multiple documents — Orchestrator analyzes and dispatches.
+    /// User specified one or more documents (by doc_id).
+    /// Orchestrator skips analysis, spawns SubAgents directly.
+    Specified(Vec<DocContext<'a>>),
+    /// Workspace scope — user didn't specify documents.
+    /// Orchestrator analyzes DocCards and selects relevant ones.
     Workspace(WorkspaceContext<'a>),
 }
 
