@@ -51,6 +51,7 @@ mod metrics;
 
 mod index;
 mod llm;
+mod query;
 mod retrieval;
 mod storage;
 mod utils;
