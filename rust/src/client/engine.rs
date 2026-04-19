@@ -860,11 +860,6 @@ impl Engine {
         }
     }
 
-    /// Get current active operation count.
-    pub fn active_operations(&self) -> usize {
-        *self.active_ops.lock().unwrap()
-    }
-
     /// Run a future with an optional timeout.
     /// If `timeout_secs` is `Some`, wraps the future in `tokio::time::timeout`.
     async fn with_timeout<F, T>(&self, timeout_secs: Option<u64>, fut: F) -> Result<T>
@@ -880,19 +875,6 @@ impl Engine {
             }
             None => fut.await,
         }
-    }
-
-    /// Get document structure (tree) and optional reasoning index. Internal use only.
-    pub(crate) async fn get_structure(
-        &self,
-        doc_id: &str,
-    ) -> Result<(DocumentTree, Option<crate::document::ReasoningIndex>)> {
-        let doc =
-            self.workspace.load(doc_id).await?.ok_or_else(|| {
-                Error::DocumentNotFound(format!("Document not found: {}", doc_id))
-            })?;
-
-        Ok((doc.tree, doc.reasoning_index))
     }
 
     /// Resolve QueryScope into a list of document IDs.
