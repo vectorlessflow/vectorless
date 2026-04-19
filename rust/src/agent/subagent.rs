@@ -14,8 +14,9 @@
 use tracing::{debug, info, warn};
 
 use crate::llm::LlmClient;
-use crate::retrieval::complexity::QueryComplexity;
-use crate::retrieval::scoring::bm25::{Bm25Engine, FieldDocument, extract_keywords};
+use crate::utils::bm25::{Bm25Engine, FieldDocument, extract_keywords};
+
+use super::config::QueryComplexity;
 
 use super::command::{Command, parse_command};
 use super::config::{Config, DocContext, Evidence, Output, Step};

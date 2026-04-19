@@ -40,6 +40,7 @@
 
 // ── Modules ──────────────────────────────────────────────────────────────────
 
+mod agent;
 mod client;
 mod config;
 mod document;

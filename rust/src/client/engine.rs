@@ -573,7 +573,7 @@ impl Engine {
     /// as the retrieval agent progresses through navigation.
     ///
     /// Supports single-document and multi-document scope.
-    /// Events are translated from the agent's internal [`AgentEvent`](retrieval::agent::AgentEvent)
+    /// Events are translated from the agent's internal [`AgentEvent`](crate::agent::AgentEvent)
     /// into the public [`RetrieveEvent`] stream.
     pub async fn query_stream(&self, ctx: QueryContext) -> Result<RetrieveEventReceiver> {
         self.check_cancel()?;
@@ -593,15 +593,15 @@ impl Engine {
         }
 
         // Create agent event channel
-        let (agent_tx, mut agent_rx) = crate::retrieval::agent::events::channel(
-            crate::retrieval::agent::events::DEFAULT_AGENT_EVENT_BOUND,
+        let (agent_tx, mut agent_rx) = crate::agent::events::channel(
+            crate::agent::events::DEFAULT_AGENT_EVENT_BOUND,
         );
         let (retrieve_tx, retrieve_rx) =
             crate::retrieval::stream::channel(crate::retrieval::stream::DEFAULT_STREAM_BOUND);
 
         // Spawn a task that translates AgentEvents → RetrieveEvents
         tokio::spawn(async move {
-            use crate::retrieval::agent::AgentEvent;
+            use crate::agent::AgentEvent;
             use crate::retrieval::stream::RetrieveEvent;
 
             while let Some(event) = agent_rx.recv().await {
@@ -719,7 +719,7 @@ impl Engine {
                                 "agent(fp={},plan={},budget={})",
                                 fast_path_hit, plan_generated, budget_exhausted
                             ),
-                            complexity: crate::retrieval::complexity::QueryComplexity::Simple,
+                            complexity: crate::agent::QueryComplexity::Simple,
                             reasoning_chain: crate::retrieval::ReasoningChain::default(),
                             tokens_used: evidence_chars,
                         };
@@ -749,7 +749,7 @@ impl Engine {
         // Run the agent in a background task
         let config = self.retriever.config().clone();
         let llm = self.retriever.llm().clone();
-        let emitter = crate::retrieval::agent::EventEmitter::new(agent_tx);
+        let emitter = crate::agent::EventEmitter::new(agent_tx);
         let metrics_hub = Arc::clone(&self.metrics_hub);
         let start = std::time::Instant::now();
 
@@ -772,27 +772,27 @@ impl Engine {
             let result = if owned_docs.len() == 1 {
                 let (doc_id, doc, nav_index, reasoning_index) =
                     owned_docs.into_iter().next().unwrap();
-                let doc_ctx = crate::retrieval::agent::DocContext {
+                let doc_ctx = crate::agent::DocContext {
                     tree: &doc.tree,
                     nav_index: &nav_index,
                     reasoning_index: &reasoning_index,
                     doc_name: &doc_id,
                 };
-                let scope = crate::retrieval::agent::Scope::Single(doc_ctx);
-                crate::retrieval::agent::retrieve(&query, scope, &config, &llm, &emitter).await
+                let scope = crate::agent::Scope::Single(doc_ctx);
+                crate::agent::retrieve(&query, scope, &config, &llm, &emitter).await
             } else {
-                let doc_contexts: Vec<crate::retrieval::agent::DocContext> = owned_docs
+                let doc_contexts: Vec<crate::agent::DocContext> = owned_docs
                     .iter()
-                    .map(|(id, doc, nav, ridx)| crate::retrieval::agent::DocContext {
+                    .map(|(id, doc, nav, ridx)| crate::agent::DocContext {
                         tree: &doc.tree,
                         nav_index: nav,
                         reasoning_index: ridx,
                         doc_name: id.as_str(),
                     })
                     .collect();
-                let ws = crate::retrieval::agent::WorkspaceContext::new(doc_contexts);
-                let scope = crate::retrieval::agent::Scope::Workspace(ws);
-                crate::retrieval::agent::retrieve(&query, scope, &config, &llm, &emitter).await
+                let ws = crate::agent::WorkspaceContext::new(doc_contexts);
+                let scope = crate::agent::Scope::Workspace(ws);
+                crate::agent::retrieve(&query, scope, &config, &llm, &emitter).await
             };
 
             // Bridge agent metrics into global MetricsHub

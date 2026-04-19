@@ -5,24 +5,7 @@
 
 use serde::{Deserialize, Serialize};
 
-/// Query complexity level for adaptive strategy selection.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum QueryComplexity {
-    /// Simple queries that can be solved with keyword matching.
-    Simple,
-
-    /// Medium complexity queries requiring semantic understanding.
-    Medium,
-
-    /// Complex queries requiring deep LLM reasoning.
-    Complex,
-}
-
-impl Default for QueryComplexity {
-    fn default() -> Self {
-        Self::Medium
-    }
-}
+use crate::agent::QueryComplexity;
 
 /// Sufficiency level for incremental retrieval.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

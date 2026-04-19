@@ -13,7 +13,7 @@
 use tracing::{debug, info, warn};
 
 use crate::llm::LlmClient;
-use crate::retrieval::scoring::bm25::extract_keywords;
+use crate::utils::bm25::extract_keywords;
 
 use super::config::{Config, Output, WorkspaceContext};
 use super::context::FindHit;

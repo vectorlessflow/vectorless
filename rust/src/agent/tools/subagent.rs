@@ -4,10 +4,10 @@
 //! SubAgent tools: ls, cd, cd_up, cat, pwd, grep, head, find_tree, wc.
 
 use super::ToolResult;
-use crate::retrieval::agent::command;
-use crate::retrieval::agent::config::DocContext;
-use crate::retrieval::agent::config::Evidence;
-use crate::retrieval::agent::state::State;
+use crate::agent::command;
+use crate::agent::config::DocContext;
+use crate::agent::config::Evidence;
+use crate::agent::state::State;
 
 /// Execute `ls` — list children of the current node.
 pub fn ls(ctx: &DocContext, state: &State) -> ToolResult {
