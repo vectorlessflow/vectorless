@@ -199,7 +199,8 @@ pub async fn run(
             retries += 1;
 
             // Supplemental: do additional find_cross and dispatch to uncovered docs
-            let max_dispatch = MAX_SUPPLEMENTAL_DISPATCH.min(ws.doc_count() - state.dispatched.len());
+            let max_dispatch =
+                MAX_SUPPLEMENTAL_DISPATCH.min(ws.doc_count() - state.dispatched.len());
             let undispatched: Vec<DispatchEntry> = (0..ws.doc_count())
                 .filter(|i| !state.dispatched.contains(i))
                 .take(max_dispatch)

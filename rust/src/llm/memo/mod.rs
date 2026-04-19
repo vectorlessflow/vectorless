@@ -11,4 +11,4 @@ mod store;
 mod types;
 
 pub use store::MemoStore;
-pub use types::{MemoKey, MemoOpType, MemoValue};
+pub use types::{MemoKey, MemoValue};

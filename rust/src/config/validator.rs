@@ -184,7 +184,6 @@ impl ValidationRule for ConsistencyValidator {
                 .with_actual(config.retrieval.sufficiency.target_tokens.to_string()),
             );
         }
-
     }
 }
 

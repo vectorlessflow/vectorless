@@ -108,8 +108,8 @@ pub async fn run(
     let doc_depth = ctx.tree.max_depth();
     let complexity = detect_query_complexity(query);
     let base_rounds = match complexity {
-        QueryComplexity::Simple => (config.max_rounds * 6 / 10).max(4),  // ~60% of default
-        QueryComplexity::Medium => config.max_rounds,                    // default
+        QueryComplexity::Simple => (config.max_rounds * 6 / 10).max(4), // ~60% of default
+        QueryComplexity::Medium => config.max_rounds,                   // default
         QueryComplexity::Complex => (config.max_rounds * 15 / 10).max(10), // ~150% of default
     };
     let base_llm = match complexity {
@@ -148,7 +148,14 @@ pub async fn run(
     // One LLM call to generate a tentative navigation plan from the bird's-eye view.
     // The plan is non-binding guidance injected into subsequent prompts.
     if state.remaining > 0 && !llm_budget_exhausted!() {
-        let plan_prompt = build_plan_prompt(query, task, &state.last_feedback, ctx.doc_name, &preserved_hits, ctx);
+        let plan_prompt = build_plan_prompt(
+            query,
+            task,
+            &state.last_feedback,
+            ctx.doc_name,
+            &preserved_hits,
+            ctx,
+        );
         match llm.complete(&plan_prompt.0, &plan_prompt.1).await {
             Ok(plan_output) => {
                 llm_calls += 1;
@@ -670,8 +677,7 @@ async fn execute_command(
                 state.check_called = true;
                 state.check_count += 1;
                 emitter.emit_sufficiency(true, state.evidence.len());
-                state.last_feedback =
-                    "Evidence is sufficient. Use done to finish.".to_string();
+                state.last_feedback = "Evidence is sufficient. Use done to finish.".to_string();
                 return Step::Done;
             }
 
@@ -782,7 +788,8 @@ fn build_plan_prompt(
     let mut keyword_section = if keyword_hits.is_empty() {
         String::new()
     } else {
-        let mut section = String::from("\nKeyword index matches (use these to prioritize navigation):\n");
+        let mut section =
+            String::from("\nKeyword index matches (use these to prioritize navigation):\n");
         for hit in keyword_hits {
             let mut entries = hit.entries.clone();
             entries.sort_by(|a, b| {
@@ -893,12 +900,8 @@ fn build_semantic_hints(
         .map(|route| {
             let nav = ctx.nav_entry(route.node_id);
             let overview = nav.map(|n| n.overview.as_str()).unwrap_or("");
-            let hints_text = nav
-                .map(|n| n.question_hints.join(" "))
-                .unwrap_or_default();
-            let tags_text = nav
-                .map(|n| n.topic_tags.join(" "))
-                .unwrap_or_default();
+            let hints_text = nav.map(|n| n.question_hints.join(" ")).unwrap_or_default();
+            let tags_text = nav.map(|n| n.topic_tags.join(" ")).unwrap_or_default();
 
             // Content field combines all metadata for rich matching.
             let content = if overview.is_empty() && hints_text.is_empty() && tags_text.is_empty() {
@@ -963,8 +966,7 @@ fn build_semantic_hints(
         for tag in &nav.topic_tags {
             let tag_lower = tag.to_lowercase();
             for kw in query_keywords {
-                if tag_lower.contains(&kw.to_lowercase())
-                    || kw.to_lowercase().contains(&tag_lower)
+                if tag_lower.contains(&kw.to_lowercase()) || kw.to_lowercase().contains(&tag_lower)
                 {
                     annotations.push(format!("topic \"{}\"", tag));
                     break;
@@ -1157,7 +1159,8 @@ fn build_replan_prompt(
          focused 2-3 step plan. Each step should be a specific action like \
          \"cd to X, then cat Y\" or \"grep for Z in current subtree\". \
          Prefer exploring unvisited branches. If current branch is exhausted, cd .. and try \
-         a different path. Output only the plan, nothing else.".to_string();
+         a different path. Output only the plan, nothing else."
+        .to_string();
 
     let user = format!(
         "Original question: {query}{task_section}\n\
@@ -1188,9 +1191,25 @@ fn detect_query_complexity(query: &str) -> QueryComplexity {
 
     // Complex indicators (English + Chinese)
     let complex_indicators = [
-        "compare", "contrast", "analyze", "evaluate", "synthesize",
-        "explain why", "how does", "relationship between", "cause and effect",
-        "对比", "分析", "评估", "综合", "为什么", "原因", "关系", "影响", "区别", "异同",
+        "compare",
+        "contrast",
+        "analyze",
+        "evaluate",
+        "synthesize",
+        "explain why",
+        "how does",
+        "relationship between",
+        "cause and effect",
+        "对比",
+        "分析",
+        "评估",
+        "综合",
+        "为什么",
+        "原因",
+        "关系",
+        "影响",
+        "区别",
+        "异同",
     ];
     for indicator in &complex_indicators {
         if query_lower.contains(indicator) {
@@ -1200,8 +1219,19 @@ fn detect_query_complexity(query: &str) -> QueryComplexity {
 
     // Simple indicators
     let simple_indicators = [
-        "what is", "define", "list", "who", "when", "where",
-        "什么是", "定义", "列表", "谁", "何时", "哪里", "在哪",
+        "what is",
+        "define",
+        "list",
+        "who",
+        "when",
+        "where",
+        "什么是",
+        "定义",
+        "列表",
+        "谁",
+        "何时",
+        "哪里",
+        "在哪",
     ];
     for indicator in &simple_indicators {
         if query_lower.contains(indicator) && word_count <= 15 {
@@ -1516,7 +1546,11 @@ mod tests {
                     "What is the total revenue?".to_string(),
                     "What was the Q1 revenue?".to_string(),
                 ],
-                topic_tags: vec!["revenue".to_string(), "sales".to_string(), "income".to_string()],
+                topic_tags: vec![
+                    "revenue".to_string(),
+                    "sales".to_string(),
+                    "income".to_string(),
+                ],
                 leaf_count: 2,
                 level: 1,
             },
@@ -1589,7 +1623,8 @@ mod tests {
 
         // "costs" should match the Expenses topic_tag via BM25 scoring
         let keywords = extract_keywords("operating costs analysis");
-        let hints = build_semantic_hints(&keywords, &"operating costs analysis".to_lowercase(), &ctx);
+        let hints =
+            build_semantic_hints(&keywords, &"operating costs analysis".to_lowercase(), &ctx);
 
         assert!(
             hints.contains("Expenses"),
@@ -1662,7 +1697,8 @@ mod tests {
             doc_name: "Financial Report",
         };
 
-        let ls_output = "[1] Revenue — Revenue breakdown (2 leaves)\n[2] Expenses — Cost analysis (2 leaves)\n";
+        let ls_output =
+            "[1] Revenue — Revenue breakdown (2 leaves)\n[2] Expenses — Cost analysis (2 leaves)\n";
 
         let (system, user) = build_plan_prompt(
             "What is the revenue?",
@@ -1675,7 +1711,9 @@ mod tests {
 
         assert!(system.contains("semantic hints"));
         // "revenue" should produce BM25 matches against the Revenue route
-        assert!(user.contains("Revenue") || user.contains("BM25") || user.contains("Semantic hints"));
+        assert!(
+            user.contains("Revenue") || user.contains("BM25") || user.contains("Semantic hints")
+        );
         assert!(user.contains("What is the revenue?"));
     }
 
@@ -1683,24 +1721,44 @@ mod tests {
 
     #[test]
     fn test_complexity_simple() {
-        assert_eq!(detect_query_complexity("What is revenue?"), QueryComplexity::Simple);
-        assert_eq!(detect_query_complexity("Define async"), QueryComplexity::Simple);
-        assert_eq!(detect_query_complexity("什么是向量检索"), QueryComplexity::Simple);
-        assert_eq!(detect_query_complexity("Q1 revenue"), QueryComplexity::Simple);
+        assert_eq!(
+            detect_query_complexity("What is revenue?"),
+            QueryComplexity::Simple
+        );
+        assert_eq!(
+            detect_query_complexity("Define async"),
+            QueryComplexity::Simple
+        );
+        assert_eq!(
+            detect_query_complexity("什么是向量检索"),
+            QueryComplexity::Simple
+        );
+        assert_eq!(
+            detect_query_complexity("Q1 revenue"),
+            QueryComplexity::Simple
+        );
     }
 
     #[test]
     fn test_complexity_complex() {
         assert_eq!(
-            detect_query_complexity("Compare and contrast the different approaches to async programming"),
+            detect_query_complexity(
+                "Compare and contrast the different approaches to async programming"
+            ),
             QueryComplexity::Complex
         );
         assert_eq!(
             detect_query_complexity("What is the relationship between ownership and borrowing?"),
             QueryComplexity::Complex
         );
-        assert_eq!(detect_query_complexity("对比A和B的区别"), QueryComplexity::Complex);
-        assert_eq!(detect_query_complexity("分析索引和检索的关系"), QueryComplexity::Complex);
+        assert_eq!(
+            detect_query_complexity("对比A和B的区别"),
+            QueryComplexity::Complex
+        );
+        assert_eq!(
+            detect_query_complexity("分析索引和检索的关系"),
+            QueryComplexity::Complex
+        );
     }
 
     #[test]
@@ -1713,6 +1771,9 @@ mod tests {
 
     #[test]
     fn test_complexity_medium() {
-        assert_eq!(detect_query_complexity("Show me the financial report summary"), QueryComplexity::Medium);
+        assert_eq!(
+            detect_query_complexity("Show me the financial report summary"),
+            QueryComplexity::Medium
+        );
     }
 }

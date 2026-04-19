@@ -593,9 +593,8 @@ impl Engine {
         }
 
         // Create agent event channel
-        let (agent_tx, mut agent_rx) = crate::agent::events::channel(
-            crate::agent::events::DEFAULT_AGENT_EVENT_BOUND,
-        );
+        let (agent_tx, mut agent_rx) =
+            crate::agent::events::channel(crate::agent::events::DEFAULT_AGENT_EVENT_BOUND);
         let (retrieve_tx, retrieve_rx) =
             crate::retrieval::stream::channel(crate::retrieval::stream::DEFAULT_STREAM_BOUND);
 
