@@ -28,11 +28,7 @@ pub fn to_single_result(output: &Output) -> QueryResultItem {
         output.answer.clone()
     };
 
-    let score = if output.evidence.is_empty() {
-        0.0
-    } else {
-        0.8
-    };
+    let score = if output.evidence.is_empty() { 0.0 } else { 0.8 };
 
     QueryResultItem {
         doc_id: String::new(), // Set by caller

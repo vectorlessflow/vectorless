@@ -6,7 +6,7 @@
 //! Uses the `query` module for complexity detection, keyword extraction,
 //! and budget computation.
 
-use crate::query::{detect_query_complexity, Budget, QueryPlan};
+use crate::query::{Budget, QueryPlan, detect_query_complexity};
 use crate::scoring::bm25::extract_keywords;
 
 /// Preprocess a raw query string into a structured [`QueryPlan`].
@@ -31,7 +31,12 @@ pub fn preprocess(query: &str) -> QueryPlan {
 }
 
 /// Preprocess a query with known document depth for accurate budget.
-pub fn preprocess_with_depth(query: &str, doc_depth: usize, base_rounds: u32, base_llm: u32) -> QueryPlan {
+pub fn preprocess_with_depth(
+    query: &str,
+    doc_depth: usize,
+    base_rounds: u32,
+    base_llm: u32,
+) -> QueryPlan {
     let complexity = detect_query_complexity(query);
     let keywords = extract_keywords(query);
     let budget = Budget::adaptive(complexity, doc_depth, base_rounds, base_llm);

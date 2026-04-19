@@ -211,20 +211,19 @@ impl ReasoningIndexStage {
             keywords.join(", ")
         );
 
-        let synonym_map: HashMap<String, Vec<String>> =
-            match llm_client.complete_json::<HashMap<String, Vec<String>>>(system, &user_prompt).await {
-                Ok(map) => map
-                    .into_iter()
-                    .map(|(k, v): (String, Vec<String>)| (k.to_lowercase(), v))
-                    .collect(),
-                Err(e) => {
-                    tracing::warn!(
-                        "[reasoning_index] Batch synonym expansion failed: {}",
-                        e
-                    );
-                    return 0;
-                }
-            };
+        let synonym_map: HashMap<String, Vec<String>> = match llm_client
+            .complete_json::<HashMap<String, Vec<String>>>(system, &user_prompt)
+            .await
+        {
+            Ok(map) => map
+                .into_iter()
+                .map(|(k, v): (String, Vec<String>)| (k.to_lowercase(), v))
+                .collect(),
+            Err(e) => {
+                tracing::warn!("[reasoning_index] Batch synonym expansion failed: {}", e);
+                return 0;
+            }
+        };
 
         // Write results back
         let mut synonym_count = 0;
@@ -233,7 +232,10 @@ impl ReasoningIndexStage {
                 if let Some(entries) = source_entries.get(keyword) {
                     for syn in synonyms {
                         let syn_clean = syn.trim().to_lowercase();
-                        if syn_clean.is_empty() || syn_clean.len() < 2 || existing_keys.contains(&syn_clean) {
+                        if syn_clean.is_empty()
+                            || syn_clean.len() < 2
+                            || existing_keys.contains(&syn_clean)
+                        {
                             continue;
                         }
                         let synonym_entries: Vec<TopicEntry> = entries
@@ -366,8 +368,7 @@ impl IndexStage for ReasoningIndexStage {
         let synonym_count = if config.enable_synonym_expansion {
             if let Some(ref llm_client) = ctx.llm_client {
                 let max_kw = (keyword_count / 4).max(20).min(100);
-                let count =
-                    Self::expand_synonyms(&mut topic_paths, llm_client, max_kw).await;
+                let count = Self::expand_synonyms(&mut topic_paths, llm_client, max_kw).await;
                 if count > 0 {
                     info!("[reasoning_index] Expanded {} synonym keywords", count);
                 }

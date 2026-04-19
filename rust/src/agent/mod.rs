@@ -32,5 +32,7 @@ pub mod orchestrator;
 pub mod prompts;
 pub mod subagent;
 
-pub use config::{Config, DocContext, Evidence, Metrics, Output, QueryComplexity, Scope, WorkspaceContext};
+pub use config::{
+    Config, DocContext, Evidence, Metrics, Output, QueryComplexity, Scope, WorkspaceContext,
+};
 pub use events::{AgentEvent, EventEmitter};

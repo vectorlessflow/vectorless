@@ -37,7 +37,10 @@ pub async fn dispatch(
 ) -> Result<Output> {
     let (ws, skip_analysis) = match scope {
         Scope::Specified(docs) => {
-            info!(docs = docs.len(), "Dispatch (user-specified, skip analysis)");
+            info!(
+                docs = docs.len(),
+                "Dispatch (user-specified, skip analysis)"
+            );
             (WorkspaceContext::new(docs), true)
         }
         Scope::Workspace(ws) => {

@@ -87,8 +87,8 @@ impl RetrieverClient {
 
         let scope = agent::Scope::Specified(vec![doc_ctx]);
         let emitter = AgentEventEmitter::noop();
-        let output = dispatcher::dispatch(question, scope, &self.config, &self.llm, &emitter)
-            .await?;
+        let output =
+            dispatcher::dispatch(question, scope, &self.config, &self.llm, &emitter).await?;
 
         let result = postprocessor::to_single_result(&output);
 
@@ -127,8 +127,8 @@ impl RetrieverClient {
         let scope = agent::Scope::Workspace(ws);
         let emitter = AgentEventEmitter::noop();
 
-        let output = dispatcher::dispatch(question, scope, &self.config, &self.llm, &emitter)
-            .await?;
+        let output =
+            dispatcher::dispatch(question, scope, &self.config, &self.llm, &emitter).await?;
 
         let result = postprocessor::to_multi_result(&output);
 
@@ -139,7 +139,6 @@ impl RetrieverClient {
 
         Ok(result)
     }
-
 }
 
 impl Clone for RetrieverClient {

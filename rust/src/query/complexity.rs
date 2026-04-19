@@ -129,7 +129,9 @@ mod tests {
     #[test]
     fn chinese_complex() {
         assert_eq!(
-            detect_query_complexity("\u{5bf9}\u{6bd4}\u{5e02}\u{573a}\u{98ce}\u{9669}\u{548c}\u{8fd0}\u{8425}\u{98ce}\u{9669}"),
+            detect_query_complexity(
+                "\u{5bf9}\u{6bd4}\u{5e02}\u{573a}\u{98ce}\u{9669}\u{548c}\u{8fd0}\u{8425}\u{98ce}\u{9669}"
+            ),
             QueryComplexity::Complex
         );
     }

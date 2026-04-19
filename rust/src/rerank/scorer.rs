@@ -4,7 +4,7 @@
 //! Relevance scoring using BM25.
 
 use crate::agent::Evidence;
-use crate::scoring::bm25::{extract_keywords, Bm25Engine, FieldDocument};
+use crate::scoring::bm25::{Bm25Engine, FieldDocument, extract_keywords};
 
 /// Score evidence items against the query using BM25.
 ///
@@ -45,8 +45,7 @@ pub fn rank(query: &str, evidence: &[Evidence]) -> Vec<(usize, f32)> {
         .collect();
 
     // Add unscored evidence with score 0.0
-    let scored_ids: std::collections::HashSet<usize> =
-        results.iter().map(|(id, _)| *id).collect();
+    let scored_ids: std::collections::HashSet<usize> = results.iter().map(|(id, _)| *id).collect();
     for i in 0..evidence.len() {
         if !scored_ids.contains(&i) {
             results.push((i, 0.0));
@@ -75,9 +74,18 @@ mod tests {
     #[test]
     fn test_rank_sorts_by_relevance() {
         let evidence = vec![
-            make_evidence("Unrelated", "The weather is nice today and the sun is shining"),
-            make_evidence("ML Intro", "Machine learning algorithms for classification and regression tasks"),
-            make_evidence("ML Advanced", "Deep learning neural networks for image recognition"),
+            make_evidence(
+                "Unrelated",
+                "The weather is nice today and the sun is shining",
+            ),
+            make_evidence(
+                "ML Intro",
+                "Machine learning algorithms for classification and regression tasks",
+            ),
+            make_evidence(
+                "ML Advanced",
+                "Deep learning neural networks for image recognition",
+            ),
         ];
         let ranked = rank("machine learning", &evidence);
         assert_eq!(ranked.len(), 3);

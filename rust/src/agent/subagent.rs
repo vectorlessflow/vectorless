@@ -23,12 +23,12 @@ use super::config::{Config, DocContext, Evidence, Output, Step};
 use super::context::FindHit;
 use super::events::EventEmitter;
 use super::prompts::{
-    NavigationParams, check_sufficiency,
-    parse_sufficiency_response, subagent_dispatch, subagent_navigation,
+    NavigationParams, check_sufficiency, parse_sufficiency_response, subagent_dispatch,
+    subagent_navigation,
 };
-use crate::rerank::synthesis::{SynthesisParams, answer_synthesis_prompt as answer_synthesis};
 use super::state::State;
 use super::tools::subagent as tools;
+use crate::rerank::synthesis::{SynthesisParams, answer_synthesis_prompt as answer_synthesis};
 
 /// Run the SubAgent loop on a single document.
 ///

@@ -779,7 +779,9 @@ impl Engine {
                 })
                 .collect();
             let scope = crate::agent::Scope::Specified(doc_contexts);
-            let result = crate::retrieval::dispatcher::dispatch(&query, scope, &config, &llm, &emitter).await;
+            let result =
+                crate::retrieval::dispatcher::dispatch(&query, scope, &config, &llm, &emitter)
+                    .await;
 
             // Bridge agent metrics into global MetricsHub
             if let Ok(output) = result {

@@ -19,8 +19,7 @@ use super::config::{Config, Output, WorkspaceContext};
 use super::context::FindHit;
 use super::events::EventEmitter;
 use super::prompts::{
-    DispatchEntry, OrchestratorAnalysisParams,
-    check_sufficiency, orchestrator_analysis,
+    DispatchEntry, OrchestratorAnalysisParams, check_sufficiency, orchestrator_analysis,
     parse_dispatch_plan, parse_sufficiency_response,
 };
 use super::state::OrchestratorState;
@@ -61,7 +60,10 @@ pub async fn run(
     emitter: &EventEmitter,
     skip_analysis: bool,
 ) -> crate::error::Result<Output> {
-    info!(docs = ws.doc_count(), skip_analysis, "Orchestrator starting");
+    info!(
+        docs = ws.doc_count(),
+        skip_analysis, "Orchestrator starting"
+    );
     emitter.emit_started(query, ws.doc_count() > 1);
 
     let mut state = OrchestratorState::new();
@@ -85,8 +87,12 @@ pub async fn run(
     }
 
     // --- Phase 1: Analyze ---
-    let dispatches = match analyze(query, ws, config, llm, &mut state, emitter, skip_analysis).await {
-        AnalyzeOutcome::Proceed { dispatches, llm_calls } => {
+    let dispatches = match analyze(query, ws, config, llm, &mut state, emitter, skip_analysis).await
+    {
+        AnalyzeOutcome::Proceed {
+            dispatches,
+            llm_calls,
+        } => {
             orch_llm_calls += llm_calls;
             dispatches
         }
@@ -126,8 +132,7 @@ pub async fn run(
     }
 
     if !skip_analysis {
-        orch_llm_calls +=
-            integrate(query, ws, config, llm, &mut state, emitter).await;
+        orch_llm_calls += integrate(query, ws, config, llm, &mut state, emitter).await;
     }
 
     // --- Phase 4: Rerank ---
@@ -193,7 +198,10 @@ async fn analyze(
                 task: query.to_string(),
             })
             .collect();
-        return AnalyzeOutcome::Proceed { dispatches, llm_calls: 0 };
+        return AnalyzeOutcome::Proceed {
+            dispatches,
+            llm_calls: 0,
+        };
     }
 
     debug!("Phase 1: analyzing doc cards and cross-doc keywords");
@@ -243,8 +251,7 @@ async fn analyze(
         match llm.complete(&system, &user).await {
             Ok(second_output) => {
                 llm_calls += 1;
-                if let Some(second_dispatches) =
-                    parse_dispatch_plan(&second_output, ws.doc_count())
+                if let Some(second_dispatches) = parse_dispatch_plan(&second_output, ws.doc_count())
                 {
                     if !second_dispatches.is_empty() {
                         info!(
@@ -253,7 +260,13 @@ async fn analyze(
                         );
                         state.analyze_done = true;
                         dispatch_and_collect(
-                            query, &second_dispatches, ws, config, llm, state, emitter,
+                            query,
+                            &second_dispatches,
+                            ws,
+                            config,
+                            llm,
+                            state,
+                            emitter,
                         )
                         .await;
                     }
@@ -270,11 +283,17 @@ async fn analyze(
         }
 
         // Already dispatched during expanded analysis, skip Phase 2
-        return AnalyzeOutcome::Proceed { dispatches: Vec::new(), llm_calls };
+        return AnalyzeOutcome::Proceed {
+            dispatches: Vec::new(),
+            llm_calls,
+        };
     }
 
     state.analyze_done = true;
-    AnalyzeOutcome::Proceed { dispatches, llm_calls }
+    AnalyzeOutcome::Proceed {
+        dispatches,
+        llm_calls,
+    }
 }
 
 /// Phase 3: Cross-doc sufficiency integration.
@@ -317,11 +336,13 @@ async fn integrate(
             break;
         }
 
-        warn!(retry = retries, "Cross-doc evidence insufficient, supplementing");
+        warn!(
+            retry = retries,
+            "Cross-doc evidence insufficient, supplementing"
+        );
         retries += 1;
 
-        let max_dispatch =
-            MAX_SUPPLEMENTAL_DISPATCH.min(ws.doc_count() - state.dispatched.len());
+        let max_dispatch = MAX_SUPPLEMENTAL_DISPATCH.min(ws.doc_count() - state.dispatched.len());
         let undispatched: Vec<DispatchEntry> = (0..ws.doc_count())
             .filter(|i| !state.dispatched.contains(i))
             .take(max_dispatch)
