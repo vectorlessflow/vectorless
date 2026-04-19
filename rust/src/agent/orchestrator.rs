@@ -217,6 +217,11 @@ async fn analyze(
     };
 
     info!(keywords = ?keywords, "Phase 1: analyzing");
+    debug!(
+        doc_cards_len = doc_cards_text.len(),
+        find_results_len = find_text.len(),
+        "Phase 1: analysis input"
+    );
 
     let (system, user) = orchestrator_analysis(&OrchestratorAnalysisParams {
         query,
@@ -234,6 +239,12 @@ async fn analyze(
     };
     llm_calls += 1;
 
+    info!(
+        response_len = analysis_output.len(),
+        response = %if analysis_output.len() > 500 { &analysis_output[..500] } else { &analysis_output },
+        "Phase 1: analysis LLM response"
+    );
+
     // Check if already answered
     let dispatches = match parse_dispatch_plan(&analysis_output, ws.doc_count()) {
         Some(entries) => entries,
@@ -242,6 +253,8 @@ async fn analyze(
             return AnalyzeOutcome::AlreadyAnswered { llm_calls };
         }
     };
+
+    info!(dispatches = dispatches.len(), "Phase 1: parsed dispatch plan");
 
     if dispatches.is_empty() {
         // Expanded analysis: retry with richer context
@@ -252,6 +265,11 @@ async fn analyze(
         match llm.complete(&system, &user).await {
             Ok(second_output) => {
                 llm_calls += 1;
+                info!(
+                    response_len = second_output.len(),
+                    response = %if second_output.len() > 500 { &second_output[..500] } else { &second_output },
+                    "Phase 1 (expanded): second analysis LLM response"
+                );
                 if let Some(second_dispatches) = parse_dispatch_plan(&second_output, ws.doc_count())
                 {
                     if !second_dispatches.is_empty() {
