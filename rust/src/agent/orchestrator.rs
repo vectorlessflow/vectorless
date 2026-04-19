@@ -137,7 +137,7 @@ pub async fn run(
 
     // --- Phase 4: Rerank ---
     let multi_doc = !skip_analysis || ws.doc_count() > 1;
-    let (answer, synth_calls) = crate::rerank::process(
+    let rerank_result = crate::rerank::process(
         query,
         &state.all_evidence,
         config,
@@ -146,13 +146,14 @@ pub async fn run(
         &state.sub_results,
     )
     .await;
-    orch_llm_calls += synth_calls;
-    if !answer.is_empty() {
-        emitter.emit_synthesis(answer.len());
+    orch_llm_calls += rerank_result.llm_calls;
+    if !rerank_result.answer.is_empty() {
+        emitter.emit_synthesis(rerank_result.answer.len());
     }
 
-    let mut output = state.into_output(answer);
+    let mut output = state.into_output(rerank_result.answer);
     output.metrics.llm_calls += orch_llm_calls;
+    output.score = rerank_result.score;
 
     emitter.emit_completed(
         output.evidence.len(),
@@ -549,7 +550,7 @@ async fn fallback_dispatch_all(
 
     // Use rerank pipeline for synthesis
     let multi_doc = ws.doc_count() > 1;
-    let (answer, synth_calls) = crate::rerank::process(
+    let rerank_result = crate::rerank::process(
         query,
         &state.all_evidence,
         config,
@@ -558,12 +559,13 @@ async fn fallback_dispatch_all(
         &state.sub_results,
     )
     .await;
-    if !answer.is_empty() {
-        emitter.emit_synthesis(answer.len());
+    if !rerank_result.answer.is_empty() {
+        emitter.emit_synthesis(rerank_result.answer.len());
     }
 
-    let mut output = state.into_output(answer);
-    output.metrics.llm_calls += synth_calls;
+    let mut output = state.into_output(rerank_result.answer);
+    output.metrics.llm_calls += rerank_result.llm_calls;
+    output.score = rerank_result.score;
 
     emitter.emit_completed(
         output.evidence.len(),

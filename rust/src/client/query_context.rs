@@ -57,6 +57,13 @@ pub struct QueryContext {
     pub(crate) depth_limit: Option<usize>,
     /// Per-operation timeout (seconds). `None` means no timeout.
     pub(crate) timeout_secs: Option<u64>,
+    /// Force Orchestrator analysis even when documents are specified.
+    ///
+    /// When `true`, the Orchestrator analyzes DocCards to select relevant
+    /// documents instead of dispatching all specified docs directly.
+    /// Useful when the user wants the system to decide which documents
+    /// (or sections) are most relevant to the query.
+    pub(crate) force_analysis: bool,
 }
 
 impl QueryContext {
@@ -69,6 +76,7 @@ impl QueryContext {
             include_reasoning: true,
             depth_limit: None,
             timeout_secs: None,
+            force_analysis: false,
         }
     }
 
@@ -108,6 +116,21 @@ impl QueryContext {
     /// Set per-operation timeout in seconds.
     pub fn with_timeout_secs(mut self, secs: u64) -> Self {
         self.timeout_secs = Some(secs);
+        self
+    }
+
+    /// Force the Orchestrator to analyze documents before dispatching SubAgents.
+    ///
+    /// By default, when documents are specified via `with_doc_ids()`, the
+    /// Orchestrator skips its analysis phase and dispatches SubAgents to all
+    /// specified documents directly. Setting this to `true` forces the
+    /// Orchestrator to analyze DocCards and decide which documents are
+    /// relevant, even when the user specified documents explicitly.
+    ///
+    /// This is useful when querying across many documents where only a subset
+    /// is likely relevant to the specific question.
+    pub fn with_force_analysis(mut self, force: bool) -> Self {
+        self.force_analysis = force;
         self
     }
 }

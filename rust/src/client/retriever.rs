@@ -8,8 +8,8 @@
 
 use tracing::info;
 
-use super::types::QueryResultItem;
 use crate::agent::{self, events::EventEmitter as AgentEventEmitter};
+use crate::client::types::QueryResult;
 use crate::document::{DocumentTree, NavigationIndex, ReasoningIndex};
 use crate::error::Result;
 use crate::events::{EventEmitter, QueryEvent};
@@ -70,8 +70,8 @@ impl RetrieverClient {
         nav_index: &NavigationIndex,
         reasoning_index: &ReasoningIndex,
         question: &str,
-        doc_name: &str,
-    ) -> Result<QueryResultItem> {
+        doc_id: &str,
+    ) -> Result<QueryResult> {
         self.events.emit_query(QueryEvent::Started {
             query: question.to_string(),
         });
@@ -82,7 +82,7 @@ impl RetrieverClient {
             tree,
             nav_index,
             reasoning_index,
-            doc_name,
+            doc_name: doc_id,
         };
 
         let scope = agent::Scope::Specified(vec![doc_ctx]);
@@ -90,11 +90,12 @@ impl RetrieverClient {
         let output =
             dispatcher::dispatch(question, scope, &self.config, &self.llm, &emitter).await?;
 
-        let result = postprocessor::to_single_result(&output);
+        let items = postprocessor::to_results(&output, doc_id);
+        let result = QueryResult::new_with_items(items);
 
         self.events.emit_query(QueryEvent::Complete {
-            total_results: result.node_ids.len(),
-            confidence: result.score,
+            total_results: result.len(),
+            confidence: result.single().map(|i| i.score).unwrap_or(0.0),
         });
 
         Ok(result)
@@ -106,7 +107,7 @@ impl RetrieverClient {
         &self,
         documents: &[(DocumentTree, NavigationIndex, ReasoningIndex, String)],
         question: &str,
-    ) -> Result<QueryResultItem> {
+    ) -> Result<QueryResult> {
         self.events.emit_query(QueryEvent::Started {
             query: question.to_string(),
         });
@@ -130,11 +131,17 @@ impl RetrieverClient {
         let output =
             dispatcher::dispatch(question, scope, &self.config, &self.llm, &emitter).await?;
 
-        let result = postprocessor::to_multi_result(&output);
+        // Use first doc_id as fallback for evidence without doc_name
+        let fallback_id = documents
+            .first()
+            .map(|(_, _, _, id)| id.as_str())
+            .unwrap_or("");
+        let items = postprocessor::to_results(&output, fallback_id);
+        let result = QueryResult::new_with_items(items);
 
         self.events.emit_query(QueryEvent::Complete {
-            total_results: result.node_ids.len(),
-            confidence: result.score,
+            total_results: result.len(),
+            confidence: result.single().map(|i| i.score).unwrap_or(0.0),
         });
 
         Ok(result)

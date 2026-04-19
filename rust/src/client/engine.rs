@@ -67,7 +67,7 @@ use super::{
     query_context::{QueryContext, QueryScope},
     retriever::RetrieverClient,
     types::{
-        DocumentInfo, FailedItem, IndexItem, IndexMode, IndexResult, QueryResult, QueryResultItem,
+        DocumentInfo, FailedItem, IndexItem, IndexMode, IndexResult, QueryResult,
     },
     workspace::WorkspaceClient,
 };
@@ -487,12 +487,43 @@ impl Engine {
                 }
             }
 
+            // Force analysis: load all docs and route through Workspace scope
+            if ctx.force_analysis {
+                let mut documents = Vec::new();
+                let mut failed = Vec::new();
+                for doc_id in &doc_ids {
+                    match self.workspace.load(doc_id).await {
+                        Ok(Some(doc)) => {
+                            let nav_index = doc.navigation_index.unwrap_or_default();
+                            let reasoning_index = doc.reasoning_index.unwrap_or_default();
+                            documents.push((doc.tree, nav_index, reasoning_index, doc_id.clone()));
+                        }
+                        Ok(None) => {
+                            failed.push(FailedItem::new(doc_id, "Document not found"));
+                        }
+                        Err(e) => {
+                            failed.push(FailedItem::new(doc_id, &e.to_string()));
+                        }
+                    }
+                }
+                if documents.is_empty() {
+                    return Err(Error::Config(format!(
+                        "No documents available for analysis: {} failures",
+                        failed.len()
+                    )));
+                }
+                let mut result = self.retriever.query_multi(&documents, &ctx.query).await?;
+                // Merge any load failures
+                result.failed.extend(failed);
+                return Ok(result);
+            }
+
             // Query documents in parallel (with concurrency limit)
             let concurrency = self.config.llm.throttle.max_concurrent_requests;
             let query = ctx.query.clone();
             let cancelled = Arc::clone(&self.cancelled);
 
-            let results: Vec<(String, std::result::Result<QueryResultItem, String>)> =
+            let results: Vec<(String, std::result::Result<QueryResult, String>)> =
                 futures::stream::iter(doc_ids.into_iter())
                     .map(|doc_id| {
                         let engine = self.clone();
@@ -526,10 +557,7 @@ impl Engine {
                                 )
                                 .await
                             {
-                                Ok(mut result) => {
-                                    result.doc_id = doc_id.clone();
-                                    (doc_id, Ok(result))
-                                }
+                                Ok(result) => (doc_id, Ok(result)),
                                 Err(e) => (doc_id, Err(e.to_string())),
                             }
                         }
@@ -540,12 +568,12 @@ impl Engine {
 
             let mut items = Vec::new();
             let mut failed = Vec::new();
-            for (doc_id, result) in results {
+            for (_doc_id, result) in results {
                 match result {
-                    Ok(item) => items.push(item),
+                    Ok(qr) => items.extend(qr.items),
                     Err(e) => {
-                        tracing::warn!("Query failed for {}: {}", doc_id, e);
-                        failed.push(FailedItem::new(&doc_id, e));
+                        tracing::warn!("Query failed for {}: {}", _doc_id, e);
+                        failed.push(FailedItem::new(&_doc_id, e));
                     }
                 }
             }

@@ -27,14 +27,14 @@ use tracing::info;
 
 use crate::agent::{Config, Evidence, Output};
 use crate::llm::LlmClient;
-use types::ConfidenceLevel;
+use types::{ConfidenceLevel, RerankOutput};
 
 /// Process agent output through the rerank pipeline.
 ///
 /// Takes raw agent output (evidence without answer) and produces
 /// a final answer through dedup → score → fuse/synthesize.
 ///
-/// Returns (answer, llm_calls_used).
+/// Returns [`RerankOutput`] with answer, score, confidence, and LLM call count.
 pub async fn process(
     query: &str,
     evidence: &[Evidence],
@@ -42,16 +42,22 @@ pub async fn process(
     llm: &LlmClient,
     multi_doc: bool,
     sub_results: &[Output],
-) -> (String, u32) {
+) -> RerankOutput {
     // Step 1: Deduplicate
     let deduped = dedup::dedup(evidence);
     if deduped.is_empty() {
         info!("No evidence after dedup");
-        return (String::new(), 0);
+        return RerankOutput {
+            answer: String::new(),
+            score: 0.0,
+            llm_calls: 0,
+            confidence: ConfidenceLevel::Low,
+        };
     }
 
     // Step 2: Score and sort by relevance
     let scored = scorer::rank(query, &deduped);
+    let top_score = scored.first().map(|(_, s)| *s).unwrap_or(0.0);
     let sorted_evidence: Vec<Evidence> = scored
         .iter()
         .map(|(idx, _)| deduped[*idx].clone())
@@ -59,13 +65,18 @@ pub async fn process(
 
     info!(
         evidence = sorted_evidence.len(),
-        top_score = scored.first().map(|(_, s)| *s).unwrap_or(0.0),
+        top_score,
         "Evidence after dedup + scoring"
     );
 
     // Step 3: Synthesize answer
     if !config.enable_synthesis {
-        return (synthesis::format_evidence_as_answer(&sorted_evidence), 0);
+        return RerankOutput {
+            answer: synthesis::format_evidence_as_answer(&sorted_evidence),
+            score: top_score,
+            llm_calls: 0,
+            confidence: ConfidenceLevel::from_evidence(sorted_evidence.len(), 0),
+        };
     }
 
     let (answer, llm_calls) = if multi_doc && sub_results.len() > 1 {
@@ -85,5 +96,10 @@ pub async fn process(
         "Rerank complete"
     );
 
-    (answer, llm_calls)
+    RerankOutput {
+        answer,
+        score: top_score,
+        llm_calls,
+        confidence,
+    }
 }

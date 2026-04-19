@@ -62,8 +62,9 @@ mod utils;
 
 // Client
 pub use client::{
-    BuildError, DocumentFormat, DocumentInfo, Engine, EngineBuilder, FailedItem, IndexContext,
-    IndexItem, IndexMode, IndexOptions, IndexResult, QueryContext, QueryResult, QueryResultItem,
+    BuildError, Confidence, DocumentFormat, DocumentInfo, Engine, EngineBuilder, EvidenceItem,
+    FailedItem, IndexContext, IndexItem, IndexMode, IndexOptions, IndexResult, QueryContext,
+    QueryMetrics, QueryResult, QueryResultItem,
 };
 
 // Config

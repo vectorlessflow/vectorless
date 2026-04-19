@@ -187,6 +187,7 @@ impl State {
                 check_count: self.check_count,
                 evidence_chars,
             },
+            score: 0.0,
         }
     }
 }
@@ -258,6 +259,7 @@ impl OrchestratorState {
                     .sum(),
                 ..Default::default()
             },
+            score: 0.0,
         }
     }
 }

@@ -26,3 +26,15 @@ impl ConfidenceLevel {
         }
     }
 }
+
+/// Output from the rerank pipeline.
+pub struct RerankOutput {
+    /// Synthesized answer.
+    pub answer: String,
+    /// Top BM25 relevance score across all evidence.
+    pub score: f32,
+    /// Number of LLM calls used during synthesis/fusion.
+    pub llm_calls: u32,
+    /// Confidence level based on evidence quality.
+    pub confidence: ConfidenceLevel,
+}

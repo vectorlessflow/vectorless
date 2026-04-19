@@ -61,6 +61,8 @@ pub struct Output {
     pub evidence: Vec<Evidence>,
     /// Agent execution metrics.
     pub metrics: Metrics,
+    /// Top relevance score from rerank (BM25), 0.0 if not scored.
+    pub score: f32,
 }
 
 impl Output {
@@ -73,6 +75,7 @@ impl Output {
                 fast_path_hit: true,
                 ..Default::default()
             },
+            score: 0.0,
         }
     }
 
@@ -82,6 +85,7 @@ impl Output {
             answer: String::new(),
             evidence: Vec::new(),
             metrics: Metrics::default(),
+            score: 0.0,
         }
     }
 }

@@ -256,20 +256,70 @@ impl IndexItem {
 // Query Types
 // ============================================================
 
+/// A single piece of evidence with source attribution.
+#[derive(Debug, Clone)]
+pub struct EvidenceItem {
+    /// Section title where this evidence was found.
+    pub title: String,
+    /// Navigation path (e.g., "Root/Chapter 1/Section 1.2").
+    pub path: String,
+    /// Raw evidence content.
+    pub content: String,
+    /// Source document name (set in multi-doc scenarios).
+    pub doc_name: Option<String>,
+}
+
+/// Query execution metrics.
+#[derive(Debug, Clone, Default)]
+pub struct QueryMetrics {
+    /// Number of LLM calls made.
+    pub llm_calls: u32,
+    /// Number of navigation rounds used.
+    pub rounds_used: u32,
+    /// Number of distinct nodes visited.
+    pub nodes_visited: usize,
+    /// Whether the fast-path was hit.
+    pub fast_path_hit: bool,
+    /// Number of evidence items collected.
+    pub evidence_count: usize,
+    /// Total characters of collected evidence.
+    pub evidence_chars: usize,
+}
+
+/// Confidence level of the query result.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Confidence {
+    /// Evidence is sufficient and the answer is clear.
+    High,
+    /// Evidence is partial but usable.
+    Medium,
+    /// Evidence is insufficient; the answer may be inaccurate.
+    Low,
+}
+
 /// A single document's query result.
 #[derive(Debug, Clone)]
 pub struct QueryResultItem {
     /// The document ID.
     pub doc_id: String,
 
-    /// Matching node IDs.
+    /// Matching node IDs (navigation paths).
     pub node_ids: Vec<String>,
 
-    /// Retrieved content.
+    /// Synthesized answer or raw evidence content.
     pub content: String,
 
-    /// Relevance score.
+    /// Relevance score (top BM25 score from rerank, 0.0–1.0).
     pub score: f32,
+
+    /// Evidence items that contributed to this result, with source attribution.
+    pub evidence: Vec<EvidenceItem>,
+
+    /// Execution metrics for this query.
+    pub metrics: Option<QueryMetrics>,
+
+    /// Confidence level of the answer.
+    pub confidence: Confidence,
 }
 
 /// Result of a document query.
@@ -291,6 +341,14 @@ impl QueryResult {
     pub fn new() -> Self {
         Self {
             items: Vec::new(),
+            failed: Vec::new(),
+        }
+    }
+
+    /// Create a query result with items.
+    pub fn new_with_items(items: Vec<QueryResultItem>) -> Self {
+        Self {
+            items,
             failed: Vec::new(),
         }
     }
@@ -422,6 +480,9 @@ mod tests {
             node_ids: vec!["n1".into()],
             content: "content".into(),
             score: 0.9,
+            evidence: vec![],
+            metrics: None,
+            confidence: Confidence::High,
         };
         let result = QueryResult::from_single(item);
         assert!(!result.is_empty());
