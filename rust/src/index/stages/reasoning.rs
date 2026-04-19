@@ -17,7 +17,7 @@ use crate::document::{
 };
 use crate::error::Result;
 use crate::llm::LlmClient;
-use crate::utils::extract_keywords;
+use crate::scoring::extract_keywords;
 
 use super::async_trait;
 use super::{AccessPattern, IndexStage, StageResult};

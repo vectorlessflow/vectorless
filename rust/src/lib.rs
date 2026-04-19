@@ -53,6 +53,7 @@ mod index;
 mod llm;
 mod query;
 mod retrieval;
+mod scoring;
 mod storage;
 mod utils;
 

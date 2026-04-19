@@ -7,7 +7,7 @@
 //! and budget computation.
 
 use crate::query::{detect_query_complexity, Budget, QueryPlan};
-use crate::utils::bm25::extract_keywords;
+use crate::scoring::bm25::extract_keywords;
 
 /// Preprocess a raw query string into a structured [`QueryPlan`].
 ///
