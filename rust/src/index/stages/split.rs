@@ -248,7 +248,10 @@ impl IndexStage for SplitStage {
             return Ok(StageResult::success("split"));
         }
 
-        info!("[split] Starting: max_tokens_per_node={}", config.max_tokens_per_node);
+        info!(
+            "[split] Starting: max_tokens_per_node={}",
+            config.max_tokens_per_node
+        );
 
         let node_count_before = tree.node_count();
         let split_count = Self::split_tree(tree, config);

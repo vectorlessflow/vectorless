@@ -70,7 +70,7 @@ impl NavigationIndexStage {
                     topic_tags: Vec::new(),
                     leaf_count: 0,
                     level: 0,
-                }
+                };
             }
         };
 
@@ -163,7 +163,9 @@ impl IndexStage for NavigationIndexStage {
 
         info!(
             "[navigation_index] Starting: {} total nodes ({} leaves, {} non-leaf)",
-            all_nodes.len(), leaf_count, non_leaf_count,
+            all_nodes.len(),
+            leaf_count,
+            non_leaf_count,
         );
 
         let mut nav_entries_count = 0usize;
@@ -171,7 +173,10 @@ impl IndexStage for NavigationIndexStage {
 
         // Phase 1: Pre-compute leaf counts for all nodes.
         // We compute once per node to avoid repeated traversals.
-        debug!("[navigation_index] Phase 1: Pre-computing leaf counts for {} nodes", all_nodes.len());
+        debug!(
+            "[navigation_index] Phase 1: Pre-computing leaf counts for {} nodes",
+            all_nodes.len()
+        );
         let mut leaf_counts: std::collections::HashMap<NodeId, usize> =
             std::collections::HashMap::with_capacity(all_nodes.len());
         for &node_id in &all_nodes {
@@ -179,7 +184,10 @@ impl IndexStage for NavigationIndexStage {
         }
 
         // Phase 2: Build NavEntry + ChildRoutes for each non-leaf node.
-        debug!("[navigation_index] Phase 2: Building NavEntry + ChildRoutes for {} non-leaf nodes", non_leaf_count);
+        debug!(
+            "[navigation_index] Phase 2: Building NavEntry + ChildRoutes for {} non-leaf nodes",
+            non_leaf_count
+        );
         let mut nav_index = NavigationIndex::new();
 
         for &node_id in &all_nodes {
@@ -216,13 +224,49 @@ impl IndexStage for NavigationIndexStage {
             nav_index.add_child_routes(node_id, routes);
         }
 
+        // Phase 3: Build DocCard from root-level data (already computed, zero LLM).
+        // Provides a compact document summary for multi-document Orchestrator Agent.
+        if let Some(root_entry) = nav_index.get_entry(tree.root()) {
+            let sections: Vec<crate::document::SectionCard> = nav_index
+                .get_child_routes(tree.root())
+                .map(|routes| {
+                    routes
+                        .iter()
+                        .map(|r| crate::document::SectionCard {
+                            title: r.title.clone(),
+                            description: r.description.clone(),
+                            leaf_count: r.leaf_count,
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+
+            let doc_card = crate::document::DocCard {
+                title: tree
+                    .get(tree.root())
+                    .map(|n| n.title.clone())
+                    .unwrap_or_default(),
+                overview: root_entry.overview.clone(),
+                question_hints: root_entry.question_hints.clone(),
+                topic_tags: root_entry.topic_tags.clone(),
+                sections,
+                total_leaves: root_entry.leaf_count,
+            };
+            nav_index.set_doc_card(doc_card);
+
+            debug!(
+                "[navigation_index] Phase 3: Built DocCard — {} sections, {} total leaves",
+                nav_index.doc_card().map(|c| c.sections.len()).unwrap_or(0),
+                nav_index.doc_card().map(|c| c.total_leaves).unwrap_or(0),
+            );
+        } else {
+            debug!("[navigation_index] Phase 3: Skipped DocCard (no root entry)");
+        }
+
         let duration = start.elapsed().as_millis() as u64;
 
-        ctx.metrics.record_navigation_index(
-            duration,
-            nav_entries_count,
-            child_routes_count,
-        );
+        ctx.metrics
+            .record_navigation_index(duration, nav_entries_count, child_routes_count);
 
         info!(
             "[navigation_index] Complete: {} nav entries, {} child routes in {}ms",

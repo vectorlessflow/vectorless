@@ -10,7 +10,7 @@
   height: 24px;
   padding: 0 8px;
   background-color: #f3f3f3;
-  color: #333;
+  color: #111827;
   border: 1px solid #d5d5d5;
   border-radius: 3px;
   text-decoration: none;
@@ -23,7 +23,7 @@
 .githubStarButton:hover {
   background-color: #e6e6e6;
   text-decoration: none;
-  color: #333;
+  color: #111827;
 }
 
 .githubStarText {
@@ -41,7 +41,7 @@
   min-width: 40px;
   height: 24px;
   background-color: #f3f3f3;
-  color: #333;
+  color: #111827;
   position: relative;
   margin-left: 5px;
   padding: 0 5px;
@@ -61,7 +61,7 @@
 .githubStarCount:hover {
   background-color: #e6e6e6;
   text-decoration: none;
-  color: #333;
+  color: #111827;
 }
 
 .githubStarCount::after,

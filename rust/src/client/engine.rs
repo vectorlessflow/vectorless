@@ -57,7 +57,7 @@ use crate::{
         incremental::{self, IndexAction},
     },
     metrics::MetricsHub,
-    retrieval::{PipelineRetriever, RetrieveEventReceiver},
+    retrieval::RetrieveEventReceiver,
     storage::{PersistedDocument, Workspace},
 };
 
@@ -67,7 +67,7 @@ use super::{
     query_context::{QueryContext, QueryScope},
     retriever::RetrieverClient,
     types::{
-        DocumentInfo, FailedItem, IndexItem, IndexMode, IndexResult, QueryResult, QueryResultItem,
+        DocumentInfo, FailedItem, IndexItem, IndexMode, IndexResult, QueryResult,
     },
     workspace::WorkspaceClient,
 };
@@ -129,7 +129,7 @@ impl Engine {
     pub(crate) async fn with_components(
         config: Config,
         workspace: Workspace,
-        retriever: PipelineRetriever,
+        retriever: RetrieverClient,
         indexer: IndexerClient,
         events: EventEmitter,
         metrics_hub: Arc<MetricsHub>,
@@ -139,8 +139,8 @@ impl Engine {
         // Attach event emitter to indexer
         let indexer = indexer.with_events(events.clone());
 
-        // Create retriever client
-        let retriever = RetrieverClient::new(retriever).with_events(events.clone());
+        // Attach event emitter to retriever
+        let retriever = retriever.with_events(events.clone());
 
         // Create workspace client
         let workspace_client = WorkspaceClient::new(workspace)
@@ -460,7 +460,6 @@ impl Engine {
 
         self.with_timeout(timeout_secs, async move {
             let doc_ids = self.resolve_scope(&ctx.scope).await?;
-            let mut options = ctx.to_retrieve_options(&self.config);
 
             // Lazy graph rebuild: only rebuild if index() marked it dirty
             if self.config.graph.enabled {
@@ -486,10 +485,37 @@ impl Engine {
                         );
                     }
                 }
-                // Load (now up-to-date) graph for retrieval
-                if let Ok(Some(graph)) = self.workspace.get_graph().await {
-                    options = options.with_document_graph(Arc::new(graph));
+            }
+
+            // Force analysis: load all docs and route through Workspace scope
+            if ctx.force_analysis {
+                let mut documents = Vec::new();
+                let mut failed = Vec::new();
+                for doc_id in &doc_ids {
+                    match self.workspace.load(doc_id).await {
+                        Ok(Some(doc)) => {
+                            let nav_index = doc.navigation_index.unwrap_or_default();
+                            let reasoning_index = doc.reasoning_index.unwrap_or_default();
+                            documents.push((doc.tree, nav_index, reasoning_index, doc_id.clone()));
+                        }
+                        Ok(None) => {
+                            failed.push(FailedItem::new(doc_id, "Document not found"));
+                        }
+                        Err(e) => {
+                            failed.push(FailedItem::new(doc_id, &e.to_string()));
+                        }
+                    }
                 }
+                if documents.is_empty() {
+                    return Err(Error::Config(format!(
+                        "No documents available for analysis: {} failures",
+                        failed.len()
+                    )));
+                }
+                let mut result = self.retriever.query_multi(&documents, &ctx.query).await?;
+                // Merge any load failures
+                result.failed.extend(failed);
+                return Ok(result);
             }
 
             // Query documents in parallel (with concurrency limit)
@@ -497,11 +523,10 @@ impl Engine {
             let query = ctx.query.clone();
             let cancelled = Arc::clone(&self.cancelled);
 
-            let results: Vec<(String, std::result::Result<QueryResultItem, String>)> =
+            let results: Vec<(String, std::result::Result<QueryResult, String>)> =
                 futures::stream::iter(doc_ids.into_iter())
                     .map(|doc_id| {
                         let engine = self.clone();
-                        let options = options.clone();
                         let query = query.clone();
                         let cancelled = Arc::clone(&cancelled);
                         async move {
@@ -509,26 +534,30 @@ impl Engine {
                                 return (doc_id, Err("Operation cancelled".to_string()));
                             }
 
-                            let (tree, reasoning_index) = match engine.get_structure(&doc_id).await
-                            {
-                                Ok(t) => t,
+                            let doc = match engine.workspace.load(&doc_id).await {
+                                Ok(Some(d)) => d,
+                                Ok(None) => {
+                                    let err = format!("Document not found: {}", doc_id);
+                                    return (doc_id, Err(err));
+                                }
                                 Err(e) => return (doc_id, Err(e.to_string())),
                             };
 
+                            let nav_index = doc.navigation_index.unwrap_or_default();
+                            let reasoning_index = doc.reasoning_index.unwrap_or_default();
+
                             match engine
                                 .retriever
-                                .query_with_reasoning_index(
-                                    &tree,
+                                .query_single(
+                                    &doc.tree,
+                                    &nav_index,
+                                    &reasoning_index,
                                     &query,
-                                    &options,
-                                    reasoning_index,
+                                    &doc_id,
                                 )
                                 .await
                             {
-                                Ok(mut result) => {
-                                    result.doc_id = doc_id.clone();
-                                    (doc_id, Ok(result))
-                                }
+                                Ok(result) => (doc_id, Ok(result)),
                                 Err(e) => (doc_id, Err(e.to_string())),
                             }
                         }
@@ -539,12 +568,12 @@ impl Engine {
 
             let mut items = Vec::new();
             let mut failed = Vec::new();
-            for (doc_id, result) in results {
+            for (_doc_id, result) in results {
                 match result {
-                    Ok(item) => items.push(item),
+                    Ok(qr) => items.extend(qr.items),
                     Err(e) => {
-                        tracing::warn!("Query failed for {}: {}", doc_id, e);
-                        failed.push(FailedItem::new(&doc_id, e));
+                        tracing::warn!("Query failed for {}: {}", _doc_id, e);
+                        failed.push(FailedItem::new(&_doc_id, e));
                     }
                 }
             }
@@ -569,28 +598,232 @@ impl Engine {
     /// Query a document with streaming results.
     ///
     /// Returns a receiver that yields retrieval events
-    /// as the retrieval pipeline progresses through each stage.
+    /// as the retrieval agent progresses through navigation.
     ///
-    /// Only supports single-document scope (via `with_doc_ids` with one ID).
+    /// Supports single-document and multi-document scope.
+    /// Events are translated from the agent's internal [`AgentEvent`](crate::agent::AgentEvent)
+    /// into the public [`RetrieveEvent`] stream.
     pub async fn query_stream(&self, ctx: QueryContext) -> Result<RetrieveEventReceiver> {
-        let doc_id = match &ctx.scope {
-            QueryScope::Documents(ids) if ids.len() == 1 => ids[0].clone(),
-            _ => {
-                return Err(Error::Config(
-                    "query_stream requires a single doc_id via with_doc_ids".to_string(),
-                ));
+        self.check_cancel()?;
+        let _guard = self.inc_active();
+
+        let doc_ids = self.resolve_scope(&ctx.scope).await?;
+        let query = ctx.query.clone();
+
+        // Load all requested documents
+        let mut docs = Vec::new();
+        for doc_id in &doc_ids {
+            let doc = match self.workspace.load(doc_id).await? {
+                Some(d) => d,
+                None => return Err(Error::Config(format!("Document not found: {}", doc_id))),
+            };
+            docs.push((doc_id.clone(), doc));
+        }
+
+        // Create agent event channel
+        let (agent_tx, mut agent_rx) =
+            crate::agent::events::channel(crate::agent::events::DEFAULT_AGENT_EVENT_BOUND);
+        let (retrieve_tx, retrieve_rx) =
+            crate::retrieval::stream::channel(crate::retrieval::stream::DEFAULT_STREAM_BOUND);
+
+        // Spawn a task that translates AgentEvents → RetrieveEvents
+        tokio::spawn(async move {
+            use crate::agent::AgentEvent;
+            use crate::retrieval::stream::RetrieveEvent;
+
+            while let Some(event) = agent_rx.recv().await {
+                let translated = match event {
+                    AgentEvent::Started { query, multi_doc } => RetrieveEvent::Started {
+                        query,
+                        strategy: if multi_doc {
+                            "orchestrator".to_string()
+                        } else {
+                            "subagent".to_string()
+                        },
+                    },
+                    AgentEvent::FastPathHit {
+                        keyword,
+                        node_title,
+                        ..
+                    } => RetrieveEvent::ContentFound {
+                        node_id: String::new(),
+                        title: node_title,
+                        preview: keyword,
+                        score: 1.0,
+                    },
+                    AgentEvent::RoundCompleted {
+                        round,
+                        command,
+                        success: _,
+                        elapsed_ms,
+                    } => RetrieveEvent::StageCompleted {
+                        stage: format!("round_{}_{}", round, command),
+                        elapsed_ms,
+                    },
+                    AgentEvent::EvidenceCollected {
+                        node_title,
+                        source_path,
+                        content_len,
+                        ..
+                    } => RetrieveEvent::ContentFound {
+                        node_id: source_path,
+                        title: node_title,
+                        preview: String::new(),
+                        score: if content_len > 0 { 0.8 } else { 0.0 },
+                    },
+                    AgentEvent::SufficiencyCheck {
+                        sufficient,
+                        evidence_count,
+                    } => RetrieveEvent::SufficiencyCheck {
+                        level: if sufficient {
+                            crate::retrieval::SufficiencyLevel::Sufficient
+                        } else {
+                            crate::retrieval::SufficiencyLevel::Insufficient
+                        },
+                        tokens: evidence_count,
+                    },
+                    AgentEvent::PlanGenerated { doc_name, plan_len } => {
+                        RetrieveEvent::StageCompleted {
+                            stage: format!("plan_{}_{}chars", doc_name, plan_len),
+                            elapsed_ms: 0,
+                        }
+                    }
+                    AgentEvent::ReplanGenerated {
+                        doc_name,
+                        missing_info,
+                        plan_len,
+                    } => RetrieveEvent::StageCompleted {
+                        stage: format!(
+                            "replan_{}_{}_{}chars",
+                            doc_name,
+                            &missing_info[..missing_info.len().min(30)],
+                            plan_len
+                        ),
+                        elapsed_ms: 0,
+                    },
+                    AgentEvent::BudgetWarning {
+                        warning_type,
+                        round,
+                    } => RetrieveEvent::StageCompleted {
+                        stage: format!("budget_warning_{}_round_{}", warning_type, round),
+                        elapsed_ms: 0,
+                    },
+                    AgentEvent::SubAgentDispatched {
+                        doc_idx, doc_name, ..
+                    } => RetrieveEvent::StageCompleted {
+                        stage: format!("dispatch_{}_{}", doc_idx, doc_name),
+                        elapsed_ms: 0,
+                    },
+                    AgentEvent::SubAgentCompleted {
+                        doc_idx,
+                        evidence_count,
+                        success,
+                    } => RetrieveEvent::StageCompleted {
+                        stage: format!("subagent_{}_done_{}_{}", doc_idx, evidence_count, success),
+                        elapsed_ms: 0,
+                    },
+                    AgentEvent::SynthesisCompleted { answer_len } => {
+                        RetrieveEvent::StageCompleted {
+                            stage: format!("synthesis_{}chars", answer_len),
+                            elapsed_ms: 0,
+                        }
+                    }
+                    AgentEvent::Completed {
+                        evidence_count,
+                        llm_calls: _,
+                        rounds_used: _,
+                        fast_path_hit,
+                        budget_exhausted,
+                        plan_generated,
+                        evidence_chars,
+                    } => {
+                        let response = crate::retrieval::RetrieveResponse {
+                            results: Vec::new(),
+                            content: String::new(),
+                            confidence: if evidence_count > 0 { 0.8 } else { 0.0 },
+                            is_sufficient: true,
+                            strategy_used: format!(
+                                "agent(fp={},plan={},budget={})",
+                                fast_path_hit, plan_generated, budget_exhausted
+                            ),
+                            complexity: crate::query::QueryComplexity::Simple,
+                            reasoning_chain: crate::retrieval::ReasoningChain::default(),
+                            tokens_used: evidence_chars,
+                        };
+                        let _ = retrieve_tx
+                            .send(RetrieveEvent::Completed { response })
+                            .await;
+                        break; // Completed is terminal
+                    }
+                    AgentEvent::Error { message } => {
+                        let _ = retrieve_tx.send(RetrieveEvent::Error { message }).await;
+                        break; // Error is terminal
+                    }
+                };
+
+                // For non-terminal events, send the translated event
+                if !matches!(
+                    translated,
+                    RetrieveEvent::Completed { .. } | RetrieveEvent::Error { .. }
+                ) {
+                    if retrieve_tx.send(translated).await.is_err() {
+                        break; // Receiver dropped
+                    }
+                }
             }
-        };
+        });
 
-        let (tree, _reasoning_index) = self.get_structure(&doc_id).await?;
-        let options = ctx.to_retrieve_options(&self.config);
+        // Run the agent in a background task
+        let config = self.retriever.config().clone();
+        let llm = self.retriever.llm().clone();
+        let emitter = crate::agent::EventEmitter::new(agent_tx);
+        let metrics_hub = Arc::clone(&self.metrics_hub);
+        let start = std::time::Instant::now();
 
-        let rx = self
-            .retriever
-            .query_stream(&tree, &ctx.query, &options)
-            .await?;
+        tokio::spawn(async move {
+            // Prepare owned indices (fill defaults for missing)
+            let owned_docs: Vec<(
+                String,
+                crate::storage::PersistedDocument,
+                crate::document::NavigationIndex,
+                crate::document::ReasoningIndex,
+            )> = docs
+                .into_iter()
+                .map(|(id, doc)| {
+                    let nav = doc.navigation_index.clone().unwrap_or_default();
+                    let ridx = doc.reasoning_index.clone().unwrap_or_default();
+                    (id, doc, nav, ridx)
+                })
+                .collect();
 
-        Ok(rx)
+            // All streaming queries are user-specified docs → always use Scope::Specified
+            let doc_contexts: Vec<crate::agent::DocContext> = owned_docs
+                .iter()
+                .map(|(id, doc, nav, ridx)| crate::agent::DocContext {
+                    tree: &doc.tree,
+                    nav_index: nav,
+                    reasoning_index: ridx,
+                    doc_name: id.as_str(),
+                })
+                .collect();
+            let scope = crate::agent::Scope::Specified(doc_contexts);
+            let result =
+                crate::retrieval::dispatcher::dispatch(&query, scope, &config, &llm, &emitter)
+                    .await;
+
+            // Bridge agent metrics into global MetricsHub
+            if let Ok(output) = result {
+                let m = &output.metrics;
+                let elapsed = start.elapsed();
+                metrics_hub.record_retrieval_query(
+                    m.rounds_used as u64,
+                    m.nodes_visited as u64,
+                    elapsed.as_millis() as u64,
+                );
+            }
+        });
+
+        Ok(retrieve_rx)
     }
 
     // ============================================================

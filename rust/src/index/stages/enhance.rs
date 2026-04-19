@@ -214,7 +214,10 @@ impl IndexStage for EnhanceStage {
             );
         }
 
-        info!("[enhance] Processing {} nodes for summary generation", total_nodes);
+        info!(
+            "[enhance] Processing {} nodes for summary generation",
+            total_nodes
+        );
 
         // === Phase 1: Collect pending nodes (cache hits applied immediately) ===
         let strategy = ctx.options.summary_strategy.clone();
@@ -321,7 +324,11 @@ impl IndexStage for EnhanceStage {
                                     pending.is_leaf,
                                 )
                                 .await;
-                            (pending.node_id, pending.is_leaf, result.map_err(|e| e.to_string()))
+                            (
+                                pending.node_id,
+                                pending.is_leaf,
+                                result.map_err(|e| e.to_string()),
+                            )
                         }
                     })
                     .buffer_unordered(concurrency)

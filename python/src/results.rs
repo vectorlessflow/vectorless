@@ -6,7 +6,112 @@
 use pyo3::prelude::*;
 
 use ::vectorless::IndexMetrics;
-use ::vectorless::{FailedItem, IndexItem, IndexResult, QueryResult, QueryResultItem};
+use ::vectorless::{
+    Confidence, EvidenceItem, FailedItem, IndexItem, IndexResult, QueryMetrics, QueryResult,
+    QueryResultItem,
+};
+
+// ============================================================
+// EvidenceItem
+// ============================================================
+
+/// A single piece of evidence with source attribution.
+#[pyclass(name = "EvidenceItem")]
+pub struct PyEvidenceItem {
+    pub(crate) inner: EvidenceItem,
+}
+
+#[pymethods]
+impl PyEvidenceItem {
+    /// Section title where this evidence was found.
+    #[getter]
+    fn title(&self) -> &str {
+        &self.inner.title
+    }
+
+    /// Navigation path (e.g., "Root/Chapter 1/Section 1.2").
+    #[getter]
+    fn path(&self) -> &str {
+        &self.inner.path
+    }
+
+    /// Raw evidence content.
+    #[getter]
+    fn content(&self) -> &str {
+        &self.inner.content
+    }
+
+    /// Source document name.
+    #[getter]
+    fn doc_name(&self) -> Option<&str> {
+        self.inner.doc_name.as_deref()
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "EvidenceItem(title='{}', path='{}', content_len={})",
+            self.inner.title,
+            self.inner.path,
+            self.inner.content.len()
+        )
+    }
+}
+
+// ============================================================
+// QueryMetrics
+// ============================================================
+
+/// Query execution metrics.
+#[pyclass(name = "QueryMetrics")]
+pub struct PyQueryMetrics {
+    pub(crate) inner: QueryMetrics,
+}
+
+#[pymethods]
+impl PyQueryMetrics {
+    /// Number of LLM calls made.
+    #[getter]
+    fn llm_calls(&self) -> u32 {
+        self.inner.llm_calls
+    }
+
+    /// Number of navigation rounds used.
+    #[getter]
+    fn rounds_used(&self) -> u32 {
+        self.inner.rounds_used
+    }
+
+    /// Number of distinct nodes visited.
+    #[getter]
+    fn nodes_visited(&self) -> usize {
+        self.inner.nodes_visited
+    }
+
+    /// Whether the fast-path was hit.
+    #[getter]
+    fn fast_path_hit(&self) -> bool {
+        self.inner.fast_path_hit
+    }
+
+    /// Number of evidence items collected.
+    #[getter]
+    fn evidence_count(&self) -> usize {
+        self.inner.evidence_count
+    }
+
+    /// Total characters of collected evidence.
+    #[getter]
+    fn evidence_chars(&self) -> usize {
+        self.inner.evidence_chars
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "QueryMetrics(llm_calls={}, rounds={}, evidence={})",
+            self.inner.llm_calls, self.inner.rounds_used, self.inner.evidence_count
+        )
+    }
+}
 
 // ============================================================
 // QueryResultItem
@@ -26,7 +131,7 @@ impl PyQueryResultItem {
         &self.inner.doc_id
     }
 
-    /// The retrieved content.
+    /// The retrieved content (synthesized answer or raw evidence).
     #[getter]
     fn content(&self) -> &str {
         &self.inner.content
@@ -38,18 +143,64 @@ impl PyQueryResultItem {
         self.inner.score
     }
 
-    /// Node IDs that matched.
+    /// Node IDs that matched (navigation paths).
     #[getter]
     fn node_ids(&self) -> Vec<String> {
         self.inner.node_ids.clone()
     }
 
+    /// Evidence items with source attribution.
+    #[getter]
+    fn evidence(&self) -> Vec<PyEvidenceItem> {
+        self.inner
+            .evidence
+            .iter()
+            .map(|e| PyEvidenceItem {
+                inner: EvidenceItem {
+                    title: e.title.clone(),
+                    path: e.path.clone(),
+                    content: e.content.clone(),
+                    doc_name: e.doc_name.clone(),
+                },
+            })
+            .collect()
+    }
+
+    /// Execution metrics for this query.
+    #[getter]
+    fn metrics(&self) -> Option<PyQueryMetrics> {
+        self.inner
+            .metrics
+            .as_ref()
+            .map(|m| PyQueryMetrics {
+                inner: QueryMetrics {
+                    llm_calls: m.llm_calls,
+                    rounds_used: m.rounds_used,
+                    nodes_visited: m.nodes_visited,
+                    fast_path_hit: m.fast_path_hit,
+                    evidence_count: m.evidence_count,
+                    evidence_chars: m.evidence_chars,
+                },
+            })
+    }
+
+    /// Confidence level: "high", "medium", or "low".
+    #[getter]
+    fn confidence(&self) -> &'static str {
+        match self.inner.confidence {
+            Confidence::High => "high",
+            Confidence::Medium => "medium",
+            Confidence::Low => "low",
+        }
+    }
+
     fn __repr__(&self) -> String {
         format!(
-            "QueryResultItem(doc_id='{}', score={:.2}, content_len={})",
+            "QueryResultItem(doc_id='{}', score={:.2}, confidence='{}', evidence={})",
             self.inner.doc_id,
             self.inner.score,
-            self.inner.content.len()
+            self.confidence(),
+            self.inner.evidence.len()
         )
     }
 }
@@ -104,7 +255,17 @@ impl PyQueryResult {
         self.inner
             .items
             .iter()
-            .map(|i| PyQueryResultItem { inner: i.clone() })
+            .map(|i| PyQueryResultItem {
+                inner: QueryResultItem {
+                    doc_id: i.doc_id.clone(),
+                    node_ids: i.node_ids.clone(),
+                    content: i.content.clone(),
+                    score: i.score,
+                    evidence: i.evidence.clone(),
+                    metrics: i.metrics.clone(),
+                    confidence: i.confidence,
+                },
+            })
             .collect()
     }
 
@@ -112,7 +273,17 @@ impl PyQueryResult {
     fn single(&self) -> Option<PyQueryResultItem> {
         self.inner
             .single()
-            .map(|i| PyQueryResultItem { inner: i.clone() })
+            .map(|i| PyQueryResultItem {
+                inner: QueryResultItem {
+                    doc_id: i.doc_id.clone(),
+                    node_ids: i.node_ids.clone(),
+                    content: i.content.clone(),
+                    score: i.score,
+                    evidence: i.evidence.clone(),
+                    metrics: i.metrics.clone(),
+                    confidence: i.confidence,
+                },
+            })
     }
 
     /// Number of result items.
@@ -131,7 +302,9 @@ impl PyQueryResult {
         self.inner
             .failed
             .iter()
-            .map(|f| PyFailedItem { inner: f.clone() })
+            .map(|f| PyFailedItem {
+                inner: FailedItem::new(&f.source, &f.error),
+            })
             .collect()
     }
 
@@ -322,7 +495,9 @@ impl PyIndexResult {
         self.inner
             .failed
             .iter()
-            .map(|f| PyFailedItem { inner: f.clone() })
+            .map(|f| PyFailedItem {
+                inner: FailedItem::new(&f.source, &f.error),
+            })
             .collect()
     }
 

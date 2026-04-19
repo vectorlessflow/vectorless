@@ -75,7 +75,12 @@ impl IndexStage for ParseStage {
             IndexInput::Content { .. } => "content",
             IndexInput::Bytes { .. } => "bytes",
         };
-        info!("[parse] Starting: format={:?}, input={}, llm={}", format, input_type, self.llm_client.is_some());
+        info!(
+            "[parse] Starting: format={:?}, input={}, llm={}",
+            format,
+            input_type,
+            self.llm_client.is_some()
+        );
 
         // Parse based on input type
         let result = match &ctx.input {

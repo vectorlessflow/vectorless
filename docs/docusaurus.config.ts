@@ -57,6 +57,7 @@ const config: Config = {
   themeConfig: {
     image: 'img/theme-logo.png',
     colorMode: {
+      defaultMode: 'dark',
       respectPrefersColorScheme: true,
     },
     navbar: {

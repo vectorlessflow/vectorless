@@ -32,11 +32,11 @@
 }
 
 .heroTitleEmphasis {
-  color: var(--text);
+  color: var(--primary);
 }
 
 .heroTitleLight {
-  color: #9a8a92;
+  color: #9AA4BF;
   font-weight: 300;
 }
 
@@ -176,9 +176,9 @@
 .demoCard {
   max-width: 1200px;
   margin: 0 auto;
-  background: #121417;
+  background: #161A1F;
   border-radius: 16px;
-  border: 1px solid #23262B;
+  border: 1px solid #252A30;
   overflow: hidden;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
 }
@@ -188,15 +188,15 @@
   align-items: center;
   gap: 1.5rem;
   padding: 0 1.25rem;
-  border-bottom: 1px solid #23262B;
-  background: #121417;
+  border-bottom: 1px solid #252A30;
+  background: #161A1F;
 }
 
 .demoTab {
   padding: 0.875rem 0 0.75rem;
   font-size: 0.8rem;
   font-weight: 500;
-  color: #8E95A3;
+  color: #9AA4BF;
   border: none;
   border-bottom: 2px solid transparent;
   background: transparent;
@@ -207,22 +207,22 @@
 }
 
 .demoTabActive {
-  color: #AF788B;
-  border-bottom-color: #AF788B;
+  color: #F59E0B;
+  border-bottom-color: #F59E0B;
 }
 
 .demoTab:not(.demoTabActive):hover {
-  color: #EBEDF0;
+  color: #EDF2F8;
 }
 
 .demoPanel {
-  background: #0B0D0E;
+  background: #111317;
 }
 
 .demoCodeHeader {
   padding: 0.75rem 1.25rem;
-  background: #0B0D0E;
-  border-bottom: 1px solid #2A2E34;
+  background: #111317;
+  border-bottom: 1px solid #252A30;
   display: flex;
   align-items: center;
   gap: 0.75rem;
@@ -256,7 +256,7 @@
   margin-left: auto;
   background: transparent;
   border: none;
-  color: #8E95A3;
+  color: #9AA4BF;
   font-size: 0.7rem;
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
   cursor: pointer;
@@ -268,7 +268,7 @@
 
 .copyBtn:hover {
   background: rgba(175, 120, 139, 0.1);
-  color: #AF788B;
+  color: #F59E0B;
 }
 
 .demoPre {
@@ -278,8 +278,8 @@
   font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', Menlo, monospace;
   font-size: 0.85rem;
   line-height: 1.75;
-  color: #EBEDF0;
-  background: #0B0D0E;
+  color: #EDF2F8;
+  background: #111317;
 }
 
 .demoPre code {
@@ -292,25 +292,25 @@
 
 /* Syntax highlight tokens */
 .hlKeyword {
-  color: #AF788B;
+  color: #F59E0B;
   font-weight: 500;
 }
 
 .hlFunction {
-  color: #6DCDFF;
+  color: #5E6AD2;
 }
 
 .hlString {
-  color: #B0E57C;
+  color: #10B981;
 }
 
 .hlComment {
-  color: #5E6673;
+  color: #6B7280;
   font-style: italic;
 }
 
 .hlType {
-  color: #6DCDFF;
+  color: #5E6AD2;
 }
 
 .hlAttribute {
@@ -318,21 +318,21 @@
 }
 
 .terminalOutput {
-  background: #0B0D0E;
-  border-top: 1px solid #2A2E34;
+  background: #111317;
+  border-top: 1px solid #252A30;
   padding: 1rem 2rem;
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
   font-size: 0.78rem;
-  color: #8E95A3;
+  color: #9AA4BF;
   line-height: 1.7;
 }
 
 .terminalPrompt {
-  color: #B0E57C;
+  color: #10B981;
 }
 
 .terminalAnswer {
-  color: #EBEDF0;
+  color: #EDF2F8;
 }
 
 .terminalCursor {
@@ -352,8 +352,8 @@
 
 .installBar {
   padding: 1rem 2rem;
-  background: #121417;
-  border-top: 1px solid #23262B;
+  background: #161A1F;
+  border-top: 1px solid #252A30;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -364,19 +364,19 @@
 .installCommand {
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
   font-size: 0.75rem;
-  color: #8E95A3;
-  background: #0B0D0E;
+  color: #9AA4BF;
+  background: #111317;
   padding: 0.4rem 1rem;
   border-radius: 8px;
-  border: 1px solid #23262B;
+  border: 1px solid #252A30;
 }
 
 .installCommand span {
-  color: #AF788B;
+  color: #F59E0B;
 }
 
 .installBtn {
-  background: #AF788B;
+  background: #F59E0B;
   border: none;
   color: white;
   font-size: 0.75rem;
@@ -389,23 +389,127 @@
 }
 
 .installBtn:hover {
-  background: #9A6A7C;
+  background: #D97706;
 }
 
-/* ===== How It Works ===== */
-.workflowWrapper {
-  max-width: 100%;
-  padding: 0;
+/* ===== Navigation Theater ===== */
+.narrativeDemo {
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 2rem 2.5rem;
+  max-width: 780px;
   margin: 0 auto;
-  text-align: center;
 }
 
-.workflowImg {
-  width: 100%;
-  height: auto;
-  display: block;
-  min-height: 520px;
-  object-fit: contain;
+.narrativeHeader {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 28px;
+}
+
+.narrativeTitle {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #E2E8F0;
+  margin: 0;
+}
+
+.narrativeBadge {
+  background: rgba(245, 158, 11, 0.12);
+  color: var(--primary);
+  padding: 2px 12px;
+  border-radius: 30px;
+  font-size: 0.7rem;
+  margin-left: auto;
+}
+
+.navTrack {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  position: relative;
+}
+
+/* vertical timeline line */
+.navTrack::before {
+  content: '';
+  position: absolute;
+  left: 18px;
+  top: 24px;
+  bottom: 24px;
+  width: 2px;
+  background: #2A3040;
+  border-radius: 1px;
+}
+
+.trackStep {
+  display: flex;
+  flex-direction: column;
+  padding: 0.75rem 0 0.75rem 48px;
+  position: relative;
+}
+
+.trackStep .stepBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--primary);
+  margin-bottom: 4px;
+  position: relative;
+}
+
+/* dot on the timeline */
+.trackStep .stepBadge::before {
+  content: '';
+  position: absolute;
+  left: -36px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--primary);
+  border: 2px solid var(--code-bg);
+  z-index: 1;
+}
+
+.stepBadgeGreen {
+  color: var(--accent-green) !important;
+}
+
+.stepBadgeGreen::before {
+  background: var(--accent-green) !important;
+}
+
+.stepContent {
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: #C8D0DE;
+}
+
+/* inline <code> inside narrative demo — dark-friendly */
+.stepContent code {
+  background: #1A1F27;
+  color: #E2E8F0;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.85em;
+  border: 1px solid #2A3040;
+}
+
+.hamsterVoice {
+  background: rgba(245, 158, 11, 0.08);
+  border-left: 3px solid var(--primary);
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  margin: 0.75rem 0 0.75rem 48px;
+  font-size: 0.85rem;
+  line-height: 1.6;
+  color: #B0B8C8;
 }
 
 /* ===== Use Cases Slider ===== */
@@ -424,8 +528,8 @@
 
 .caseCard {
   flex: 0 0 calc(65% - 0.75rem);
-  background: #121417;
-  border: 1px solid #23262B;
+  background: #161A1F;
+  border: 1px solid #252A30;
   border-radius: 16px;
   padding: 3rem 3rem 2.5rem;
   opacity: 0.4;
@@ -443,50 +547,50 @@
   opacity: 1;
   transform: scale(1);
   filter: brightness(1);
-  border-color: #AF788B;
-  box-shadow: 0 12px 40px rgba(175, 120, 139, 0.18);
+  border-color: #F59E0B;
+  box-shadow: 0 12px 40px rgba(245, 158, 11, 0.18);
 }
 
 .caseTitle {
   font-size: 1.55rem;
   font-weight: 600;
   margin: 0 0 0.75rem;
-  color: #EBEDF0;
+  color: #EDF2F8;
 }
 
 .caseDesc {
-  color: #8E95A3;
+  color: #9AA4BF;
   font-size: 1.05rem;
   line-height: 1.7;
   margin: 0 0 1.75rem;
 }
 
 .caseQuery {
-  background: #0B0D0E;
+  background: #111317;
   border-radius: 12px;
   padding: 1.5rem 1.75rem;
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
   font-size: 0.88rem;
-  color: #EBEDF0;
-  border: 1px solid #23262B;
+  color: #EDF2F8;
+  border: 1px solid #252A30;
   line-height: 1.7;
 }
 
 .caseQueryLabel {
-  color: #AF788B;
+  color: #F59E0B;
   font-weight: 600;
   margin-bottom: 0.5rem;
 }
 
 .caseQueryText {
-  color: #EBEDF0;
+  color: #EDF2F8;
 }
 
 .caseAnswer {
-  color: #8E95A3;
+  color: #9AA4BF;
   margin-top: 0.75rem;
   padding-top: 0.75rem;
-  border-top: 1px solid #23262B;
+  border-top: 1px solid #252A30;
   font-size: 0.75rem;
 }
 
@@ -544,7 +648,7 @@
 
 /* ===== CTA ===== */
 .sectionCtaDark {
-  background: #0B0D0E;
+  background: #111317;
   padding: 3rem 1.5rem;
 }
 
@@ -560,12 +664,12 @@
   font-weight: 700;
   letter-spacing: -0.02em;
   margin: 0 0 1rem;
-  color: var(--text);
+  color: var(--primary);
 }
 
 .ctaDesc {
   font-size: 1.05rem;
-  color: #8E95A3;
+  color: #9AA4BF;
   max-width: 520px;
   margin: 0 auto 2rem;
   line-height: 1.6;
@@ -585,8 +689,8 @@
   font-weight: 600;
   font-size: 0.88rem;
   background: transparent;
-  border: 1px solid #23262B;
-  color: #EBEDF0;
+  border: 1px solid #252A30;
+  color: #EDF2F8;
   text-decoration: none;
   cursor: pointer;
   transition: all 0.2s;
@@ -594,9 +698,9 @@
 }
 
 .ctaBtnSecondary:hover {
-  border-color: #AF788B;
-  background: rgba(175, 120, 139, 0.12);
-  color: #AF788B;
+  border-color: #F59E0B;
+  background: rgba(245, 158, 11, 0.12);
+  color: #F59E0B;
   text-decoration: none;
 }
 
@@ -609,8 +713,8 @@
 }
 
 .ctaInstallItem {
-  background: #121417;
-  border: 1px solid #23262B;
+  background: #161A1F;
+  border: 1px solid #252A30;
   border-radius: 12px;
   padding: 0.65rem 1.25rem;
   display: flex;
@@ -621,17 +725,17 @@
 .ctaInstallCommand {
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
   font-size: 0.82rem;
-  color: #EBEDF0;
+  color: #EDF2F8;
 }
 
 .ctaInstallCommand span {
-  color: #AF788B;
+  color: #F59E0B;
 }
 
 .ctaCopyIcon {
   background: transparent;
   border: none;
-  color: #8E95A3;
+  color: #9AA4BF;
   cursor: pointer;
   padding: 0.25rem 0.65rem;
   border-radius: 6px;
@@ -641,13 +745,13 @@
 }
 
 .ctaCopyIcon:hover {
-  background: rgba(175, 120, 139, 0.12);
-  color: #AF788B;
+  background: rgba(245, 158, 11, 0.12);
+  color: #F59E0B;
 }
 
 /* ===== Dark theme overrides ===== */
 [data-theme='dark'] .heroTitleEmphasis {
-  color: var(--primary-light);
+  color: var(--primary);
 }
 
 [data-theme='dark'] .heroTitleLight {

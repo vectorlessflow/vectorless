@@ -50,6 +50,11 @@ pub struct NavigationIndex {
     /// Child routes for each non-leaf node.
     #[serde(with = "super::serde_helpers")]
     child_routes: HashMap<NodeId, Vec<ChildRoute>>,
+
+    /// Pre-computed document card for multi-document Orchestrator.
+    /// Built during compile phase by NavigationIndexStage.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    doc_card: Option<DocCard>,
 }
 
 impl NavigationIndex {
@@ -58,6 +63,7 @@ impl NavigationIndex {
         Self {
             nav_entries: HashMap::new(),
             child_routes: HashMap::new(),
+            doc_card: None,
         }
     }
 
@@ -95,9 +101,7 @@ impl NavigationIndex {
     pub fn root_entry(&self) -> Option<&NavEntry> {
         // The root should always be present if the index is non-empty.
         // Return the first entry with level 0.
-        self.nav_entries
-            .values()
-            .find(|e| e.level == 0)
+        self.nav_entries.values().find(|e| e.level == 0)
     }
 
     /// Iterate over all navigation entries.
@@ -113,6 +117,16 @@ impl NavigationIndex {
     /// Check if the index is empty.
     pub fn is_empty(&self) -> bool {
         self.nav_entries.is_empty()
+    }
+
+    /// Get the pre-computed document card.
+    pub fn doc_card(&self) -> Option<&DocCard> {
+        self.doc_card.as_ref()
+    }
+
+    /// Set the document card.
+    pub fn set_doc_card(&mut self, card: DocCard) {
+        self.doc_card = Some(card);
     }
 }
 
@@ -168,6 +182,52 @@ pub struct ChildRoute {
     pub description: String,
 
     /// Number of leaf nodes in this child's subtree.
+    pub leaf_count: usize,
+}
+
+/// Pre-computed document card for multi-document Orchestrator Agent.
+///
+/// Built during the compile phase by `NavigationIndexStage`, this provides
+/// a compact summary of the entire document — enough for the Orchestrator
+/// to decide whether a document is relevant to a query without entering it.
+///
+/// All fields come from data already computed in earlier phases of the
+/// NavigationIndexStage (root NavEntry + root child_routes). No LLM calls.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DocCard {
+    /// Document title (root node title).
+    pub title: String,
+
+    /// Document overview (root NavEntry.overview).
+    pub overview: String,
+
+    /// Questions this document can answer (root NavEntry.question_hints).
+    pub question_hints: Vec<String>,
+
+    /// Topic keywords (root NavEntry.topic_tags).
+    pub topic_tags: Vec<String>,
+
+    /// Top-level section summaries (from root child_routes).
+    pub sections: Vec<SectionCard>,
+
+    /// Total leaf nodes in the document.
+    pub total_leaves: usize,
+}
+
+/// One top-level section in a [`DocCard`].
+///
+/// Provides a compact view of a single top-level section,
+/// allowing the Orchestrator to scan section titles and descriptions
+/// to assess document relevance.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SectionCard {
+    /// Section title.
+    pub title: String,
+
+    /// One-sentence description of this section.
+    pub description: String,
+
+    /// Number of leaf nodes in this section's subtree.
     pub leaf_count: usize,
 }
 
@@ -415,5 +475,152 @@ mod tests {
         let routes = deserialized.get_child_routes(root).unwrap();
         assert_eq!(routes[0].title, "Child1");
         assert_eq!(routes[1].title, "Child2");
+    }
+
+    #[test]
+    fn test_doc_card_default_none() {
+        let index = NavigationIndex::new();
+        assert!(index.doc_card().is_none());
+    }
+
+    #[test]
+    fn test_doc_card_set_and_get() {
+        let card = DocCard {
+            title: "Test Doc".to_string(),
+            overview: "A test document".to_string(),
+            question_hints: vec!["What?".to_string()],
+            topic_tags: vec!["test".to_string()],
+            sections: vec![SectionCard {
+                title: "Section 1".to_string(),
+                description: "First section".to_string(),
+                leaf_count: 5,
+            }],
+            total_leaves: 5,
+        };
+
+        let mut index = NavigationIndex::new();
+        index.set_doc_card(card);
+
+        let retrieved = index.doc_card().unwrap();
+        assert_eq!(retrieved.title, "Test Doc");
+        assert_eq!(retrieved.overview, "A test document");
+        assert_eq!(retrieved.question_hints.len(), 1);
+        assert_eq!(retrieved.topic_tags.len(), 1);
+        assert_eq!(retrieved.sections.len(), 1);
+        assert_eq!(retrieved.sections[0].title, "Section 1");
+        assert_eq!(retrieved.sections[0].leaf_count, 5);
+        assert_eq!(retrieved.total_leaves, 5);
+    }
+
+    #[test]
+    fn test_doc_card_serialization_roundtrip() {
+        let tree = build_small_tree();
+        let root = tree.root();
+        let children: Vec<NodeId> = tree.children_iter(root).collect();
+
+        let mut index = NavigationIndex::new();
+        index.add_entry(
+            root,
+            NavEntry {
+                overview: "Root overview".to_string(),
+                question_hints: vec!["What is this?".to_string()],
+                topic_tags: vec!["intro".to_string()],
+                leaf_count: 2,
+                level: 0,
+            },
+        );
+        index.add_child_routes(
+            root,
+            vec![
+                ChildRoute {
+                    node_id: children[0],
+                    title: "Child1".to_string(),
+                    description: "First".to_string(),
+                    leaf_count: 1,
+                },
+                ChildRoute {
+                    node_id: children[1],
+                    title: "Child2".to_string(),
+                    description: "Second".to_string(),
+                    leaf_count: 1,
+                },
+            ],
+        );
+
+        // Build DocCard from index data
+        let root_entry = index.get_entry(root).unwrap();
+        let sections: Vec<SectionCard> = index
+            .get_child_routes(root)
+            .unwrap()
+            .iter()
+            .map(|r| SectionCard {
+                title: r.title.clone(),
+                description: r.description.clone(),
+                leaf_count: r.leaf_count,
+            })
+            .collect();
+        index.set_doc_card(DocCard {
+            title: "Root".to_string(),
+            overview: root_entry.overview.clone(),
+            question_hints: root_entry.question_hints.clone(),
+            topic_tags: root_entry.topic_tags.clone(),
+            sections,
+            total_leaves: root_entry.leaf_count,
+        });
+
+        // Serialize + deserialize
+        let json = serde_json::to_string(&index).expect("serialization failed");
+        let deserialized: NavigationIndex =
+            serde_json::from_str(&json).expect("deserialization failed");
+
+        // Verify DocCard survived round-trip
+        let card = deserialized.doc_card().unwrap();
+        assert_eq!(card.title, "Root");
+        assert_eq!(card.overview, "Root overview");
+        assert_eq!(card.question_hints, vec!["What is this?"]);
+        assert_eq!(card.topic_tags, vec!["intro"]);
+        assert_eq!(card.sections.len(), 2);
+        assert_eq!(card.sections[0].title, "Child1");
+        assert_eq!(card.sections[1].leaf_count, 1);
+        assert_eq!(card.total_leaves, 2);
+    }
+
+    #[test]
+    fn test_doc_card_backward_compat_deserialize_without_card() {
+        // JSON from an older version that doesn't have doc_card
+        let tree = build_small_tree();
+        let root = tree.root();
+
+        let mut index = NavigationIndex::new();
+        index.add_entry(
+            root,
+            NavEntry {
+                overview: "Old index".to_string(),
+                question_hints: vec![],
+                topic_tags: vec![],
+                leaf_count: 2,
+                level: 0,
+            },
+        );
+        // No doc_card set
+
+        let json = serde_json::to_string(&index).expect("serialization failed");
+        let deserialized: NavigationIndex =
+            serde_json::from_str(&json).expect("deserialization failed");
+
+        assert!(deserialized.doc_card().is_none());
+        assert_eq!(deserialized.entry_count(), 1);
+    }
+
+    #[test]
+    fn test_section_card_fields() {
+        let card = SectionCard {
+            title: "Getting Started".to_string(),
+            description: "Quick setup guide".to_string(),
+            leaf_count: 3,
+        };
+        assert_eq!(card.title, "Getting Started");
+        assert_eq!(card.description, "Quick setup guide");
+        assert_eq!(card.leaf_count, 3);
     }
 }

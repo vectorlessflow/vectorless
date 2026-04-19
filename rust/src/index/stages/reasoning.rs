@@ -17,7 +17,7 @@ use crate::document::{
 };
 use crate::error::Result;
 use crate::llm::LlmClient;
-use crate::retrieval::scoring::extract_keywords;
+use crate::scoring::extract_keywords;
 
 use super::async_trait;
 use super::{AccessPattern, IndexStage, StageResult};
@@ -59,8 +59,7 @@ impl ReasoningIndexStage {
         tree: &crate::document::DocumentTree,
         config: &ReasoningIndexConfig,
     ) -> (HashMap<String, Vec<TopicEntry>>, usize) {
-        let mut keyword_nodes: HashMap<String, Vec<(NodeId, f32, usize)>> =
-            HashMap::new();
+        let mut keyword_nodes: HashMap<String, Vec<(NodeId, f32, usize)>> = HashMap::new();
 
         // Walk all nodes and extract keywords from title + summary
         for node_id in tree.traverse() {
@@ -107,13 +106,11 @@ impl ReasoningIndexStage {
         let keyword_count = sorted_keywords.len();
 
         // Build topic_paths: merge duplicate (keyword, node) pairs
-        let mut topic_paths: HashMap<String, Vec<TopicEntry>> =
-            HashMap::new();
+        let mut topic_paths: HashMap<String, Vec<TopicEntry>> = HashMap::new();
 
         for (keyword, entries) in sorted_keywords {
             // Merge duplicate node entries by summing weights
-            let mut merged: HashMap<NodeId, (f32, usize)> =
-                HashMap::new();
+            let mut merged: HashMap<NodeId, (f32, usize)> = HashMap::new();
             for (node_id, weight, depth) in entries {
                 let entry = merged.entry(node_id).or_insert((0.0, depth));
                 entry.0 += weight;
@@ -150,9 +147,7 @@ impl ReasoningIndexStage {
     }
 
     /// Build section map from depth-1 nodes.
-    fn build_section_map(
-        tree: &crate::document::DocumentTree,
-    ) -> HashMap<String, NodeId> {
+    fn build_section_map(tree: &crate::document::DocumentTree) -> HashMap<String, NodeId> {
         let mut section_map = HashMap::new();
         let root = tree.root();
         for child_id in tree.children(root) {
@@ -167,19 +162,17 @@ impl ReasoningIndexStage {
         section_map
     }
 
-    /// Expand keywords with LLM-generated synonyms (concurrent).
+    /// Expand keywords with LLM-generated synonyms (single batch request).
     ///
-    /// For each existing keyword in `topic_paths`, ask the LLM for synonymous
-    /// search terms. Synonym entries inherit the same node mappings but with
+    /// Sends all keywords to the LLM in one request and maps each to its
+    /// synonyms. Synonym entries inherit the same node mappings but with
     /// a reduced weight (0.6x) to reflect the indirect match.
     async fn expand_synonyms(
         topic_paths: &mut HashMap<String, Vec<TopicEntry>>,
         llm_client: &LlmClient,
         max_keywords: usize,
-        concurrency: usize,
     ) -> usize {
         use std::collections::HashSet;
-        use futures::StreamExt;
 
         let existing_keys: HashSet<String> = topic_paths.keys().cloned().collect();
         // Pick top keywords by entry count for synonym expansion
@@ -196,83 +189,66 @@ impl ReasoningIndexStage {
         }
 
         tracing::info!(
-            "[reasoning_index] Expanding synonyms for {} keywords (concurrency: {})",
-            keyword_count, concurrency,
+            "[reasoning_index] Expanding synonyms for {} keywords (single request)",
+            keyword_count,
         );
 
-        // Snapshot the source entries for each keyword before concurrent calls.
-        // We need this because `topic_paths` is immutably borrowed during LLM calls
-        // and we write results back afterwards.
+        // Snapshot the source entries for each keyword.
         let source_entries: HashMap<String, Vec<TopicEntry>> = ranked
             .iter()
             .map(|(kw, _): &(String, usize)| {
-                (
-                    kw.clone(),
-                    topic_paths.get(kw).cloned().unwrap_or_default(),
-                )
+                (kw.clone(), topic_paths.get(kw).cloned().unwrap_or_default())
             })
             .collect();
 
-        // Concurrent LLM calls
-        let results: Vec<(String, std::result::Result<Vec<String>, String>)> =
-            futures::stream::iter(ranked.into_iter().map(|(kw, _)| kw))
-                .map(|keyword| {
-                    let client = llm_client.clone();
-                    async move {
-                        let prompt = format!(
-                            "List up to 5 synonyms or related search terms for \"{}\". \
-                             Return only the terms separated by commas, no numbering, no explanation.",
-                            keyword
-                        );
-                        match client
-                            .complete(
-                                "You are a thesaurus assistant. Return only comma-separated synonyms.",
-                                &prompt,
-                            )
-                            .await
-                        {
-                            Ok(response) => {
-                                let synonyms: Vec<String> = response
-                                    .to_lowercase()
-                                    .split(',')
-                                    .map(|s| s.trim().to_string())
-                                    .filter(|s| !s.is_empty() && s.len() >= 2)
-                                    .collect();
-                                (keyword, Ok(synonyms))
-                            }
-                            Err(e) => (keyword, Err(e.to_string())),
-                        }
-                    }
-                })
-                .buffer_unordered(concurrency)
-                .collect()
-                .await;
+        let keywords: Vec<String> = ranked.into_iter().map(|(kw, _)| kw).collect();
+
+        let system = "You are a thesaurus assistant. For each keyword, provide up to 5 synonyms \
+            or related search terms. Return ONLY a valid JSON object mapping each keyword to an \
+            array of synonym strings. No explanation, no markdown.";
+        let user_prompt = format!(
+            "Keywords: {}\n\nReturn a JSON object: {{\"keyword\": [\"syn1\", \"syn2\"], ...}}",
+            keywords.join(", ")
+        );
+
+        let synonym_map: HashMap<String, Vec<String>> = match llm_client
+            .complete_json::<HashMap<String, Vec<String>>>(system, &user_prompt)
+            .await
+        {
+            Ok(map) => map
+                .into_iter()
+                .map(|(k, v): (String, Vec<String>)| (k.to_lowercase(), v))
+                .collect(),
+            Err(e) => {
+                tracing::warn!("[reasoning_index] Batch synonym expansion failed: {}", e);
+                return 0;
+            }
+        };
 
         // Write results back
         let mut synonym_count = 0;
-        for (keyword, result) in results {
-            match result {
-                Ok(synonyms) => {
-                    if let Some(entries) = source_entries.get(&keyword) {
-                        for syn in synonyms {
-                            if existing_keys.contains(&syn) {
-                                continue;
-                            }
-                            let synonym_entries: Vec<TopicEntry> = entries
-                                .iter()
-                                .map(|e| TopicEntry {
-                                    node_id: e.node_id,
-                                    weight: e.weight * 0.6,
-                                    depth: e.depth,
-                                })
-                                .collect();
-                            topic_paths.insert(syn, synonym_entries);
-                            synonym_count += 1;
+        for keyword in &keywords {
+            if let Some(synonyms) = synonym_map.get(keyword) {
+                if let Some(entries) = source_entries.get(keyword) {
+                    for syn in synonyms {
+                        let syn_clean = syn.trim().to_lowercase();
+                        if syn_clean.is_empty()
+                            || syn_clean.len() < 2
+                            || existing_keys.contains(&syn_clean)
+                        {
+                            continue;
                         }
+                        let synonym_entries: Vec<TopicEntry> = entries
+                            .iter()
+                            .map(|e| TopicEntry {
+                                node_id: e.node_id,
+                                weight: e.weight * 0.6,
+                                depth: e.depth,
+                            })
+                            .collect();
+                        topic_paths.insert(syn_clean, synonym_entries);
+                        synonym_count += 1;
                     }
-                }
-                Err(error) => {
-                    tracing::warn!("[reasoning_index] Synonym expansion failed for '{}': {}", keyword, error);
                 }
             }
         }
@@ -379,7 +355,10 @@ impl IndexStage for ReasoningIndexStage {
 
         // 1. Build topic-to-path mapping
         let (mut topic_paths, keyword_count) = Self::build_topic_paths(tree, config);
-        let topic_count: usize = topic_paths.values().map(|v: &Vec<TopicEntry>| v.len()).sum();
+        let topic_count: usize = topic_paths
+            .values()
+            .map(|v: &Vec<TopicEntry>| v.len())
+            .sum();
         debug!(
             "[reasoning_index] Topic paths: {} keywords, {} entries",
             keyword_count, topic_count
@@ -389,10 +368,7 @@ impl IndexStage for ReasoningIndexStage {
         let synonym_count = if config.enable_synonym_expansion {
             if let Some(ref llm_client) = ctx.llm_client {
                 let max_kw = (keyword_count / 4).max(20).min(100);
-                let concurrency = ctx.options.concurrency.max_concurrent_requests;
-                let count =
-                    Self::expand_synonyms(&mut topic_paths, llm_client, max_kw, concurrency)
-                        .await;
+                let count = Self::expand_synonyms(&mut topic_paths, llm_client, max_kw).await;
                 if count > 0 {
                     info!("[reasoning_index] Expanded {} synonym keywords", count);
                 }
@@ -407,7 +383,10 @@ impl IndexStage for ReasoningIndexStage {
 
         // 2. Build section map
         let section_map = Self::build_section_map(tree);
-        debug!("[reasoning_index] Section map: {} entries", section_map.len());
+        debug!(
+            "[reasoning_index] Section map: {} entries",
+            section_map.len()
+        );
 
         // 3. Build summary shortcut
         let summary_shortcut = if config.build_summary_shortcut {
@@ -520,7 +499,10 @@ mod tests {
         let config = ReasoningIndexConfig::default();
         let (topic_paths, keyword_count) = ReasoningIndexStage::build_topic_paths(&tree, &config);
 
-        assert!(keyword_count > 0, "Should extract keywords from title + summary");
+        assert!(
+            keyword_count > 0,
+            "Should extract keywords from title + summary"
+        );
         assert!(!topic_paths.is_empty(), "Should build topic paths");
 
         // "learning" appears in both titles → should be a keyword
@@ -571,8 +553,7 @@ mod tests {
 
         let mut config = ReasoningIndexConfig::default();
         config.max_keyword_entries = 5;
-        let (topic_paths, keyword_count) =
-            ReasoningIndexStage::build_topic_paths(&tree, &config);
+        let (topic_paths, keyword_count) = ReasoningIndexStage::build_topic_paths(&tree, &config);
 
         assert!(
             keyword_count <= 5,

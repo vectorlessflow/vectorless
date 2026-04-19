@@ -458,10 +458,14 @@ impl PipelineOrchestrator {
         if parallel_count > 0 {
             info!(
                 "[pipeline] {} execution groups ({} parallelizable)",
-                groups.len(), parallel_count
+                groups.len(),
+                parallel_count
             );
         } else {
-            debug!("[pipeline] {} execution groups (all sequential)", groups.len());
+            debug!(
+                "[pipeline] {} execution groups (all sequential)",
+                groups.len()
+            );
         }
 
         // Create context
@@ -556,8 +560,7 @@ impl PipelineOrchestrator {
                 let mut entries: Vec<ParallelEntry> = Vec::with_capacity(group.stage_indices.len());
 
                 for &idx in &group.stage_indices {
-                    let stage =
-                        std::mem::replace(&mut self.stages[idx].stage, Box::new(NopStage));
+                    let stage = std::mem::replace(&mut self.stages[idx].stage, Box::new(NopStage));
                     let name = stage.name().to_string();
                     let policy = stage.failure_policy();
                     let access = stage.access_pattern();
@@ -567,10 +570,8 @@ impl PipelineOrchestrator {
                         None
                     } else {
                         // Reader gets a cloned context
-                        let mut clone = IndexContext::new(
-                            IndexInput::content(""),
-                            ctx.options.clone(),
-                        );
+                        let mut clone =
+                            IndexContext::new(IndexInput::content(""), ctx.options.clone());
                         clone.tree = ctx.tree.clone();
                         clone.existing_tree = ctx.existing_tree.clone();
                         clone.doc_id = ctx.doc_id.clone();
@@ -612,12 +613,31 @@ impl PipelineOrchestrator {
                 // All futures are !Send (Box<dyn IndexStage>), but join_all
                 // works fine on the same thread.
 
-                let reader_futs: Vec<std::pin::Pin<Box<dyn std::future::Future<Output = (ParallelEntry, std::result::Result<StageResult, crate::error::Error>)>>>> = reader_entries.into_iter().map(|mut entry| {
-                    Box::pin(async move {
-                        let res = Self::execute_stage_with_policy(&mut entry.stage, entry.ctx.as_mut().unwrap()).await;
-                        (entry, res)
-                    }) as std::pin::Pin<Box<dyn std::future::Future<Output = _>>>
-                }).collect();
+                let reader_futs: Vec<
+                    std::pin::Pin<
+                        Box<
+                            dyn std::future::Future<
+                                    Output = (
+                                        ParallelEntry,
+                                        std::result::Result<StageResult, crate::error::Error>,
+                                    ),
+                                > + Send,
+                        >,
+                    >,
+                > = reader_entries
+                    .into_iter()
+                    .map(|mut entry| {
+                        Box::pin(async move {
+                            let res = Self::execute_stage_with_policy(
+                                &mut entry.stage,
+                                entry.ctx.as_mut().unwrap(),
+                            )
+                            .await;
+                            (entry, res)
+                        })
+                            as std::pin::Pin<Box<dyn std::future::Future<Output = _> + Send>>
+                    })
+                    .collect();
 
                 // If there's a tree writer, run it concurrently with readers.
                 // If no tree writer (all readers), just run readers.

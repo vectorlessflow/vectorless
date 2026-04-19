@@ -24,7 +24,8 @@ use metrics::{
     PyLlmMetricsReport, PyMetricsReport, PyPilotMetricsReport, PyRetrievalMetricsReport,
 };
 use results::{
-    PyFailedItem, PyIndexItem, PyIndexMetrics, PyIndexResult, PyQueryResult, PyQueryResultItem,
+    PyEvidenceItem, PyFailedItem, PyIndexItem, PyIndexMetrics, PyIndexResult, PyQueryMetrics,
+    PyQueryResult, PyQueryResultItem,
 };
 
 /// Vectorless - Reasoning-native document intelligence engine.
@@ -48,6 +49,8 @@ fn _vectorless(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyIndexMetrics>()?;
     m.add_class::<PyQueryResult>()?;
     m.add_class::<PyQueryResultItem>()?;
+    m.add_class::<PyEvidenceItem>()?;
+    m.add_class::<PyQueryMetrics>()?;
     m.add_class::<PyFailedItem>()?;
     m.add_class::<PyDocumentInfo>()?;
     m.add_class::<PyDocumentGraphNode>()?;

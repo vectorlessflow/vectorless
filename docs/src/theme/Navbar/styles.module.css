@@ -10,6 +10,7 @@
 .navbarBrand {
   display: flex;
   align-items: center;
+  gap: 10px;
   flex-shrink: 0;
   margin-right: 24rem;
 }
@@ -27,15 +28,21 @@
 }
 
 .navbarLogo {
-  height: 40px;
+  height: 30px;
   width: auto;
 }
 
 .logo {
-  font-size: 1.6rem;
-  font-weight: 800;
+  font-size: 1.3rem;
+  font-weight: 600;
+  font-family: 'Inter', 'Libre Franklin', -apple-system, BlinkMacSystemFont, sans-serif;
   letter-spacing: -0.02em;
-  color: var(--primary);
+  color: #111827;
+  line-height: 1;
+}
+
+[data-theme='dark'] .logo {
+  color: #D0D6E4;
 }
 
 /* Center: navigation links */
@@ -50,9 +57,14 @@
 .navbarCenter :global(.navbar__link) {
   font-size: 0.875rem;
   font-weight: 400;
+  color: #374151;
   padding: 0;
   text-decoration: none;
   transition: opacity 0.15s ease;
+}
+
+[data-theme='dark'] .navbarCenter :global(.navbar__link) {
+  color: #C8D0E0;
 }
 
 .navbarCenter :global(.navbar__link:hover) {
@@ -80,6 +92,35 @@
 .githubStarWrapper {
   display: flex;
   align-items: center;
+}
+
+/* Theme toggle */
+.themeToggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: #374151;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.themeToggle:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+[data-theme='dark'] .themeToggle {
+  color: #C8D0E0;
+}
+
+[data-theme='dark'] .themeToggle:hover {
+  border-color: var(--primary);
+  color: var(--primary);
 }
 
 @media (max-width: 996px) {

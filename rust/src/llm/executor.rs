@@ -246,10 +246,30 @@ impl LlmExecutor {
                 "Executing LLM request"
             );
 
-            // Step 2: Execute the request
-            let result = self
-                .do_request(&current_model, system, user, max_tokens)
-                .await;
+            // Step 2: Execute the request (with optional timeout)
+            let request_future = self.do_request(&current_model, system, user, max_tokens);
+            let result = if self.config.request_timeout_secs > 0 {
+                let timeout = Duration::from_secs(self.config.request_timeout_secs);
+                match tokio::time::timeout(timeout, request_future).await {
+                    Ok(r) => r,
+                    Err(_) => {
+                        warn!(
+                            timeout_secs = self.config.request_timeout_secs,
+                            model = %current_model,
+                            "LLM request timed out"
+                        );
+                        if let Some(ref metrics) = self.metrics {
+                            metrics.record_llm_timeout();
+                        }
+                        Err(LlmError::Timeout(format!(
+                            "Request timed out after {}s",
+                            self.config.request_timeout_secs
+                        )))
+                    }
+                }
+            } else {
+                request_future.await
+            };
 
             match result {
                 Ok(response) => {

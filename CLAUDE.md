@@ -5,23 +5,38 @@ A hierarchical, reasoning-native document intelligence engine written in Rust.
 ## Project Structure
 
 - `rust/` - Rust core engine
-  - `src/client/` - Client API (EngineBuilder, Engine)
-  - `src/config/` - Configuration types
-  - `src/document/` - Document parsers (Markdown, PDF)
-  - `src/index/` - Index building and pipeline
-  - `src/retrieval/` - Retrieval engine (beam search, MCTS, greedy, hybrid strategies)
-  - `src/storage/` - Storage layer
-  - `src/llm/` - LLM client abstraction
+  - `src/client/` - Client API (EngineBuilder, Engine) - facade layer, no business logic
+  - `src/document/` - Document data structures (DocumentTree, NavigationIndex, ReasoningIndex)
+  - `src/index/` - Compile pipeline (8-stage, checkpointing, incremental update)
+  - `src/retrieval/` - Retrieval dispatch layer (preprocessing, dispatch, postprocessing, cache, streaming)
+  - `src/query/` - Query understanding and planning (intent classification, rewrite, decomposition, budget)
+  - `src/agent/` - Retrieval execution (SubAgent: doc navigation, Orchestrator: workspace analysis + multi-doc fusion)
+  - `src/rerank/` - Result reranking and answer synthesis (dedup, scoring, fusion, synthesis)
+  - `src/scoring/` - Scoring and ranking strategies (BM25, relevance scoring, score combination)
+  - `src/llm/` - LLM client (connection pool, memo/caching, throttle/rate-limiting, fallback)
+  - `src/storage/` - Persistence (Workspace, LRU cache, backend abstraction file/memory)
   - `src/graph/` - Cross-document relationship graph
-  - `src/memo/` - Caching and reasoning memo
-  - `src/metrics/` - Metrics and usage tracking
+  - `src/metrics/` - Metrics collection and reporting
   - `src/events/` - Event system for progress monitoring
-  - `src/throttle/` - Rate limiting
-  - `src/utils/` - Utility functions
+  - `src/config/` - Configuration types and validation
+  - `src/error.rs` - Unified error types
+  - `src/utils/` - Utility functions (token counting, fingerprinting, validation)
   - `examples/` - Rust examples (flow, indexing, pdf, batch, etc.)
-- `python/` - Python SDK (PyO3 bindings)
+- `python/` - Python SDK (PyO3 bindings) + CLI
 - `docs/` - Docusaurus documentation site
 - `samples/` - Sample files
+
+### Retrieval Call Flow
+
+```
+Engine.query()
+  → retrieval/dispatcher
+    → query/understand() → QueryPlan
+    → branch:
+        ├── User specified doc_ids → parallel spawn N × SubAgent
+        └── Workspace scope → Orchestrator (analyze DocCards → spawn SubAgents → fusion)
+    → rerank/ (dedup → score → fusion → synthesis)
+```
 
 ## Build Commands
 

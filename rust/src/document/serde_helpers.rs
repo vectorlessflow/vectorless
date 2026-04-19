@@ -82,8 +82,7 @@ where
             A: de::MapAccess<'de>,
         {
             // Consume the map (should be empty for backward compat)
-            let _: de::value::MapAccessDeserializer<A> =
-                de::value::MapAccessDeserializer::new(map);
+            let _: de::value::MapAccessDeserializer<A> = de::value::MapAccessDeserializer::new(map);
             Ok(HashMap::new())
         }
     }
@@ -195,7 +194,11 @@ mod tests {
         // Verify deterministic ordering: root (id 0) before child (id 1)
         let root_pos = json.find("\"a\"").unwrap_or(usize::MAX);
         let child_pos = json.find("\"b\"").unwrap_or(usize::MAX);
-        assert!(root_pos < child_pos, "root entry should come first: {}", json);
+        assert!(
+            root_pos < child_pos,
+            "root entry should come first: {}",
+            json
+        );
     }
 
     #[test]

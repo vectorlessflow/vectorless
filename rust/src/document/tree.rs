@@ -421,6 +421,21 @@ impl DocumentTree {
         self.get(id).map(|n| n.depth).unwrap_or(0)
     }
 
+    /// Get the maximum depth of any node in the tree (root = 0, leaf ≥ 0).
+    ///
+    /// Uses a single BFS pass. Returns 0 for a single-node tree.
+    pub fn max_depth(&self) -> usize {
+        let mut max_d = 0;
+        let mut stack = vec![(self.root_id, 0usize)];
+        while let Some((id, d)) = stack.pop() {
+            max_d = max_d.max(d);
+            for child in self.children_iter(id) {
+                stack.push((child, d + 1));
+            }
+        }
+        max_d
+    }
+
     /// Get the first child of a node.
     ///
     /// Returns None if the node has no children.

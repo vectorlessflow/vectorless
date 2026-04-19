@@ -9,7 +9,6 @@
 
 use serde::{Deserialize, Serialize};
 
-use super::content::ContentAggregatorConfig;
 use super::storage::{CacheConfig, StrategyConfig, SufficiencyConfig};
 
 /// Retrieval strategy configuration.
@@ -37,10 +36,6 @@ pub struct RetrievalConfig {
     /// Strategy-specific configuration.
     #[serde(default)]
     pub strategy: StrategyConfig,
-
-    /// Content aggregator configuration.
-    #[serde(default)]
-    pub content: ContentAggregatorConfig,
 }
 
 fn default_top_k() -> usize {
@@ -55,7 +50,6 @@ impl Default for RetrievalConfig {
             sufficiency: SufficiencyConfig::default(),
             cache: CacheConfig::default(),
             strategy: StrategyConfig::default(),
-            content: ContentAggregatorConfig::default(),
         }
     }
 }
