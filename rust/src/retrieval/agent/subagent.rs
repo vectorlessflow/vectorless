@@ -288,6 +288,41 @@ pub async fn run(
             };
         }
 
+        // Dynamic re-planning: when check returned INSUFFICIENT and budget allows,
+        // generate a focused new plan to guide remaining navigation.
+        if is_check
+            && !state.missing_info.is_empty()
+            && state.remaining >= 3
+            && !llm_budget_exhausted!()
+        {
+            let replan = build_replan_prompt(query, task, &state, ctx);
+            match llm.complete(&replan.0, &replan.1).await {
+                Ok(new_plan) => {
+                    llm_calls += 1;
+                    let plan_text = new_plan.trim().to_string();
+                    if !plan_text.is_empty() {
+                        info!(
+                            doc = ctx.doc_name,
+                            plan_len = plan_text.len(),
+                            "Re-plan generated after insufficient evidence"
+                        );
+                        state.plan = plan_text;
+                    }
+                }
+                Err(e) => {
+                    warn!(doc = ctx.doc_name, error = %e, "Re-plan LLM call failed");
+                    // Fall back to ReAct free exploration
+                    state.plan.clear();
+                }
+            }
+            // Clear missing_info so we don't re-plan again next round
+            state.missing_info.clear();
+        } else if is_check && !state.missing_info.is_empty() {
+            // Budget too tight for re-planning — clear plan for ReAct free exploration
+            state.plan.clear();
+            state.missing_info.clear();
+        }
+
         // Emit round event
         let cmd_str = format!("{:?}", command);
         let success = !matches!(step, Step::ForceDone(_));
@@ -614,8 +649,6 @@ async fn execute_command(
                             .trim_start_matches(|c: char| c == '-' || c == ' ');
                         if !reason.is_empty() {
                             state.missing_info = reason.to_string();
-                            // Plan failed — clear it so react decisions take over
-                            state.plan.clear();
                         }
                         state.set_feedback(format!(
                             "Evidence not yet sufficient: {}",
@@ -663,10 +696,16 @@ async fn execute_command(
     }
 }
 
+/// Maximum total chars for keyword + semantic sections in planning prompt.
+const PLAN_CONTEXT_BUDGET: usize = 1500;
+
 /// Build the navigation planning prompt (Phase 1.5).
 ///
 /// One-shot LLM call after bird's-eye view to generate a tentative navigation plan.
-/// Enriched with keyword hits from the ReasoningIndex (preserved from fast-path miss).
+/// Enriched with:
+/// - Keyword hits from the ReasoningIndex (preserved from fast-path miss)
+/// - Ancestor paths showing where each hit sits in the document tree
+/// - Semantic hints from question_hints and topic_tags matching
 fn build_plan_prompt(
     query: &str,
     task: Option<&str>,
@@ -680,8 +719,10 @@ fn build_plan_prompt(
         None => String::new(),
     };
 
-    // Format keyword hits for the planning prompt.
-    // Shows which nodes matched which keywords and at what depth/weight.
+    let query_keywords = extract_keywords(query);
+    let query_lower = query.to_lowercase();
+
+    // --- Keyword hits with ancestor path expansion ---
     let keyword_section = if keyword_hits.is_empty() {
         String::new()
     } else {
@@ -699,28 +740,187 @@ fn build_plan_prompt(
                 if !seen.insert(entry.node_id) {
                     continue;
                 }
-                let title = ctx.node_title(entry.node_id).unwrap_or("unknown");
+                let ancestor_path = build_ancestor_path(entry.node_id, ctx);
                 section.push_str(&format!(
-                    "  - keyword '{}' → node \"{}\" (depth {}, weight {:.2})\n",
-                    hit.keyword, title, entry.depth, entry.weight
+                    "  - keyword '{}' → {} (depth {}, weight {:.2})\n",
+                    hit.keyword, ancestor_path, entry.depth, entry.weight
                 ));
+                // Budget check
+                if section.len() > PLAN_CONTEXT_BUDGET {
+                    section.push_str("  ... (more hits truncated)\n");
+                    break;
+                }
+            }
+            if section.len() > PLAN_CONTEXT_BUDGET {
+                break;
             }
         }
         section
     };
 
+    // --- Semantic hints: match query against question_hints and topic_tags ---
+    let semantic_section = build_semantic_hints(&query_keywords, &query_lower, ctx);
+
     let system = "You are a document navigation planner. Given a user question, the top-level \
-         document structure, and keyword index matches, output a brief navigation plan: which \
-         sections to visit and in what order. Prioritize sections that matched keywords. \
-         The plan should be 2-5 steps. Each step should be a specific action like \
-         \"cd to X, then cat Y\" or \"grep for Z in subtree\". \
+         document structure, keyword index matches, and semantic hints, output a brief navigation \
+         plan: which sections to visit and in what order. Prioritize sections that matched keywords \
+         or semantic hints. The plan should be 2-5 steps. Each step should be a specific action \
+         like \"cd to X, then cat Y\" or \"grep for Z in subtree\". \
+         Pay attention to 'Can answer' and 'Topics' annotations in the structure listing — \
+         they indicate what questions each section addresses. \
          Output only the plan, nothing else.".to_string();
 
     let user = format!(
         "Document: {doc_name}\n\
-         Top-level structure:\n{ls_output}{keyword_section}\
+         Top-level structure:\n{ls_output}{keyword_section}{semantic_section}\
          User question: {query}{task_section}\n\n\
          Navigation plan:"
+    );
+
+    (system, user)
+}
+
+/// Build the ancestor path string for a node (e.g., "root > Chapter 1 > Section 1.2").
+fn build_ancestor_path(node_id: crate::document::NodeId, ctx: &DocContext<'_>) -> String {
+    let path = ctx.tree.path_from_root(node_id);
+    path.iter()
+        .filter_map(|&id| ctx.node_title(id))
+        .collect::<Vec<_>>()
+        .join(" > ")
+}
+
+/// Build semantic hints section by matching query against question_hints and topic_tags
+/// of root-level children.
+fn build_semantic_hints(
+    query_keywords: &[String],
+    query_lower: &str,
+    ctx: &DocContext<'_>,
+) -> String {
+    let root = ctx.root();
+    let routes = match ctx.ls(root) {
+        Some(r) => r,
+        None => return String::new(),
+    };
+
+    let mut section = String::new();
+    let budget_remaining = PLAN_CONTEXT_BUDGET.saturating_sub(section.len());
+
+    for route in routes {
+        let nav = match ctx.nav_entry(route.node_id) {
+            Some(n) => n,
+            None => continue,
+        };
+
+        let mut matches = Vec::new();
+
+        // Match query keywords against question_hints
+        for hint in &nav.question_hints {
+            let hint_lower = hint.to_lowercase();
+            // Check if any query keyword appears in the hint, or hint words in query
+            for kw in query_keywords {
+                if hint_lower.contains(&kw.to_lowercase()) {
+                    matches.push(format!("question \"{}\"", hint));
+                    break;
+                }
+            }
+            if !matches.iter().any(|m| m.contains(&hint.clone())) {
+                // Also check if hint keywords appear in the full query
+                for word in hint_lower.split_whitespace() {
+                    if word.len() > 3 && query_lower.contains(word) {
+                        matches.push(format!("question \"{}\"", hint));
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Match query keywords against topic_tags
+        for tag in &nav.topic_tags {
+            let tag_lower = tag.to_lowercase();
+            for kw in query_keywords {
+                if tag_lower.contains(&kw.to_lowercase()) || kw.to_lowercase().contains(&tag_lower) {
+                    matches.push(format!("topic \"{}\"", tag));
+                    break;
+                }
+            }
+            if !matches.iter().any(|m| m.contains(&format!("topic \"{}\"", tag))) {
+                if query_lower.contains(&tag_lower) && tag.len() > 2 {
+                    matches.push(format!("topic \"{}\"", tag));
+                }
+            }
+        }
+
+        if !matches.is_empty() {
+            let line = format!(
+                "  - Section '{}' — matches: {}\n",
+                route.title,
+                matches.join(", ")
+            );
+            if section.len() + line.len() > budget_remaining {
+                break;
+            }
+            section.push_str(&line);
+        }
+    }
+
+    if section.is_empty() {
+        String::new()
+    } else {
+        format!("\nSemantic hints (sections likely relevant to the question):\n{}", section)
+    }
+}
+
+/// Build a focused re-planning prompt when check returns INSUFFICIENT.
+///
+/// Unlike the initial planning prompt (Phase 1.5) which starts from root-level structure,
+/// this uses the current navigation state: position, visited nodes, collected evidence,
+/// and what's specifically missing.
+fn build_replan_prompt(
+    query: &str,
+    task: Option<&str>,
+    state: &State,
+    ctx: &DocContext<'_>,
+) -> (String, String) {
+    let task_section = match task {
+        Some(t) => format!("\nOriginal sub-task: {}", t),
+        None => String::new(),
+    };
+
+    let visited = format_visited_titles(state, ctx);
+    let evidence_summary = state.evidence_summary();
+
+    // Show current position's children for local navigation context
+    let current_children = match ctx.ls(state.current_node) {
+        Some(routes) if !routes.is_empty() => {
+            let items: Vec<String> = routes
+                .iter()
+                .map(|r| format!("  - {} ({} leaves)", r.title, r.leaf_count))
+                .collect();
+            format!("Children at current position:\n{}\n", items.join("\n"))
+        }
+        _ => "Current position is a leaf node — consider cd .. to go back.\n".to_string(),
+    };
+
+    let system = "You are re-planning a document navigation strategy. The previous plan did not \
+         find sufficient evidence. Given what's been found and what's still missing, generate a \
+         focused 2-3 step plan. Each step should be a specific action like \
+         \"cd to X, then cat Y\" or \"grep for Z in current subtree\". \
+         Prefer exploring unvisited branches. If current branch is exhausted, cd .. and try \
+         a different path. Output only the plan, nothing else.".to_string();
+
+    let user = format!(
+        "Original question: {query}{task_section}\n\
+         Current position: /{}\n\
+         Evidence collected so far:\n{evidence_summary}\n\
+         What's missing: {}\n\
+         Already visited: {visited}\n\
+         {current_children}\
+         Remaining rounds: {}/{}\n\n\
+         Revised navigation plan:",
+        state.path_str(),
+        state.missing_info,
+        state.remaining,
+        state.max_rounds,
     );
 
     (system, user)

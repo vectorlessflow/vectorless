@@ -217,17 +217,51 @@ pub async fn run(
         "Phase 3: integrating and synthesizing cross-doc answer"
     );
     let answer = if config.enable_synthesis {
-        let integration_text = format_integration_text(&state.sub_results);
-        let (system, _) = orchestrator_integration(&OrchestratorIntegrationParams {
+        // Build owned intermediate data for each sub-agent result, then borrow for prompt.
+        struct SubResultData {
+            doc_name: String,
+            evidence_count: usize,
+            evidence_text: String,
+            answer: String,
+        }
+        let summaries: Vec<SubResultData> = state
+            .sub_results
+            .iter()
+            .map(|result| {
+                let doc_name = result
+                    .evidence
+                    .first()
+                    .and_then(|e| e.doc_name.clone())
+                    .unwrap_or_else(|| "unknown".to_string());
+                let evidence_text = result
+                    .evidence
+                    .iter()
+                    .map(|e| format!("[{}] {}", e.node_title, e.content))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                SubResultData {
+                    evidence_count: result.evidence.len(),
+                    doc_name,
+                    evidence_text,
+                    answer: result.answer.clone(),
+                }
+            })
+            .collect();
+
+        let summary_refs: Vec<super::prompts::SubAgentSummary<'_>> = summaries
+            .iter()
+            .map(|s| super::prompts::SubAgentSummary {
+                doc_name: &s.doc_name,
+                evidence_count: s.evidence_count,
+                evidence_text: &s.evidence_text,
+                answer: &s.answer,
+            })
+            .collect();
+
+        let (system, user) = orchestrator_integration(&OrchestratorIntegrationParams {
             query,
-            sub_results: &[],
+            sub_results: &summary_refs,
         });
-        let user = format!(
-            "User question: {query}\n\nCollected evidence:\n{integration_text}\n\n\
-             Provide a complete, well-structured answer. For each piece of information, \
-             cite the source document and section. If evidence is missing for some aspect, \
-             clearly state what is known and what is missing.\n\nAnswer:"
-        );
 
         match llm.complete(&system, &user).await {
             Ok(a) => {
