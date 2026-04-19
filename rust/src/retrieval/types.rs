@@ -5,7 +5,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::agent::QueryComplexity;
+use crate::query::QueryComplexity;
 
 /// Sufficiency level for incremental retrieval.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

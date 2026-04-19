@@ -1,16 +1,28 @@
 // Copyright (c) 2026 vectorless developers
 // SPDX-License-Identifier: Apache-2.0
 
-//! Retrieval infrastructure — types, streaming, and caching.
+//! Retrieval dispatch layer — the entry point for all query operations.
 //!
-//! The actual retrieval engine lives in the top-level [`agent`](crate::agent) module.
-//! This module provides supporting infrastructure:
+//! This module sits between the client API and the agent execution layer.
+//! It is responsible for:
 //!
-//! - **Types** — `RetrieveResponse`, `SufficiencyLevel`, `ReasoningChain`, etc.
-//! - **Streaming** — `RetrieveEvent` / `RetrieveEventReceiver` for async progress
-//! - **Cache** — `ReasoningCache` for L1 query caching
+//! - **Dispatching** queries to the appropriate agent path (SubAgent vs Orchestrator)
+//! - **Preprocessing** raw queries into structured `QueryPlan`s
+//! - **Post-processing** agent output into client-facing results
+//! - **Caching** query results (L1 exact, L2 path patterns, L3 strategy scores)
+//! - **Streaming** retrieval events for async progress monitoring
+//!
+//! Call flow:
+//! ```text
+//! client → retrieval::dispatch()
+//!   ├── User specified doc_ids → parallel N × SubAgent
+//!   └── Workspace scope → Orchestrator (analyze → spawn → fusion)
+//! ```
 
 mod cache;
+pub mod dispatcher;
+pub mod postprocessor;
+pub mod preprocessor;
 pub mod stream;
 mod types;
 

@@ -718,7 +718,7 @@ impl Engine {
                                 "agent(fp={},plan={},budget={})",
                                 fast_path_hit, plan_generated, budget_exhausted
                             ),
-                            complexity: crate::agent::QueryComplexity::Simple,
+                            complexity: crate::query::QueryComplexity::Simple,
                             reasoning_chain: crate::retrieval::ReasoningChain::default(),
                             tokens_used: evidence_chars,
                         };
@@ -778,7 +778,7 @@ impl Engine {
                     doc_name: &doc_id,
                 };
                 let scope = crate::agent::Scope::Single(doc_ctx);
-                crate::agent::retrieve(&query, scope, &config, &llm, &emitter).await
+                crate::retrieval::dispatcher::dispatch(&query, scope, &config, &llm, &emitter).await
             } else {
                 let doc_contexts: Vec<crate::agent::DocContext> = owned_docs
                     .iter()
@@ -791,7 +791,7 @@ impl Engine {
                     .collect();
                 let ws = crate::agent::WorkspaceContext::new(doc_contexts);
                 let scope = crate::agent::Scope::Workspace(ws);
-                crate::agent::retrieve(&query, scope, &config, &llm, &emitter).await
+                crate::retrieval::dispatcher::dispatch(&query, scope, &config, &llm, &emitter).await
             };
 
             // Bridge agent metrics into global MetricsHub

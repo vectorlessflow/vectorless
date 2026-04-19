@@ -4,7 +4,7 @@
 //! Document retrieval client.
 //!
 //! This module provides query and retrieval operations for document content,
-//! using the agent-based retrieval system.
+//! dispatching through the retrieval layer to the agent-based system.
 
 use tracing::info;
 
@@ -14,6 +14,7 @@ use crate::document::{DocumentTree, NavigationIndex, ReasoningIndex};
 use crate::error::{Error, Result};
 use crate::events::{EventEmitter, QueryEvent};
 use crate::llm::LlmClient;
+use crate::retrieval::{dispatcher, postprocessor};
 
 /// Document retrieval client.
 ///
@@ -86,11 +87,10 @@ impl RetrieverClient {
 
         let scope = agent::Scope::Single(doc_ctx);
         let emitter = AgentEventEmitter::noop();
-        let output = agent::retrieve(question, scope, &self.config, &self.llm, &emitter)
-            .await
-            .map_err(|e| Error::Retrieval(e.to_string()))?;
+        let output = dispatcher::dispatch(question, scope, &self.config, &self.llm, &emitter)
+            .await?;
 
-        let result = self.build_query_result(&output);
+        let result = postprocessor::to_single_result(&output);
 
         self.events.emit_query(QueryEvent::Complete {
             total_results: result.node_ids.len(),
@@ -127,11 +127,10 @@ impl RetrieverClient {
         let scope = agent::Scope::Workspace(ws);
         let emitter = AgentEventEmitter::noop();
 
-        let output = agent::retrieve(question, scope, &self.config, &self.llm, &emitter)
-            .await
-            .map_err(|e| Error::Retrieval(e.to_string()))?;
+        let output = dispatcher::dispatch(question, scope, &self.config, &self.llm, &emitter)
+            .await?;
 
-        let result = self.build_multi_query_result(&output);
+        let result = postprocessor::to_multi_result(&output);
 
         self.events.emit_query(QueryEvent::Complete {
             total_results: result.node_ids.len(),
@@ -141,55 +140,6 @@ impl RetrieverClient {
         Ok(result)
     }
 
-    /// Build QueryResultItem from agent Output.
-    fn build_query_result(&self, output: &agent::Output) -> QueryResultItem {
-        let node_ids: Vec<String> = output
-            .evidence
-            .iter()
-            .map(|e| e.source_path.clone())
-            .collect();
-
-        let content = if output.answer.is_empty() {
-            output
-                .evidence
-                .iter()
-                .map(|e| format!("## {}\n{}", e.node_title, e.content))
-                .collect::<Vec<_>>()
-                .join("\n\n---\n\n")
-        } else {
-            output.answer.clone()
-        };
-
-        // Confidence based on whether we found evidence
-        let score = if output.evidence.is_empty() {
-            0.0
-        } else {
-            0.8 // Agent-based retrieval is high confidence when it finds evidence
-        };
-
-        QueryResultItem {
-            doc_id: String::new(), // Set by caller
-            node_ids,
-            content,
-            score,
-        }
-    }
-
-    /// Build QueryResultItem from multi-doc agent output.
-    fn build_multi_query_result(&self, output: &agent::Output) -> QueryResultItem {
-        let node_ids: Vec<String> = output
-            .evidence
-            .iter()
-            .map(|e| e.source_path.clone())
-            .collect();
-
-        QueryResultItem {
-            doc_id: String::new(),
-            node_ids,
-            content: output.answer.clone(),
-            score: if output.evidence.is_empty() { 0.0 } else { 0.8 },
-        }
-    }
 }
 
 impl Clone for RetrieverClient {
