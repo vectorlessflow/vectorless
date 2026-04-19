@@ -460,137 +460,23 @@ impl Engine {
 
         self.with_timeout(timeout_secs, async move {
             let doc_ids = self.resolve_scope(&ctx.scope).await?;
+            self.maybe_rebuild_graph();
 
-            // Lazy graph rebuild: only rebuild if index() marked it dirty
-            if self.config.graph.enabled {
-                let fail_count = self.graph_fail_count.load(Ordering::Relaxed);
-                let should_try = fail_count < GRAPH_REBUILD_MAX_FAILURES;
-
-                if self.graph_dirty.swap(false, Ordering::Relaxed) {
-                    if should_try {
-                        if let Err(e) = self.rebuild_graph().await {
-                            let count = self.graph_fail_count.fetch_add(1, Ordering::Relaxed) + 1;
-                            tracing::warn!(count, "Graph rebuild failed: {e}");
-                            // Re-mark dirty so next query retries
-                            self.graph_dirty.store(true, Ordering::Relaxed);
-                        } else {
-                            // Reset failure count on success
-                            self.graph_fail_count.store(0, Ordering::Relaxed);
-                        }
-                    } else {
-                        tracing::warn!(
-                            count = fail_count,
-                            "Skipping graph rebuild after {} consecutive failures",
-                            fail_count
-                        );
-                    }
-                }
-            }
-
-            // Force analysis: load all docs and route through Workspace scope
-            if ctx.force_analysis {
-                let mut documents = Vec::new();
-                let mut failed = Vec::new();
-                for doc_id in &doc_ids {
-                    match self.workspace.load(doc_id).await {
-                        Ok(Some(doc)) => {
-                            let nav_index = doc.navigation_index.unwrap_or_default();
-                            let reasoning_index = doc.reasoning_index.unwrap_or_default();
-                            documents.push((doc.tree, nav_index, reasoning_index, doc_id.clone()));
-                        }
-                        Ok(None) => {
-                            failed.push(FailedItem::new(doc_id, "Document not found"));
-                        }
-                        Err(e) => {
-                            failed.push(FailedItem::new(doc_id, &e.to_string()));
-                        }
-                    }
-                }
-                if documents.is_empty() {
-                    return Err(Error::Config(format!(
-                        "No documents available for analysis: {} failures",
-                        failed.len()
-                    )));
-                }
-                let mut result = self.retriever.query_multi(&documents, &ctx.query).await?;
-                // Merge any load failures
-                result.failed.extend(failed);
-                return Ok(result);
-            }
-
-            // Query documents in parallel (with concurrency limit)
-            let concurrency = self.config.llm.throttle.max_concurrent_requests;
-            let query = ctx.query.clone();
-            let cancelled = Arc::clone(&self.cancelled);
-
-            let results: Vec<(String, std::result::Result<QueryResult, String>)> =
-                futures::stream::iter(doc_ids.into_iter())
-                    .map(|doc_id| {
-                        let engine = self.clone();
-                        let query = query.clone();
-                        let cancelled = Arc::clone(&cancelled);
-                        async move {
-                            if cancelled.load(Ordering::Relaxed) {
-                                return (doc_id, Err("Operation cancelled".to_string()));
-                            }
-
-                            let doc = match engine.workspace.load(&doc_id).await {
-                                Ok(Some(d)) => d,
-                                Ok(None) => {
-                                    let err = format!("Document not found: {}", doc_id);
-                                    return (doc_id, Err(err));
-                                }
-                                Err(e) => return (doc_id, Err(e.to_string())),
-                            };
-
-                            let nav_index = doc.navigation_index.unwrap_or_default();
-                            let reasoning_index = doc.reasoning_index.unwrap_or_default();
-
-                            match engine
-                                .retriever
-                                .query_single(
-                                    &doc.tree,
-                                    &nav_index,
-                                    &reasoning_index,
-                                    &query,
-                                    &doc_id,
-                                )
-                                .await
-                            {
-                                Ok(result) => (doc_id, Ok(result)),
-                                Err(e) => (doc_id, Err(e.to_string())),
-                            }
-                        }
-                    })
-                    .buffer_unordered(concurrency)
-                    .collect()
-                    .await;
-
-            let mut items = Vec::new();
-            let mut failed = Vec::new();
-            for (_doc_id, result) in results {
-                match result {
-                    Ok(qr) => items.extend(qr.items),
-                    Err(e) => {
-                        tracing::warn!("Query failed for {}: {}", _doc_id, e);
-                        failed.push(FailedItem::new(&_doc_id, e));
-                    }
-                }
-            }
-
-            if items.is_empty() && !failed.is_empty() {
+            let (documents, failed) = self.load_documents(&doc_ids).await?;
+            if documents.is_empty() {
                 return Err(Error::Config(format!(
-                    "Query failed for all {} document(s): {}",
-                    failed.len(),
-                    failed
-                        .iter()
-                        .map(|f| format!("{} ({})", f.source, f.error))
-                        .collect::<Vec<_>>()
-                        .join("; ")
+                    "No documents available for query: {} failures",
+                    failed.len()
                 )));
             }
 
-            Ok(QueryResult::with_partial(items, failed))
+            let skip_analysis = !ctx.force_analysis;
+            let mut result =
+                self.retriever
+                    .query(&documents, &ctx.query, skip_analysis)
+                    .await?;
+            result.failed.extend(failed);
+            Ok(result)
         })
         .await
     }
@@ -610,7 +496,7 @@ impl Engine {
         let doc_ids = self.resolve_scope(&ctx.scope).await?;
         let query = ctx.query.clone();
 
-        // Load all requested documents
+        // Load all requested documents (need owned PersistedDocument for spawned task)
         let mut docs = Vec::new();
         for doc_id in &doc_ids {
             let doc = match self.workspace.load(doc_id).await? {
@@ -892,6 +778,70 @@ impl Engine {
     // ============================================================
     // Internal
     // ============================================================
+
+    /// Load documents by ID, returning loaded artifacts and failures.
+    async fn load_documents(
+        &self,
+        doc_ids: &[String],
+    ) -> Result<(
+        Vec<(
+            crate::document::DocumentTree,
+            crate::document::NavigationIndex,
+            crate::document::ReasoningIndex,
+            String,
+        )>,
+        Vec<FailedItem>,
+    )> {
+        let mut documents = Vec::new();
+        let mut failed = Vec::new();
+        for doc_id in doc_ids {
+            match self.workspace.load(doc_id).await {
+                Ok(Some(doc)) => {
+                    let nav_index = doc.navigation_index.unwrap_or_default();
+                    let reasoning_index = doc.reasoning_index.unwrap_or_default();
+                    documents.push((doc.tree, nav_index, reasoning_index, doc_id.clone()));
+                }
+                Ok(None) => {
+                    failed.push(FailedItem::new(doc_id, "Document not found"));
+                }
+                Err(e) => {
+                    failed.push(FailedItem::new(doc_id, &e.to_string()));
+                }
+            }
+        }
+        Ok((documents, failed))
+    }
+
+    /// Rebuild the cross-document graph if dirty, with failure limit.
+    fn maybe_rebuild_graph(&self) {
+        if !self.config.graph.enabled {
+            return;
+        }
+        let fail_count = self.graph_fail_count.load(Ordering::Relaxed);
+        let should_try = fail_count < GRAPH_REBUILD_MAX_FAILURES;
+
+        if self.graph_dirty.swap(false, Ordering::Relaxed) {
+            if should_try {
+                // Spawn graph rebuild as a background task to not block the query
+                let engine = self.clone();
+                tokio::spawn(async move {
+                    if let Err(e) = engine.rebuild_graph().await {
+                        let count = engine.graph_fail_count.fetch_add(1, Ordering::Relaxed) + 1;
+                        tracing::warn!(count, "Graph rebuild failed: {e}");
+                        engine.graph_dirty.store(true, Ordering::Relaxed);
+                    } else {
+                        engine.graph_fail_count.store(0, Ordering::Relaxed);
+                    }
+                });
+            } else {
+                tracing::warn!(
+                    count = fail_count,
+                    "Skipping graph rebuild after {} consecutive failures",
+                    fail_count
+                );
+            }
+        }
+    }
 
     /// Check cancel flag, returning an error if cancelled.
     fn check_cancel(&self) -> Result<()> {

@@ -62,76 +62,48 @@ impl RetrieverClient {
         &self.llm
     }
 
-    /// Query a single document tree.
-    #[tracing::instrument(skip_all, fields(question = %question))]
-    pub async fn query_single(
-        &self,
-        tree: &DocumentTree,
-        nav_index: &NavigationIndex,
-        reasoning_index: &ReasoningIndex,
-        question: &str,
-        doc_id: &str,
-    ) -> Result<QueryResult> {
-        self.events.emit_query(QueryEvent::Started {
-            query: question.to_string(),
-        });
-
-        info!("Querying: {:?}", question);
-
-        let doc_ctx = agent::DocContext {
-            tree,
-            nav_index,
-            reasoning_index,
-            doc_name: doc_id,
-        };
-
-        let scope = agent::Scope::Specified(vec![doc_ctx]);
-        let emitter = AgentEventEmitter::noop();
-        let output =
-            dispatcher::dispatch(question, scope, &self.config, &self.llm, &emitter).await?;
-
-        let items = postprocessor::to_results(&output, doc_id);
-        let result = QueryResult::new_with_items(items);
-
-        self.events.emit_query(QueryEvent::Complete {
-            total_results: result.len(),
-            confidence: result.single().map(|i| i.score).unwrap_or(0.0),
-        });
-
-        Ok(result)
-    }
-
-    /// Query multiple documents using the Orchestrator.
-    #[tracing::instrument(skip_all, fields(question = %question))]
-    pub async fn query_multi(
+    /// Query documents through the agent-based retrieval system.
+    ///
+    /// - `skip_analysis = true` → `Scope::Specified` (user-specified docs, skip Orchestrator analysis)
+    /// - `skip_analysis = false` → `Scope::Workspace` (full Orchestrator analysis flow)
+    #[tracing::instrument(skip_all, fields(question = %question, docs = documents.len()))]
+    pub async fn query(
         &self,
         documents: &[(DocumentTree, NavigationIndex, ReasoningIndex, String)],
         question: &str,
+        skip_analysis: bool,
     ) -> Result<QueryResult> {
         self.events.emit_query(QueryEvent::Started {
             query: question.to_string(),
         });
 
-        info!(docs = documents.len(), "Multi-doc querying: {:?}", question);
+        info!(
+            docs = documents.len(),
+            skip_analysis,
+            "Querying: {:?}",
+            question
+        );
 
         let doc_contexts: Vec<agent::DocContext> = documents
             .iter()
-            .map(|(tree, nav, ridx, name)| agent::DocContext {
+            .map(|(tree, nav, ridx, id)| agent::DocContext {
                 tree,
                 nav_index: nav,
                 reasoning_index: ridx,
-                doc_name: name.as_str(),
+                doc_name: id.as_str(),
             })
             .collect();
 
-        let ws = agent::WorkspaceContext::new(doc_contexts);
-        let scope = agent::Scope::Workspace(ws);
-        let emitter = AgentEventEmitter::noop();
+        let scope = if skip_analysis {
+            agent::Scope::Specified(doc_contexts)
+        } else {
+            agent::Scope::Workspace(agent::WorkspaceContext::new(doc_contexts))
+        };
 
+        let emitter = AgentEventEmitter::noop();
         let output =
             dispatcher::dispatch(question, scope, &self.config, &self.llm, &emitter).await?;
 
-        // Use first doc_id as fallback for evidence without doc_name
         let fallback_id = documents
             .first()
             .map(|(_, _, _, id)| id.as_str())
