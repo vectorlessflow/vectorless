@@ -79,7 +79,30 @@ pub async fn run(
 
     // --- Phase 1: Bird's-eye view ---
     debug!(doc = ctx.doc_name, "Phase 1: bird's-eye view (ls root)");
-    let mut state = State::new(ctx.root(), config.max_rounds);
+
+    // Adaptive budget: scale max_rounds based on document depth.
+    // Depth 0-2: use config as-is (8 rounds)
+    // Depth 3-4: +2 rounds per extra level
+    // Depth 5+: cap at 1.5x the configured max_rounds
+    let doc_depth = ctx.tree.max_depth();
+    let adaptive_rounds = if doc_depth <= 2 {
+        config.max_rounds
+    } else {
+        let extra = (doc_depth - 2) * 2; // 2 extra rounds per level beyond 2
+        let capped = config.max_rounds + extra as u32;
+        capped.min((config.max_rounds as f32 * 1.5).ceil() as u32)
+    };
+    if adaptive_rounds != config.max_rounds {
+        info!(
+            doc = ctx.doc_name,
+            doc_depth,
+            configured = config.max_rounds,
+            adaptive = adaptive_rounds,
+            "Adaptive budget: deep document detected, increasing rounds"
+        );
+    }
+
+    let mut state = State::new(ctx.root(), adaptive_rounds);
     let ls_result = tools::ls(ctx, &state);
     state.set_feedback(ls_result.feedback);
 
