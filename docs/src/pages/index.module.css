@@ -392,20 +392,124 @@
   background: #D97706;
 }
 
-/* ===== How It Works ===== */
-.workflowWrapper {
-  max-width: 100%;
-  padding: 0;
+/* ===== Navigation Theater ===== */
+.narrativeDemo {
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 2rem 2.5rem;
+  max-width: 780px;
   margin: 0 auto;
-  text-align: center;
 }
 
-.workflowImg {
-  width: 100%;
-  height: auto;
-  display: block;
-  min-height: 520px;
-  object-fit: contain;
+.narrativeHeader {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 28px;
+}
+
+.narrativeTitle {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #E2E8F0;
+  margin: 0;
+}
+
+.narrativeBadge {
+  background: rgba(245, 158, 11, 0.12);
+  color: var(--primary);
+  padding: 2px 12px;
+  border-radius: 30px;
+  font-size: 0.7rem;
+  margin-left: auto;
+}
+
+.navTrack {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  position: relative;
+}
+
+/* vertical timeline line */
+.navTrack::before {
+  content: '';
+  position: absolute;
+  left: 18px;
+  top: 24px;
+  bottom: 24px;
+  width: 2px;
+  background: #2A3040;
+  border-radius: 1px;
+}
+
+.trackStep {
+  display: flex;
+  flex-direction: column;
+  padding: 0.75rem 0 0.75rem 48px;
+  position: relative;
+}
+
+.trackStep .stepBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--primary);
+  margin-bottom: 4px;
+  position: relative;
+}
+
+/* dot on the timeline */
+.trackStep .stepBadge::before {
+  content: '';
+  position: absolute;
+  left: -36px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--primary);
+  border: 2px solid var(--code-bg);
+  z-index: 1;
+}
+
+.stepBadgeGreen {
+  color: var(--accent-green) !important;
+}
+
+.stepBadgeGreen::before {
+  background: var(--accent-green) !important;
+}
+
+.stepContent {
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: #C8D0DE;
+}
+
+/* inline <code> inside narrative demo — dark-friendly */
+.stepContent code {
+  background: #1A1F27;
+  color: #E2E8F0;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.85em;
+  border: 1px solid #2A3040;
+}
+
+.hamsterVoice {
+  background: rgba(245, 158, 11, 0.08);
+  border-left: 3px solid var(--primary);
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  margin: 0.75rem 0 0.75rem 48px;
+  font-size: 0.85rem;
+  line-height: 1.6;
+  color: #B0B8C8;
 }
 
 /* ===== Use Cases Slider ===== */

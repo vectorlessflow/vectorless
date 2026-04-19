@@ -99,11 +99,18 @@ async def main():
     result = await engine.index(IndexContext.from_path("./report.pdf"))
     doc_id = result.doc_id
 
-    # Query
+    # Query with evidence and metrics
     result = await engine.query(
-        QueryContext("What is the total revenue?").with_doc_ids([doc_id])
+        QueryContext("What is the total revenue?")
+            .with_doc_ids([doc_id])
     )
-    print(result.single().content)
+    item = result.single()
+    print(f"Answer:  {item.content}")
+    print(f"Score:   {item.score:.2f}  Confidence: {item.confidence}")
+    for ev in item.evidence:
+        print(f"  [{ev.title}] {ev.path}")
+    print(f"LLM calls: {item.metrics.llm_calls}  "
+          f"Rounds: {item.metrics.rounds_used}")
 
 asyncio.run(main())`;
 
@@ -122,13 +129,20 @@ async fn main() -> vectorless::Result<()> {
     let result = engine.index(IndexContext::from_path("./report.pdf")).await?;
     let doc_id = result.doc_id().unwrap();
 
-    // Query
+    // Query with evidence and metrics
     let result = engine.query(
         QueryContext::new("What is the total revenue?")
             .with_doc_ids(vec![doc_id.to_string()])
     ).await?;
-    println!("{}", result.content);
-
+    let item = result.single().unwrap();
+    println!("Answer:  {}", item.content);
+    println!("Score:   {:.2}  Confidence: {:?}", item.score, item.confidence);
+    for ev in &item.evidence {
+        println!("  [{}] {}", ev.title, ev.path);
+    }
+    if let Some(m) = &item.metrics {
+        println!("LLM calls: {}  Rounds: {}", m.llm_calls, m.rounds_used);
+    }
     Ok(())
 }`;
 
@@ -200,7 +214,11 @@ function SectionGetStarted() {
               <PythonCode />
               <div className={styles.terminalOutput}>
                 <span className={styles.terminalPrompt}>$</span> python demo.py<br />
-                <span className={styles.terminalAnswer}>&rarr; The total revenue for fiscal year 2024 was $2.3 billion, a 15% increase YoY.</span>
+                <span className={styles.terminalAnswer}>Answer:&nbsp; The total revenue for fiscal year 2024 was $2.3 billion, a 15% increase YoY.<br />
+                Score:&nbsp;&nbsp; 0.91&nbsp;&nbsp; Confidence: high<br />
+                &nbsp;&nbsp;[Revenue Summary] Root/Financial Overview/Q3 2024<br />
+                &nbsp;&nbsp;[Revenue Breakdown] Root/Financial Overview/Q3 2024<br />
+                LLM calls: 4&nbsp;&nbsp; Rounds: 3</span>
                 <span className={styles.terminalCursor} />
               </div>
             </div>
@@ -220,7 +238,11 @@ function SectionGetStarted() {
               <RustCode />
               <div className={styles.terminalOutput}>
                 <span className={styles.terminalPrompt}>$</span> cargo run<br />
-                <span className={styles.terminalAnswer}>&rarr; The total revenue for fiscal year 2024 was $2.3 billion, a 15% increase YoY.</span>
+                <span className={styles.terminalAnswer}>Answer:&nbsp; The total revenue for fiscal year 2024 was $2.3 billion, a 15% increase YoY.<br />
+                Score:&nbsp;&nbsp; 0.91&nbsp;&nbsp; Confidence: High<br />
+                &nbsp;&nbsp;[Revenue Summary] Root/Financial Overview/Q3 2024<br />
+                &nbsp;&nbsp;[Revenue Breakdown] Root/Financial Overview/Q3 2024<br />
+                LLM calls: 4&nbsp;&nbsp; Rounds: 3</span>
                 <span className={styles.terminalCursor} />
               </div>
             </div>
@@ -249,8 +271,93 @@ function SectionHowItWorks() {
         <p className={styles.sectionSubtitle}>
           You declare a few lines of code. We do everything else.
         </p>
-        <div className={styles.workflowWrapper}>
-          <img src="/img/workflow.svg" alt="How Vectorless works" className={styles.workflowImg} />
+        <div className={styles.narrativeDemo}>
+          <div className={styles.narrativeHeader}>
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="var(--primary)" xmlns="http://www.w3.org/2000/svg">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+            </svg>
+            <h2 className={styles.narrativeTitle}>Vectorless Reasoning Flow</h2>
+            <span className={styles.narrativeBadge}>Live Reasoning</span>
+          </div>
+          <div className={styles.navTrack}>
+            {/* Step 1: Index */}
+            <div className={styles.trackStep}>
+              <div className={styles.stepBadge}>
+                <i className="fas fa-database" /> Index
+              </div>
+              <div className={styles.stepContent}>
+                3 documents indexed → hierarchical trees + NavigationIndex + ReasoningIndex built
+              </div>
+            </div>
+            {/* Step 2: Query */}
+            <div className={styles.trackStep}>
+              <div className={styles.stepBadge}>
+                <i className="fas fa-question-circle" /> Query
+              </div>
+              <div className={styles.stepContent}>
+                &ldquo;How much delta-V remains after the Day 17 thruster failure, and is it enough?&rdquo;
+              </div>
+            </div>
+            {/* Step 3: Orchestrator analyzes DocCards */}
+            <div className={styles.trackStep}>
+              <div className={styles.stepBadge}>
+                <i className="fas fa-sitemap" /> Orchestrator · Analyze
+              </div>
+              <div className={styles.stepContent}>
+                Reads DocCards from all 3 docs → keywords <span style={{color: 'var(--primary)'}}>delta-V</span>, <span style={{color: 'var(--primary)'}}>thruster</span> matched → dispatches SubAgent to doc #1
+              </div>
+            </div>
+            {/* Step 4: Bird's-eye view */}
+            <div className={styles.trackStep}>
+              <div className={styles.stepBadge}>
+                <i className="fas fa-eye" /> SubAgent · Bird&rsquo;s-Eye
+              </div>
+              <div className={styles.stepContent}>
+                <code>ls</code> root → sees 4 top-level sections → generates navigation plan targeting <span style={{color: 'var(--primary)'}}>Orbital Mechanics</span> + <span style={{color: 'var(--primary)'}}>Mission Anomalies</span>
+              </div>
+            </div>
+            {/* Step 5: Navigate */}
+            <div className={styles.trackStep}>
+              <div className={styles.stepBadge}>
+                <i className="fas fa-arrow-down" /> Navigate
+              </div>
+              <div className={styles.stepContent}>
+                <code>cd &quot;Orbital Mechanics&quot;</code> → <code>cd &quot;Transfer Orbit Analysis&quot;</code> → <code>cat &quot;Delta-V Budget&quot;</code> → evidence #1 collected
+              </div>
+            </div>
+            {/* Step 6: Cross-reference */}
+            <div className={styles.trackStep}>
+              <div className={`${styles.stepBadge} ${styles.stepBadgeGreen}`}>
+                <i className="fas fa-search" /> Cross-Reference
+              </div>
+              <div className={styles.stepContent}>
+                <code>find &quot;misfire&quot;</code> → hit in Mission Anomalies → <code>cd</code> + <code>cat &quot;Day 17 Thruster Misfire&quot;</code> → evidence #2 collected
+              </div>
+            </div>
+            {/* Step 7: Sufficiency check */}
+            <div className={styles.trackStep}>
+              <div className={styles.stepBadge}>
+                <i className="fas fa-clipboard-check" /> Check
+              </div>
+              <div className={styles.stepContent}>
+                <code>check</code> → LLM evaluates: both delta-V budget and anomaly impact found → SUFFICIENT → <code>done</code>
+              </div>
+            </div>
+            {/* Step 8: Rerank + Synthesize */}
+            <div className={styles.hamsterVoice}>
+              <i className="fas fa-lightbulb" style={{color: 'var(--primary)', marginRight: 8}} />
+              <strong>Rerank pipeline:</strong> dedup → BM25 scoring (score: 0.87, confidence: <span style={{color: 'var(--accent-green)'}}>high</span>) → synthesis LLM generates cross-referenced answer.
+            </div>
+            {/* Step 9: Final Answer */}
+            <div className={styles.trackStep}>
+              <div className={`${styles.stepBadge} ${styles.stepBadgeGreen}`}>
+                <i className="fas fa-check-circle" /> Result
+              </div>
+              <div className={styles.stepContent}>
+                After the B3 thruster failure, remaining reserve is <span style={{color: 'var(--primary)'}}>218 m/s</span> vs. 150 m/s requirement — sufficient to complete the mission. Sources: Delta-V Budget, Day 17 Thruster Misfire.
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </section>
