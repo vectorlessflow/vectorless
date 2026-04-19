@@ -15,24 +15,14 @@
 //!     └── Scope::Workspace(ws)   → Orchestrator → Output
 //! ```
 
-mod context;
-mod retriever;
 pub mod stream;
 mod types;
 
 pub mod agent;
+pub mod cache;
 pub mod complexity;
-pub mod content;
 pub mod scoring;
 pub mod sufficiency;
 
 pub use types::*;
-
-// Re-exports for types.rs inter-module references
-pub use context::{PruningStrategy, TokenEstimation};
-
-// Sufficiency exports
-pub use sufficiency::SufficiencyLevel;
-
-// Streaming exports
 pub use stream::RetrieveEventReceiver;

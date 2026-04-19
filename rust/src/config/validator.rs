@@ -119,36 +119,6 @@ impl ValidationRule for RangeValidator {
             ));
         }
 
-        // Content aggregator ranges
-        if config.retrieval.content.token_budget == 0 {
-            errors.push(ValidationError::error(
-                "retrieval.content.token_budget",
-                "Token budget must be greater than 0",
-            ));
-        }
-
-        if config.retrieval.content.min_relevance_score < 0.0
-            || config.retrieval.content.min_relevance_score > 1.0
-        {
-            errors.push(
-                ValidationError::error(
-                    "retrieval.content.min_relevance_score",
-                    "Min relevance score must be between 0.0 and 1.0",
-                )
-                .with_expected("0.0 - 1.0")
-                .with_actual(config.retrieval.content.min_relevance_score.to_string()),
-            );
-        }
-
-        if config.retrieval.content.hierarchical_min_per_level < 0.0
-            || config.retrieval.content.hierarchical_min_per_level > 1.0
-        {
-            errors.push(ValidationError::error(
-                "retrieval.content.hierarchical_min_per_level",
-                "Hierarchical min per level must be between 0.0 and 1.0",
-            ));
-        }
-
         // Throttle ranges
         if config.llm.throttle.max_concurrent_requests == 0 {
             errors.push(ValidationError::error(
@@ -192,17 +162,6 @@ impl ValidationRule for ConsistencyValidator {
             );
         }
 
-        // Check if content token budget is reasonable
-        if config.retrieval.content.token_budget > 100000 {
-            errors.push(
-                ValidationError::warning(
-                    "retrieval.content.token_budget",
-                    "Token budget is very high, may cause performance issues",
-                )
-                .with_actual(config.retrieval.content.token_budget.to_string()),
-            );
-        }
-
         // Check if sufficiency thresholds are consistent
         if config.retrieval.sufficiency.min_tokens > config.retrieval.sufficiency.target_tokens {
             errors.push(
@@ -226,28 +185,6 @@ impl ValidationRule for ConsistencyValidator {
             );
         }
 
-        // Check scoring strategy validity
-        let valid_strategies = ["keyword_only", "keyword_bm25", "hybrid"];
-        if !valid_strategies.contains(&config.retrieval.content.scoring_strategy.as_str()) {
-            errors.push(
-                ValidationError::error(
-                    "retrieval.content.scoring_strategy",
-                    "Invalid scoring strategy",
-                )
-                .with_expected(format!("one of: {:?}", valid_strategies))
-                .with_actual(config.retrieval.content.scoring_strategy.clone()),
-            );
-        }
-
-        // Check output format validity
-        let valid_formats = ["markdown", "json", "tree", "flat"];
-        if !valid_formats.contains(&config.retrieval.content.output_format.as_str()) {
-            errors.push(
-                ValidationError::error("retrieval.content.output_format", "Invalid output format")
-                    .with_expected(format!("one of: {:?}", valid_formats))
-                    .with_actual(config.retrieval.content.output_format.clone()),
-            );
-        }
     }
 }
 
@@ -349,15 +286,14 @@ mod tests {
     #[test]
     fn test_validator_catches_range_errors() {
         let mut config = Config::default();
-        config.retrieval.content.token_budget = 0;
-        config.retrieval.content.min_relevance_score = 1.5;
+        config.retrieval.top_k = 0;
 
         let validator = ConfigValidator::new();
         let result = validator.validate(&config);
 
         assert!(result.is_err());
         let err = result.unwrap_err();
-        assert!(err.errors.iter().any(|e| e.path.contains("token_budget")));
+        assert!(err.errors.iter().any(|e| e.path.contains("top_k")));
     }
 
     #[test]

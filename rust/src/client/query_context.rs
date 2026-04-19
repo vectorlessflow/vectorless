@@ -19,9 +19,6 @@
 //! let ctx = QueryContext::new("Explain the algorithm");
 //! ```
 
-use crate::config::Config;
-use crate::retrieval::{RetrieveOptions, StrategyPreference};
-
 /// Query scope — determines which documents to search.
 #[derive(Debug, Clone)]
 pub(crate) enum QueryScope {
@@ -54,8 +51,6 @@ pub struct QueryContext {
     pub(crate) scope: QueryScope,
     /// Maximum tokens for the result content.
     pub(crate) max_tokens: Option<usize>,
-    /// Retrieval strategy override.
-    pub(crate) strategy: Option<StrategyPreference>,
     /// Whether to include the pilot reasoning chain in the result.
     pub(crate) include_reasoning: bool,
     /// Maximum tree traversal depth for the pilot.
@@ -71,7 +66,6 @@ impl QueryContext {
             query: query.into(),
             scope: QueryScope::Workspace,
             max_tokens: None,
-            strategy: None,
             include_reasoning: true,
             depth_limit: None,
             timeout_secs: None,
@@ -99,12 +93,6 @@ impl QueryContext {
         self
     }
 
-    /// Set the retrieval strategy.
-    pub fn with_strategy(mut self, strategy: StrategyPreference) -> Self {
-        self.strategy = Some(strategy);
-        self
-    }
-
     /// Set whether to include the pilot reasoning chain.
     pub fn with_include_reasoning(mut self, include: bool) -> Self {
         self.include_reasoning = include;
@@ -121,24 +109,6 @@ impl QueryContext {
     pub fn with_timeout_secs(mut self, secs: u64) -> Self {
         self.timeout_secs = Some(secs);
         self
-    }
-
-    /// Convert to internal `RetrieveOptions`, merging with engine config.
-    pub(crate) fn to_retrieve_options(&self, config: &Config) -> RetrieveOptions {
-        let mut opts = RetrieveOptions::new()
-            .with_top_k(config.retrieval.top_k)
-            .with_include_content(true)
-            .with_include_summaries(true);
-
-        if let Some(max_tokens) = self.max_tokens {
-            opts = opts.with_max_tokens(max_tokens);
-        }
-
-        if let Some(strategy) = &self.strategy {
-            opts = opts.with_strategy(strategy.clone());
-        }
-
-        opts
     }
 }
 

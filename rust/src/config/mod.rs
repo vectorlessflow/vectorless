@@ -13,5 +13,5 @@ pub use types::Config;
 pub(crate) use types::{
     CompressionAlgorithm, FallbackBehavior, FallbackConfig, IndexerConfig, LlmConfig,
     LlmMetricsConfig, MetricsConfig, OnAllFailedBehavior, PilotMetricsConfig,
-    RetrievalMetricsConfig, SlotConfig, SufficiencyConfig,
+    RetrievalMetricsConfig, SlotConfig,
 };

@@ -3,7 +3,6 @@
 
 //! Configuration type definitions.
 
-mod content;
 mod indexer;
 mod llm_pool;
 mod metrics;
@@ -20,7 +19,7 @@ pub(crate) use metrics::{
     LlmMetricsConfig, MetricsConfig, PilotMetricsConfig, RetrievalMetricsConfig,
 };
 pub(crate) use retrieval::RetrievalConfig;
-pub(crate) use storage::{CompressionAlgorithm, StorageConfig, SufficiencyConfig};
+pub(crate) use storage::{CompressionAlgorithm, StorageConfig};
 
 /// Main configuration for vectorless.
 ///
@@ -167,27 +166,6 @@ impl Config {
                 "retrieval.top_k",
                 "Top K must be greater than 0",
             ));
-        }
-
-        // Validate content aggregator
-        if self.retrieval.content.token_budget == 0 {
-            errors.push(ValidationError::error(
-                "retrieval.content.token_budget",
-                "Token budget must be greater than 0",
-            ));
-        }
-
-        if self.retrieval.content.min_relevance_score < 0.0
-            || self.retrieval.content.min_relevance_score > 1.0
-        {
-            errors.push(
-                ValidationError::error(
-                    "retrieval.content.min_relevance_score",
-                    "Min relevance score must be between 0.0 and 1.0",
-                )
-                .with_expected("0.0 - 1.0")
-                .with_actual(self.retrieval.content.min_relevance_score.to_string()),
-            );
         }
 
         // Validate throttle
@@ -363,8 +341,7 @@ mod tests {
     #[test]
     fn test_config_validation_errors() {
         let mut config = Config::default();
-        config.retrieval.content.token_budget = 0;
-        config.retrieval.content.min_relevance_score = 1.5;
+        config.retrieval.top_k = 0;
 
         let result = config.validate();
         assert!(result.is_err());
