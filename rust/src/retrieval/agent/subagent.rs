@@ -74,7 +74,10 @@ pub async fn run(
             );
             return Ok(output);
         }
-        debug!(doc = ctx.doc_name, "Fast path miss — entering navigation loop");
+        debug!(
+            doc = ctx.doc_name,
+            "Fast path miss — entering navigation loop"
+        );
     }
 
     // --- Phase 1: Bird's-eye view ---
@@ -149,15 +152,15 @@ pub async fn run(
         if llm_budget_exhausted!() {
             info!(
                 doc = ctx.doc_name,
-                llm_calls,
-                max_llm,
-                "LLM call budget exhausted"
+                llm_calls, max_llm, "LLM call budget exhausted"
             );
             break;
         }
 
         // Stuck detection: inject warning if no progress
-        if state.rounds_since_evidence >= STUCK_THRESHOLD && !state.last_feedback.contains("[Warning:") {
+        if state.rounds_since_evidence >= STUCK_THRESHOLD
+            && !state.last_feedback.contains("[Warning:")
+        {
             let stuck_warning = format!(
                 "\n[Warning: No new evidence collected in {} rounds. \
                  Consider using grep, findtree, or cd .. to explore a different path.]",
@@ -169,7 +172,9 @@ pub async fn run(
         // Mid-budget checkpoint: remind LLM to check if it hasn't yet
         let half_budget = state.max_rounds / 2;
         let rounds_used = state.max_rounds - state.remaining;
-        if rounds_used == half_budget && !state.check_called && state.remaining > 1
+        if rounds_used == half_budget
+            && !state.check_called
+            && state.remaining > 1
             && !state.last_feedback.contains("[Hint:")
         {
             state.last_feedback.push_str(
@@ -344,10 +349,16 @@ pub async fn run(
             }
         }
     } else if !output.evidence.is_empty() {
-        debug!(doc = ctx.doc_name, "Synthesis disabled — concatenating raw evidence");
+        debug!(
+            doc = ctx.doc_name,
+            "Synthesis disabled — concatenating raw evidence"
+        );
         output.answer = format_evidence_as_answer(&output.evidence);
     } else {
-        info!(doc = ctx.doc_name, "No evidence collected — returning not-found message");
+        info!(
+            doc = ctx.doc_name,
+            "No evidence collected — returning not-found message"
+        );
         output.answer = format!(
             "I was unable to find relevant information in document '{}' to answer your question.",
             ctx.doc_name
@@ -574,9 +585,10 @@ async fn execute_command(
                             // Plan failed — clear it so react decisions take over
                             state.plan.clear();
                         }
-                        state.set_feedback(
-                            format!("Evidence not yet sufficient: {}", response.trim())
-                        );
+                        state.set_feedback(format!(
+                            "Evidence not yet sufficient: {}",
+                            response.trim()
+                        ));
                         Step::Continue
                     }
                 }
@@ -622,7 +634,12 @@ async fn execute_command(
 /// Build the navigation planning prompt (Phase 1.5).
 ///
 /// One-shot LLM call after bird's-eye view to generate a tentative navigation plan.
-fn build_plan_prompt(query: &str, task: Option<&str>, ls_output: &str, doc_name: &str) -> (String, String) {
+fn build_plan_prompt(
+    query: &str,
+    task: Option<&str>,
+    ls_output: &str,
+    doc_name: &str,
+) -> (String, String) {
     let task_section = match task {
         Some(t) => format!("\nYour specific task: {}", t),
         None => String::new(),
@@ -668,16 +685,30 @@ const SYNTHESIS_EVIDENCE_CAP: usize = 8000;
 fn format_evidence_for_synthesis(evidence: &[Evidence]) -> String {
     let mut result = String::new();
     for e in evidence {
-        let item = format!("[{}] (source: {})\n{}", e.node_title, e.source_path, e.content);
+        let item = format!(
+            "[{}] (source: {})\n{}",
+            e.node_title, e.source_path, e.content
+        );
         if result.len() + item.len() + 2 > SYNTHESIS_EVIDENCE_CAP {
             // Truncate this item to fit the remaining budget
             let remaining = SYNTHESIS_EVIDENCE_CAP.saturating_sub(result.len());
             if remaining > 50 {
-                result.push_str(&format!("[{}] (source: {})\n{}...[truncated]\n",
-                    e.node_title, e.source_path, &e.content[..remaining.min(e.content.len())]));
+                result.push_str(&format!(
+                    "[{}] (source: {})\n{}...[truncated]\n",
+                    e.node_title,
+                    e.source_path,
+                    &e.content[..remaining.min(e.content.len())]
+                ));
             }
-            result.push_str(&format!("\n... and {} more evidence items truncated to fit budget.\n",
-                evidence.len() - evidence.iter().position(|x| x.node_title == e.node_title).unwrap_or(0) - 1));
+            result.push_str(&format!(
+                "\n... and {} more evidence items truncated to fit budget.\n",
+                evidence.len()
+                    - evidence
+                        .iter()
+                        .position(|x| x.node_title == e.node_title)
+                        .unwrap_or(0)
+                    - 1
+            ));
             break;
         }
         result.push_str(&item);

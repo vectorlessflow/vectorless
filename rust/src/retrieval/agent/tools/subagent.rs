@@ -28,7 +28,8 @@ pub fn ls(ctx: &DocContext, state: &State) -> ToolResult {
     match ctx.ls(state.current_node) {
         Some(routes) => {
             if routes.is_empty() {
-                output.push_str("(leaf node — no children)\nUse cd .. to go back or done to finish.");
+                output
+                    .push_str("(leaf node — no children)\nUse cd .. to go back or done to finish.");
                 return ToolResult::ok(output);
             }
 
@@ -49,10 +50,7 @@ pub fn ls(ctx: &DocContext, state: &State) -> ToolResult {
                         ));
                     }
                     if !nav.topic_tags.is_empty() {
-                        output.push_str(&format!(
-                            "\n    Topics: {}",
-                            nav.topic_tags.join(", ")
-                        ));
+                        output.push_str(&format!("\n    Topics: {}", nav.topic_tags.join(", ")));
                     }
                 }
                 output.push('\n');
@@ -261,26 +259,26 @@ pub fn grep(pattern: &str, ctx: &DocContext, state: &State) -> ToolResult {
     if matches_found == 0 {
         ToolResult::ok(format!("No matches for /{}/ in subtree.", pattern))
     } else {
-        ToolResult::ok(format!("Found {} match(es) for /{}/:\n{}", matches_found, pattern, output))
+        ToolResult::ok(format!(
+            "Found {} match(es) for /{}/:\n{}",
+            matches_found, pattern, output
+        ))
     }
 }
 
 /// Execute `head <target>` — preview first N lines of a node without collecting evidence.
 pub fn head(target: &str, lines: usize, ctx: &DocContext, state: &State) -> ToolResult {
-    let node_id = match command::resolve_target_extended(
-        target,
-        ctx.nav_index,
-        state.current_node,
-        ctx.tree,
-    ) {
-        Some(id) => id,
-        None => {
-            return ToolResult::fail(format!(
-                "Target '{}' not found. Use ls to see available children.",
-                target
-            ))
-        }
-    };
+    let node_id =
+        match command::resolve_target_extended(target, ctx.nav_index, state.current_node, ctx.tree)
+        {
+            Some(id) => id,
+            None => {
+                return ToolResult::fail(format!(
+                    "Target '{}' not found. Use ls to see available children.",
+                    target
+                ));
+            }
+        };
 
     let content = match ctx.cat(node_id) {
         Some(c) => c,
@@ -321,10 +319,7 @@ pub fn find_tree(pattern: &str, ctx: &DocContext) -> ToolResult {
         if let Some(node) = ctx.tree.get(*node_id) {
             if node.title.to_lowercase().contains(&pattern_lower) {
                 let depth = ctx.tree.depth(*node_id);
-                let leaf_count = ctx
-                    .nav_entry(*node_id)
-                    .map(|e| e.leaf_count)
-                    .unwrap_or(0);
+                let leaf_count = ctx.nav_entry(*node_id).map(|e| e.leaf_count).unwrap_or(0);
                 results.push((node.title.clone(), depth, leaf_count));
             }
         }
@@ -336,7 +331,10 @@ pub fn find_tree(pattern: &str, ctx: &DocContext) -> ToolResult {
 
     let mut output = format!("Nodes matching '{}' ({} found):\n", pattern, results.len());
     for (title, depth, leaves) in &results {
-        output.push_str(&format!("  - {} (depth {}, {} leaves)\n", title, depth, leaves));
+        output.push_str(&format!(
+            "  - {} (depth {}, {} leaves)\n",
+            title, depth, leaves
+        ));
     }
 
     ToolResult::ok(output)
@@ -344,20 +342,17 @@ pub fn find_tree(pattern: &str, ctx: &DocContext) -> ToolResult {
 
 /// Execute `wc <target>` — show node content statistics.
 pub fn wc(target: &str, ctx: &DocContext, state: &State) -> ToolResult {
-    let node_id = match command::resolve_target_extended(
-        target,
-        ctx.nav_index,
-        state.current_node,
-        ctx.tree,
-    ) {
-        Some(id) => id,
-        None => {
-            return ToolResult::fail(format!(
-                "Target '{}' not found. Use ls to see available children.",
-                target
-            ))
-        }
-    };
+    let node_id =
+        match command::resolve_target_extended(target, ctx.nav_index, state.current_node, ctx.tree)
+        {
+            Some(id) => id,
+            None => {
+                return ToolResult::fail(format!(
+                    "Target '{}' not found. Use ls to see available children.",
+                    target
+                ));
+            }
+        };
 
     let content = match ctx.cat(node_id) {
         Some(c) => c,
@@ -376,7 +371,10 @@ pub fn wc(target: &str, ctx: &DocContext, state: &State) -> ToolResult {
 }
 
 /// Collect all NodeIds in the subtree rooted at `node` (inclusive).
-fn collect_subtree(node: crate::document::NodeId, tree: &crate::document::DocumentTree) -> Vec<crate::document::NodeId> {
+fn collect_subtree(
+    node: crate::document::NodeId,
+    tree: &crate::document::DocumentTree,
+) -> Vec<crate::document::NodeId> {
     let mut result = vec![node];
     let mut stack = vec![node];
 

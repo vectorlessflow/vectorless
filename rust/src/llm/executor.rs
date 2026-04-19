@@ -247,8 +247,7 @@ impl LlmExecutor {
             );
 
             // Step 2: Execute the request (with optional timeout)
-            let request_future = self
-                .do_request(&current_model, system, user, max_tokens);
+            let request_future = self.do_request(&current_model, system, user, max_tokens);
             let result = if self.config.request_timeout_secs > 0 {
                 let timeout = Duration::from_secs(self.config.request_timeout_secs);
                 match tokio::time::timeout(timeout, request_future).await {

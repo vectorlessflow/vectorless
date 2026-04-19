@@ -249,15 +249,8 @@ impl OrchestratorState {
                     .iter()
                     .map(|r| r.metrics.nodes_visited)
                     .sum(),
-                plan_generated: self
-                    .sub_results
-                    .iter()
-                    .any(|r| r.metrics.plan_generated),
-                check_count: self
-                    .sub_results
-                    .iter()
-                    .map(|r| r.metrics.check_count)
-                    .sum(),
+                plan_generated: self.sub_results.iter().any(|r| r.metrics.plan_generated),
+                check_count: self.sub_results.iter().map(|r| r.metrics.check_count).sum(),
                 evidence_chars: self
                     .sub_results
                     .iter()

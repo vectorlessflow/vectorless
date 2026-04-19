@@ -75,13 +75,19 @@ pub fn subagent_navigation(params: &NavigationParams) -> (String, String) {
     let visited_section = if params.visited_titles == "(none)" {
         String::new()
     } else {
-        format!("\nAlready visited (do not re-read these): {}", params.visited_titles)
+        format!(
+            "\nAlready visited (do not re-read these): {}",
+            params.visited_titles
+        )
     };
 
     let plan_section = if params.plan.is_empty() {
         String::new()
     } else {
-        format!("\nNavigation plan (follow this as guidance, adapt if needed):\n{}\n", params.plan)
+        format!(
+            "\nNavigation plan (follow this as guidance, adapt if needed):\n{}\n",
+            params.plan
+        )
     };
 
     let system = format!(
