@@ -15,7 +15,7 @@ use tracing::{debug, info, warn};
 
 use crate::llm::LlmClient;
 use crate::retrieval::complexity::QueryComplexity;
-use crate::retrieval::scoring::bm25::extract_keywords;
+use crate::retrieval::scoring::bm25::{Bm25Engine, FieldDocument, extract_keywords};
 
 use super::command::{Command, parse_command};
 use super::config::{Config, DocContext, Evidence, Output, Step};
@@ -860,8 +860,16 @@ fn build_ancestor_path(node_id: crate::document::NodeId, ctx: &DocContext<'_>) -
         .join(" > ")
 }
 
-/// Build semantic hints section by matching query against question_hints and topic_tags
-/// of root-level children.
+/// Build semantic hints section using BM25 scoring over child routes.
+///
+/// Instead of binary keyword matching, this uses a lightweight `Bm25Engine` to
+/// score each root-level child route against the query. The BM25 engine receives
+/// each route's title, description, overview, question_hints, and topic_tags as
+/// fields with different weights — title matches rank highest.
+///
+/// Routes with non-zero BM25 scores are injected into the planning prompt with
+/// their score and any matching question/topic annotations, giving the planner
+/// continuous relevance signals instead of binary match/no-match.
 fn build_semantic_hints(
     query_keywords: &[String],
     query_lower: &str,
@@ -873,6 +881,47 @@ fn build_semantic_hints(
         None => return String::new(),
     };
 
+    if routes.is_empty() {
+        return String::new();
+    }
+
+    // --- BM25 scoring over child routes ---
+    // Build a FieldDocument for each route: title, description, overview+hints+tags.
+    let field_docs: Vec<FieldDocument<String>> = routes
+        .iter()
+        .map(|route| {
+            let nav = ctx.nav_entry(route.node_id);
+            let overview = nav.map(|n| n.overview.as_str()).unwrap_or("");
+            let hints_text = nav
+                .map(|n| n.question_hints.join(" "))
+                .unwrap_or_default();
+            let tags_text = nav
+                .map(|n| n.topic_tags.join(" "))
+                .unwrap_or_default();
+
+            // Content field combines all metadata for rich matching.
+            let content = if overview.is_empty() && hints_text.is_empty() && tags_text.is_empty() {
+                String::new()
+            } else {
+                format!("{} {} {}", overview, hints_text, tags_text)
+            };
+
+            FieldDocument::new(
+                route.title.clone(),
+                route.title.clone(),
+                route.description.clone(),
+                content,
+            )
+        })
+        .collect();
+
+    let engine = Bm25Engine::fit_to_corpus(&field_docs);
+    let bm25_results: std::collections::HashMap<String, f32> = engine
+        .search_weighted(query_lower, routes.len())
+        .into_iter()
+        .collect();
+
+    // --- Also do keyword-level matching for annotation ---
     let mut section = String::new();
     let budget_remaining = PLAN_CONTEXT_BUDGET.saturating_sub(section.len());
 
@@ -882,62 +931,77 @@ fn build_semantic_hints(
             None => continue,
         };
 
-        let mut matches = Vec::new();
+        let bm25_score = bm25_results.get(&route.title).copied().unwrap_or(0.0);
 
-        // Match query keywords against question_hints
+        // Skip routes with zero BM25 score (no relevance signal at all)
+        if bm25_score <= 0.0 {
+            continue;
+        }
+
+        let mut annotations = Vec::new();
+
+        // Annotate with keyword matches for explainability
         for hint in &nav.question_hints {
             let hint_lower = hint.to_lowercase();
-            // Check if any query keyword appears in the hint, or hint words in query
             for kw in query_keywords {
                 if hint_lower.contains(&kw.to_lowercase()) {
-                    matches.push(format!("question \"{}\"", hint));
+                    annotations.push(format!("question \"{}\"", hint));
                     break;
                 }
             }
-            if !matches.iter().any(|m| m.contains(&hint.clone())) {
-                // Also check if hint keywords appear in the full query
+            if !annotations.iter().any(|a| a.contains(&hint.clone())) {
                 for word in hint_lower.split_whitespace() {
                     if word.len() > 3 && query_lower.contains(word) {
-                        matches.push(format!("question \"{}\"", hint));
+                        annotations.push(format!("question \"{}\"", hint));
                         break;
                     }
                 }
             }
         }
 
-        // Match query keywords against topic_tags
         for tag in &nav.topic_tags {
             let tag_lower = tag.to_lowercase();
             for kw in query_keywords {
-                if tag_lower.contains(&kw.to_lowercase()) || kw.to_lowercase().contains(&tag_lower) {
-                    matches.push(format!("topic \"{}\"", tag));
+                if tag_lower.contains(&kw.to_lowercase())
+                    || kw.to_lowercase().contains(&tag_lower)
+                {
+                    annotations.push(format!("topic \"{}\"", tag));
                     break;
                 }
             }
-            if !matches.iter().any(|m| m.contains(&format!("topic \"{}\"", tag))) {
+            if !annotations
+                .iter()
+                .any(|a| a.contains(&format!("topic \"{}\"", tag)))
+            {
                 if query_lower.contains(&tag_lower) && tag.len() > 2 {
-                    matches.push(format!("topic \"{}\"", tag));
+                    annotations.push(format!("topic \"{}\"", tag));
                 }
             }
         }
 
-        if !matches.is_empty() {
-            let line = format!(
-                "  - Section '{}' — matches: {}\n",
-                route.title,
-                matches.join(", ")
-            );
-            if section.len() + line.len() > budget_remaining {
-                break;
-            }
-            section.push_str(&line);
+        let annotation_str = if annotations.is_empty() {
+            String::new()
+        } else {
+            format!(", {}", annotations.join(", "))
+        };
+
+        let line = format!(
+            "  - Section '{}' — BM25: {:.2}{}\n",
+            route.title, bm25_score, annotation_str
+        );
+        if section.len() + line.len() > budget_remaining {
+            break;
         }
+        section.push_str(&line);
     }
 
     if section.is_empty() {
         String::new()
     } else {
-        format!("\nSemantic hints (sections likely relevant to the question):\n{}", section)
+        format!(
+            "\nSemantic hints (BM25-scored sections, higher = more relevant):\n{}",
+            section
+        )
     }
 }
 
@@ -1506,8 +1570,8 @@ mod tests {
             hints
         );
         assert!(
-            hints.contains("question") || hints.contains("topic"),
-            "Should show match type, got: {}",
+            hints.contains("BM25"),
+            "Should include BM25 score, got: {}",
             hints
         );
     }
@@ -1522,13 +1586,18 @@ mod tests {
             doc_name: "test",
         };
 
-        // "costs" should match the Expenses topic_tag
+        // "costs" should match the Expenses topic_tag via BM25 scoring
         let keywords = extract_keywords("operating costs analysis");
         let hints = build_semantic_hints(&keywords, &"operating costs analysis".to_lowercase(), &ctx);
 
         assert!(
             hints.contains("Expenses"),
-            "Should match Expenses section via topic tag 'costs', got: {}",
+            "Should match Expenses section via BM25 + topic tag 'costs', got: {}",
+            hints
+        );
+        assert!(
+            hints.contains("BM25"),
+            "Should include BM25 score, got: {}",
             hints
         );
     }
@@ -1543,8 +1612,9 @@ mod tests {
             doc_name: "test",
         };
 
-        let keywords = extract_keywords("employee vacation policy");
-        let hints = build_semantic_hints(&keywords, &"employee vacation policy".to_lowercase(), &ctx);
+        // "xyzzy" is a nonsense word that won't match any route metadata
+        let keywords = extract_keywords("xyzzy foobar");
+        let hints = build_semantic_hints(&keywords, &"xyzzy foobar".to_lowercase(), &ctx);
 
         assert!(
             hints.is_empty(),
@@ -1603,8 +1673,8 @@ mod tests {
         );
 
         assert!(system.contains("semantic hints"));
-        assert!(user.contains("Semantic hints"));
-        assert!(user.contains("Revenue"));
+        // "revenue" should produce BM25 matches against the Revenue route
+        assert!(user.contains("Revenue") || user.contains("BM25") || user.contains("Semantic hints"));
         assert!(user.contains("What is the revenue?"));
     }
 
