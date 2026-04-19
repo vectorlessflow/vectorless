@@ -238,7 +238,26 @@ impl OrchestratorState {
         self.sub_results.push(result);
     }
 
-    /// Merge all sub-results into a single Output.
+    /// Clone results into an Output without consuming self.
+    ///
+    /// Used by `finalize_output` which needs to borrow state for rerank.
+    pub fn clone_results_into_output(&self, answer: String) -> Output {
+        Output {
+            answer,
+            evidence: self.all_evidence.clone(),
+            metrics: super::config::Metrics {
+                llm_calls: self.total_llm_calls,
+                nodes_visited: self.sub_results.iter().map(|r| r.metrics.nodes_visited).sum(),
+                plan_generated: self.sub_results.iter().any(|r| r.metrics.plan_generated),
+                check_count: self.sub_results.iter().map(|r| r.metrics.check_count).sum(),
+                evidence_chars: self.sub_results.iter().map(|r| r.metrics.evidence_chars).sum(),
+                ..Default::default()
+            },
+            score: 0.0,
+        }
+    }
+
+    /// Merge all sub-results into a single Output (consuming self).
     pub fn into_output(self, answer: String) -> Output {
         Output {
             answer,
