@@ -81,7 +81,7 @@ pub async fn run(
     debug!(doc = ctx.doc_name, "Phase 1: bird's-eye view (ls root)");
     let mut state = State::new(ctx.root(), config.max_rounds);
     let ls_result = tools::ls(ctx, &state);
-    state.last_feedback = ls_result.feedback;
+    state.set_feedback(ls_result.feedback);
 
     // --- Phase 1.5: Navigation planning ---
     // One LLM call to generate a tentative navigation plan from the bird's-eye view.
@@ -133,26 +133,24 @@ pub async fn run(
         }
 
         // Stuck detection: inject warning if no progress
-        if state.rounds_since_evidence >= STUCK_THRESHOLD {
+        if state.rounds_since_evidence >= STUCK_THRESHOLD && !state.last_feedback.contains("[Warning:") {
             let stuck_warning = format!(
                 "\n[Warning: No new evidence collected in {} rounds. \
                  Consider using grep, findtree, or cd .. to explore a different path.]",
                 state.rounds_since_evidence
             );
-            if !state.last_feedback.contains("[Warning:") {
-                state.last_feedback.push_str(&stuck_warning);
-            }
+            state.last_feedback.push_str(&stuck_warning);
         }
 
         // Mid-budget checkpoint: remind LLM to check if it hasn't yet
         let half_budget = state.max_rounds / 2;
         let rounds_used = state.max_rounds - state.remaining;
-        if rounds_used == half_budget && !state.check_called && state.remaining > 1 {
-            if !state.last_feedback.contains("[Hint:") {
-                state.last_feedback.push_str(
-                    "\n[Hint: You've used half your budget. Consider running `check` to evaluate if collected evidence is sufficient.]",
-                );
-            }
+        if rounds_used == half_budget && !state.check_called && state.remaining > 1
+            && !state.last_feedback.contains("[Hint:")
+        {
+            state.last_feedback.push_str(
+                "\n[Hint: You've used half your budget. Consider running `check` to evaluate if collected evidence is sufficient.]",
+            );
         }
 
         // Build prompt
@@ -428,26 +426,26 @@ async fn execute_command(
     match command {
         Command::Ls => {
             let result = tools::ls(ctx, state);
-            state.last_feedback = result.feedback;
+            state.set_feedback(result.feedback);
             Step::Continue
         }
 
         Command::Cd { target } => {
             let result = tools::cd(target, ctx, state);
-            state.last_feedback = result.feedback;
+            state.set_feedback(result.feedback);
             Step::Continue
         }
 
         Command::CdUp => {
             let result = tools::cd_up(ctx, state);
-            state.last_feedback = result.feedback;
+            state.set_feedback(result.feedback);
             Step::Continue
         }
 
         Command::Cat { target } => {
             let evidence_before = state.evidence.len();
             let result = tools::cat(target, ctx, state);
-            state.last_feedback = result.feedback;
+            state.set_feedback(result.feedback);
             // Emit evidence event if new evidence was added
             if state.evidence.len() > evidence_before {
                 if let Some(ev) = state.evidence.last() {
@@ -473,8 +471,19 @@ async fn execute_command(
         Command::Find { keyword } => {
             let feedback = match ctx.find(keyword) {
                 Some(hit) => {
+                    // Sort by weight descending, dedup by node_id (keep highest weight)
+                    let mut entries = hit.entries.clone();
+                    entries.sort_by(|a, b| {
+                        b.weight
+                            .partial_cmp(&a.weight)
+                            .unwrap_or(std::cmp::Ordering::Equal)
+                    });
+                    let mut seen_nodes = std::collections::HashSet::new();
                     let mut output = format!("Results for '{}':\n", keyword);
-                    for entry in &hit.entries {
+                    for entry in &entries {
+                        if !seen_nodes.insert(entry.node_id) {
+                            continue; // skip duplicate node
+                        }
                         let title = ctx.node_title(entry.node_id).unwrap_or("unknown");
                         let summary = ctx
                             .nav_entry(entry.node_id)
@@ -493,13 +502,13 @@ async fn execute_command(
                 }
                 None => format!("No results for '{}'", keyword),
             };
-            state.last_feedback = feedback;
+            state.set_feedback(feedback);
             Step::Continue
         }
 
         Command::Pwd => {
             let result = tools::pwd(state);
-            state.last_feedback = result.feedback;
+            state.set_feedback(result.feedback);
             Step::Continue
         }
 
@@ -536,8 +545,9 @@ async fn execute_command(
                             // Plan failed — clear it so react decisions take over
                             state.plan.clear();
                         }
-                        state.last_feedback =
-                            format!("Evidence not yet sufficient: {}", response.trim());
+                        state.set_feedback(
+                            format!("Evidence not yet sufficient: {}", response.trim())
+                        );
                         Step::Continue
                     }
                 }
@@ -556,25 +566,25 @@ async fn execute_command(
 
         Command::Grep { pattern } => {
             let result = tools::grep(pattern, ctx, state);
-            state.last_feedback = result.feedback;
+            state.set_feedback(result.feedback);
             Step::Continue
         }
 
         Command::Head { target, lines } => {
             let result = tools::head(target, *lines, ctx, state);
-            state.last_feedback = result.feedback;
+            state.set_feedback(result.feedback);
             Step::Continue
         }
 
         Command::FindTree { pattern } => {
             let result = tools::find_tree(pattern, ctx);
-            state.last_feedback = result.feedback;
+            state.set_feedback(result.feedback);
             Step::Continue
         }
 
         Command::Wc { target } => {
             let result = tools::wc(target, ctx, state);
-            state.last_feedback = result.feedback;
+            state.set_feedback(result.feedback);
             Step::Continue
         }
     }
@@ -618,18 +628,33 @@ fn format_visited_titles(state: &State, ctx: &DocContext<'_>) -> String {
         .join(", ")
 }
 
-/// Format evidence items for the synthesis prompt.
+/// Maximum total characters for evidence in the synthesis prompt.
+/// Prevents runaway token costs when many evidence items are collected.
+const SYNTHESIS_EVIDENCE_CAP: usize = 8000;
+
+/// Format evidence items for the synthesis prompt, with a total character cap.
+///
+/// Each item is included in full until the cap is reached. Items that would
+/// exceed the cap are truncated with a "[truncated]" marker.
 fn format_evidence_for_synthesis(evidence: &[Evidence]) -> String {
-    evidence
-        .iter()
-        .map(|e| {
-            format!(
-                "[{}] (source: {})\n{}",
-                e.node_title, e.source_path, e.content
-            )
-        })
-        .collect::<Vec<_>>()
-        .join("\n\n")
+    let mut result = String::new();
+    for e in evidence {
+        let item = format!("[{}] (source: {})\n{}", e.node_title, e.source_path, e.content);
+        if result.len() + item.len() + 2 > SYNTHESIS_EVIDENCE_CAP {
+            // Truncate this item to fit the remaining budget
+            let remaining = SYNTHESIS_EVIDENCE_CAP.saturating_sub(result.len());
+            if remaining > 50 {
+                result.push_str(&format!("[{}] (source: {})\n{}...[truncated]\n",
+                    e.node_title, e.source_path, &e.content[..remaining.min(e.content.len())]));
+            }
+            result.push_str(&format!("\n... and {} more evidence items truncated to fit budget.\n",
+                evidence.len() - evidence.iter().position(|x| x.node_title == e.node_title).unwrap_or(0) - 1));
+            break;
+        }
+        result.push_str(&item);
+        result.push_str("\n\n");
+    }
+    result
 }
 
 /// Format evidence as a simple answer (fallback when synthesis is disabled or fails).

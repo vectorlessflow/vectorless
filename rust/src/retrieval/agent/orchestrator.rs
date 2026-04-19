@@ -433,19 +433,39 @@ fn format_integration_text(sub_results: &[Output]) -> String {
         .join("\n\n")
 }
 
-/// Format all evidence for the synthesis prompt.
+/// Maximum total characters for evidence in the orchestrator synthesis prompt.
+const ORCH_SYNTHESIS_EVIDENCE_CAP: usize = 10000;
+
+/// Format all evidence for the synthesis prompt, with a total character cap.
 fn format_evidence_for_synthesis(evidence: &[super::config::Evidence]) -> String {
-    evidence
-        .iter()
-        .map(|e| {
-            let doc = e.doc_name.as_deref().unwrap_or("unknown");
-            format!(
-                "[{}] ({} at {})\n{}",
-                e.node_title, doc, e.source_path, e.content
-            )
-        })
-        .collect::<Vec<_>>()
-        .join("\n\n")
+    let mut result = String::new();
+    for e in evidence {
+        let doc = e.doc_name.as_deref().unwrap_or("unknown");
+        let item = format!("[{}] ({} at {})\n{}", e.node_title, doc, e.source_path, e.content);
+        if result.len() + item.len() + 2 > ORCH_SYNTHESIS_EVIDENCE_CAP {
+            let remaining = ORCH_SYNTHESIS_EVIDENCE_CAP.saturating_sub(result.len());
+            if remaining > 50 {
+                result.push_str(&format!(
+                    "[{}] ({} at {})\n{}...[truncated]\n",
+                    e.node_title, doc, e.source_path,
+                    &e.content[..remaining.min(e.content.len())]
+                ));
+            }
+            let remaining_count = evidence.len()
+                - evidence.iter().position(|x| x.node_title == e.node_title).unwrap_or(0)
+                - 1;
+            if remaining_count > 0 {
+                result.push_str(&format!(
+                    "\n... and {} more evidence items truncated to fit budget.\n",
+                    remaining_count
+                ));
+            }
+            break;
+        }
+        result.push_str(&item);
+        result.push_str("\n\n");
+    }
+    result
 }
 
 /// Format evidence summary for sufficiency check.
