@@ -155,7 +155,9 @@ pub async fn run(
     if state.all_evidence.is_empty() {
         info!("No evidence collected from any SubAgent");
         emitter.emit_completed(0, orch_llm_calls, 0);
-        return Ok(state.into_output(String::new()));
+        return Ok(state.into_output(
+            "I was unable to find relevant information across the available documents to answer your question.".to_string()
+        ));
     }
 
     info!(

@@ -387,6 +387,12 @@ pub fn parse_dispatch_plan(llm_output: &str, total_docs: usize) -> Option<Vec<Di
             let doc_num: usize = rest.trim().trim_end_matches(',').parse().unwrap_or(0);
             if doc_num > 0 && doc_num <= total_docs {
                 current_doc_idx = Some(doc_num - 1); // Convert to 0-based
+            } else if doc_num > 0 {
+                tracing::warn!(
+                    requested_doc = doc_num,
+                    total_docs,
+                    "Dispatch plan references out-of-range document, skipping"
+                );
             }
         } else if let Some(rest) = line.strip_prefix("reason:") {
             current_reason = rest.trim().to_string();

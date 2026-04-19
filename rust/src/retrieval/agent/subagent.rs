@@ -347,7 +347,11 @@ pub async fn run(
         debug!(doc = ctx.doc_name, "Synthesis disabled — concatenating raw evidence");
         output.answer = format_evidence_as_answer(&output.evidence);
     } else {
-        info!(doc = ctx.doc_name, "No evidence collected — returning empty output");
+        info!(doc = ctx.doc_name, "No evidence collected — returning not-found message");
+        output.answer = format!(
+            "I was unable to find relevant information in document '{}' to answer your question.",
+            ctx.doc_name
+        );
     }
 
     emitter.emit_completed(
