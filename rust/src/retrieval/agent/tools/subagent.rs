@@ -34,12 +34,28 @@ pub fn ls(ctx: &DocContext, state: &State) -> ToolResult {
 
             for (i, route) in routes.iter().enumerate() {
                 output.push_str(&format!(
-                    "[{}] {} — {} ({} leaves)\n",
+                    "[{}] {} — {} ({} leaves)",
                     i + 1,
                     route.title,
                     route.description,
                     route.leaf_count
                 ));
+                // Append question_hints and topic_tags from NavEntry if available
+                if let Some(nav) = ctx.nav_entry(route.node_id) {
+                    if !nav.question_hints.is_empty() {
+                        output.push_str(&format!(
+                            "\n    Can answer: {}",
+                            nav.question_hints.join(", ")
+                        ));
+                    }
+                    if !nav.topic_tags.is_empty() {
+                        output.push_str(&format!(
+                            "\n    Topics: {}",
+                            nav.topic_tags.join(", ")
+                        ));
+                    }
+                }
+                output.push('\n');
             }
             ToolResult::ok(output)
         }
