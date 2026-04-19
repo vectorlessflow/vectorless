@@ -46,6 +46,10 @@ pub struct State {
     /// Whether the `check` command has been called at least once.
     /// Used to trigger mid-budget checkpoint reminder.
     pub check_called: bool,
+    /// Number of times `check` has been called.
+    pub check_count: u32,
+    /// Whether a navigation plan was generated in Phase 1.5.
+    pub plan_generated: bool,
 }
 
 /// Maximum number of history entries to keep for prompt injection.
@@ -71,6 +75,8 @@ impl State {
             plan: String::new(),
             rounds_since_evidence: 0,
             check_called: false,
+            check_count: 0,
+            plan_generated: false,
         }
     }
 
@@ -177,6 +183,7 @@ impl State {
 
     /// Convert this state into an Output (consuming the state), with budget flag.
     pub fn into_output_with_budget(self, llm_calls: u32, budget_exhausted: bool) -> Output {
+        let evidence_chars: usize = self.evidence.iter().map(|e| e.content.len()).sum();
         Output {
             answer: String::new(), // filled by synthesis
             evidence: self.evidence,
@@ -186,6 +193,9 @@ impl State {
                 nodes_visited: self.visited.len(),
                 fast_path_hit: false,
                 budget_exhausted,
+                plan_generated: self.plan_generated,
+                check_count: self.check_count,
+                evidence_chars,
             },
         }
     }
@@ -243,15 +253,27 @@ impl OrchestratorState {
             answer,
             evidence: self.all_evidence,
             metrics: super::config::Metrics {
-                rounds_used: 0,
                 llm_calls: self.total_llm_calls,
                 nodes_visited: self
                     .sub_results
                     .iter()
                     .map(|r| r.metrics.nodes_visited)
                     .sum(),
-                fast_path_hit: false,
-                budget_exhausted: false,
+                plan_generated: self
+                    .sub_results
+                    .iter()
+                    .any(|r| r.metrics.plan_generated),
+                check_count: self
+                    .sub_results
+                    .iter()
+                    .map(|r| r.metrics.check_count)
+                    .sum(),
+                evidence_chars: self
+                    .sub_results
+                    .iter()
+                    .map(|r| r.metrics.evidence_chars)
+                    .sum(),
+                ..Default::default()
             },
         }
     }

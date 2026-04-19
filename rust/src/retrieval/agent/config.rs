@@ -70,11 +70,8 @@ impl Output {
             answer,
             evidence,
             metrics: Metrics {
-                rounds_used: 0,
-                llm_calls: 0,
-                nodes_visited: 0,
                 fast_path_hit: true,
-                budget_exhausted: false,
+                ..Default::default()
             },
         }
     }
@@ -115,6 +112,12 @@ pub struct Metrics {
     pub fast_path_hit: bool,
     /// Whether the LLM call budget was exhausted.
     pub budget_exhausted: bool,
+    /// Whether a navigation plan was generated (Phase 1.5).
+    pub plan_generated: bool,
+    /// Number of times `check` was called.
+    pub check_count: u32,
+    /// Total characters of collected evidence.
+    pub evidence_chars: usize,
 }
 
 /// Step result from the navigation loop.

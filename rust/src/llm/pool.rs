@@ -65,6 +65,7 @@ impl LlmPool {
                 max_tokens: slot.max_tokens,
                 temperature: slot.temperature,
                 retry: retry.clone(),
+                request_timeout_secs: 0,
             }
         };
 

@@ -36,6 +36,10 @@ pub struct LlmConfig {
     /// Retry configuration.
     #[serde(default)]
     pub retry: RetryConfig,
+
+    /// Per-request timeout. 0 means no timeout (wait indefinitely).
+    #[serde(default)]
+    pub request_timeout_secs: u64,
 }
 
 fn default_max_tokens() -> usize {
@@ -55,6 +59,7 @@ impl Default for LlmConfig {
             max_tokens: default_max_tokens(),
             temperature: default_temperature(),
             retry: RetryConfig::default(),
+            request_timeout_secs: 0,
         }
     }
 }

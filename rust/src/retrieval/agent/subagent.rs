@@ -122,6 +122,7 @@ pub async fn run(
                         "Navigation plan generated"
                     );
                     state.plan = plan_text;
+                    state.plan_generated = true;
                 }
             }
             Err(e) => {
@@ -543,6 +544,7 @@ async fn execute_command(
                 Ok(response) => {
                     *llm_calls += 1;
                     state.check_called = true;
+                    state.check_count += 1;
                     let sufficient = parse_sufficiency_response(&response);
                     info!(
                         doc = ctx.doc_name,
