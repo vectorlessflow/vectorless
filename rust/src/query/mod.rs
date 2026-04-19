@@ -11,9 +11,7 @@
 //!
 //! ```text
 //! raw query string
-//!   → detect_query_complexity()   (heuristic, zero-cost)
 //!   → extract keywords            (from utils/bm25)
-//!   → compute adaptive budget     (complexity × document depth)
 //!   → QueryPlan
 //! ```
 //!
@@ -22,11 +20,5 @@
 //! - Query rewrite / expansion
 //! - Multi-query decomposition
 
-mod budget;
-mod complexity;
 mod text;
 mod types;
-
-pub use budget::Budget;
-pub use complexity::detect_query_complexity;
-pub use types::{QueryComplexity, QueryPlan};

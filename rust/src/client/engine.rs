@@ -632,7 +632,6 @@ impl Engine {
                                 "agent(fp={},plan={},budget={})",
                                 fast_path_hit, plan_generated, budget_exhausted
                             ),
-                            complexity: crate::query::QueryComplexity::Simple,
                             reasoning_chain: crate::retrieval::ReasoningChain::default(),
                             tokens_used: evidence_chars,
                         };

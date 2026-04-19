@@ -3,23 +3,6 @@
 
 //! Core types for query understanding.
 
-/// Query complexity level for adaptive budget selection.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum QueryComplexity {
-    /// Simple queries that can be solved with keyword matching.
-    Simple,
-    /// Medium complexity queries requiring semantic understanding.
-    Medium,
-    /// Complex queries requiring deep LLM reasoning.
-    Complex,
-}
-
-impl Default for QueryComplexity {
-    fn default() -> Self {
-        Self::Medium
-    }
-}
-
 /// Query intent classification (future: will be populated by LLM).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum QueryIntent {
@@ -59,14 +42,10 @@ pub struct QueryPlan {
     pub original: String,
     /// Rewritten queries (currently empty; future: LLM rewrite).
     pub rewritten: Vec<String>,
-    /// Detected complexity level.
-    pub complexity: QueryComplexity,
     /// Detected intent.
     pub intent: QueryIntent,
     /// Decomposed sub-queries (currently empty; future: decomposition).
     pub sub_queries: Vec<SubQuery>,
     /// Extracted keywords.
     pub keywords: Vec<String>,
-    /// Adaptive budget derived from complexity + document depth.
-    pub budget: super::Budget,
 }

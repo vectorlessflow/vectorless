@@ -11,7 +11,6 @@
 //!
 //! Called directly for single-doc scope, or dispatched by the Orchestrator.
 
-mod complexity;
 mod execute;
 mod fast_path;
 mod format;
@@ -32,7 +31,6 @@ use super::state::State;
 use super::tools::subagent as tools;
 use crate::rerank::synthesis::{SynthesisParams, answer_synthesis_prompt as answer_synthesis};
 
-use complexity::compute_adaptive_budget;
 use execute::{execute_command, parse_and_detect_failure};
 use fast_path::{FastPathResult, fast_path};
 use format::{format_evidence_as_answer, format_evidence_for_synthesis, format_visited_titles};
@@ -88,17 +86,12 @@ pub async fn run(
 
     // --- Phase 1: Bird's-eye view + adaptive budget ---
     let doc_depth = ctx.tree.max_depth();
-    let (adaptive_rounds, max_llm) = compute_adaptive_budget(
-        query, doc_depth, config.max_rounds, config.max_llm_calls,
-    );
-
-    let complexity = complexity::detect_query_complexity(query);
-    if adaptive_rounds != config.max_rounds || max_llm != config.max_llm_calls {
+    let adaptive_rounds = adaptive_rounds(config.max_rounds, doc_depth);
+    if adaptive_rounds != config.max_rounds {
         info!(
-            doc = ctx.doc_name, doc_depth, complexity = ?complexity,
+            doc = ctx.doc_name, doc_depth,
             configured_rounds = config.max_rounds, adaptive_rounds,
-            configured_llm = config.max_llm_calls, adaptive_llm = max_llm,
-            "Adaptive budget"
+            "Adaptive budget: deep document"
         );
     }
 
@@ -346,3 +339,16 @@ pub async fn run(
 
     Ok(output)
 }
+
+/// Compute adaptive rounds based on document depth.
+///
+/// Deep documents (depth > 2) get extra rounds, capped at 1.5x base.
+fn adaptive_rounds(base_rounds: u32, doc_depth: usize) -> u32 {
+    if doc_depth <= 2 {
+        return base_rounds;
+    }
+    let extra = (doc_depth - 2) * 2;
+    let capped = base_rounds + extra as u32;
+    capped.min((base_rounds as f32 * 1.5).ceil() as u32)
+}
+

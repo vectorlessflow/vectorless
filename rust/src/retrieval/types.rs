@@ -5,8 +5,6 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::query::QueryComplexity;
-
 /// Sufficiency level for incremental retrieval.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SufficiencyLevel {
@@ -44,9 +42,6 @@ pub struct RetrieveResponse {
     /// Strategy that was used.
     pub strategy_used: String,
 
-    /// Detected query complexity.
-    pub complexity: QueryComplexity,
-
     /// Reasoning chain explaining how results were found.
     pub reasoning_chain: ReasoningChain,
 
@@ -62,7 +57,6 @@ impl Default for RetrieveResponse {
             confidence: 0.0,
             is_sufficient: false,
             strategy_used: String::new(),
-            complexity: QueryComplexity::Medium,
             reasoning_chain: ReasoningChain::default(),
             tokens_used: 0,
         }

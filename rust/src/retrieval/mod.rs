@@ -7,7 +7,6 @@
 //! It is responsible for:
 //!
 //! - **Dispatching** queries to the appropriate agent path (SubAgent vs Orchestrator)
-//! - **Preprocessing** raw queries into structured `QueryPlan`s
 //! - **Post-processing** agent output into client-facing results
 //! - **Caching** query results (L1 exact, L2 path patterns, L3 strategy scores)
 //! - **Streaming** retrieval events for async progress monitoring
@@ -22,7 +21,6 @@
 mod cache;
 pub mod dispatcher;
 pub mod postprocessor;
-pub mod preprocessor;
 pub mod stream;
 mod types;
 
