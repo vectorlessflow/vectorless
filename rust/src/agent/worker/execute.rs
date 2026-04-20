@@ -113,6 +113,7 @@ pub async fn execute_command(
                 }
                 None => format!("No results for '{}'", keyword),
             };
+            info!(doc = ctx.doc_name, keyword, feedback = %truncate_log(&feedback), "find result");
             state.set_feedback(feedback);
             Step::Continue
         }

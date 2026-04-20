@@ -42,6 +42,8 @@ pub struct NavigationParams<'a> {
     /// Query intent context from QueryPlan (e.g. "factual — find specific answer").
     /// Empty string if not available.
     pub intent_context: &'a str,
+    /// Formatted keyword index matches (empty if none).
+    pub keyword_hints: &'a str,
 }
 
 pub fn worker_navigation(params: &NavigationParams) -> (String, String) {
@@ -95,6 +97,12 @@ pub fn worker_navigation(params: &NavigationParams) -> (String, String) {
         )
     };
 
+    let keyword_section = if params.keyword_hints.is_empty() {
+        String::new()
+    } else {
+        format!("\n{}", params.keyword_hints)
+    };
+
     let intent_section = if params.intent_context.is_empty() {
         String::new()
     } else {
@@ -120,9 +128,15 @@ Available commands:
 - check             Evaluate if collected evidence is sufficient
 - done              End navigation
 
+SEARCH STRATEGY (important — follow this priority order):
+- When keyword matches are shown below, use find with the EXACT keyword from the list (single word, \
+not multi-word phrases). Example: if hint shows keyword 'performance' pointing to Performance section, \
+use find performance, NOT find \"performance guide\".
+- Use ls when you have no keyword hints or need to discover the structure of an unknown section.
+- Use findtree when you know a section title pattern but not the exact name.
+
 Rules:
 - Output exactly ONE command per response, nothing else.
-- Always ls before cd — observe before descending.
 - Content from cat is automatically saved as evidence — don't re-cat the same node.
 - Do not cat or cd into nodes you have already visited.
 - If the current branch has nothing relevant, use cd .. to go back.
@@ -144,7 +158,7 @@ User question: {query}{task_section}{intent_section}
 
 Current position: /{breadcrumb}
 Collected evidence:
-{evidence_summary}{missing_section}{visited_section}{plan_section}
+{evidence_summary}{missing_section}{keyword_section}{visited_section}{plan_section}
 {history_section}
 Remaining rounds: {remaining}/{max_rounds}
 
@@ -228,9 +242,14 @@ pub fn worker_dispatch(params: &WorkerDispatchParams) -> (String, String) {
 Available commands: ls, cd <name>, cd .., cat, cat <name>, head <name>, find <keyword>, \
 findtree <pattern>, grep <regex>, wc <name>, pwd, check, done
 
+SEARCH STRATEGY:
+- Prefer find <keyword> to jump directly to relevant sections over manual ls→cd exploration. \
+Use single-word keywords, not multi-word phrases.
+- Use ls when you need to discover the structure of an unknown section.
+- Use findtree when you know a section title pattern but not the exact name.
+
 Rules:
 - Output exactly ONE command per response.
-- Always ls before cd.
 - Content from cat is automatically saved as evidence.
 - After cat collects evidence, if it relates to your task, use done immediately.
 - Do NOT grep after cat — cat already collected the full content.
@@ -382,16 +401,41 @@ mod tests {
             visited_titles: "(none)",
             plan: "",
             intent_context: "",
+            keyword_hints: "",
         };
 
         let (system, user) = worker_navigation(&params);
         assert!(system.contains("document navigation"));
+        assert!(system.contains("SEARCH STRATEGY"));
         assert!(user.contains("What is the revenue?"));
         assert!(user.contains("root/Financial Statements"));
         assert!(user.contains("200 chars"));
         assert!(user.contains("2024 comparison"));
         assert!(user.contains("5/8"));
         assert!(!user.contains("sub-task"));
+    }
+
+    #[test]
+    fn test_worker_navigation_with_keyword_hints() {
+        let params = NavigationParams {
+            query: "What is the revenue?",
+            task: None,
+            breadcrumb: "root",
+            evidence_summary: "(none)",
+            missing_info: "",
+            last_feedback: "",
+            remaining: 8,
+            max_rounds: 8,
+            history: "(no history yet)",
+            visited_titles: "(none)",
+            plan: "",
+            intent_context: "",
+            keyword_hints: "Keyword matches (use find <keyword> to jump directly):\n  - 'revenue' → root > Revenue (weight 0.85)\n",
+        };
+
+        let (_, user) = worker_navigation(&params);
+        assert!(user.contains("revenue"));
+        assert!(user.contains("find"));
     }
 
     #[test]
@@ -409,6 +453,7 @@ mod tests {
             visited_titles: "(none)",
             plan: "",
             intent_context: "analytical — comparative analysis",
+            keyword_hints: "",
         };
 
         let (_, user) = worker_navigation(&params);

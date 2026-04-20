@@ -192,11 +192,15 @@ impl Engine {
                 )));
             }
 
-            // Rebuild cross-document graph immediately after indexing.
+            // Rebuild cross-document graph in the background so index returns immediately.
             if !items.is_empty() && self.config.graph.enabled {
-                if let Err(e) = self.rebuild_graph().await {
-                    tracing::warn!("Graph rebuild failed after indexing: {e}");
-                }
+                let engine = self.clone();
+                tokio::spawn(async move {
+                    info!("Rebuilding document graph in background...");
+                    if let Err(e) = engine.rebuild_graph().await {
+                        tracing::warn!("Background graph rebuild failed: {e}");
+                    }
+                });
             }
 
             Ok(IndexResult::with_partial(items, failed))
@@ -1069,6 +1073,7 @@ impl Engine {
 
         // Load all documents in parallel and extract keyword profiles
         let doc_ids = self.workspace.inner().list_documents().await;
+        info!(doc_count = doc_ids.len(), "Loading documents for graph rebuild");
         let concurrency = self.config.llm.throttle.max_concurrent_requests;
 
         let loaded: Vec<Option<PersistedDocument>> = futures::stream::iter(doc_ids.iter().cloned())
@@ -1079,6 +1084,9 @@ impl Engine {
             .buffer_unordered(concurrency)
             .collect()
             .await;
+
+        let loaded_count = loaded.iter().filter(|d| d.is_some()).count();
+        info!(loaded_count, "Documents loaded, building graph");
 
         let mut builder = crate::graph::DocumentGraphBuilder::new(self.config.graph.clone());
         for doc in loaded.into_iter().flatten() {
@@ -1093,6 +1101,7 @@ impl Engine {
         }
 
         let graph = builder.build();
+        info!(nodes = graph.node_count(), edges = graph.edge_count(), "Graph built, persisting");
         self.workspace.set_graph(&graph).await?;
         Ok(())
     }

@@ -159,6 +159,46 @@ pub fn build_replan_prompt(
     (system, user)
 }
 
+/// Format keyword index hits into a compact string for LLM context.
+///
+/// Returns a string like:
+/// ```text
+/// Keyword matches available for find:
+///   - 'performance' → root > Architecture Guide > Performance (weight 0.85)
+///   - 'latency' → root > Architecture Guide > Performance (weight 0.72)
+/// ```
+pub fn format_keyword_hints(keyword_hits: &[FindHit], ctx: &DocContext<'_>) -> String {
+    if keyword_hits.is_empty() {
+        return String::new();
+    }
+
+    let mut section = String::from("Keyword matches (use find <keyword> to jump directly):\n");
+    for hit in keyword_hits {
+        let mut entries = hit.entries.clone();
+        entries.sort_by(|a, b| {
+            b.weight
+                .partial_cmp(&a.weight)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        let mut seen = HashSet::new();
+        for entry in &entries {
+            if !seen.insert(entry.node_id) {
+                continue;
+            }
+            let ancestor_path = build_ancestor_path(entry.node_id, ctx);
+            section.push_str(&format!(
+                "  - '{}' → {} (weight {:.2})\n",
+                hit.keyword, ancestor_path, entry.weight
+            ));
+            if section.len() > 800 {
+                section.push_str("  ... (more)\n");
+                return section;
+            }
+        }
+    }
+    section
+}
+
 /// Build the ancestor path string for a node (e.g., "root > Chapter 1 > Section 1.2").
 pub fn build_ancestor_path(node_id: crate::document::NodeId, ctx: &DocContext<'_>) -> String {
     let mut path: Vec<crate::document::NodeId> = ctx.tree.ancestors_iter(node_id).collect();

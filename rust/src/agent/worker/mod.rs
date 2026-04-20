@@ -32,7 +32,7 @@ use crate::scoring::bm25::extract_keywords;
 
 use execute::{execute_command, parse_and_detect_failure};
 use format::format_visited_titles;
-use planning::{build_plan_prompt, build_replan_prompt};
+use planning::{build_plan_prompt, build_replan_prompt, format_keyword_hints};
 
 /// Worker agent — navigates a single document to collect evidence.
 ///
@@ -160,6 +160,7 @@ impl<'a> Agent for Worker<'a> {
 
         // --- Phase 2: Navigation loop ---
         let use_dispatch_prompt = task_ref.is_some();
+        let keyword_hints = format_keyword_hints(&index_hits, ctx);
 
         loop {
             if state.remaining == 0 {
@@ -197,6 +198,7 @@ impl<'a> Agent for Worker<'a> {
                     visited_titles: &visited_titles,
                     plan: &state.plan,
                     intent_context: &intent_context,
+                    keyword_hints: &keyword_hints,
                 })
             };
 
@@ -209,8 +211,7 @@ impl<'a> Agent for Worker<'a> {
                     .map_err(|e| Error::LlmReasoning {
                         stage: "worker/navigation".to_string(),
                         detail: format!(
-                            "Nav loop LLM call failed (round {}): {e}",
-                            config.max_rounds - state.remaining + 1
+                            "Nav loop LLM call failed (round {round_num}): {e}"
                         ),
                     })?;
             llm_calls += 1;
@@ -242,7 +243,6 @@ impl<'a> Agent for Worker<'a> {
 
             debug!(doc = ctx.doc_name, ?command, "Parsed command");
 
-            let round_num = config.max_rounds - state.remaining + 1;
             let is_check = matches!(command, Command::Check);
 
             // Execute
