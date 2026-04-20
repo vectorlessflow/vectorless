@@ -92,7 +92,7 @@ impl Default for IndexOptions {
             mode: IndexMode::Default,
             generate_summaries: true,
             generate_ids: true,
-            generate_description: false,
+            generate_description: true,
             enable_synonym_expansion: true,
             timeout_secs: None,
         }
