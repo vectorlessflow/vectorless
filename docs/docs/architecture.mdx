@@ -16,7 +16,7 @@ Vectorless transforms documents into hierarchical semantic trees and uses LLM-po
                                                   │
                      ┌──────────────┐     ┌──────▼───────┐
                      │    Result    │◀────│   Retrieval  │
-                     │   (Answer)   │     │   Pipeline   │
+                     │  (Evidence)  │     │   Pipeline   │
                      └──────────────┘     └──────────────┘
 ```
 
@@ -33,6 +33,7 @@ The indexing pipeline processes documents through ordered stages:
 | **Enhance** | 30 | Generate LLM summaries (Full, Selective, or Lazy strategy) |
 | **Enrich** | 40 | Calculate metadata, page ranges, resolve cross-references |
 | **Reasoning Index** | 45 | Build keyword-to-node mappings, synonym expansion, summary shortcuts |
+| **Navigation Index** | 50 | Build NavEntry + ChildRoute data for agent navigation |
 | **Optimize** | 60 | Final tree optimization |
 
 Each stage is independently configurable. The pipeline supports incremental re-indexing via content fingerprinting.
@@ -70,11 +71,11 @@ Engine.query()
   → Dispatcher
     → Query Understanding (LLM) → QueryPlan (intent, concepts, strategy)
     → Orchestrator (always — single or multi-doc)
-      → Analyze (LLM selects documents + tasks)
+      → Analyze (LLM reviews DocCards, selects documents + tasks)
       → Supervisor Loop:
           Dispatch Workers → Evaluate (LLM sufficiency check)
           → if insufficient → Replan (LLM) → loop
-      → Rerank (dedup → BM25 score → synthesis/fusion)
+      → Rerank (dedup → BM25 score → evidence formatting)
 ```
 
 ### Query Understanding
@@ -84,29 +85,57 @@ Every query first passes through LLM-based understanding:
 | Field | Description |
 |-------|-------------|
 | **Intent** | Factual, Analytical, Navigational, or Summary |
-| **Complexity** | Simple, Moderate, or Complex |
-| **Key Concepts** | LLM-extracted concepts (distinct from keywords) |
 | **Strategy Hint** | focused, exploratory, comparative, or summary |
+| **Key Concepts** | LLM-extracted concepts (distinct from keywords) |
 
 ### Orchestrator (Supervisor)
 
 The Orchestrator is the central coordinator. It always runs — even for single-document queries. Its supervisor loop:
 
-1. **Analyze** — LLM reviews DocCards and selects relevant documents with specific tasks
+1. **Analyze** — LLM reviews DocCards (lightweight metadata) and selects relevant documents with specific tasks
 2. **Dispatch** — Fan-out Workers in parallel (one per document)
 3. **Evaluate** — LLM checks if collected evidence is sufficient to answer the query
 4. **Replan** (if insufficient) — LLM identifies missing information and dispatches additional Workers
 
+When the user specifies document IDs directly, the Orchestrator skips the analysis phase and dispatches Workers immediately.
+
 ### Worker (Evidence Collector)
 
-Each Worker navigates a single document's tree to collect evidence:
+Each Worker navigates a single document's tree to collect evidence through a command-based loop:
 
 1. **Bird's-eye** — `ls` the root for an overview
-2. **Plan** — LLM generates a navigation plan
-3. **Navigate** — Loop: LLM → command → execute → repeat (with budget)
+2. **Plan** — LLM generates a navigation plan based on keyword index hits
+3. **Navigate** — Loop: LLM selects command → execute → observe result → repeat
 4. **Return** — Collected evidence only — no answer synthesis
 
-Workers use tree commands (`ls`, `cd`, `cat`, `grep`, `find`, `findtree`) and a `check` command for self-evaluation.
+#### Available Commands
+
+| Command | Description |
+|---------|-------------|
+| `ls` | List children at current position (with summaries and leaf counts) |
+| `cd <name>` | Enter a child node |
+| `cd ..` | Go back to parent |
+| `cat <name>` | Read node content (automatically collected as evidence) |
+| `head <name>` | Preview first N lines (does NOT collect evidence) |
+| `find <keyword>` | Search the document's ReasoningIndex for a keyword |
+| `findtree <pattern>` | Search for nodes by title pattern (case-insensitive) |
+| `grep <pattern>` | Regex search across content in current subtree |
+| `wc <name>` | Show content size (lines, words, chars) |
+| `pwd` | Show current navigation path |
+| `check` | Evaluate if collected evidence is sufficient |
+| `done` | End navigation |
+
+#### Navigation Strategy
+
+Workers prioritize keyword-based navigation over manual exploration:
+
+1. When keyword index hits are available, Workers use `find` with the exact keyword to jump directly to relevant sections
+2. Workers use `ls` when no keyword hints exist or when discovering unknown structure
+3. Workers use `findtree` when the section title pattern is known but not the exact name
+
+#### Dynamic Re-planning
+
+After a `check` command finds insufficient evidence, the Worker triggers a re-plan — the LLM generates a new navigation plan based on what's missing. This allows the Worker to adapt its strategy mid-navigation.
 
 ### Rerank Pipeline
 
@@ -114,11 +143,17 @@ After all Workers complete, the Orchestrator runs the final pipeline:
 
 1. **Dedup** — Remove duplicate and low-quality evidence
 2. **BM25 Scoring** — Rank evidence by keyword relevance
-3. **Answer Generation** — LLM synthesizes or fuses evidence into a final answer
+3. **Evidence Formatting** — Return original document text with source attribution
+
+The system returns raw evidence text — no LLM synthesis or paraphrasing. This ensures the user sees the exact document content that matches their query.
+
+## DocCard Catalog
+
+When multiple documents are indexed, Vectorless maintains a lightweight `catalog.bin` containing DocCard metadata for each document. This allows the Orchestrator to analyze and select relevant documents without loading the full document trees — a significant optimization for workspaces with many documents.
 
 ## Cross-Document Graph
 
-When multiple documents are indexed, Vectorless automatically builds a relationship graph based on shared keywords and Jaccard similarity. This graph enables cross-document retrieval with score boosting.
+When multiple documents are indexed, Vectorless automatically builds a relationship graph based on shared keywords and Jaccard similarity. The graph is constructed as a background task after each indexing operation.
 
 ## Zero Infrastructure
 

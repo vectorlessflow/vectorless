@@ -4,70 +4,84 @@ sidebar_position: 2
 
 # Retrieval Strategies
 
-Vectorless provides five retrieval strategies, each designed for different query types and accuracy/speed trade-offs.
+Vectorless uses a unified agent-based retrieval approach where the Orchestrator and Workers coordinate through LLM reasoning. The strategy adapts automatically based on query scope and complexity.
 
 ## Strategy Overview
 
-| Strategy | LLM Calls | Speed | Accuracy | Best For |
-|----------|-----------|-------|----------|----------|
-| **Keyword** | 0 (search) | Fastest | Good | Simple keyword matches |
-| **LLM** | High | Slowest | Best | Complex reasoning queries |
-| **Hybrid** | Medium | Medium | High | General purpose (recommended) |
-| **Cross-Document** | Varies | Medium | High | Multi-document queries |
-| **Page Range** | 0 (search) | Fast | Good | PDF page-scoped queries |
+| Mode | When | LLM Calls | Description |
+|------|------|-----------|-------------|
+| **Direct Dispatch** | User specifies doc_ids | Medium | Skip Orchestrator analysis, dispatch Worker directly |
+| **Single-Document** | One relevant document found | Medium | Orchestrator analyzes, dispatches one Worker |
+| **Multi-Document** | Multiple relevant documents | High | Orchestrator selects docs, dispatches parallel Workers |
+| **Workspace** | No scope specified | High | Orchestrator reviews all DocCards, selects relevant docs |
 
-## Keyword Strategy
+## Direct Dispatch
 
-Fast TF-IDF/BM25 matching against the pre-computed reasoning index. No LLM calls during search.
+When the user specifies document IDs in the query context, the system skips Orchestrator analysis and dispatches Workers directly to each specified document.
 
 ```python
 from vectorless import QueryContext
 
-ctx = QueryContext("revenue").with_doc_ids([doc_id])
+answer = await engine.query(
+    QueryContext("What is the total revenue?").with_doc_ids([doc_id])
+)
 ```
 
-Use when:
-- The query contains exact terms from the document
-- Speed is the priority
-- You want zero additional LLM token cost
+This is the fastest path — no DocCard analysis LLM call, just direct navigation.
 
-## LLM Strategy
+## Single-Document Retrieval
 
-LLM-powered tree navigation with full contextual understanding. The LLM sees the table of contents, node summaries, and makes navigation decisions at each level.
+The Orchestrator analyzes the query and available DocCards, determines one document is relevant, and dispatches a single Worker to navigate it.
 
 ```python
-ctx = QueryContext("Explain the relationship between architecture and performance").with_doc_ids([doc_id])
+answer = await engine.query(
+    QueryContext("What are the growth trends?").with_doc_ids([doc_id])
+)
 ```
 
-Use when:
-- The query requires multi-hop reasoning
-- Synonyms or paraphrases are likely
-- Accuracy is more important than speed
+The Worker follows a plan-navigate-evaluate loop:
+1. Generate a navigation plan from keyword index hits
+2. Navigate the tree using commands (ls, cd, cat, find, grep)
+3. Self-evaluate evidence sufficiency with `check`
+4. Return collected evidence
 
-## Hybrid Strategy (Recommended)
+## Multi-Document Retrieval
 
-Two-phase retrieval: BM25 pre-filter followed by LLM refinement. Combines the speed of keyword matching with the accuracy of LLM reasoning.
+The Orchestrator identifies multiple relevant documents and dispatches Workers in parallel — one per document, each with a specific sub-task.
 
 ```python
-ctx = QueryContext("What are the growth trends?").with_doc_ids([doc_id])
+answer = await engine.query(
+    QueryContext("Compare quarterly revenue across reports").with_doc_ids([doc_id_1, doc_id_2])
+)
 ```
 
-The recommended default for most queries. Fast pre-filtering reduces the number of nodes sent to the LLM, keeping token costs manageable while maintaining high accuracy.
+The Orchestrator's supervisor loop:
+1. **Analyze** — LLM reviews DocCards and creates a dispatch plan with per-document tasks
+2. **Dispatch** — Fan-out Workers in parallel
+3. **Evaluate** — LLM checks if combined evidence is sufficient
+4. **Replan** (if insufficient) — LLM identifies gaps and dispatches additional Workers
 
-## Cross-Document Strategy
+## Workspace Retrieval
 
-Searches across multiple indexed documents and aggregates results. Uses the cross-document relationship graph for score boosting.
+When no document scope is specified, the Orchestrator reviews all indexed documents via the lightweight DocCard catalog.
 
 ```python
-ctx = QueryContext("Compare the architectures")
+answer = await engine.query(
+    QueryContext("What documents discuss performance?")
+)
 ```
 
-When a high-confidence result is found in one document, neighbor documents in the graph receive a score boost, surfacing related content across the workspace.
+The DocCard catalog (`catalog.bin`) stores lightweight metadata for each document — enabling fast analysis without loading full document trees. This is critical for workspaces with many documents.
 
-## Auto Selection
+## Query Understanding
 
-By default, the engine analyzes query complexity and automatically selects the appropriate strategy:
+Every query (regardless of mode) passes through LLM-based understanding that produces a `QueryPlan`:
 
-- Simple keyword queries → Keyword strategy
-- Complex reasoning queries → Hybrid strategy
-- Multi-document scope → Cross-Document strategy
+| Field | Description |
+|-------|-------------|
+| **Intent** | Factual, Analytical, Navigational, or Summary |
+| **Strategy Hint** | focused, exploratory, comparative, or summary |
+| **Key Concepts** | LLM-extracted concepts from the query |
+| **Keywords** | BM25 keywords for index lookup and evidence scoring |
+
+The QueryPlan guides Worker navigation — for example, a "factual" intent with a "focused" strategy hint tells the Worker to look for a specific answer rather than exploring broadly.

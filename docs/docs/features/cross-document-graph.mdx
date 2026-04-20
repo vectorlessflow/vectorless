@@ -23,36 +23,18 @@ Document A ←── 0.72 ──→ Document B
 
 ### Graph Building
 
-After each indexing operation, the graph is automatically rebuilt:
+After each indexing operation, the graph is automatically rebuilt as a background task:
 
 1. Extract keyword profiles from each document's reasoning index
 2. Compute pairwise Jaccard similarity
 3. Create edges for document pairs exceeding the similarity threshold
 4. Store the graph in the workspace
 
-### Graph-Aware Retrieval
+The graph builder uses keyword weights from the ReasoningIndex — keywords that appear in titles get 2.0× weight, summaries 1.5×, and content 1.0×. This ensures that structurally important keywords have more influence on the similarity calculation.
 
-When using the cross-document strategy, the graph boosts scores for connected documents:
+### Accessing the Graph
 
-1. Search each document independently
-2. Identify high-confidence results (score > 0.5)
-3. For each high-confidence result, boost neighbor documents' scores
-4. Re-rank the merged result set
-
-```python
-from vectorless import Engine, QueryContext
-
-engine = Engine(api_key="sk-...", model="gpt-4o")
-
-# Query across all documents with graph boosting
-result = await engine.query(
-    QueryContext("Compare the approaches")
-)
-```
-
-## Accessing the Graph
-
-### Python
+#### Python
 
 ```python
 graph = await engine.get_graph()
@@ -67,7 +49,7 @@ if graph:
         print(f"  → {edge.target_doc_id} (weight: {edge.weight:.2f})")
 ```
 
-### Rust
+#### Rust
 
 ```rust
 if let Some(graph) = engine.get_graph().await? {
@@ -100,3 +82,7 @@ min_keyword_jaccard: 0.1    — Minimum Jaccard similarity threshold
 max_keywords_per_doc: 50    — Max keywords extracted per document
 max_edges_per_node: 10      — Max edges per document node
 ```
+
+## Current Status
+
+The graph is built and persisted during indexing. Graph-aware retrieval features (such as score boosting for connected documents) are planned for a future release. Currently, the graph serves as a relationship discovery and inspection tool accessible via the API.

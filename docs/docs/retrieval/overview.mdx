@@ -9,43 +9,53 @@ The retrieval pipeline transforms a user query into relevant document content by
 ## Pipeline Phases
 
 ```text
-Query ──▶ Analyze ──▶ Plan ──▶ Search ──▶ Evaluate ──▶ Result
-            │           │         │           │
-            ▼           ▼         ▼           ▼
-        Keywords    Strategy   Algorithm    Score &
-        Complexity  Selection  Execution    Dedup
+Query ──▶ Understand ──▶ Orchestrate ──▶ Navigate ──▶ Evaluate ──▶ Result
+              │               │              │            │
+              ▼               ▼              ▼            ▼
+          QueryPlan      DocCards +      ls/cd/cat/    Evidence
+          Intent +       Dispatch       find/grep     sufficiency
+          Concepts       Workers                      check
 ```
 
-### Analyze
+### Understand
 
-- Extract keywords from the query
-- Detect query complexity (simple keyword match vs. multi-hop reasoning)
-- Decompose complex queries into sub-queries when needed
+- LLM analyzes the query to extract intent, key concepts, and strategy hints
+- Produces a `QueryPlan` that guides the entire retrieval process
+- Extracts BM25 keywords for index lookup and evidence scoring
 
-### Plan
+### Orchestrate
 
-- Select the retrieval strategy (Keyword, LLM, Hybrid, Cross-Document)
-- Select the search algorithm (Beam Search, MCTS, Pure Pilot)
-- Configure beam width, depth limits, and iteration budgets
+- LLM reviews DocCard metadata (lightweight, no full document loading)
+- Selects relevant documents and assigns specific tasks to each
+- When user specifies doc_ids directly, skips analysis and dispatches immediately
+- Fan-out Workers in parallel — one per document
 
-### Search
+### Navigate
 
-- Use the ToC Navigator to locate relevant subtrees
-- Execute the selected search algorithm from located subtrees
-- The Pilot provides LLM guidance at key decision points
+Each Worker navigates its assigned document through a command loop:
+
+1. **Bird's-eye** — `ls` at root to see the document structure
+2. **Plan** — LLM generates a navigation plan using keyword index hits
+3. **Command loop** — LLM picks a command (`ls`, `cd`, `cat`, `find`, `grep`, etc.), executes it, observes the result, and repeats
+4. **Collect evidence** — `cat` automatically saves node content as evidence
 
 ### Evaluate
 
-- Score and rank candidate nodes
-- Deduplicate overlapping results
-- Aggregate content within the token budget
+- Workers can self-evaluate with `check` — an LLM assesses evidence sufficiency
+- Orchestrator evaluates overall evidence across all Workers
+- If insufficient, the Orchestrator triggers a replan and dispatches additional Workers
+
+### Result
+
+- Deduplicate and rank collected evidence by BM25 relevance score
+- Return original document text with source attribution — no LLM synthesis
 
 ## Quick Selection Guide
 
-| Use Case | Strategy | Algorithm |
-|----------|----------|-----------|
-| Simple keyword lookup | Keyword | Beam Search |
-| Complex question requiring reasoning | Hybrid | Beam Search |
-| Multi-hop reasoning across sections | LLM | MCTS |
-| Multiple documents | Cross-Document | Beam Search |
-| Fast overview of document | Keyword | ToC Navigator |
+| Use Case | Flow |
+|----------|------|
+| Single document, specific question | Worker dispatched directly → navigate → collect evidence |
+| Single document, broad exploration | Worker with navigation plan → multi-round exploration |
+| Multiple documents | Orchestrator analyzes DocCards → dispatches Workers per document |
+| Workspace-wide query | Orchestrator reviews all DocCards → selects relevant documents |
+| Specified doc_ids | Skip Orchestrator analysis → direct Worker dispatch |

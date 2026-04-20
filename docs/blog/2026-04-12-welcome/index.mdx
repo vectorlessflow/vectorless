@@ -16,7 +16,7 @@ Traditional RAG systems rely on vector embeddings and similarity search. This ap
 Vectorless takes a different path:
 
 - **Hierarchical Semantic Trees** — Documents are parsed into a tree of sections, preserving structure and relationships.
-- **LLM Navigation** — Queries are resolved by intelligently traversing the tree, not by comparing vectors.
+- **LLM Agent Navigation** — Queries are resolved by agents that navigate the tree using commands (ls, cd, cat, find, grep), making every decision through LLM reasoning.
 - **Zero Infrastructure** — No vector DB, no embedding models, no similarity search. Just an LLM API key.
 
 ## Quick Start
@@ -25,7 +25,7 @@ Vectorless takes a different path:
 
 ```python
 import asyncio
-from vectorless import Engine, IndexContext
+from vectorless import Engine, IndexContext, QueryContext
 
 async def main():
     engine = Engine(
@@ -38,7 +38,9 @@ async def main():
     doc_id = result.doc_id
 
     # Query
-    answer = await engine.query(doc_id, "What is the total revenue?")
+    answer = await engine.query(
+        QueryContext("What is the total revenue?").with_doc_ids([doc_id])
+    )
     print(answer.single().content)
 
 asyncio.run(main())
@@ -69,11 +71,17 @@ async fn main() -> vectorless::Result<()> {
 }
 ```
 
-## What's Next?
+## How It Works
 
-- Cross-document relationship graph
-- Incremental indexing with content fingerprinting
-- Multi-format support (Markdown, PDF, DOCX)
+1. **Index** — Documents are parsed into hierarchical semantic trees with pre-computed navigation indexes and keyword mappings.
+2. **Query** — The Orchestrator coordinates multi-document retrieval by dispatching Worker agents. Each Worker navigates the tree using commands, collects evidence, and self-evaluates sufficiency.
+3. **Result** — Evidence is deduplicated, ranked by BM25 relevance, and returned as original document text.
+
+## What's Next
+
+- Cross-document graph-aware retrieval with score boosting
+- DOCX format support
+- Streaming query results with real-time progress events
 
 The project is open source under Apache-2.0. Contributions welcome!
 

@@ -84,10 +84,7 @@ async fn main() -> vectorless::Result<()> {
     let result = engine.query(
         QueryContext::new("What is the total revenue?").with_doc_ids(vec![doc_id.to_string()])
     ).await?;
-
-    if let Some(item) = result.single() {
-        println!("{}", item.content);
-    }
+    println!("{}", result.content);
 
     Ok(())
 }
@@ -97,4 +94,4 @@ async fn main() -> vectorless::Result<()> {
 
 - [Architecture](/docs/architecture) — Understand the indexing and retrieval pipeline
 - [Indexing Overview](/docs/indexing/overview) — Learn about each pipeline stage
-- [Retrieval Strategies](/docs/retrieval/strategies) — Choose the right strategy for your use case
+- [Retrieval Strategies](/docs/retrieval/strategies) — Understand how queries are processed
