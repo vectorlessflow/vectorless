@@ -109,7 +109,8 @@ Available commands:
 - ls                List children at current position (with summaries and leaf counts)
 - cd <name>         Enter a child node (supports absolute paths like /root/Section)
 - cd ..             Go back to parent node
-- cat <name>        Read node content (automatically collected as evidence)
+- cat <name>        Read a child node's content (automatically collected as evidence)
+- cat               Read the current node's content (useful at leaf nodes)
 - head <name>       Preview first 20 lines of a node (does NOT collect evidence)
 - find <keyword>    Search for a keyword in the document index
 - findtree <pattern> Search for nodes by title pattern (case-insensitive)
@@ -219,7 +220,7 @@ pub fn worker_dispatch(params: &WorkerDispatchParams) -> (String, String) {
         "You are a document navigation assistant. You are searching inside the document \
          \"{doc_name}\" for specific information.
 
-Available commands: ls, cd <name>, cd .., cat <name>, head <name>, find <keyword>, \
+Available commands: ls, cd <name>, cd .., cat, cat <name>, head <name>, find <keyword>, \
 findtree <pattern>, grep <regex>, wc <name>, pwd, check, done
 
 Rules:

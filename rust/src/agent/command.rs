@@ -53,6 +53,9 @@ pub fn parse_command(llm_output: &str) -> Command {
 
     match parts.as_slice() {
         ["ls"] => Command::Ls,
+        ["cat"] => Command::Cat {
+            target: ".".to_string(),
+        },
         ["cd", ".."] => Command::CdUp,
         ["cd", target] => Command::Cd {
             target: (*target).to_string(),

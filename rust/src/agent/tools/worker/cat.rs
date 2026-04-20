@@ -10,18 +10,29 @@ use crate::agent::state::WorkerState;
 use super::super::ToolResult;
 
 /// Execute `cat <target>` — read node content and collect as evidence.
+///
+/// Special targets:
+/// - `cat .` or `cat` (no arg) reads the current node's content.
+/// - Otherwise resolves the target to a child node by name.
 pub fn cat(target: &str, ctx: &DocContext, state: &mut WorkerState) -> ToolResult {
-    let node_id =
-        match command::resolve_target_extended(target, ctx.nav_index, state.current_node, ctx.tree)
-        {
+    let node_id = if target == "." || target.is_empty() {
+        state.current_node
+    } else {
+        match command::resolve_target_extended(
+            target,
+            ctx.nav_index,
+            state.current_node,
+            ctx.tree,
+        ) {
             Some(id) => id,
             None => {
                 return ToolResult::fail(format!(
-                    "Target '{}' not found. Use ls to see available children.",
+                    "Target '{}' not found. Use 'ls' to see children, or 'cat .' to read current node.",
                     target
                 ));
             }
-        };
+        }
+    };
 
     if state.visited.contains(&node_id) {
         let title = ctx.node_title(node_id).unwrap_or("unknown");
