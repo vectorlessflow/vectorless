@@ -214,11 +214,13 @@ fn build_intent_signals(intent: QueryIntent, ctx: &DocContext<'_>) -> String {
                 Some(r) => r,
                 None => return String::new(),
             };
-            let mut section = String::from(
-                "\nSection map (known top-level sections for direct navigation):\n",
-            );
+            let mut section =
+                String::from("\nSection map (known top-level sections for direct navigation):\n");
             for route in routes {
-                section.push_str(&format!("  - {} ({} leaves)\n", route.title, route.leaf_count));
+                section.push_str(&format!(
+                    "  - {} ({} leaves)\n",
+                    route.title, route.leaf_count
+                ));
             }
             section
         }

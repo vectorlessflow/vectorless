@@ -7,8 +7,7 @@ use pyo3::prelude::*;
 
 use ::vectorless::IndexMetrics;
 use ::vectorless::{
-    EvidenceItem, FailedItem, IndexItem, IndexResult, QueryMetrics, QueryResult,
-    QueryResultItem,
+    EvidenceItem, FailedItem, IndexItem, IndexResult, QueryMetrics, QueryResult, QueryResultItem,
 };
 
 // ============================================================

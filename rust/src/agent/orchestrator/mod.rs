@@ -220,7 +220,8 @@ impl<'a> Agent for Orchestrator<'a> {
         // - LLM evaluated sufficient on first try → high confidence
         // - Needed replan rounds → lower confidence
         // - No evaluation ran (skip_analysis / no evidence) → moderate
-        let confidence = compute_confidence(eval_sufficient, iteration, state.all_evidence.is_empty());
+        let confidence =
+            compute_confidence(eval_sufficient, iteration, state.all_evidence.is_empty());
 
         // --- Phase 3: Finalize — rerank + synthesize ---
         if state.all_evidence.is_empty() {
