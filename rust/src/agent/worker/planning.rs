@@ -163,9 +163,9 @@ pub fn build_replan_prompt(
 ///
 /// Returns a string like:
 /// ```text
-/// Keyword matches available for find:
-///   - 'performance' → root > Architecture Guide > Performance (weight 0.85)
-///   - 'latency' → root > Architecture Guide > Performance (weight 0.72)
+/// Keyword matches (use find <keyword> to jump directly):
+///   - 'complex' → Performance (weight 0.85)
+///   - 'latency' → Performance (weight 0.72)
 /// ```
 pub fn format_keyword_hints(keyword_hits: &[FindHit], ctx: &DocContext<'_>) -> String {
     if keyword_hits.is_empty() {
@@ -185,10 +185,10 @@ pub fn format_keyword_hints(keyword_hits: &[FindHit], ctx: &DocContext<'_>) -> S
             if !seen.insert(entry.node_id) {
                 continue;
             }
-            let ancestor_path = build_ancestor_path(entry.node_id, ctx);
+            let title = ctx.node_title(entry.node_id).unwrap_or("unknown");
             section.push_str(&format!(
                 "  - '{}' → {} (weight {:.2})\n",
-                hit.keyword, ancestor_path, entry.weight
+                hit.keyword, title, entry.weight
             ));
             if section.len() > 800 {
                 section.push_str("  ... (more)\n");
@@ -199,14 +199,14 @@ pub fn format_keyword_hints(keyword_hits: &[FindHit], ctx: &DocContext<'_>) -> S
     section
 }
 
-/// Build the ancestor path string for a node (e.g., "root > Chapter 1 > Section 1.2").
+/// Build the ancestor path string for a node (e.g., "root/Chapter 1/Section 1.2").
 pub fn build_ancestor_path(node_id: crate::document::NodeId, ctx: &DocContext<'_>) -> String {
     let mut path: Vec<crate::document::NodeId> = ctx.tree.ancestors_iter(node_id).collect();
     path.reverse();
     path.iter()
         .filter_map(|&id| ctx.node_title(id))
         .collect::<Vec<_>>()
-        .join(" > ")
+        .join("/")
 }
 
 /// Build intent-specific index signals for the planning prompt.
@@ -581,7 +581,7 @@ mod tests {
             reasoning_index: &crate::document::ReasoningIndex::default(),
             doc_name: "test",
         };
-        assert_eq!(build_ancestor_path(revenue, &ctx), "Root > Revenue");
+        assert_eq!(build_ancestor_path(revenue, &ctx), "Root/Revenue");
         assert_eq!(build_ancestor_path(root, &ctx), "Root");
     }
 
