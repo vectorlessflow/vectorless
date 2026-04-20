@@ -284,16 +284,11 @@ pub struct QueryMetrics {
     pub evidence_chars: usize,
 }
 
-/// Confidence level of the query result.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Confidence {
-    /// Evidence is sufficient and the answer is clear.
-    High,
-    /// Evidence is partial but usable.
-    Medium,
-    /// Evidence is insufficient; the answer may be inaccurate.
-    Low,
-}
+/// Confidence score of the query result (0.0–1.0).
+///
+/// Derived from LLM evaluate() — whether evidence was deemed sufficient
+/// and how many replan rounds were needed.
+pub type Confidence = f32;
 
 /// A single document's query result.
 #[derive(Debug, Clone)]
@@ -307,16 +302,13 @@ pub struct QueryResultItem {
     /// Synthesized answer or raw evidence content.
     pub content: String,
 
-    /// Relevance score (top BM25 score from rerank, 0.0–1.0).
-    pub score: f32,
-
     /// Evidence items that contributed to this result, with source attribution.
     pub evidence: Vec<EvidenceItem>,
 
     /// Execution metrics for this query.
     pub metrics: Option<QueryMetrics>,
 
-    /// Confidence level of the answer.
+    /// Confidence score (0.0–1.0) — derived from LLM evaluation.
     pub confidence: Confidence,
 }
 
@@ -477,10 +469,9 @@ mod tests {
             doc_id: "doc-1".into(),
             node_ids: vec!["n1".into()],
             content: "content".into(),
-            score: 0.9,
             evidence: vec![],
             metrics: None,
-            confidence: Confidence::High,
+            confidence: 0.9,
         };
         let result = QueryResult::from_single(item);
         assert!(!result.is_empty());

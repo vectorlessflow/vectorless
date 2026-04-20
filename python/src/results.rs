@@ -7,7 +7,7 @@ use pyo3::prelude::*;
 
 use ::vectorless::IndexMetrics;
 use ::vectorless::{
-    Confidence, EvidenceItem, FailedItem, IndexItem, IndexResult, QueryMetrics, QueryResult,
+    EvidenceItem, FailedItem, IndexItem, IndexResult, QueryMetrics, QueryResult,
     QueryResultItem,
 };
 
@@ -131,10 +131,10 @@ impl PyQueryResultItem {
         &self.inner.content
     }
 
-    /// Relevance score (0.0 to 1.0).
+    /// Confidence score (0.0 to 1.0).
     #[getter]
     fn score(&self) -> f32 {
-        self.inner.score
+        self.inner.confidence
     }
 
     /// Node IDs that matched (navigation paths).
@@ -174,22 +174,17 @@ impl PyQueryResultItem {
         })
     }
 
-    /// Confidence level: "high", "medium", or "low".
+    /// Confidence score (0.0 to 1.0).
     #[getter]
-    fn confidence(&self) -> &'static str {
-        match self.inner.confidence {
-            Confidence::High => "high",
-            Confidence::Medium => "medium",
-            Confidence::Low => "low",
-        }
+    fn confidence(&self) -> f32 {
+        self.inner.confidence
     }
 
     fn __repr__(&self) -> String {
         format!(
-            "QueryResultItem(doc_id='{}', score={:.2}, confidence='{}', evidence={})",
+            "QueryResultItem(doc_id='{}', confidence={:.2}, evidence={})",
             self.inner.doc_id,
-            self.inner.score,
-            self.confidence(),
+            self.inner.confidence,
             self.inner.evidence.len()
         )
     }
@@ -250,7 +245,6 @@ impl PyQueryResult {
                     doc_id: i.doc_id.clone(),
                     node_ids: i.node_ids.clone(),
                     content: i.content.clone(),
-                    score: i.score,
                     evidence: i.evidence.clone(),
                     metrics: i.metrics.clone(),
                     confidence: i.confidence,
@@ -266,7 +260,6 @@ impl PyQueryResult {
                 doc_id: i.doc_id.clone(),
                 node_ids: i.node_ids.clone(),
                 content: i.content.clone(),
-                score: i.score,
                 evidence: i.evidence.clone(),
                 metrics: i.metrics.clone(),
                 confidence: i.confidence,

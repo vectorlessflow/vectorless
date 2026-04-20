@@ -76,14 +76,14 @@ impl AgentConfig {
 /// Agent output — the final result of a retrieval operation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Output {
-    /// Final synthesized answer (may be empty if synthesis is disabled).
+    /// Final synthesized answer.
     pub answer: String,
     /// Collected evidence from navigation.
     pub evidence: Vec<Evidence>,
     /// Agent execution metrics.
     pub metrics: Metrics,
-    /// Top relevance score from rerank (BM25), 0.0 if not scored.
-    pub score: f32,
+    /// Confidence score (0.0–1.0) — derived from LLM evaluate() result.
+    pub confidence: f32,
 }
 
 impl Output {
@@ -93,7 +93,7 @@ impl Output {
             answer: String::new(),
             evidence: Vec::new(),
             metrics: Metrics::default(),
-            score: 0.0,
+            confidence: 0.0,
         }
     }
 }
@@ -183,7 +183,7 @@ impl From<WorkerOutput> for Output {
                 check_count: wo.metrics.check_count,
                 evidence_chars: wo.metrics.evidence_chars,
             },
-            score: 0.0,
+            confidence: 0.0,
         }
     }
 }

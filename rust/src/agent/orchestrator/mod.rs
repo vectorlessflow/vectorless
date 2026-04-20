@@ -131,9 +131,9 @@ impl<'a> Agent for Orchestrator<'a> {
         };
 
         // --- Phase 2: Supervisor loop ---
-        // Initial dispatch with the plan from analysis
         let mut current_dispatches = initial_dispatches;
         let mut iteration: u32 = 0;
+        let mut eval_sufficient = false;
 
         loop {
             if iteration >= MAX_SUPERVISOR_ITERATIONS {
@@ -178,6 +178,7 @@ impl<'a> Agent for Orchestrator<'a> {
             orch_llm_calls += 1;
 
             if eval_result.sufficient {
+                eval_sufficient = true;
                 info!(
                     evidence = state.all_evidence.len(),
                     iteration, "Evidence sufficient — exiting supervisor loop"
@@ -215,6 +216,12 @@ impl<'a> Agent for Orchestrator<'a> {
             iteration += 1;
         }
 
+        // Derive confidence from supervisor loop outcome:
+        // - LLM evaluated sufficient on first try → high confidence
+        // - Needed replan rounds → lower confidence
+        // - No evaluation ran (skip_analysis / no evidence) → moderate
+        let confidence = compute_confidence(eval_sufficient, iteration, state.all_evidence.is_empty());
+
         // --- Phase 3: Finalize — rerank + synthesize ---
         if state.all_evidence.is_empty() {
             emitter.emit_orchestrator_completed(0, orch_llm_calls, 0);
@@ -231,8 +238,23 @@ impl<'a> Agent for Orchestrator<'a> {
             orch_llm_calls,
             multi_doc,
             query_plan.intent,
+            confidence,
         )
         .await
+    }
+}
+
+/// Compute confidence from LLM evaluate() outcome.
+fn compute_confidence(eval_sufficient: bool, replan_rounds: u32, no_evidence: bool) -> f32 {
+    if no_evidence {
+        return 0.0;
+    }
+    if eval_sufficient {
+        // LLM said sufficient: first round = 0.95, each replan round drops 0.15
+        (0.95 - replan_rounds as f32 * 0.15).max(0.5)
+    } else {
+        // LLM never said sufficient (budget exhausted or no more docs)
+        (0.4 - replan_rounds as f32 * 0.1).max(0.1)
     }
 }
 
@@ -246,6 +268,7 @@ pub async fn finalize_output(
     orch_llm_calls: u32,
     multi_doc: bool,
     intent: crate::query::QueryIntent,
+    confidence: f32,
 ) -> crate::error::Result<Output> {
     let _ = config;
     let rerank_result = crate::rerank::process(
@@ -255,6 +278,7 @@ pub async fn finalize_output(
         multi_doc,
         &state.sub_results,
         intent,
+        confidence,
     )
     .await?;
 
@@ -265,7 +289,7 @@ pub async fn finalize_output(
 
     let mut output = state.clone_results_into_output(rerank_result.answer);
     output.metrics.llm_calls += total_llm_calls;
-    output.score = rerank_result.score;
+    output.confidence = rerank_result.confidence;
 
     emitter.emit_orchestrator_completed(
         output.evidence.len(),
@@ -276,6 +300,7 @@ pub async fn finalize_output(
     info!(
         evidence = output.evidence.len(),
         llm_calls = output.metrics.llm_calls,
+        confidence = output.confidence,
         "Orchestrator complete"
     );
 

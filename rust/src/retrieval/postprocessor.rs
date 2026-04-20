@@ -11,7 +11,6 @@ use std::collections::BTreeMap;
 
 use crate::agent::config::{Evidence, Metrics, Output};
 use crate::client::{Confidence, EvidenceItem, QueryMetrics, QueryResultItem};
-use crate::rerank::types::ConfidenceLevel;
 
 /// Convert agent output to query result items, split by document.
 ///
@@ -23,7 +22,7 @@ use crate::rerank::types::ConfidenceLevel;
 /// cross-document evidence). Each item gets its own subset of evidence.
 pub fn to_results(output: &Output, doc_id: &str) -> Vec<QueryResultItem> {
     if output.evidence.is_empty() {
-        return vec![empty_item(doc_id, &output.answer, output.score)];
+        return vec![empty_item(doc_id, &output.answer, output.confidence)];
     }
 
     // Group evidence by doc_name
@@ -34,7 +33,7 @@ pub fn to_results(output: &Output, doc_id: &str) -> Vec<QueryResultItem> {
         return vec![build_item(
             doc_id,
             &output.answer,
-            output.score,
+            output.confidence,
             &output.evidence,
             &output.metrics,
         )];
@@ -49,7 +48,7 @@ pub fn to_results(output: &Output, doc_id: &str) -> Vec<QueryResultItem> {
             build_item(
                 did,
                 &output.answer,
-                output.score,
+                output.confidence,
                 &evidence,
                 &output.metrics,
             )
@@ -70,7 +69,7 @@ fn group_by_doc(evidence: &[Evidence]) -> BTreeMap<Option<String>, Vec<&Evidence
 fn build_item(
     doc_id: &str,
     answer: &str,
-    score: f32,
+    confidence: Confidence,
     evidence: &[Evidence],
     metrics: &Metrics,
 ) -> QueryResultItem {
@@ -96,16 +95,11 @@ fn build_item(
     };
 
     let evidence_count = evidence.len();
-    let confidence = map_confidence(ConfidenceLevel::from_evidence(
-        evidence_count,
-        content.len(),
-    ));
 
     QueryResultItem {
         doc_id: doc_id.to_string(),
         node_ids,
         content,
-        score,
         evidence: evidence_items,
         metrics: Some(QueryMetrics {
             llm_calls: metrics.llm_calls,
@@ -119,7 +113,7 @@ fn build_item(
 }
 
 /// Build an empty result item (no evidence).
-fn empty_item(doc_id: &str, answer: &str, score: f32) -> QueryResultItem {
+fn empty_item(doc_id: &str, answer: &str, confidence: Confidence) -> QueryResultItem {
     let content = if answer.is_empty() {
         String::new()
     } else {
@@ -129,18 +123,8 @@ fn empty_item(doc_id: &str, answer: &str, score: f32) -> QueryResultItem {
         doc_id: doc_id.to_string(),
         node_ids: Vec::new(),
         content,
-        score,
         evidence: Vec::new(),
         metrics: None,
-        confidence: Confidence::Low,
-    }
-}
-
-/// Map internal confidence to public API confidence.
-fn map_confidence(level: ConfidenceLevel) -> Confidence {
-    match level {
-        ConfidenceLevel::High => Confidence::High,
-        ConfidenceLevel::Medium => Confidence::Medium,
-        ConfidenceLevel::Low => Confidence::Low,
+        confidence,
     }
 }

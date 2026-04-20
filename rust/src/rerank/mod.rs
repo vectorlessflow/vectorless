@@ -9,18 +9,17 @@
 //! agent (collect evidence)
 //!   → rerank::process()
 //!     → dedup (quality filter + dedup)
-//!     → scorer (BM25 relevance ranking)
 //!     → intent-driven synthesis/fusion
 //!   → Output with final answer
 //! ```
 //!
 //! Synthesis strategy is driven by [`QueryIntent`] from query understanding.
-//! The agent only collects evidence; all organizing, ranking, and answer
-//! generation happens here.
+//! The agent only collects evidence; all organizing and answer generation
+//! happens here. Confidence is derived from the LLM evaluate() result
+//! in the Orchestrator's supervisor loop — not from heuristic scoring.
 
 pub mod dedup;
 pub mod fusion;
-pub mod scorer;
 pub mod synthesis;
 pub mod types;
 
@@ -29,13 +28,14 @@ use tracing::info;
 use crate::agent::{Evidence, Output};
 use crate::llm::LlmClient;
 use crate::query::QueryIntent;
-use types::{ConfidenceLevel, RerankOutput};
+use types::RerankOutput;
 
 /// Process agent output through the rerank pipeline.
 ///
 /// Takes raw agent output (evidence without answer) and produces
-/// a final answer through dedup → score → intent-driven synthesis.
+/// a final answer through dedup → intent-driven synthesis.
 ///
+/// Confidence is passed from the Orchestrator (derived from LLM evaluate).
 /// Returns [`Result<RerankOutput>`]. Propagates LLM errors — no silent fallback.
 pub async fn process(
     query: &str,
@@ -44,6 +44,7 @@ pub async fn process(
     multi_doc: bool,
     sub_results: &[Output],
     intent: QueryIntent,
+    confidence: f32,
 ) -> crate::error::Result<RerankOutput> {
     // Step 1: Deduplicate
     let deduped = dedup::dedup(evidence);
@@ -51,32 +52,22 @@ pub async fn process(
         info!("No evidence after dedup");
         return Ok(RerankOutput {
             answer: String::new(),
-            score: 0.0,
             llm_calls: 0,
-            confidence: ConfidenceLevel::Low,
+            confidence: 0.0,
         });
     }
 
-    // Step 2: Score and sort by relevance
-    let scored = scorer::rank(query, &deduped);
-    let top_score = scored.first().map(|(_, s)| *s).unwrap_or(0.0);
-    let sorted_evidence: Vec<Evidence> = scored
-        .iter()
-        .map(|(idx, _)| deduped[*idx].clone())
-        .collect();
-
     info!(
-        evidence = sorted_evidence.len(),
-        top_score,
+        evidence = deduped.len(),
         intent = %intent,
-        "Evidence after dedup + scoring"
+        "Evidence after dedup"
     );
 
-    // Step 3: Intent-driven synthesis (No thought, no answer).
+    // Step 2: Intent-driven synthesis (No thought, no answer).
     let (answer, llm_calls) = match intent {
         QueryIntent::Navigational => {
             // Navigational: format locations, no deep synthesis needed
-            (format_locations(&sorted_evidence), 0)
+            (format_locations(&deduped), 0)
         }
         QueryIntent::Analytical if multi_doc && sub_results.len() > 1 => {
             // Analytical multi-doc: fuse across sub-results
@@ -85,21 +76,19 @@ pub async fn process(
         }
         _ => {
             // Factual, Summary, Analytical single-doc: synthesis
-            synthesis::synthesize(query, &sorted_evidence, llm).await?
+            synthesis::synthesize(query, &deduped, llm).await?
         }
     };
 
-    let confidence = ConfidenceLevel::from_evidence(sorted_evidence.len(), answer.len());
     info!(
-        evidence = sorted_evidence.len(),
+        evidence = deduped.len(),
         answer_len = answer.len(),
-        confidence = ?confidence,
+        confidence,
         "Rerank complete"
     );
 
     Ok(RerankOutput {
         answer,
-        score: top_score,
         llm_calls,
         confidence,
     })

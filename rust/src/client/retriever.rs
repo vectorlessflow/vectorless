@@ -111,7 +111,7 @@ impl RetrieverClient {
 
         self.events.emit_query(QueryEvent::Complete {
             total_results: result.len(),
-            confidence: result.single().map(|i| i.score).unwrap_or(0.0),
+            confidence: result.single().map(|i| i.confidence).unwrap_or(0.0),
         });
 
         Ok(result)
