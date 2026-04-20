@@ -233,8 +233,6 @@ impl<'a> Agent for Orchestrator<'a> {
         finalize_output(
             &query,
             &state,
-            &config,
-            &llm,
             &emitter,
             orch_llm_calls,
             multi_doc,
@@ -263,25 +261,14 @@ fn compute_confidence(eval_sufficient: bool, replan_rounds: u32, no_evidence: bo
 pub async fn finalize_output(
     query: &str,
     state: &OrchestratorState,
-    config: &AgentConfig,
-    llm: &LlmClient,
     emitter: &EventEmitter,
     orch_llm_calls: u32,
     multi_doc: bool,
     intent: crate::query::QueryIntent,
     confidence: f32,
 ) -> crate::error::Result<Output> {
-    let _ = config;
-    let rerank_result = crate::rerank::process(
-        query,
-        &state.all_evidence,
-        llm,
-        multi_doc,
-        &state.sub_results,
-        intent,
-        confidence,
-    )
-    .await?;
+    let rerank_result =
+        crate::rerank::process(query, &state.all_evidence, multi_doc, intent, confidence).await?;
 
     let total_llm_calls = orch_llm_calls + rerank_result.llm_calls;
     if !rerank_result.answer.is_empty() {

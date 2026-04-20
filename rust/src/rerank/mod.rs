@@ -1,7 +1,7 @@
 // Copyright (c) 2026 vectorless developers
 // SPDX-License-Identifier: Apache-2.0
 
-//! Result reranking and answer synthesis.
+//! Result reranking — dedup + format.
 //!
 //! Post-processing pipeline that runs after the agent collects raw evidence:
 //!
@@ -9,44 +9,33 @@
 //! agent (collect evidence)
 //!   → rerank::process()
 //!     → dedup (quality filter + dedup)
-//!     → intent-driven synthesis/fusion
+//!     → format as answer (no LLM — return original text)
 //!   → Output with final answer
 //! ```
 //!
-//! Synthesis strategy is driven by [`QueryIntent`] from query understanding.
-//! The agent only collects evidence; all organizing and answer generation
-//! happens here. Confidence is derived from the LLM evaluate() result
-//! in the Orchestrator's supervisor loop — not from heuristic scoring.
+//! This is a document retrieval engine. The answer IS the evidence.
+//! No LLM synthesis, no rewriting. Find what you find, return what you find.
 
 pub mod dedup;
-pub mod fusion;
-pub mod synthesis;
 pub mod types;
 
 use tracing::info;
 
-use crate::agent::{Evidence, Output};
-use crate::llm::LlmClient;
+use crate::agent::Evidence;
 use crate::query::QueryIntent;
 use types::RerankOutput;
 
 /// Process agent output through the rerank pipeline.
 ///
-/// Takes raw agent output (evidence without answer) and produces
-/// a final answer through dedup → intent-driven synthesis.
-///
-/// Confidence is passed from the Orchestrator (derived from LLM evaluate).
-/// Returns [`Result<RerankOutput>`]. Propagates LLM errors — no silent fallback.
+/// Deduplicates evidence, then returns the original text as the answer.
+/// No LLM calls — the Worker already retrieved the exact passages.
 pub async fn process(
-    query: &str,
+    _query: &str,
     evidence: &[Evidence],
-    llm: &LlmClient,
-    multi_doc: bool,
-    sub_results: &[Output],
+    _multi_doc: bool,
     intent: QueryIntent,
     confidence: f32,
 ) -> crate::error::Result<RerankOutput> {
-    // Step 1: Deduplicate
     let deduped = dedup::dedup(evidence);
     if deduped.is_empty() {
         info!("No evidence after dedup");
@@ -63,21 +52,9 @@ pub async fn process(
         "Evidence after dedup"
     );
 
-    // Step 2: Intent-driven synthesis (No thought, no answer).
-    let (answer, llm_calls) = match intent {
-        QueryIntent::Navigational => {
-            // Navigational: format locations, no deep synthesis needed
-            (format_locations(&deduped), 0)
-        }
-        QueryIntent::Analytical if multi_doc && sub_results.len() > 1 => {
-            // Analytical multi-doc: fuse across sub-results
-            let sub_refs: Vec<&Output> = sub_results.iter().collect();
-            fusion::fuse(query, &sub_refs, llm).await?
-        }
-        _ => {
-            // Factual, Summary, Analytical single-doc: synthesis
-            synthesis::synthesize(query, &deduped, llm).await?
-        }
+    let answer = match intent {
+        QueryIntent::Navigational => format_locations(&deduped),
+        _ => format_evidence_as_answer(&deduped),
     };
 
     info!(
@@ -89,7 +66,7 @@ pub async fn process(
 
     Ok(RerankOutput {
         answer,
-        llm_calls,
+        llm_calls: 0,
         confidence,
     })
 }
@@ -108,4 +85,20 @@ fn format_locations(evidence: &[Evidence]) -> String {
         ));
     }
     result
+}
+
+/// Format collected evidence directly as the answer.
+fn format_evidence_as_answer(evidence: &[Evidence]) -> String {
+    evidence
+        .iter()
+        .map(|e| {
+            let doc = e.doc_name.as_deref().unwrap_or("");
+            if doc.is_empty() {
+                format!("[{}]\n{}", e.node_title, e.content)
+            } else {
+                format!("[{} — {}]\n{}", e.node_title, doc, e.content)
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n\n")
 }

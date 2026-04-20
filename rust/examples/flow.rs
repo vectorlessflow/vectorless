@@ -119,12 +119,7 @@ async fn main() -> vectorless::Result<()> {
                         println!("    - No relevant content found");
                     } else {
                         println!("    - Found relevant content:");
-                        let preview = if item.content.len() > 200 {
-                            format!("{}...", &item.content)
-                        } else {
-                            item.content.clone()
-                        };
-                        for line in preview.lines().take(5) {
+                        for line in item.content.lines() {
                             println!("      {}", line);
                         }
                     }
