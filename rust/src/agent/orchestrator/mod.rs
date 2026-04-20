@@ -170,6 +170,7 @@ impl<'a> Agent for Orchestrator<'a> {
 
             // Skip evaluation for user-specified documents (no replan needed)
             if skip_analysis {
+                eval_sufficient = !state.all_evidence.is_empty();
                 break;
             }
 

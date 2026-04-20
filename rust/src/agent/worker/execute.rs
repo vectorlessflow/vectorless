@@ -128,6 +128,13 @@ pub async fn execute_command(
 
             let (system, user) = check_sufficiency(query, &evidence_summary);
 
+            info!(
+                doc = ctx.doc_name,
+                system = %system,
+                user = %user,
+                "Check prompt"
+            );
+
             match llm.complete(&system, &user).await {
                 Ok(response) => {
                     *llm_calls += 1;
@@ -137,6 +144,7 @@ pub async fn execute_command(
                         doc = ctx.doc_name,
                         sufficient,
                         evidence = state.evidence.len(),
+                        response = %response,
                         "Sufficiency check"
                     );
                     emitter.emit_worker_sufficiency_check(

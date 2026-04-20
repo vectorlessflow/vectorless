@@ -41,7 +41,7 @@ use std::{
     collections::HashMap,
     sync::Arc,
     sync::Mutex,
-    sync::atomic::{AtomicBool, AtomicU32, Ordering},
+    sync::atomic::{AtomicBool, Ordering},
 };
 
 use futures::StreamExt;
@@ -73,9 +73,6 @@ use super::{
 /// Shared cancel state: `true` means cancelled.
 type CancelFlag = Arc<AtomicBool>;
 
-/// Max consecutive graph rebuild failures before giving up.
-const GRAPH_REBUILD_MAX_FAILURES: u32 = 3;
-
 /// The main Engine client.
 ///
 /// Provides high-level operations for document indexing and retrieval.
@@ -104,12 +101,6 @@ pub struct Engine {
 
     /// Central metrics hub for unified collection.
     metrics_hub: Arc<MetricsHub>,
-
-    /// Whether the document graph needs rebuilding (set after index, consumed in query).
-    graph_dirty: Arc<AtomicBool>,
-
-    /// Consecutive graph rebuild failures — skip rebuild after threshold.
-    graph_fail_count: Arc<AtomicU32>,
 
     /// Shared cancel flag — set by `cancel()`, checked by long-running operations.
     cancelled: CancelFlag,
@@ -151,8 +142,6 @@ impl Engine {
             retriever,
             workspace: workspace_client,
             metrics_hub,
-            graph_dirty: Arc::new(AtomicBool::new(false)),
-            graph_fail_count: Arc::new(AtomicU32::new(0)),
             cancelled: Arc::new(AtomicBool::new(false)),
             active_ops: Arc::new(Mutex::new(0)),
         })
@@ -203,11 +192,11 @@ impl Engine {
                 )));
             }
 
-            // Mark graph as dirty — will be lazily rebuilt on next query()
-            // Also reset failure count so the new data gets a fresh rebuild attempt.
+            // Rebuild cross-document graph immediately after indexing.
             if !items.is_empty() && self.config.graph.enabled {
-                self.graph_dirty.store(true, Ordering::Relaxed);
-                self.graph_fail_count.store(0, Ordering::Relaxed);
+                if let Err(e) = self.rebuild_graph().await {
+                    tracing::warn!("Graph rebuild failed after indexing: {e}");
+                }
             }
 
             Ok(IndexResult::with_partial(items, failed))
@@ -458,7 +447,6 @@ impl Engine {
 
         self.with_timeout(timeout_secs, async move {
             let doc_ids = self.resolve_scope(&ctx.scope).await?;
-            self.maybe_rebuild_graph();
 
             let (documents, failed) = self.load_documents(&doc_ids).await?;
             if documents.is_empty() {
@@ -915,37 +903,6 @@ impl Engine {
         Ok((documents, failed))
     }
 
-    /// Rebuild the cross-document graph if dirty, with failure limit.
-    fn maybe_rebuild_graph(&self) {
-        if !self.config.graph.enabled {
-            return;
-        }
-        let fail_count = self.graph_fail_count.load(Ordering::Relaxed);
-        let should_try = fail_count < GRAPH_REBUILD_MAX_FAILURES;
-
-        if self.graph_dirty.swap(false, Ordering::Relaxed) {
-            if should_try {
-                // Spawn graph rebuild as a background task to not block the query
-                let engine = self.clone();
-                tokio::spawn(async move {
-                    if let Err(e) = engine.rebuild_graph().await {
-                        let count = engine.graph_fail_count.fetch_add(1, Ordering::Relaxed) + 1;
-                        tracing::warn!(count, "Graph rebuild failed: {e}");
-                        engine.graph_dirty.store(true, Ordering::Relaxed);
-                    } else {
-                        engine.graph_fail_count.store(0, Ordering::Relaxed);
-                    }
-                });
-            } else {
-                tracing::warn!(
-                    count = fail_count,
-                    "Skipping graph rebuild after {} consecutive failures",
-                    fail_count
-                );
-            }
-        }
-    }
-
     /// Check cancel flag, returning an error if cancelled.
     fn check_cancel(&self) -> Result<()> {
         if self.cancelled.load(Ordering::Relaxed) {
@@ -1162,8 +1119,6 @@ impl Clone for Engine {
             retriever: self.retriever.clone(),
             workspace: self.workspace.clone(),
             metrics_hub: Arc::clone(&self.metrics_hub),
-            graph_dirty: Arc::clone(&self.graph_dirty),
-            graph_fail_count: Arc::clone(&self.graph_fail_count),
             cancelled: Arc::clone(&self.cancelled),
             active_ops: Arc::clone(&self.active_ops),
         }
@@ -1207,20 +1162,6 @@ mod tests {
 
         flag.store(false, Ordering::Relaxed);
         assert!(!flag.load(Ordering::Relaxed));
-    }
-
-    #[test]
-    fn test_graph_dirty_flag() {
-        let dirty = Arc::new(AtomicBool::new(false));
-        assert!(!dirty.load(Ordering::Relaxed));
-
-        // Simulate: index marks dirty
-        dirty.store(true, Ordering::Relaxed);
-
-        // Simulate: query swaps to false and rebuilds
-        let was_dirty = dirty.swap(false, Ordering::Relaxed);
-        assert!(was_dirty);
-        assert!(!dirty.load(Ordering::Relaxed));
     }
 
     #[test]

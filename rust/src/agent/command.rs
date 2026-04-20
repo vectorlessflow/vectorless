@@ -38,6 +38,27 @@ pub enum Command {
     Done,
 }
 
+/// Strip surrounding quotes from a target string.
+///
+/// Handles straight quotes (`"`, `'`) and Unicode smart quotes (U+201C/U+201D, U+2018/U+2019).
+fn strip_quotes(s: &str) -> String {
+    let trimmed = s.trim();
+    let chars: Vec<char> = trimmed.chars().collect();
+    if chars.len() < 2 {
+        return trimmed.to_string();
+    }
+    let (first, last) = (chars[0], chars[chars.len() - 1]);
+    let matching = (first == '"' && last == '"')
+        || (first == '\'' && last == '\'')
+        || (first == '\u{201c}' && last == '\u{201d}')
+        || (first == '\u{2018}' && last == '\u{2019}');
+    if matching {
+        trimmed[chars[0].len_utf8()..trimmed.len() - chars[chars.len() - 1].len_utf8()].to_string()
+    } else {
+        trimmed.to_string()
+    }
+}
+
 /// Parse the first non-empty line of LLM output into a Command.
 pub fn parse_command(llm_output: &str) -> Command {
     let line = llm_output
@@ -58,53 +79,53 @@ pub fn parse_command(llm_output: &str) -> Command {
         },
         ["cd", ".."] => Command::CdUp,
         ["cd", target] => Command::Cd {
-            target: (*target).to_string(),
+            target: strip_quotes(target),
         },
         ["cd", _target, ..] => Command::Cd {
             // Handle "cd some name" by joining remaining parts
-            target: parts[1..].join(" "),
+            target: strip_quotes(&parts[1..].join(" ")),
         },
         ["cat", target] => Command::Cat {
-            target: (*target).to_string(),
+            target: strip_quotes(target),
         },
         ["cat", _target, ..] => Command::Cat {
-            target: parts[1..].join(" "),
+            target: strip_quotes(&parts[1..].join(" ")),
         },
         ["find", keyword] => Command::Find {
-            keyword: (*keyword).to_string(),
+            keyword: strip_quotes(keyword),
         },
         ["find", _keyword, ..] => Command::Find {
-            keyword: parts[1..].join(" "),
+            keyword: strip_quotes(&parts[1..].join(" ")),
         },
         ["grep", pattern] => Command::Grep {
-            pattern: (*pattern).to_string(),
+            pattern: strip_quotes(pattern),
         },
         ["grep", _pattern, ..] => Command::Grep {
-            pattern: parts[1..].join(" "),
+            pattern: strip_quotes(&parts[1..].join(" ")),
         },
         ["head", target] => Command::Head {
-            target: (*target).to_string(),
+            target: strip_quotes(target),
             lines: 20, // default
         },
         ["head", "-n", n, target @ ..] => Command::Head {
-            target: target.join(" "),
+            target: strip_quotes(&target.join(" ")),
             lines: n.parse().unwrap_or(20),
         },
         ["head", _target, ..] => Command::Head {
-            target: parts[1..].join(" "),
+            target: strip_quotes(&parts[1..].join(" ")),
             lines: 20,
         },
         ["findtree", pattern] => Command::FindTree {
-            pattern: (*pattern).to_string(),
+            pattern: strip_quotes(pattern),
         },
         ["findtree", _pattern, ..] => Command::FindTree {
-            pattern: parts[1..].join(" "),
+            pattern: strip_quotes(&parts[1..].join(" ")),
         },
         ["wc", target] => Command::Wc {
-            target: (*target).to_string(),
+            target: strip_quotes(target),
         },
         ["wc", _target, ..] => Command::Wc {
-            target: parts[1..].join(" "),
+            target: strip_quotes(&parts[1..].join(" ")),
         },
         ["pwd"] => Command::Pwd,
         ["check"] => Command::Check,
@@ -125,6 +146,7 @@ pub fn resolve_target(
     nav_index: &NavigationIndex,
     current_node: NodeId,
 ) -> Option<NodeId> {
+    let target = strip_quotes(target);
     let routes = nav_index.get_child_routes(current_node)?;
 
     // 1. Exact match
@@ -169,8 +191,9 @@ pub fn resolve_target_extended(
     current_node: NodeId,
     tree: &crate::document::DocumentTree,
 ) -> Option<NodeId> {
+    let target = strip_quotes(target);
     // Try the primary resolver first
-    if let Some(id) = resolve_target(target, nav_index, current_node) {
+    if let Some(id) = resolve_target(&target, nav_index, current_node) {
         return Some(id);
     }
 
@@ -213,6 +236,68 @@ mod tests {
             Command::Cd {
                 target: "some long name".to_string()
             }
+        );
+        // Quoted multi-word targets should have quotes stripped
+        assert_eq!(
+            parse_command("cd \"Vectorless Architecture Guide\""),
+            Command::Cd {
+                target: "Vectorless Architecture Guide".to_string()
+            }
+        );
+        assert_eq!(
+            parse_command("cd 'Vectorless Architecture Guide'"),
+            Command::Cd {
+                target: "Vectorless Architecture Guide".to_string()
+            }
+        );
+        // Smart quotes
+        assert_eq!(
+            parse_command("\u{201c}Vectorless Architecture Guide\u{201d}"),
+            Command::Ls // doesn't start with a command keyword
+        );
+    }
+
+    #[test]
+    fn test_strip_quotes_straight() {
+        assert_eq!(strip_quotes("\"hello\""), "hello");
+        assert_eq!(strip_quotes("'hello'"), "hello");
+        assert_eq!(strip_quotes("hello"), "hello");
+        assert_eq!(strip_quotes("\"only left"), "\"only left");
+    }
+
+    #[test]
+    fn test_strip_quotes_smart() {
+        assert_eq!(strip_quotes("\u{201c}hello\u{201d}"), "hello");
+        assert_eq!(strip_quotes("\u{2018}hello\u{2019}"), "hello");
+    }
+
+    #[test]
+    fn test_resolve_target_quoted() {
+        use crate::document::{ChildRoute, DocumentTree};
+
+        let mut tree = DocumentTree::new("Root", "");
+        let root = tree.root();
+        let c1 = tree.add_child(root, "Vectorless Architecture Guide", "content");
+
+        let mut nav_index = NavigationIndex::new();
+        nav_index.add_child_routes(
+            root,
+            vec![ChildRoute {
+                node_id: c1,
+                title: "Vectorless Architecture Guide".to_string(),
+                description: "Main guide".to_string(),
+                leaf_count: 5,
+            }],
+        );
+
+        // Quoted target should still resolve
+        assert_eq!(
+            resolve_target("\"Vectorless Architecture Guide\"", &nav_index, root),
+            Some(c1)
+        );
+        assert_eq!(
+            resolve_target("'Vectorless Architecture Guide'", &nav_index, root),
+            Some(c1)
         );
     }
 

@@ -55,7 +55,7 @@ pub fn ls(ctx: &DocContext, state: &WorkerState) -> ToolResult {
             ToolResult::ok(output)
         }
         None => {
-            output.push_str("(no navigation data for this node)\nUse cd .. to go back.");
+            output.push_str("(no navigation data for this node)\nUse cat to read content or cd .. to go back.");
             ToolResult::ok(output)
         }
     }

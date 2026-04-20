@@ -149,7 +149,7 @@ impl<'a> Agent for Worker<'a> {
             if !plan_text.is_empty() {
                 info!(
                     doc = ctx.doc_name,
-                    plan_len = plan_text.len(),
+                    plan = %plan_text,
                     "Navigation plan generated"
                 );
                 emitter.emit_worker_plan_generated(ctx.doc_name, plan_text.len());
@@ -201,6 +201,7 @@ impl<'a> Agent for Worker<'a> {
             };
 
             // LLM decision
+            let round_num = config.max_rounds - state.remaining + 1;
             let round_start = std::time::Instant::now();
             let llm_output =
                 llm.complete(&system, &user)
@@ -215,7 +216,7 @@ impl<'a> Agent for Worker<'a> {
             llm_calls += 1;
 
             // Parse command
-            if llm_output.trim().len() < 5 {
+            if llm_output.trim().len() < 2 {
                 tracing::warn!(
                     doc = ctx.doc_name,
                     round = config.max_rounds - state.remaining + 1,
@@ -276,7 +277,7 @@ impl<'a> Agent for Worker<'a> {
                 if !plan_text.is_empty() {
                     info!(
                         doc = ctx.doc_name,
-                        plan_len = plan_text.len(),
+                        plan = %plan_text,
                         "Re-plan generated"
                     );
                     emitter.emit_worker_replan(ctx.doc_name, &missing, plan_text.len());
