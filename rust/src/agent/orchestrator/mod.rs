@@ -18,6 +18,7 @@ mod integrate;
 use tracing::info;
 
 use crate::llm::LlmClient;
+use crate::query::QueryPlan;
 
 use super::config::{AgentConfig, Output, WorkspaceContext};
 use super::events::EventEmitter;
@@ -38,6 +39,9 @@ pub struct Orchestrator<'a> {
     llm: LlmClient,
     emitter: EventEmitter,
     skip_analysis: bool,
+    /// Query understanding plan — produced by `QueryPipeline::understand()`.
+    /// Contains intent, complexity, key concepts, and strategy hints.
+    query_plan: QueryPlan,
 }
 
 impl<'a> Orchestrator<'a> {
@@ -49,6 +53,7 @@ impl<'a> Orchestrator<'a> {
         llm: LlmClient,
         emitter: EventEmitter,
         skip_analysis: bool,
+        query_plan: QueryPlan,
     ) -> Self {
         Self {
             query: query.to_string(),
@@ -57,6 +62,7 @@ impl<'a> Orchestrator<'a> {
             llm,
             emitter,
             skip_analysis,
+            query_plan,
         }
     }
 }
@@ -69,9 +75,15 @@ impl<'a> Agent for Orchestrator<'a> {
     }
 
     async fn run(self) -> crate::error::Result<Output> {
-        let Orchestrator { query, ws, config, llm, emitter, skip_analysis } = self;
+        let Orchestrator { query, ws, config, llm, emitter, skip_analysis, query_plan } = self;
 
-        info!(docs = ws.doc_count(), skip_analysis, "Orchestrator starting");
+        info!(
+            docs = ws.doc_count(),
+            skip_analysis,
+            intent = %query_plan.intent,
+            complexity = %query_plan.complexity,
+            "Orchestrator starting"
+        );
         emitter.emit_orchestrator_started(&query, ws.doc_count(), skip_analysis);
 
         let mut state = OrchestratorState::new();
@@ -92,8 +104,8 @@ impl<'a> Agent for Orchestrator<'a> {
             }
         }
 
-        // --- Phase 1: Analyze ---
-        let dispatches = match analyze(&query, ws, &config, &llm, &mut state, &emitter, skip_analysis).await {
+        // --- Phase 1: Analyze (uses query_plan for intent-aware strategy) ---
+        let dispatches = match analyze(&query, ws, &config, &llm, &mut state, &emitter, skip_analysis, &query_plan).await {
             AnalyzeOutcome::Proceed { dispatches, llm_calls } => {
                 orch_llm_calls += llm_calls;
                 dispatches

@@ -6,6 +6,7 @@
 use tracing::{debug, info, warn};
 
 use crate::llm::LlmClient;
+use crate::query::QueryPlan;
 use crate::scoring::bm25::extract_keywords;
 
 use super::super::config::{AgentConfig, WorkspaceContext};
@@ -36,6 +37,7 @@ pub async fn analyze(
     state: &mut OrchestratorState,
     emitter: &EventEmitter,
     skip_analysis: bool,
+    _query_plan: &QueryPlan,
 ) -> AnalyzeOutcome {
     if skip_analysis {
         debug!("Phase 1: skipping (user-specified documents)");

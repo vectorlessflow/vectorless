@@ -22,11 +22,16 @@ use crate::agent::orchestrator::Orchestrator;
 use crate::agent::{Agent, EventEmitter, Output};
 use crate::error::{Error, Result};
 use crate::llm::LlmClient;
+use crate::query::QueryPipeline;
 
 /// Dispatch a query to the Orchestrator.
 ///
 /// This is the single entry point from the client layer into the retrieval system.
 /// It always goes through the Orchestrator — never directly to Worker.
+///
+/// Flow:
+/// 1. Query understanding via LLM (produces [`QueryPlan`])
+/// 2. Orchestrator dispatch (uses QueryPlan for strategy)
 ///
 /// - `Scope::Specified(docs)` → Orchestrator skips analysis, dispatches all docs directly.
 /// - `Scope::Workspace(ws)` → Orchestrator runs full flow (analyze → dispatch → fuse → synthesize).
@@ -51,8 +56,19 @@ pub async fn dispatch(
         }
     };
 
+    // Step 1: Query understanding — LLM analyzes intent, concepts, complexity.
+    // This is required. "Model fails, we fail." — errors propagate.
+    let query_plan = QueryPipeline::understand(query, llm).await?;
+    info!(
+        intent = %query_plan.intent,
+        complexity = %query_plan.complexity,
+        concepts = query_plan.key_concepts.len(),
+        "Query understanding complete"
+    );
+
+    // Step 2: Dispatch to Orchestrator with the query plan.
     let orchestrator = Orchestrator::new(
-        query, &ws, config.clone(), llm.clone(), emitter.clone(), skip_analysis,
+        query, &ws, config.clone(), llm.clone(), emitter.clone(), skip_analysis, query_plan,
     );
     orchestrator.run().await.map_err(|e| Error::Retrieval(e.to_string()))
 }
