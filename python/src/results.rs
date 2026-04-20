@@ -87,12 +87,6 @@ impl PyQueryMetrics {
         self.inner.nodes_visited
     }
 
-    /// Whether the fast-path was hit.
-    #[getter]
-    fn fast_path_hit(&self) -> bool {
-        self.inner.fast_path_hit
-    }
-
     /// Number of evidence items collected.
     #[getter]
     fn evidence_count(&self) -> usize {
@@ -177,7 +171,6 @@ impl PyQueryResultItem {
                     llm_calls: m.llm_calls,
                     rounds_used: m.rounds_used,
                     nodes_visited: m.nodes_visited,
-                    fast_path_hit: m.fast_path_hit,
                     evidence_count: m.evidence_count,
                     evidence_chars: m.evidence_chars,
                 },

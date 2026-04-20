@@ -102,7 +102,6 @@ fn build_item(
             llm_calls: metrics.llm_calls,
             rounds_used: metrics.rounds_used,
             nodes_visited: metrics.nodes_visited,
-            fast_path_hit: metrics.fast_path_hit,
             evidence_count,
             evidence_chars: metrics.evidence_chars,
         }),

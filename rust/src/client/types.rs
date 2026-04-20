@@ -278,8 +278,6 @@ pub struct QueryMetrics {
     pub rounds_used: u32,
     /// Number of distinct nodes visited.
     pub nodes_visited: usize,
-    /// Whether the fast-path was hit.
-    pub fast_path_hit: bool,
     /// Number of evidence items collected.
     pub evidence_count: usize,
     /// Total characters of collected evidence.

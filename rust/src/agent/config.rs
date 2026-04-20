@@ -9,19 +9,15 @@ use serde::{Deserialize, Serialize};
 // Worker configuration
 // ---------------------------------------------------------------------------
 
-/// Worker configuration — navigation budget and fast-path settings.
+/// Worker configuration — navigation budget settings.
 #[derive(Debug, Clone)]
 pub struct WorkerConfig {
     /// Maximum navigation rounds per Worker loop (ls/cd/cat/grep/head/find etc.).
     /// `check` does NOT count against this budget.
     pub max_rounds: u32,
-    /// Hard cap on total LLM calls per Worker (planning + nav + check + synthesis).
+    /// Hard cap on total LLM calls per Worker (planning + nav + check).
     /// Prevents runaway costs regardless of max_rounds. 0 = no limit.
     pub max_llm_calls: u32,
-    /// Enable fast-path (keyword lookup before full navigation).
-    pub enable_fast_path: bool,
-    /// Confidence threshold for fast-path direct hit.
-    pub fast_path_threshold: f32,
 }
 
 impl Default for WorkerConfig {
@@ -29,8 +25,6 @@ impl Default for WorkerConfig {
         Self {
             max_rounds: 8,
             max_llm_calls: 15,
-            enable_fast_path: true,
-            fast_path_threshold: 0.85,
         }
     }
 }
@@ -45,15 +39,9 @@ impl WorkerConfig {
 // Orchestrator configuration
 // ---------------------------------------------------------------------------
 
-/// Orchestrator configuration — analysis and dispatch settings.
+/// Orchestrator configuration — dispatch settings.
 #[derive(Debug, Clone)]
 pub struct OrchestratorConfig {
-    /// Enable fast-path (keyword lookup before full analysis).
-    pub enable_fast_path: bool,
-    /// Maximum integration retries (re-dispatch after insufficient evidence).
-    pub max_integration_retries: u32,
-    /// Maximum supplemental documents to add during re-dispatch.
-    pub max_supplemental_docs: usize,
     /// Worker configuration for dispatched agents.
     pub worker_config: WorkerConfig,
 }
@@ -61,9 +49,6 @@ pub struct OrchestratorConfig {
 impl Default for OrchestratorConfig {
     fn default() -> Self {
         Self {
-            enable_fast_path: true,
-            max_integration_retries: 1,
-            max_supplemental_docs: 2,
             worker_config: WorkerConfig::default(),
         }
     }
@@ -127,19 +112,6 @@ pub struct Output {
 }
 
 impl Output {
-    /// Create an output from fast-path (no navigation loop).
-    pub fn fast_path(answer: String, evidence: Vec<Evidence>) -> Self {
-        Self {
-            answer,
-            evidence,
-            metrics: Metrics {
-                fast_path_hit: true,
-                ..Default::default()
-            },
-            score: 0.0,
-        }
-    }
-
     /// Create an empty output (no evidence found).
     pub fn empty() -> Self {
         Self {
@@ -170,7 +142,6 @@ pub struct Metrics {
     pub rounds_used: u32,
     pub llm_calls: u32,
     pub nodes_visited: usize,
-    pub fast_path_hit: bool,
     pub budget_exhausted: bool,
     pub plan_generated: bool,
     pub check_count: u32,
@@ -232,7 +203,6 @@ impl From<WorkerOutput> for Output {
                 rounds_used: wo.metrics.rounds_used,
                 llm_calls: wo.metrics.llm_calls,
                 nodes_visited: wo.metrics.nodes_visited,
-                fast_path_hit: false,
                 budget_exhausted: wo.metrics.budget_exhausted,
                 plan_generated: wo.metrics.plan_generated,
                 check_count: wo.metrics.check_count,
