@@ -16,7 +16,7 @@ use super::config::{Evidence, Output};
 /// Mutable navigation state for a Worker loop.
 ///
 /// Created at loop start, destroyed at loop end. Never escapes the call.
-pub struct State {
+pub struct WorkerState {
     /// Navigation breadcrumb (path from root to current node).
     pub breadcrumb: Vec<String>,
     /// Current position in the document tree.

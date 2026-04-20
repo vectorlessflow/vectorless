@@ -77,7 +77,7 @@ pub async fn analyze(
         Ok(output) => output,
         Err(e) => {
             warn!(error = %e, "Orchestrator analysis LLM call failed");
-            emitter.emit_error(&e.to_string());
+            emitter.emit_error("orchestrator/analysis", &e.to_string());
             return AnalyzeOutcome::AnalysisFailed;
         }
     };

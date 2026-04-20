@@ -55,7 +55,7 @@ pub fn fast_path(
     }
 
     info!(doc_idx, node = %title, weight = best_entry.weight, "Cross-doc fast path hit");
-    emitter.emit_fast_path(&keywords.join(","), &title, best_entry.weight);
+    emitter.emit_orchestrator_fast_path(&keywords.join(","), doc.doc_name, &title, best_entry.weight);
 
     Some(Output::fast_path(
         content.clone(),

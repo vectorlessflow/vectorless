@@ -45,8 +45,7 @@ pub async fn run(
     llm: &LlmClient,
     emitter: &EventEmitter,
 ) -> crate::error::Result<Output> {
-    let is_multi_doc = task.is_some();
-    emitter.emit_started(query, is_multi_doc);
+    emitter.emit_worker_started(ctx.doc_name, task, config.max_rounds);
 
     info!(
         doc = ctx.doc_name,
@@ -69,9 +68,10 @@ pub async fn run(
         match fast_path(query, ctx, config, emitter) {
             FastPathResult::Hit(output) => {
                 info!(doc = ctx.doc_name, "Fast path hit — skipping navigation");
-                emitter.emit_completed(
-                    output.evidence.len(), output.metrics.llm_calls,
-                    output.metrics.rounds_used, true, false, false, 0,
+                emitter.emit_worker_done(
+                    ctx.doc_name, output.evidence.len(),
+                    output.metrics.rounds_used, output.metrics.llm_calls,
+                    false, false,
                 );
                 return Ok(output);
             }
@@ -110,7 +110,7 @@ pub async fn run(
                 let plan_text = plan_output.trim().to_string();
                 if !plan_text.is_empty() {
                     info!(doc = ctx.doc_name, plan_len = plan_text.len(), "Navigation plan generated");
-                    emitter.emit_plan_generated(ctx.doc_name, plan_text.len());
+                    emitter.emit_worker_plan_generated(ctx.doc_name, plan_text.len());
                     state.plan = plan_text;
                     state.plan_generated = true;
                 }
@@ -144,7 +144,7 @@ pub async fn run(
                  Consider using grep, findtree, or cd .. to explore a different path.]",
                 state.rounds_since_evidence
             ));
-            emitter.emit_budget_warning("stuck", state.max_rounds - state.remaining + 1);
+            emitter.emit_worker_budget_warning(ctx.doc_name, "stuck", state.max_rounds - state.remaining + 1);
         }
 
         // Mid-budget checkpoint
@@ -156,7 +156,7 @@ pub async fn run(
             state.last_feedback.push_str(
                 "\n[Hint: You've used half your budget. Consider running `check` to evaluate if collected evidence is sufficient.]",
             );
-            emitter.emit_budget_warning("half_budget", rounds_used);
+            emitter.emit_worker_budget_warning(ctx.doc_name, "half_budget", rounds_used);
         }
 
         // Build prompt
@@ -241,7 +241,7 @@ pub async fn run(
                     let plan_text = new_plan.trim().to_string();
                     if !plan_text.is_empty() {
                         info!(doc = ctx.doc_name, plan_len = plan_text.len(), "Re-plan generated");
-                        emitter.emit_replan_generated(ctx.doc_name, &missing, plan_text.len());
+                        emitter.emit_worker_replan(ctx.doc_name, &missing, plan_text.len());
                         state.plan = plan_text;
                     }
                 }
@@ -260,7 +260,7 @@ pub async fn run(
         let cmd_str = format!("{:?}", command);
         let success = !matches!(step, Step::ForceDone(_));
         let round_elapsed = round_start.elapsed().as_millis() as u64;
-        emitter.emit_round(round_num, &cmd_str, success, round_elapsed);
+        emitter.emit_worker_round(ctx.doc_name, round_num, &cmd_str, success, round_elapsed);
 
         let feedback_preview = if state.last_feedback.len() > 120 {
             format!("{}...", &state.last_feedback[..120])
@@ -306,7 +306,7 @@ pub async fn run(
                 output.answer = answer.trim().to_string();
                 output.metrics.llm_calls += 1;
                 info!(doc = ctx.doc_name, answer_len = output.answer.len(), "Synthesis complete");
-                emitter.emit_synthesis(output.answer.len());
+                emitter.emit_answer_completed(output.answer.len(), "medium");
             }
             Err(e) => {
                 warn!(doc = ctx.doc_name, error = %e, "Synthesis LLM call failed");
@@ -322,11 +322,10 @@ pub async fn run(
         );
     }
 
-    emitter.emit_completed(
-        output.evidence.len(), output.metrics.llm_calls,
-        output.metrics.rounds_used, output.metrics.fast_path_hit,
+    emitter.emit_worker_done(
+        ctx.doc_name, output.evidence.len(),
+        output.metrics.rounds_used, output.metrics.llm_calls,
         output.metrics.budget_exhausted, output.metrics.plan_generated,
-        output.metrics.evidence_chars,
     );
 
     info!(

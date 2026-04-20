@@ -48,7 +48,7 @@ pub async fn integrate(
             sufficient, evidence = state.all_evidence.len(), retry = retries,
             "Cross-doc sufficiency check"
         );
-        emitter.emit_sufficiency(sufficient, state.all_evidence.len());
+        emitter.emit_orchestrator_evaluated(sufficient, state.all_evidence.len(), None);
 
         if sufficient {
             break;

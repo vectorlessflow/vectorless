@@ -61,6 +61,7 @@ pub async fn execute_command(
                         "Evidence collected"
                     );
                     emitter.emit_evidence(
+                        ctx.doc_name,
                         &ev.node_title,
                         &ev.source_path,
                         ev.content.len(),
@@ -129,7 +130,7 @@ pub async fn execute_command(
                 );
                 state.check_called = true;
                 state.check_count += 1;
-                emitter.emit_sufficiency(true, state.evidence.len());
+                emitter.emit_worker_sufficiency_check(ctx.doc_name, true, state.evidence.len(), None);
                 state.last_feedback = "Evidence is sufficient. Use done to finish.".to_string();
                 return Step::Done;
             }
@@ -148,7 +149,7 @@ pub async fn execute_command(
                         evidence = state.evidence.len(),
                         "Sufficiency check"
                     );
-                    emitter.emit_sufficiency(sufficient, state.evidence.len());
+                    emitter.emit_worker_sufficiency_check(ctx.doc_name, sufficient, state.evidence.len(), None);
                     if sufficient {
                         state.last_feedback =
                             "Evidence is sufficient. Use done to finish.".to_string();

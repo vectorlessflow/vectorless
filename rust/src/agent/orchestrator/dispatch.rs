@@ -45,26 +45,32 @@ pub async fn dispatch_and_collect(
             let sub_emitter = EventEmitter::noop();
 
             Some(async move {
-                emitter.emit_worker_dispatched(doc_idx, &doc_name, &task);
+                emitter.emit_worker_dispatched(doc_idx, &doc_name, &task, &[]);
                 let result =
                     worker::run(&query, Some(&task), doc, &config, &llm, &sub_emitter).await;
-                (doc_idx, result)
+                (doc_idx, doc_name, result)
             })
         })
         .collect();
 
     let results: Vec<_> = futures::future::join_all(futures).await;
 
-    for (doc_idx, result) in results {
+    for (doc_idx, doc_name, result) in results {
         match result {
             Ok(output) => {
                 info!(doc_idx, evidence = output.evidence.len(), "Worker completed");
-                emitter.emit_worker_completed(doc_idx, output.evidence.len(), true);
+                emitter.emit_worker_completed(
+                    doc_idx, &doc_name,
+                    output.evidence.len(),
+                    output.metrics.rounds_used,
+                    output.metrics.llm_calls,
+                    true,
+                );
                 state.collect_result(output);
             }
             Err(e) => {
                 warn!(doc_idx, error = %e, "Worker failed");
-                emitter.emit_worker_completed(doc_idx, 0, false);
+                emitter.emit_worker_completed(doc_idx, &doc_name, 0, 0, 0, false);
             }
         }
     }
@@ -92,7 +98,7 @@ pub async fn fallback_dispatch_all(
     dispatch_and_collect(query, &dispatches, ws, config, llm, &mut state, emitter).await;
 
     if state.all_evidence.is_empty() {
-        emitter.emit_completed(0, 0, 0, false, false, false, 0);
+        emitter.emit_orchestrator_completed(0, 0, 0);
         return Ok(state.into_output(String::new()));
     }
 

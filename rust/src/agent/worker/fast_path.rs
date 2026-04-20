@@ -70,7 +70,7 @@ pub fn fast_path(
     }
 
     info!(keyword = %best_kw, node = %title, weight = best.weight, "Fast path hit");
-    emitter.emit_fast_path(&best_kw, &title, best.weight);
+    emitter.emit_worker_fast_path(ctx.doc_name, &best_kw, &title, best.weight);
 
     FastPathResult::Hit(Output::fast_path(
         content.clone(),
