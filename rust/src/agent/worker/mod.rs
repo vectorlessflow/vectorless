@@ -210,9 +210,7 @@ impl<'a> Agent for Worker<'a> {
                     .await
                     .map_err(|e| Error::LlmReasoning {
                         stage: "worker/navigation".to_string(),
-                        detail: format!(
-                            "Nav loop LLM call failed (round {round_num}): {e}"
-                        ),
+                        detail: format!("Nav loop LLM call failed (round {round_num}): {e}"),
                     })?;
             llm_calls += 1;
 

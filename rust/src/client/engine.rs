@@ -477,8 +477,8 @@ impl Engine {
     /// as the retrieval agent progresses through navigation.
     ///
     /// Supports single-document and multi-document scope.
-    /// Events are translated from the agent's internal [`AgentEvent`](crate::agent::AgentEvent)
-    /// into the public [`RetrieveEvent`] stream.
+    /// Events are translated from the agent's internal event stream
+    /// into the public `RetrieveEventReceiver` stream.
     pub async fn query_stream(&self, ctx: QueryContext) -> Result<RetrieveEventReceiver> {
         self.check_cancel()?;
         let _guard = self.inc_active();
@@ -1073,7 +1073,10 @@ impl Engine {
 
         // Load all documents in parallel and extract keyword profiles
         let doc_ids = self.workspace.inner().list_documents().await;
-        info!(doc_count = doc_ids.len(), "Loading documents for graph rebuild");
+        info!(
+            doc_count = doc_ids.len(),
+            "Loading documents for graph rebuild"
+        );
         let concurrency = self.config.llm.throttle.max_concurrent_requests;
 
         let loaded: Vec<Option<PersistedDocument>> = futures::stream::iter(doc_ids.iter().cloned())
@@ -1101,7 +1104,11 @@ impl Engine {
         }
 
         let graph = builder.build();
-        info!(nodes = graph.node_count(), edges = graph.edge_count(), "Graph built, persisting");
+        info!(
+            nodes = graph.node_count(),
+            edges = graph.edge_count(),
+            "Graph built, persisting"
+        );
         self.workspace.set_graph(&graph).await?;
         Ok(())
     }

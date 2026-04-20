@@ -224,7 +224,11 @@ fn truncate_log(s: &str) -> std::borrow::Cow<'_, str> {
     if s.len() <= MAX {
         std::borrow::Cow::Borrowed(s)
     } else {
-        std::borrow::Cow::Owned(format!("{}...(truncated, {} chars total)", &s[..MAX], s.len()))
+        std::borrow::Cow::Owned(format!(
+            "{}...(truncated, {} chars total)",
+            &s[..MAX],
+            s.len()
+        ))
     }
 }
 
