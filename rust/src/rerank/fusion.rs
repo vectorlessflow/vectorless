@@ -3,7 +3,7 @@
 
 //! Cross-document evidence fusion.
 
-use tracing::{info, warn};
+use tracing::info;
 
 use crate::agent::Output;
 use crate::llm::LlmClient;
@@ -62,8 +62,12 @@ Requirements:
 
 /// Fuse multiple Worker results into a single answer via LLM.
 ///
-/// Returns (answer, llm_calls).
-pub async fn fuse(query: &str, sub_results: &[&Output], llm: &LlmClient) -> (String, u32) {
+/// Returns (answer, llm_calls). Propagates LLM errors — no silent fallback.
+pub async fn fuse(
+    query: &str,
+    sub_results: &[&Output],
+    llm: &LlmClient,
+) -> crate::error::Result<(String, u32)> {
     // Build intermediate summaries from sub-results
     struct SubResultData {
         doc_name: String,
@@ -112,23 +116,20 @@ pub async fn fuse(query: &str, sub_results: &[&Output], llm: &LlmClient) -> (Str
 
     match llm.complete(&system, &user).await {
         Ok(a) => {
-            info!(answer_len = a.len(), "Fusion synthesis complete");
-            (a.trim().to_string(), 1)
+            let answer = a.trim().to_string();
+            if answer.is_empty() {
+                return Err(crate::error::Error::LlmReasoning {
+                    stage: "fusion".to_string(),
+                    detail: "LLM returned empty answer".to_string(),
+                });
+            }
+            info!(answer_len = answer.len(), "Fusion synthesis complete");
+            Ok((answer, 1))
         }
-        Err(e) => {
-            warn!(error = %e, "Fusion LLM call failed");
-            // Fallback: concatenate all evidence
-            let fallback: String = sub_results
-                .iter()
-                .flat_map(|r| r.evidence.iter())
-                .map(|e| {
-                    let doc = e.doc_name.as_deref().unwrap_or("unknown");
-                    format!("**{}** (from {}):\n{}", e.node_title, doc, e.content)
-                })
-                .collect::<Vec<_>>()
-                .join("\n\n");
-            (fallback, 0)
-        }
+        Err(e) => Err(crate::error::Error::LlmReasoning {
+            stage: "fusion".to_string(),
+            detail: format!("LLM call failed: {}", e),
+        }),
     }
 }
 

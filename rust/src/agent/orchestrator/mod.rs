@@ -157,7 +157,7 @@ pub async fn finalize_output(
     let rerank_result = crate::rerank::process(
         query, &state.all_evidence, config.answer.enable_synthesis, llm, multi_doc, &state.sub_results,
     )
-    .await;
+    .await?;
 
     let total_llm_calls = orch_llm_calls + rerank_result.llm_calls;
     if !rerank_result.answer.is_empty() {

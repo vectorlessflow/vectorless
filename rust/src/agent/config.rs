@@ -189,6 +189,41 @@ pub enum Step {
 }
 
 // ---------------------------------------------------------------------------
+// Worker output (evidence only, no answer)
+// ---------------------------------------------------------------------------
+
+/// Output from a single Worker — pure evidence, no answer synthesis.
+/// Rerank handles all answer generation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkerOutput {
+    /// Collected evidence from document navigation.
+    pub evidence: Vec<Evidence>,
+    /// Worker execution metrics.
+    pub metrics: WorkerMetrics,
+    /// Document name this Worker was assigned to.
+    pub doc_name: String,
+}
+
+/// Metrics specific to a single Worker's execution.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct WorkerMetrics {
+    /// Number of navigation rounds used.
+    pub rounds_used: u32,
+    /// Number of LLM calls made.
+    pub llm_calls: u32,
+    /// Number of distinct nodes visited.
+    pub nodes_visited: usize,
+    /// Whether the LLM call budget was exhausted.
+    pub budget_exhausted: bool,
+    /// Whether a navigation plan was generated.
+    pub plan_generated: bool,
+    /// Number of times `check` was called.
+    pub check_count: u32,
+    /// Total characters of collected evidence.
+    pub evidence_chars: usize,
+}
+
+// ---------------------------------------------------------------------------
 // Scope types
 // ---------------------------------------------------------------------------
 

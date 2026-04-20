@@ -4,21 +4,21 @@
 //! Worker agent — document navigation and evidence collection.
 //!
 //! The Worker is a consuming-self struct implementing [`Agent`]:
-//! 1. Fast path: keyword lookup → direct hit?
-//! 2. Bird's-eye: ls(root) for initial overview
+//! 1. Bird's-eye: ls(root) for initial overview
+//! 2. Navigation planning: LLM generates a plan (keyword hits as context)
 //! 3. Navigation loop: LLM → parse → execute → repeat (max N rounds)
-//! 4. Answer synthesis: LLM generates final answer from evidence
 //!
 //! Dispatched by the Orchestrator, one per document.
+//! Returns raw evidence — no answer synthesis. Rerank owns all answer generation.
 
 mod execute;
-mod fast_path;
 mod format;
 mod planning;
 
 use tracing::{debug, info, warn};
 
 use crate::llm::LlmClient;
+use crate::scoring::bm25::extract_keywords;
 use super::Agent;
 use super::command::Command;
 use super::config::{DocContext, Output, Step, WorkerConfig};
@@ -31,7 +31,6 @@ use super::state::WorkerState;
 use super::tools::worker as tools;
 
 use execute::{execute_command, parse_and_detect_failure};
-use fast_path::{FastPathResult, fast_path};
 use format::format_visited_titles;
 use planning::{build_plan_prompt, build_replan_prompt};
 
@@ -96,26 +95,11 @@ impl<'a> Agent for Worker<'a> {
             () => { max_llm > 0 && llm_calls >= max_llm }
         }
 
-        // --- Phase 0: Fast path ---
-        let mut preserved_hits: Vec<FindHit> = Vec::new();
-        if config.enable_fast_path {
-            match fast_path(&query, ctx, &config, &emitter) {
-                FastPathResult::Hit(output) => {
-                    info!(doc = ctx.doc_name, "Fast path hit — skipping navigation");
-                    emitter.emit_worker_done(
-                        ctx.doc_name, output.evidence.len(),
-                        output.metrics.rounds_used, output.metrics.llm_calls,
-                        false, false,
-                    );
-                    return Ok(output);
-                }
-                FastPathResult::Miss(hits) => {
-                    if !hits.is_empty() {
-                        debug!(doc = ctx.doc_name, hit_count = hits.len(), "Fast path miss — preserving hits");
-                        preserved_hits = hits;
-                    }
-                }
-            }
+        // Gather keyword hits as context for LLM planning (not routing rules)
+        let keywords = extract_keywords(&query);
+        let index_hits: Vec<FindHit> = ctx.find_all(&keywords);
+        if !index_hits.is_empty() {
+            debug!(doc = ctx.doc_name, hit_count = index_hits.len(), "ReasoningIndex keyword hits available for planning");
         }
 
         // --- Phase 1: Bird's-eye view + adaptive budget ---
@@ -136,7 +120,7 @@ impl<'a> Agent for Worker<'a> {
         // --- Phase 1.5: Navigation planning ---
         if state.remaining > 0 && !llm_budget_exhausted!() {
             let plan_prompt = build_plan_prompt(
-                &query, task_ref, &state.last_feedback, ctx.doc_name, &preserved_hits, ctx,
+                &query, task_ref, &state.last_feedback, ctx.doc_name, &index_hits, ctx,
             );
             match llm.complete(&plan_prompt.0, &plan_prompt.1).await {
                 Ok(plan_output) => {

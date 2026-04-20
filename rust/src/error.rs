@@ -63,7 +63,7 @@ pub enum Error {
     // =========================================================================
     // LLM Errors
     // =========================================================================
-    /// An error occurred during LLM call.
+    /// An error occurred during LLM call (transient: network, timeout).
     #[error("LLM error: {0}")]
     Llm(String),
 
@@ -74,6 +74,16 @@ pub enum Error {
     /// LLM quota exceeded.
     #[error("LLM quota exceeded")]
     QuotaExceeded,
+
+    /// LLM reasoning failure — model responded but output is unusable.
+    /// Not transient. Do not retry the same prompt.
+    #[error("LLM reasoning failure at '{stage}': {detail}")]
+    LlmReasoning {
+        /// The pipeline stage where reasoning failed.
+        stage: String,
+        /// Why the output was unusable.
+        detail: String,
+    },
 
     // =========================================================================
     // Summary Errors

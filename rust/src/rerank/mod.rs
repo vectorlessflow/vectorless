@@ -34,7 +34,7 @@ use types::{ConfidenceLevel, RerankOutput};
 /// Takes raw agent output (evidence without answer) and produces
 /// a final answer through dedup → score → fuse/synthesize.
 ///
-/// Returns [`RerankOutput`] with answer, score, confidence, and LLM call count.
+/// Returns [`Result<RerankOutput>`]. Propagates LLM errors — no silent fallback.
 pub async fn process(
     query: &str,
     evidence: &[Evidence],
@@ -42,17 +42,17 @@ pub async fn process(
     llm: &LlmClient,
     multi_doc: bool,
     sub_results: &[Output],
-) -> RerankOutput {
+) -> crate::error::Result<RerankOutput> {
     // Step 1: Deduplicate
     let deduped = dedup::dedup(evidence);
     if deduped.is_empty() {
         info!("No evidence after dedup");
-        return RerankOutput {
+        return Ok(RerankOutput {
             answer: String::new(),
             score: 0.0,
             llm_calls: 0,
             confidence: ConfidenceLevel::Low,
-        };
+        });
     }
 
     // Step 2: Score and sort by relevance
@@ -69,23 +69,23 @@ pub async fn process(
         "Evidence after dedup + scoring"
     );
 
-    // Step 3: Synthesize answer
+    // Step 3: Synthesize answer (always via LLM, no fallback)
     if !enable_synthesis {
-        return RerankOutput {
+        return Ok(RerankOutput {
             answer: synthesis::format_evidence_as_answer(&sorted_evidence),
             score: top_score,
             llm_calls: 0,
             confidence: ConfidenceLevel::from_evidence(sorted_evidence.len(), 0),
-        };
+        });
     }
 
     let (answer, llm_calls) = if multi_doc && sub_results.len() > 1 {
         // Multi-doc: fuse across sub-results
         let sub_refs: Vec<&Output> = sub_results.iter().collect();
-        fusion::fuse(query, &sub_refs, llm).await
+        fusion::fuse(query, &sub_refs, llm).await?
     } else {
         // Single doc: simple synthesis
-        synthesis::synthesize(query, &sorted_evidence, llm).await
+        synthesis::synthesize(query, &sorted_evidence, llm).await?
     };
 
     let confidence = ConfidenceLevel::from_evidence(sorted_evidence.len(), answer.len());
@@ -96,10 +96,10 @@ pub async fn process(
         "Rerank complete"
     );
 
-    RerankOutput {
+    Ok(RerankOutput {
         answer,
         score: top_score,
         llm_calls,
         confidence,
-    }
+    })
 }

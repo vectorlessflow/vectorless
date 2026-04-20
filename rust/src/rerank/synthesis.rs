@@ -3,7 +3,7 @@
 
 //! Answer synthesis — generate the final answer from collected evidence.
 
-use tracing::{info, warn};
+use tracing::info;
 
 use crate::agent::Evidence;
 use crate::llm::LlmClient;
@@ -51,8 +51,12 @@ pub fn answer_synthesis_prompt(params: &SynthesisParams) -> (String, String) {
 
 /// Synthesize an answer from evidence using LLM.
 ///
-/// Returns (answer, llm_calls).
-pub async fn synthesize(query: &str, evidence: &[Evidence], llm: &LlmClient) -> (String, u32) {
+/// Returns (answer, llm_calls). Propagates LLM errors — no silent fallback.
+pub async fn synthesize(
+    query: &str,
+    evidence: &[Evidence],
+    llm: &LlmClient,
+) -> crate::error::Result<(String, u32)> {
     let evidence_text = format_evidence_for_synthesis(evidence);
     let (system, user) = answer_synthesis_prompt(&SynthesisParams {
         query,
@@ -62,13 +66,20 @@ pub async fn synthesize(query: &str, evidence: &[Evidence], llm: &LlmClient) -> 
 
     match llm.complete(&system, &user).await {
         Ok(a) => {
-            info!(answer_len = a.len(), "Synthesis complete");
-            (a.trim().to_string(), 1)
+            let answer = a.trim().to_string();
+            if answer.is_empty() {
+                return Err(crate::error::Error::LlmReasoning {
+                    stage: "synthesis".to_string(),
+                    detail: "LLM returned empty answer".to_string(),
+                });
+            }
+            info!(answer_len = answer.len(), "Synthesis complete");
+            Ok((answer, 1))
         }
-        Err(e) => {
-            warn!(error = %e, "Synthesis LLM call failed");
-            (format_evidence_as_answer(evidence), 0)
-        }
+        Err(e) => Err(crate::error::Error::LlmReasoning {
+            stage: "synthesis".to_string(),
+            detail: format!("LLM call failed: {}", e),
+        }),
     }
 }
 
