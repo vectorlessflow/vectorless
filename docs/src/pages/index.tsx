@@ -304,16 +304,16 @@ function SectionHowItWorks() {
                 <i className="fas fa-sitemap" /> Orchestrator · Analyze
               </div>
               <div className={styles.stepContent}>
-                Reads DocCards from all 3 docs → keywords <span style={{color: 'var(--primary)'}}>delta-V</span>, <span style={{color: 'var(--primary)'}}>thruster</span> matched → dispatches SubAgent to doc #1
+                LLM understands query intent (complex, analytical) → reads DocCards → dispatches Worker to doc #1
               </div>
             </div>
             {/* Step 4: Bird's-eye view */}
             <div className={styles.trackStep}>
               <div className={styles.stepBadge}>
-                <i className="fas fa-eye" /> SubAgent · Bird&rsquo;s-Eye
+                <i className="fas fa-eye" /> Worker · Bird&rsquo;s-Eye
               </div>
               <div className={styles.stepContent}>
-                <code>ls</code> root → sees 4 top-level sections → generates navigation plan targeting <span style={{color: 'var(--primary)'}}>Orbital Mechanics</span> + <span style={{color: 'var(--primary)'}}>Mission Anomalies</span>
+                <code>ls</code> root → sees 4 top-level sections → LLM generates navigation plan targeting <span style={{color: 'var(--primary)'}}>Orbital Mechanics</span> + <span style={{color: 'var(--primary)'}}>Mission Anomalies</span>
               </div>
             </div>
             {/* Step 5: Navigate */}

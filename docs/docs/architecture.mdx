@@ -55,29 +55,66 @@ TreeNode
 
 ## Retrieval Pipeline
 
-The retrieval pipeline consists of four phases:
+The retrieval pipeline is a supervisor loop driven entirely by LLM reasoning. Every decision — which documents to query, how to navigate, whether evidence is sufficient — is made by the model, not by heuristics.
 
-1. **Analyze** — Detect query complexity, extract keywords, decompose complex queries
-2. **Plan** — Select retrieval strategy and search algorithm
-3. **Search** — Execute tree traversal with Pilot guidance
-4. **Evaluate** — Score, deduplicate, and aggregate results
+### Principles
 
-### Pilot
+- **Reason, don't vector.** — Every retrieval decision is an LLM decision.
+- **Model fails, we fail.** — No silent degradation. No heuristic fallbacks.
+- **No thought, no answer.** — Only LLM-reasoned output counts as an answer.
 
-The Pilot is the core intelligence component. It provides LLM-guided navigation at key decision points:
+### Flow
 
-- **Fork points** — When multiple children exist, Pilot evaluates which path to follow
-- **Backtracking** — When a path yields insufficient results, Pilot suggests alternatives
-- **Binary pruning** — Quick relevance filter for nodes with many children
+```text
+Engine.query()
+  → Dispatcher
+    → Query Understanding (LLM) → QueryPlan (intent, concepts, strategy)
+    → Orchestrator (always — single or multi-doc)
+      → Analyze (LLM selects documents + tasks)
+      → Supervisor Loop:
+          Dispatch Workers → Evaluate (LLM sufficiency check)
+          → if insufficient → Replan (LLM) → loop
+      → Rerank (dedup → BM25 score → synthesis/fusion)
+```
 
-### Search Algorithms
+### Query Understanding
 
-| Algorithm | Description | Use Case |
-|-----------|-------------|----------|
-| **Beam Search** | Explores multiple paths with backtracking | General purpose (recommended) |
-| **MCTS** | Monte Carlo Tree Search with UCT selection | Complex multi-hop queries |
-| **Pure Pilot** | Greedy single-path, Pilot at every level | High-accuracy, higher token cost |
-| **ToC Navigator** | Table-of-contents based location | Broad queries ("what is this about?") |
+Every query first passes through LLM-based understanding:
+
+| Field | Description |
+|-------|-------------|
+| **Intent** | Factual, Analytical, Navigational, or Summary |
+| **Complexity** | Simple, Moderate, or Complex |
+| **Key Concepts** | LLM-extracted concepts (distinct from keywords) |
+| **Strategy Hint** | focused, exploratory, comparative, or summary |
+
+### Orchestrator (Supervisor)
+
+The Orchestrator is the central coordinator. It always runs — even for single-document queries. Its supervisor loop:
+
+1. **Analyze** — LLM reviews DocCards and selects relevant documents with specific tasks
+2. **Dispatch** — Fan-out Workers in parallel (one per document)
+3. **Evaluate** — LLM checks if collected evidence is sufficient to answer the query
+4. **Replan** (if insufficient) — LLM identifies missing information and dispatches additional Workers
+
+### Worker (Evidence Collector)
+
+Each Worker navigates a single document's tree to collect evidence:
+
+1. **Bird's-eye** — `ls` the root for an overview
+2. **Plan** — LLM generates a navigation plan
+3. **Navigate** — Loop: LLM → command → execute → repeat (with budget)
+4. **Return** — Collected evidence only — no answer synthesis
+
+Workers use tree commands (`ls`, `cd`, `cat`, `grep`, `find`, `findtree`) and a `check` command for self-evaluation.
+
+### Rerank Pipeline
+
+After all Workers complete, the Orchestrator runs the final pipeline:
+
+1. **Dedup** — Remove duplicate and low-quality evidence
+2. **BM25 Scoring** — Rank evidence by keyword relevance
+3. **Answer Generation** — LLM synthesizes or fuses evidence into a final answer
 
 ## Cross-Document Graph
 
