@@ -99,7 +99,6 @@ impl WorkerState {
     pub fn cd(&mut self, node: NodeId, title: &str) {
         self.breadcrumb.push(title.to_string());
         self.current_node = node;
-        self.visited.insert(node);
     }
 
     /// Navigate back to parent.
