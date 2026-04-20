@@ -36,25 +36,6 @@ impl WorkerConfig {
 }
 
 // ---------------------------------------------------------------------------
-// Orchestrator configuration
-// ---------------------------------------------------------------------------
-
-/// Orchestrator configuration — dispatch settings.
-#[derive(Debug, Clone)]
-pub struct OrchestratorConfig {
-    /// Worker configuration for dispatched agents.
-    pub worker_config: WorkerConfig,
-}
-
-impl Default for OrchestratorConfig {
-    fn default() -> Self {
-        Self {
-            worker_config: WorkerConfig::default(),
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------
 // Answer pipeline configuration
 // ---------------------------------------------------------------------------
 
@@ -79,7 +60,6 @@ impl Default for AnswerConfig {
 #[derive(Debug, Clone, Default)]
 pub struct AgentConfig {
     pub worker: WorkerConfig,
-    pub orchestrator: OrchestratorConfig,
     pub answer: AnswerConfig,
 }
 

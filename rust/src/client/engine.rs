@@ -542,17 +542,6 @@ impl Engine {
                             format!("orchestrator({}_docs)", doc_count)
                         },
                     },
-                    AgentEvent::OrchestratorFastPath {
-                        keyword,
-                        doc_name,
-                        node_title,
-                        ..
-                    } => RetrieveEvent::ContentFound {
-                        node_id: format!("{}/{}", doc_name, node_title),
-                        title: node_title,
-                        preview: keyword,
-                        score: 1.0,
-                    },
                     AgentEvent::OrchestratorAnalyzing {
                         doc_count,
                         keywords,
@@ -564,12 +553,6 @@ impl Engine {
                         ),
                         elapsed_ms: 0,
                     },
-                    AgentEvent::OrchestratorPlanReady { dispatch_count, .. } => {
-                        RetrieveEvent::StageCompleted {
-                            stage: format!("orchestrator_plan_{}_dispatches", dispatch_count),
-                            elapsed_ms: 0,
-                        }
-                    }
                     AgentEvent::WorkerDispatched {
                         doc_idx,
                         doc_name,
@@ -636,17 +619,6 @@ impl Engine {
                     } => RetrieveEvent::StageCompleted {
                         stage: format!("worker_started_{}_r{}", doc_name, max_rounds),
                         elapsed_ms: 0,
-                    },
-                    AgentEvent::WorkerFastPath {
-                        doc_name,
-                        keyword,
-                        node_title,
-                        weight,
-                    } => RetrieveEvent::ContentFound {
-                        node_id: format!("{}/{}", doc_name, node_title),
-                        title: node_title,
-                        preview: keyword,
-                        score: weight,
                     },
                     AgentEvent::WorkerPlanGenerated { doc_name, plan_len } => {
                         RetrieveEvent::StageCompleted {

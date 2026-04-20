@@ -66,6 +66,16 @@ impl<'a> DocContext<'a> {
         self.nav_index.get_entry(node)
     }
 
+    /// Get the summary shortcut (pre-computed overview), if available.
+    pub fn summary_shortcut(&self) -> Option<&crate::document::SummaryShortcut> {
+        self.reasoning_index.summary_shortcut()
+    }
+
+    /// Find a top-level section by its title, returning its NodeId.
+    pub fn find_section(&self, title: &str) -> Option<NodeId> {
+        self.reasoning_index.find_section(title)
+    }
+
     /// Get the parent of a node (by searching the tree).
     pub fn parent(&self, node: NodeId) -> Option<NodeId> {
         self.tree.parent(node)

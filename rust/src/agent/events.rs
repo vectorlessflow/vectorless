@@ -41,25 +41,10 @@ pub enum AgentEvent {
         skip_analysis: bool,
     },
 
-    /// Orchestrator fast-path hit — keyword lookup answered directly.
-    OrchestratorFastPath {
-        keyword: String,
-        doc_name: String,
-        node_title: String,
-        weight: f32,
-    },
-
     /// Orchestrator is analyzing documents to select which to dispatch.
     OrchestratorAnalyzing {
         doc_count: usize,
         keywords: Vec<String>,
-    },
-
-    /// Orchestrator decided which documents to dispatch.
-    OrchestratorPlanReady {
-        dispatch_count: usize,
-        /// (doc_idx, doc_name, task) for each dispatch.
-        dispatches: Vec<(usize, String, String)>,
     },
 
     /// A Worker was dispatched to a document.
@@ -106,14 +91,6 @@ pub enum AgentEvent {
         doc_name: String,
         task: Option<String>,
         max_rounds: u32,
-    },
-
-    /// Worker fast-path hit.
-    WorkerFastPath {
-        doc_name: String,
-        keyword: String,
-        node_title: String,
-        weight: f32,
     },
 
     /// Worker generated a navigation plan.
@@ -274,32 +251,10 @@ impl EventEmitter {
         });
     }
 
-    pub fn emit_orchestrator_fast_path(
-        &self,
-        keyword: &str,
-        doc_name: &str,
-        node_title: &str,
-        weight: f32,
-    ) {
-        self.emit(AgentEvent::OrchestratorFastPath {
-            keyword: keyword.to_string(),
-            doc_name: doc_name.to_string(),
-            node_title: node_title.to_string(),
-            weight,
-        });
-    }
-
     pub fn emit_orchestrator_analyzing(&self, doc_count: usize, keywords: &[String]) {
         self.emit(AgentEvent::OrchestratorAnalyzing {
             doc_count,
             keywords: keywords.to_vec(),
-        });
-    }
-
-    pub fn emit_orchestrator_plan_ready(&self, dispatches: &[(usize, String, String)]) {
-        self.emit(AgentEvent::OrchestratorPlanReady {
-            dispatch_count: dispatches.len(),
-            dispatches: dispatches.to_vec(),
         });
     }
 
@@ -377,21 +332,6 @@ impl EventEmitter {
             doc_name: doc_name.to_string(),
             task: task.map(|s| s.to_string()),
             max_rounds,
-        });
-    }
-
-    pub fn emit_worker_fast_path(
-        &self,
-        doc_name: &str,
-        keyword: &str,
-        node_title: &str,
-        weight: f32,
-    ) {
-        self.emit(AgentEvent::WorkerFastPath {
-            doc_name: doc_name.to_string(),
-            keyword: keyword.to_string(),
-            node_title: node_title.to_string(),
-            weight,
         });
     }
 

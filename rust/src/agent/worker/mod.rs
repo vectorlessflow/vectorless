@@ -135,6 +135,7 @@ impl<'a> Agent for Worker<'a> {
                 ctx.doc_name,
                 &index_hits,
                 ctx,
+                query_plan.intent,
             );
             let plan_output = llm
                 .complete(&plan_prompt.0, &plan_prompt.1)

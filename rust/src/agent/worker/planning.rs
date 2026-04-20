@@ -5,6 +5,7 @@
 
 use std::collections::HashSet;
 
+use crate::query::QueryIntent;
 use crate::scoring::bm25::{Bm25Engine, FieldDocument, extract_keywords};
 
 use super::super::config::DocContext;
@@ -23,6 +24,7 @@ pub fn build_plan_prompt(
     doc_name: &str,
     keyword_hits: &[FindHit],
     ctx: &DocContext<'_>,
+    intent: QueryIntent,
 ) -> (String, String) {
     let task_section = match task {
         Some(t) => format!("\nYour specific task: {}", t),
@@ -75,6 +77,8 @@ pub fn build_plan_prompt(
 
     let semantic_section = build_semantic_hints(&query_keywords, &query_lower, ctx);
 
+    let intent_section = build_intent_signals(intent, ctx);
+
     let system = "You are a document navigation planner. Given a user question, the top-level \
          document structure, keyword index matches, and semantic hints, output a brief navigation \
          plan: which sections to visit and in what order. Prioritize sections that matched keywords \
@@ -92,7 +96,7 @@ pub fn build_plan_prompt(
 
     let user = format!(
         "Document: {doc_name}\n\
-         Top-level structure:\n{ls_output}{keyword_section}{semantic_section}\
+         Top-level structure:\n{ls_output}{keyword_section}{semantic_section}{intent_section}\
          User question: {query}{task_section}\n\n\
          Navigation plan:"
     );
@@ -163,6 +167,63 @@ pub fn build_ancestor_path(node_id: crate::document::NodeId, ctx: &DocContext<'_
         .filter_map(|&id| ctx.node_title(id))
         .collect::<Vec<_>>()
         .join(" > ")
+}
+
+/// Build intent-specific index signals for the planning prompt.
+///
+/// Injects pre-computed ReasoningIndex data as context for the LLM:
+/// - Summary intent → summary_shortcut (document overview + section summaries)
+/// - Navigational intent → section_map matches from query keywords
+/// - Factual/Analytical → no additional signals (keyword hits already injected)
+fn build_intent_signals(intent: QueryIntent, ctx: &DocContext<'_>) -> String {
+    match intent {
+        QueryIntent::Summary => {
+            let shortcut = match ctx.summary_shortcut() {
+                Some(s) => s,
+                None => return String::new(),
+            };
+            let mut section = String::from(
+                "\nPre-computed document overview (use this to plan breadth-first scan):\n",
+            );
+            if !shortcut.document_summary.is_empty() {
+                section.push_str(&format!(
+                    "Document summary: {}\n",
+                    &shortcut.document_summary[..shortcut.document_summary.len().min(500)]
+                ));
+            }
+            for ss in &shortcut.section_summaries {
+                let summary_preview = if ss.summary.len() > 200 {
+                    format!("{}...", &ss.summary[..200])
+                } else {
+                    ss.summary.clone()
+                };
+                section.push_str(&format!(
+                    "  - Section '{}' (depth {}): {}\n",
+                    ss.title, ss.depth, summary_preview
+                ));
+                if section.len() > PLAN_CONTEXT_BUDGET {
+                    section.push_str("  ... (more sections truncated)\n");
+                    break;
+                }
+            }
+            section
+        }
+        QueryIntent::Navigational => {
+            let root = ctx.root();
+            let routes = match ctx.ls(root) {
+                Some(r) => r,
+                None => return String::new(),
+            };
+            let mut section = String::from(
+                "\nSection map (known top-level sections for direct navigation):\n",
+            );
+            for route in routes {
+                section.push_str(&format!("  - {} ({} leaves)\n", route.title, route.leaf_count));
+            }
+            section
+        }
+        _ => String::new(),
+    }
 }
 
 /// Build semantic hints section using BM25 scoring over child routes.
@@ -575,6 +636,7 @@ mod tests {
             "Financial Report",
             &[],
             &ctx,
+            QueryIntent::Factual,
         );
         assert!(system.contains("semantic hints"));
         assert!(user.contains("What is the revenue?"));
