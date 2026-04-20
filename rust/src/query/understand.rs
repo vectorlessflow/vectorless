@@ -7,7 +7,7 @@
 //! Falls back to keyword-only analysis on LLM failure.
 
 use serde::Deserialize;
-use tracing::{info, warn};
+use tracing::info;
 
 use crate::llm::LlmClient;
 
@@ -26,37 +26,28 @@ struct QueryAnalysis {
 
 /// Use LLM to understand the query and produce a QueryPlan.
 ///
-/// On LLM failure, falls back to keyword-only default plan.
+/// Propagates LLM errors — no silent degradation. The caller decides
+/// how to handle failure (retry, abort, etc.).
 pub async fn understand(
     query: &str,
     keywords: &[String],
     llm: &LlmClient,
 ) -> crate::error::Result<QueryPlan> {
     let (system, user) = understand_prompt(query, keywords);
-    match llm.complete(&system, &user).await {
-        Ok(response) => {
-            let analysis = parse_analysis(&response);
-            match analysis {
-                Some(a) => {
-                    info!(
-                        intent = %a.intent,
-                        complexity = %a.complexity,
-                        concepts = a.key_concepts.len(),
-                        "Query understanding complete"
-                    );
-                    Ok(a.into_plan(query, keywords))
-                }
-                None => {
-                    warn!("Failed to parse LLM query analysis, using defaults");
-                    Ok(QueryPlan::default_for(query, keywords.to_vec()))
-                }
-            }
-        }
-        Err(e) => {
-            warn!(error = %e, "Query understanding LLM call failed");
-            Ok(QueryPlan::default_for(query, keywords.to_vec()))
-        }
-    }
+    let response = llm.complete(&system, &user).await?;
+    let analysis = parse_analysis(&response).ok_or_else(|| {
+        crate::error::Error::Config(format!(
+            "Query understanding returned unparseable response: {}",
+            &response[..response.len().min(200)]
+        ))
+    })?;
+    info!(
+        intent = %analysis.intent,
+        complexity = %analysis.complexity,
+        concepts = analysis.key_concepts.len(),
+        "Query understanding complete"
+    );
+    Ok(analysis.into_plan(query, keywords))
 }
 
 /// Parse the LLM's JSON response into a QueryAnalysis.

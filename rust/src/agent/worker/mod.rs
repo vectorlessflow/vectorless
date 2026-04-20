@@ -15,7 +15,6 @@ mod execute;
 mod fast_path;
 mod format;
 mod planning;
-mod sufficiency;
 
 use tracing::{debug, info, warn};
 

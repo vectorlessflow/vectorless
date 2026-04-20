@@ -15,7 +15,8 @@
 //!   → QueryPlan
 //! ```
 //!
-//! On LLM failure, falls back to keyword-only analysis.
+//! LLM understanding is required — this is a pure reasoning engine.
+//! Errors are propagated, not silently degraded.
 
 mod text;
 mod types;
@@ -29,16 +30,16 @@ use crate::scoring::bm25::extract_keywords;
 
 /// Query understanding pipeline.
 ///
-/// Produces a [`QueryPlan`] from a raw query string.
-/// Uses LLM for deep understanding with graceful fallback.
+/// Produces a [`QueryPlan`] from a raw query string via LLM analysis.
 pub struct QueryPipeline;
 
 impl QueryPipeline {
     /// Analyze a query and produce a structured plan.
     ///
     /// 1. Extract keywords (zero-cost, no LLM)
-    /// 2. LLM deep understanding (intent, concepts, complexity)
-    /// 3. Graceful fallback to keyword-only plan on LLM failure
+    /// 2. LLM deep understanding (intent, concepts, complexity, strategy)
+    ///
+    /// Errors propagate — the caller handles retries or failure.
     pub async fn understand(
         query: &str,
         llm: &LlmClient,

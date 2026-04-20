@@ -12,7 +12,6 @@ use super::super::config::{DocContext, Step};
 use super::super::events::EventEmitter;
 use super::super::state::WorkerState;
 use super::super::prompts::{check_sufficiency, parse_sufficiency_response};
-use super::sufficiency::heuristic_sufficiency;
 use super::super::tools::worker as tools;
 
 /// Execute a single parsed command, mutating state.
@@ -117,23 +116,6 @@ pub async fn execute_command(
 
         Command::Check => {
             let evidence_summary = state.evidence_summary();
-
-            let all_content: String = state.evidence.iter().map(|e| e.content.as_str()).collect();
-            let heuristic = heuristic_sufficiency(&all_content);
-            if heuristic.is_sufficient() && !all_content.is_empty() {
-                info!(
-                    doc = ctx.doc_name,
-                    evidence = state.evidence.len(),
-                    content_len = all_content.len(),
-                    quality = heuristic.quality_score,
-                    "Heuristic pre-check: sufficient (skipping LLM call)"
-                );
-                state.check_called = true;
-                state.check_count += 1;
-                emitter.emit_worker_sufficiency_check(ctx.doc_name, true, state.evidence.len(), None);
-                state.last_feedback = "Evidence is sufficient. Use done to finish.".to_string();
-                return Step::Done;
-            }
 
             let (system, user) = check_sufficiency(query, &evidence_summary);
 
