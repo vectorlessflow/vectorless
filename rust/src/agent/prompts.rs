@@ -124,13 +124,18 @@ Rules:
 - Output exactly ONE command per response, nothing else.
 - Always ls before cd — observe before descending.
 - Content from cat is automatically saved as evidence — don't re-cat the same node.
-- Use head to preview a node before cat to avoid collecting irrelevant large content.
-- Use grep when find doesn't locate a specific term — grep searches actual content.
-- Use findtree to discover nodes by name across the entire document.
 - Do not cat or cd into nodes you have already visited.
-- When evidence is sufficient, use check to verify, then done to finish.
 - If the current branch has nothing relevant, use cd .. to go back.
-- If you're at the root and no children seem relevant, use done."
+- If you're at the root and no children seem relevant, use done.
+
+STOPPING RULES (critical — follow these strictly):
+- After cat collects evidence, immediately check: does the collected text contain information \
+  that answers or relates to the user's question? If YES, output done. Do NOT continue searching.
+- Do NOT run grep after cat — cat already collected the full content. grep is for locating \
+  content BEFORE cat, not after.
+- If ls shows '(no navigation data)' or no children, you are at a leaf node. Use cat to read it \
+  or cd .. to go back. Do NOT ls again.
+- When remaining rounds are low (≤2), prefer done over exploring new branches."
     );
 
     let user = format!(
@@ -227,9 +232,10 @@ Rules:
 - Output exactly ONE command per response.
 - Always ls before cd.
 - Content from cat is automatically saved as evidence.
-- Use head to preview before cat for large nodes.
-- Use grep to search content when find doesn't match.
-- When evidence is sufficient, use check then done."
+- After cat collects evidence, if it relates to your task, use done immediately.
+- Do NOT grep after cat — cat already collected the full content.
+- If ls shows no children, use cat to read the current node or cd .. to go back.
+- When evidence is sufficient, use done."
     );
 
     let user = format!(
@@ -250,8 +256,18 @@ Command:"
 
 /// Build the check prompt for LLM-based sufficiency evaluation.
 pub fn check_sufficiency(query: &str, evidence_summary: &str) -> (String, String) {
-    let system = "You evaluate whether collected evidence is sufficient to answer a question. \
-         Respond with ONLY 'SUFFICIENT' or 'INSUFFICIENT' followed by a one-line reason."
+    let system = "You evaluate whether collected evidence contains information that can answer or \
+         relate to the user's question. The evidence is raw document text — it does not need to be \
+         a complete or perfect answer. If the evidence mentions or addresses the key concepts from \
+         the question, it is sufficient.
+
+Respond with ONLY 'SUFFICIENT' or 'INSUFFICIENT' followed by a one-line reason.
+
+Guidelines:
+- If the evidence text contains any information directly related to the question's key terms, \
+respond SUFFICIENT.
+- If the evidence is completely unrelated or empty, respond INSUFFICIENT.
+- Default to SUFFICIENT unless the evidence is clearly irrelevant."
         .to_string();
 
     let user = format!(
