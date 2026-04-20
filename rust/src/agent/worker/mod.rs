@@ -215,6 +215,14 @@ impl<'a> Agent for Worker<'a> {
             llm_calls += 1;
 
             // Parse command
+            if llm_output.trim().len() < 5 {
+                tracing::warn!(
+                    doc = ctx.doc_name,
+                    round = config.max_rounds - state.remaining + 1,
+                    response = llm_output.trim(),
+                    "LLM response unusually short"
+                );
+            }
             let (command, is_parse_failure) = parse_and_detect_failure(&llm_output);
             if is_parse_failure {
                 let raw_preview = if llm_output.trim().len() > 200 {

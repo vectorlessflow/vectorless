@@ -26,6 +26,11 @@ pub async fn execute_command(
     llm_calls: &mut u32,
     emitter: &EventEmitter,
 ) -> Step {
+    info!(
+        doc = ctx.doc_name,
+        command = ?command,
+        "Executing tool"
+    );
     match command {
         Command::Ls => {
             let result = tools::ls(ctx, state);

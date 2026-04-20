@@ -394,17 +394,21 @@ impl LlmExecutor {
         user: &str,
         max_tokens: Option<u16>,
     ) -> LlmResult<String> {
-        // Build request
-        let request = CreateChatCompletionRequestArgs::default()
+        // Build request — only set max_tokens when explicitly provided,
+        // letting the API use its own default otherwise.
+        let mut request = CreateChatCompletionRequestArgs::default()
             .model(model)
             .messages([
                 ChatCompletionRequestSystemMessage::from(system).into(),
                 ChatCompletionRequestUserMessage::from(user).into(),
             ])
             .temperature(self.config.temperature)
-            .max_tokens(max_tokens.unwrap_or(self.config.max_tokens as u16))
             .build()
             .map_err(|e| LlmError::Request(format!("Failed to build request: {}", e)))?;
+
+        if let Some(mt) = max_tokens {
+            request.max_tokens = Some(mt as u32);
+        }
 
         info!(
             "LLM request → endpoint: {}, model: {}, system: {} chars, user: {} chars",
@@ -432,11 +436,39 @@ impl LlmExecutor {
         let prompt_tokens = usage.map(|u| u.prompt_tokens).unwrap_or(0);
         let completion_tokens = usage.map(|u| u.completion_tokens).unwrap_or(0);
 
-        let content = response
-            .choices
-            .first()
-            .and_then(|choice| choice.message.content.clone())
-            .ok_or(LlmError::NoContent)?;
+        let first_choice = response.choices.first();
+
+        if first_choice.is_none() {
+            if let Some(ref metrics) = self.metrics {
+                metrics.record_llm_call(
+                    prompt_tokens as u64,
+                    completion_tokens as u64,
+                    request_elapsed.as_millis() as u64,
+                    false,
+                );
+            }
+            return Err(LlmError::NoContent);
+        }
+
+        let choice = first_choice.unwrap();
+        let content = choice.message.content.clone().unwrap_or_default();
+
+        if content.is_empty() {
+            let has_tool_calls = choice
+                .message
+                .tool_calls
+                .as_ref()
+                .map_or(false, |t| !t.is_empty());
+            let finish_reason = format!("{:?}", choice.finish_reason);
+            warn!(
+                elapsed_ms = request_elapsed.as_millis(),
+                prompt_tokens,
+                completion_tokens,
+                has_tool_calls,
+                finish_reason,
+                "LLM returned empty content field"
+            );
+        }
 
         if let Some(ref metrics) = self.metrics {
             metrics.record_llm_call(
@@ -447,13 +479,22 @@ impl LlmExecutor {
             );
         }
 
-        info!(
-            "LLM response ← {}ms, tokens: {} prompt + {} completion, content: {} chars",
-            request_elapsed.as_millis(),
-            prompt_tokens,
-            completion_tokens,
-            content.len()
-        );
+        if content.is_empty() {
+            warn!(
+                elapsed_ms = request_elapsed.as_millis(),
+                prompt_tokens,
+                completion_tokens,
+                "LLM returned empty response"
+            );
+        } else {
+            info!(
+                "LLM response ← {}ms, tokens: {} prompt + {} completion, content: {} chars",
+                request_elapsed.as_millis(),
+                prompt_tokens,
+                completion_tokens,
+                content.len()
+            );
+        }
 
         Ok(content)
     }

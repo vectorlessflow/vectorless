@@ -7,7 +7,7 @@
 //! Falls back to keyword-only analysis on LLM failure.
 
 use serde::Deserialize;
-use tracing::info;
+use tracing::{info, warn};
 
 use crate::llm::LlmClient;
 
@@ -35,12 +35,28 @@ pub async fn understand(
 ) -> crate::error::Result<QueryPlan> {
     let (system, user) = understand_prompt(query, keywords);
     let response = llm.complete(&system, &user).await?;
+
+    if response.trim().is_empty() {
+        warn!("Query understanding: LLM returned empty response");
+        return Err(crate::error::Error::Config(
+            "Query understanding failed: LLM returned an empty response. \
+             Check your API key, model, and endpoint configuration."
+                .to_string(),
+        ));
+    }
+
     let analysis = parse_analysis(&response).ok_or_else(|| {
+        warn!(
+            response = &response[..response.len().min(500)],
+            "Query understanding: failed to parse LLM response as JSON"
+        );
         crate::error::Error::Config(format!(
-            "Query understanding returned unparseable response: {}",
-            &response[..response.len().min(200)]
+            "Query understanding returned unparseable response ({} chars): {}",
+            response.len(),
+            &response[..response.len().min(300)]
         ))
     })?;
+
     info!(
         intent = %analysis.intent,
         complexity = %analysis.complexity,

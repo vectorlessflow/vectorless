@@ -140,9 +140,9 @@ async fn main() -> vectorless::Result<()> {
     }
 
     // Cleanup
-    for doc in engine.list().await? {
-        engine.remove(&doc.id).await?;
-    }
+    // for doc in engine.list().await? {
+    //     engine.remove(&doc.id).await?;
+    // }
 
     Ok(())
 }
