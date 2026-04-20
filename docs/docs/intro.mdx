@@ -12,7 +12,7 @@ It transforms documents into hierarchical semantic trees and uses LLMs to naviga
 
 1. **Parse** — Documents (Markdown, PDF) are parsed into hierarchical semantic trees, preserving structure and relationships between sections.
 2. **Index** — Trees are stored with metadata, keywords, and summaries. The pipeline resolves cross-references ("see Section 2.1") and expands keywords with LLM-generated synonyms for improved recall. Incremental indexing skips unchanged files via content fingerprinting.
-3. **Query** — An LLM navigates the tree to find the most relevant sections. Multiple search algorithms (Beam Search, MCTS, Greedy) are available, and the Pilot component provides LLM-guided navigation at key decision points.
+3. **Query** — An LLM-powered agent navigates the tree to find the most relevant sections. The Orchestrator coordinates multi-document queries, dispatching Workers that use `ls`, `cd`, `cat`, `find`, and `grep` commands to explore the tree and collect evidence.
 
 ## Quick Start
 
@@ -24,7 +24,7 @@ pip install vectorless
 
 ```python
 import asyncio
-from vectorless import Engine, IndexContext
+from vectorless import Engine, IndexContext, QueryContext
 
 async def main():
     engine = Engine(
@@ -35,7 +35,9 @@ async def main():
     result = await engine.index(IndexContext.from_path("./report.pdf"))
     doc_id = result.doc_id
 
-    answer = await engine.query(doc_id, "What is the total revenue?")
+    answer = await engine.query(
+        QueryContext("What is the total revenue?").with_doc_ids([doc_id])
+    )
     print(answer.single().content)
 
 asyncio.run(main())
@@ -74,11 +76,12 @@ async fn main() -> vectorless::Result<()> {
 ## Features
 
 - **Hierarchical Semantic Trees** — Preserves document structure, not flat chunks
-- **LLM-Powered Retrieval** — Structural reasoning over the tree, not vector similarity
-- **Cross-Reference Navigation** — Automatically resolves "see Section 2.1", "Appendix G" references and follows them during retrieval
+- **LLM-Powered Agent Navigation** — Worker agents navigate the tree using commands (ls, cd, cat, find, grep), making every retrieval decision through LLM reasoning
+- **Cross-Reference Resolution** — Automatically resolves "see Section 2.1", "Appendix G" references during indexing
 - **Synonym Expansion** — LLM-generated synonyms for indexed keywords improve recall for differently-worded queries
-- **Multi-Algorithm Search** — Beam Search, MCTS, Greedy, and ToC Navigator with LLM Pilot guidance
+- **Orchestrator Supervisor Loop** — Multi-document queries are coordinated by an LLM supervisor that dispatches Workers, evaluates evidence, and replans when needed
 - **Cross-Document Graph** — Automatic relationship discovery between documents via shared keywords
 - **Incremental Indexing** — Content fingerprinting skips unchanged files
+- **DocCard Catalog** — Lightweight document metadata index enables fast multi-document analysis without loading full documents
 - **Multi-Format** — Markdown and PDF support
 - **Zero Infrastructure** — No vector DB, no embedding models, just an LLM API key

@@ -4,7 +4,7 @@ sidebar_position: 1
 
 # Summary Strategies
 
-Summaries are critical for retrieval quality. The Pilot uses summaries to evaluate candidate nodes during tree navigation. Without summaries, the Pilot can only use node titles for decision-making, which significantly reduces accuracy.
+Summaries are critical for retrieval quality. The Worker agent uses summaries in the NavigationIndex to decide which branches to explore and where to navigate. Without summaries, the Worker can only use node titles for decision-making, which significantly reduces accuracy.
 
 ## Available Strategies
 
@@ -32,7 +32,7 @@ let strategy = SummaryStrategy::selective(100, true);
 - `min_tokens` — Minimum content tokens to generate a summary (default: 100)
 - `branch_only` — Only generate for non-leaf nodes (default: true)
 
-**Trade-off**: Lower indexing cost, but leaf nodes lack summaries. The Pilot falls back to title-only evaluation at leaf level.
+**Trade-off**: Lower indexing cost, but leaf nodes lack summaries. The Worker falls back to title-only evaluation at leaf level.
 
 ### Lazy
 
@@ -56,10 +56,23 @@ let strategy = SummaryStrategy::lazy(true);
 
 ## How Summaries Are Used
 
-During retrieval, the Pilot builds context for each candidate node:
+During retrieval, the Worker agent reads summary data from the NavigationIndex at each decision point:
 
-1. **Title** — Always available, highest priority signal
-2. **Summary** — Used for semantic evaluation at fork points
-3. **Content** — Used for BM25 scoring and final result
+1. **`ls` output** — Child nodes show their descriptions (derived from summaries) and leaf counts
+2. **Navigation decisions** — The LLM evaluates summaries to decide which branch to enter
+3. **Keyword index** — Topic tags from summaries are indexed for `find` command lookups
+4. **DocCards** — Root-level summaries power the Orchestrator's document selection
 
-When a node has no summary, the Pilot's decision quality degrades. This is why **Full** is the default — it ensures the Pilot always has summaries to work with.
+When a node has no summary, the Worker's navigation quality degrades. This is why **Full** is the default — it ensures the Worker always has summary context to work with.
+
+## Navigation-Oriented Summaries
+
+Branch nodes receive structured summaries with three components:
+
+| Component | Purpose | Used By |
+|-----------|---------|---------|
+| **OVERVIEW** | 2-3 sentence routing summary | Worker's `ls` output |
+| **QUESTIONS** | 3-5 typical questions this branch can answer | Keyword index |
+| **TAGS** | 2-4 topic keywords | ReasoningIndex `find` command |
+
+This structured format enables the Worker to quickly assess whether a branch is worth exploring without reading its full content.
