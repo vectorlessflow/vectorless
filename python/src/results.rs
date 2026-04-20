@@ -163,18 +163,15 @@ impl PyQueryResultItem {
     /// Execution metrics for this query.
     #[getter]
     fn metrics(&self) -> Option<PyQueryMetrics> {
-        self.inner
-            .metrics
-            .as_ref()
-            .map(|m| PyQueryMetrics {
-                inner: QueryMetrics {
-                    llm_calls: m.llm_calls,
-                    rounds_used: m.rounds_used,
-                    nodes_visited: m.nodes_visited,
-                    evidence_count: m.evidence_count,
-                    evidence_chars: m.evidence_chars,
-                },
-            })
+        self.inner.metrics.as_ref().map(|m| PyQueryMetrics {
+            inner: QueryMetrics {
+                llm_calls: m.llm_calls,
+                rounds_used: m.rounds_used,
+                nodes_visited: m.nodes_visited,
+                evidence_count: m.evidence_count,
+                evidence_chars: m.evidence_chars,
+            },
+        })
     }
 
     /// Confidence level: "high", "medium", or "low".
@@ -264,19 +261,17 @@ impl PyQueryResult {
 
     /// Get the first (single-doc) result item.
     fn single(&self) -> Option<PyQueryResultItem> {
-        self.inner
-            .single()
-            .map(|i| PyQueryResultItem {
-                inner: QueryResultItem {
-                    doc_id: i.doc_id.clone(),
-                    node_ids: i.node_ids.clone(),
-                    content: i.content.clone(),
-                    score: i.score,
-                    evidence: i.evidence.clone(),
-                    metrics: i.metrics.clone(),
-                    confidence: i.confidence,
-                },
-            })
+        self.inner.single().map(|i| PyQueryResultItem {
+            inner: QueryResultItem {
+                doc_id: i.doc_id.clone(),
+                node_ids: i.node_ids.clone(),
+                content: i.content.clone(),
+                score: i.score,
+                evidence: i.evidence.clone(),
+                metrics: i.metrics.clone(),
+                confidence: i.confidence,
+            },
+        })
     }
 
     /// Number of result items.

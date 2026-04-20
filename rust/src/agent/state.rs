@@ -168,7 +168,12 @@ impl WorkerState {
 
     /// Convert this state into a WorkerOutput (consuming the state), with budget flag.
     /// Worker returns evidence only — no answer synthesis.
-    pub fn into_worker_output(self, llm_calls: u32, budget_exhausted: bool, doc_name: &str) -> super::config::WorkerOutput {
+    pub fn into_worker_output(
+        self,
+        llm_calls: u32,
+        budget_exhausted: bool,
+        doc_name: &str,
+    ) -> super::config::WorkerOutput {
         let evidence_chars: usize = self.evidence.iter().map(|e| e.content.len()).sum();
         super::config::WorkerOutput {
             evidence: self.evidence,
@@ -242,10 +247,18 @@ impl OrchestratorState {
             evidence: self.all_evidence.clone(),
             metrics: super::config::Metrics {
                 llm_calls: self.total_llm_calls,
-                nodes_visited: self.sub_results.iter().map(|r| r.metrics.nodes_visited).sum(),
+                nodes_visited: self
+                    .sub_results
+                    .iter()
+                    .map(|r| r.metrics.nodes_visited)
+                    .sum(),
                 plan_generated: self.sub_results.iter().any(|r| r.metrics.plan_generated),
                 check_count: self.sub_results.iter().map(|r| r.metrics.check_count).sum(),
-                evidence_chars: self.sub_results.iter().map(|r| r.metrics.evidence_chars).sum(),
+                evidence_chars: self
+                    .sub_results
+                    .iter()
+                    .map(|r| r.metrics.evidence_chars)
+                    .sum(),
                 ..Default::default()
             },
             score: 0.0,

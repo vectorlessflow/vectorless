@@ -56,7 +56,8 @@ fn parse_analysis(response: &str) -> Option<QueryAnalysis> {
     // Try to extract JSON from the response (LLM may wrap it in markdown)
     let json_str = if trimmed.starts_with("```") {
         // Strip markdown code fences
-        let without_start = trimmed.trim_start_matches(|c| c == '`' || c == 'j' || c == 's' || c == 'o' || c == 'n');
+        let without_start = trimmed
+            .trim_start_matches(|c| c == '`' || c == 'j' || c == 's' || c == 'o' || c == 'n');
         let without_end = without_start.trim_end_matches(|c| c == '`');
         without_end.trim()
     } else {
@@ -76,11 +77,15 @@ impl QueryAnalysis {
             strategy_hint: self.strategy_hint,
             complexity: parse_complexity(&self.complexity),
             rewritten: self.rewritten.into_iter().collect(),
-            sub_queries: self.sub_queries.into_iter().map(|sq| SubQuery {
-                query: sq,
-                intent: QueryIntent::Factual,
-                target_docs: None,
-            }).collect(),
+            sub_queries: self
+                .sub_queries
+                .into_iter()
+                .map(|sq| SubQuery {
+                    query: sq,
+                    intent: QueryIntent::Factual,
+                    target_docs: None,
+                })
+                .collect(),
         }
     }
 }

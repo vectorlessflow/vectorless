@@ -34,12 +34,13 @@ pub async fn evaluate(
     let evidence_summary = format_evidence_summary(evidence);
     let (system, user) = check_sufficiency(query, &evidence_summary);
 
-    let response = llm.complete(&system, &user).await.map_err(|e| {
-        Error::LlmReasoning {
+    let response = llm
+        .complete(&system, &user)
+        .await
+        .map_err(|e| Error::LlmReasoning {
             stage: "orchestrator/evaluate".to_string(),
             detail: format!("Sufficiency check LLM call failed: {e}"),
-        }
-    })?;
+        })?;
 
     let sufficient = parse_sufficiency_response(&response);
     let missing_info = if sufficient {
@@ -81,7 +82,12 @@ pub fn format_evidence_summary(evidence: &[Evidence]) -> String {
         .iter()
         .map(|e| {
             let doc = e.doc_name.as_deref().unwrap_or("unknown");
-            format!("- [{}] (from {}) {} chars", e.node_title, doc, e.content.len())
+            format!(
+                "- [{}] (from {}) {} chars",
+                e.node_title,
+                doc,
+                e.content.len()
+            )
         })
         .collect::<Vec<_>>()
         .join("\n")

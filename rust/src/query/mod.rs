@@ -40,10 +40,7 @@ impl QueryPipeline {
     /// 2. LLM deep understanding (intent, concepts, complexity, strategy)
     ///
     /// Errors propagate — the caller handles retries or failure.
-    pub async fn understand(
-        query: &str,
-        llm: &LlmClient,
-    ) -> crate::error::Result<QueryPlan> {
+    pub async fn understand(query: &str, llm: &LlmClient) -> crate::error::Result<QueryPlan> {
         let keywords = extract_keywords(query);
         understand::understand(query, &keywords, llm).await
     }

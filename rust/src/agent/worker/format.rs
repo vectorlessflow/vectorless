@@ -3,9 +3,9 @@
 
 //! Formatting helpers for prompts and synthesis.
 
+use super::super::config::DocContext;
 use super::super::config::Evidence;
 use super::super::state::WorkerState;
-use super::super::config::DocContext;
 
 /// Maximum total characters for evidence in the synthesis prompt.
 const SYNTHESIS_EVIDENCE_CAP: usize = 8000;

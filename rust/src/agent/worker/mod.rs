@@ -17,19 +17,17 @@ mod planning;
 
 use tracing::{debug, info};
 
-use crate::error::Error;
-use crate::llm::LlmClient;
-use crate::scoring::bm25::extract_keywords;
 use super::Agent;
 use super::command::Command;
 use super::config::{DocContext, Step, WorkerConfig, WorkerOutput};
 use super::context::FindHit;
 use super::events::EventEmitter;
-use super::prompts::{
-    NavigationParams, worker_dispatch, worker_navigation,
-};
+use super::prompts::{NavigationParams, worker_dispatch, worker_navigation};
 use super::state::WorkerState;
 use super::tools::worker as tools;
+use crate::error::Error;
+use crate::llm::LlmClient;
+use crate::scoring::bm25::extract_keywords;
 
 use execute::{execute_command, parse_and_detect_failure};
 use format::format_visited_titles;
@@ -76,7 +74,14 @@ impl<'a> Agent for Worker<'a> {
     }
 
     async fn run(self) -> crate::error::Result<WorkerOutput> {
-        let Worker { query, task, ctx, config, llm, emitter } = self;
+        let Worker {
+            query,
+            task,
+            ctx,
+            config,
+            llm,
+            emitter,
+        } = self;
         let task_ref = task.as_deref();
 
         emitter.emit_worker_started(ctx.doc_name, task_ref, config.max_rounds);
@@ -93,14 +98,20 @@ impl<'a> Agent for Worker<'a> {
         let max_llm = config.max_llm_calls;
 
         macro_rules! llm_budget_exhausted {
-            () => { max_llm > 0 && llm_calls >= max_llm }
+            () => {
+                max_llm > 0 && llm_calls >= max_llm
+            };
         }
 
         // Gather keyword hits as context for LLM planning (not routing rules)
         let keywords = extract_keywords(&query);
         let index_hits: Vec<FindHit> = ctx.find_all(&keywords);
         if !index_hits.is_empty() {
-            debug!(doc = ctx.doc_name, hit_count = index_hits.len(), "ReasoningIndex keyword hits available for planning");
+            debug!(
+                doc = ctx.doc_name,
+                hit_count = index_hits.len(),
+                "ReasoningIndex keyword hits available for planning"
+            );
         }
 
         // --- Phase 1: Bird's-eye view + adaptive budget ---
@@ -108,8 +119,10 @@ impl<'a> Agent for Worker<'a> {
         let adaptive_rounds = adaptive_rounds(config.max_rounds, doc_depth);
         if adaptive_rounds != config.max_rounds {
             info!(
-                doc = ctx.doc_name, doc_depth,
-                configured_rounds = config.max_rounds, adaptive_rounds,
+                doc = ctx.doc_name,
+                doc_depth,
+                configured_rounds = config.max_rounds,
+                adaptive_rounds,
                 "Adaptive budget: deep document"
             );
         }
@@ -121,18 +134,28 @@ impl<'a> Agent for Worker<'a> {
         // --- Phase 1.5: Navigation planning ---
         if state.remaining > 0 && !llm_budget_exhausted!() {
             let plan_prompt = build_plan_prompt(
-                &query, task_ref, &state.last_feedback, ctx.doc_name, &index_hits, ctx,
+                &query,
+                task_ref,
+                &state.last_feedback,
+                ctx.doc_name,
+                &index_hits,
+                ctx,
             );
-            let plan_output = llm.complete(&plan_prompt.0, &plan_prompt.1).await.map_err(|e| {
-                Error::LlmReasoning {
+            let plan_output = llm
+                .complete(&plan_prompt.0, &plan_prompt.1)
+                .await
+                .map_err(|e| Error::LlmReasoning {
                     stage: "worker/plan".to_string(),
                     detail: format!("Navigation plan LLM call failed: {e}"),
-                }
-            })?;
+                })?;
             llm_calls += 1;
             let plan_text = plan_output.trim().to_string();
             if !plan_text.is_empty() {
-                info!(doc = ctx.doc_name, plan_len = plan_text.len(), "Navigation plan generated");
+                info!(
+                    doc = ctx.doc_name,
+                    plan_len = plan_text.len(),
+                    "Navigation plan generated"
+                );
                 emitter.emit_worker_plan_generated(ctx.doc_name, plan_text.len());
                 state.plan = plan_text;
                 state.plan_generated = true;
@@ -149,7 +172,10 @@ impl<'a> Agent for Worker<'a> {
                 break;
             }
             if llm_budget_exhausted!() {
-                info!(doc = ctx.doc_name, llm_calls, max_llm, "LLM call budget exhausted");
+                info!(
+                    doc = ctx.doc_name,
+                    llm_calls, max_llm, "LLM call budget exhausted"
+                );
                 break;
             }
 
@@ -162,13 +188,19 @@ impl<'a> Agent for Worker<'a> {
                      Consider using grep, findtree, or cd .. to explore a different path.]",
                     state.rounds_since_evidence
                 ));
-                emitter.emit_worker_budget_warning(ctx.doc_name, "stuck", state.max_rounds - state.remaining + 1);
+                emitter.emit_worker_budget_warning(
+                    ctx.doc_name,
+                    "stuck",
+                    state.max_rounds - state.remaining + 1,
+                );
             }
 
             // Mid-budget checkpoint
             let half_budget = state.max_rounds / 2;
             let rounds_used = state.max_rounds - state.remaining;
-            if rounds_used == half_budget && !state.check_called && state.remaining > 1
+            if rounds_used == half_budget
+                && !state.check_called
+                && state.remaining > 1
                 && !state.last_feedback.contains("[Hint:")
             {
                 state.last_feedback.push_str(
@@ -188,7 +220,8 @@ impl<'a> Agent for Worker<'a> {
             } else {
                 let visited_titles = format_visited_titles(&state, ctx);
                 worker_navigation(&NavigationParams {
-                    query: &query, task: task_ref,
+                    query: &query,
+                    task: task_ref,
                     breadcrumb: &state.path_str(),
                     evidence_summary: &state.evidence_summary(),
                     missing_info: &state.missing_info,
@@ -203,12 +236,16 @@ impl<'a> Agent for Worker<'a> {
 
             // LLM decision
             let round_start = std::time::Instant::now();
-            let llm_output = llm.complete(&system, &user).await.map_err(|e| {
-                Error::LlmReasoning {
-                    stage: "worker/navigation".to_string(),
-                    detail: format!("Nav loop LLM call failed (round {}): {e}", config.max_rounds - state.remaining + 1),
-                }
-            })?;
+            let llm_output =
+                llm.complete(&system, &user)
+                    .await
+                    .map_err(|e| Error::LlmReasoning {
+                        stage: "worker/navigation".to_string(),
+                        detail: format!(
+                            "Nav loop LLM call failed (round {}): {e}",
+                            config.max_rounds - state.remaining + 1
+                        ),
+                    })?;
             llm_calls += 1;
 
             // Parse command
@@ -235,7 +272,16 @@ impl<'a> Agent for Worker<'a> {
             let is_check = matches!(command, Command::Check);
 
             // Execute
-            let step = execute_command(&command, ctx, &mut state, &query, &llm, &mut llm_calls, &emitter).await;
+            let step = execute_command(
+                &command,
+                ctx,
+                &mut state,
+                &query,
+                &llm,
+                &mut llm_calls,
+                &emitter,
+            )
+            .await;
 
             if !is_check {
                 state.rounds_since_evidence = if state.evidence.len() > evidence_before {
@@ -246,19 +292,28 @@ impl<'a> Agent for Worker<'a> {
             }
 
             // Dynamic re-planning after insufficient check
-            if is_check && !state.missing_info.is_empty() && state.remaining >= 3 && !llm_budget_exhausted!() {
+            if is_check
+                && !state.missing_info.is_empty()
+                && state.remaining >= 3
+                && !llm_budget_exhausted!()
+            {
                 let missing = state.missing_info.clone();
                 let replan = build_replan_prompt(&query, task_ref, &state, ctx);
-                let new_plan = llm.complete(&replan.0, &replan.1).await.map_err(|e| {
-                    Error::LlmReasoning {
-                        stage: "worker/replan".to_string(),
-                        detail: format!("Re-plan LLM call failed: {e}"),
-                    }
-                })?;
+                let new_plan =
+                    llm.complete(&replan.0, &replan.1)
+                        .await
+                        .map_err(|e| Error::LlmReasoning {
+                            stage: "worker/replan".to_string(),
+                            detail: format!("Re-plan LLM call failed: {e}"),
+                        })?;
                 llm_calls += 1;
                 let plan_text = new_plan.trim().to_string();
                 if !plan_text.is_empty() {
-                    info!(doc = ctx.doc_name, plan_len = plan_text.len(), "Re-plan generated");
+                    info!(
+                        doc = ctx.doc_name,
+                        plan_len = plan_text.len(),
+                        "Re-plan generated"
+                    );
                     emitter.emit_worker_replan(ctx.doc_name, &missing, plan_text.len());
                     state.plan = plan_text;
                 }
@@ -284,7 +339,11 @@ impl<'a> Agent for Worker<'a> {
             // Check termination
             match step {
                 Step::Done => {
-                    info!(doc = ctx.doc_name, evidence = state.evidence.len(), "Navigation done");
+                    info!(
+                        doc = ctx.doc_name,
+                        evidence = state.evidence.len(),
+                        "Navigation done"
+                    );
                     break;
                 }
                 Step::ForceDone(reason) => {
@@ -306,9 +365,12 @@ impl<'a> Agent for Worker<'a> {
         let output = state.into_worker_output(llm_calls, budget_exhausted, ctx.doc_name);
 
         emitter.emit_worker_done(
-            ctx.doc_name, output.evidence.len(),
-            output.metrics.rounds_used, output.metrics.llm_calls,
-            output.metrics.budget_exhausted, output.metrics.plan_generated,
+            ctx.doc_name,
+            output.evidence.len(),
+            output.metrics.rounds_used,
+            output.metrics.llm_calls,
+            output.metrics.budget_exhausted,
+            output.metrics.plan_generated,
         );
 
         info!(

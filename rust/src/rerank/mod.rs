@@ -65,8 +65,7 @@ pub async fn process(
 
     info!(
         evidence = sorted_evidence.len(),
-        top_score,
-        "Evidence after dedup + scoring"
+        top_score, "Evidence after dedup + scoring"
     );
 
     // Step 3: Synthesize answer (always via LLM, no fallback)

@@ -21,11 +21,8 @@ use serde::Serialize;
 #[derive(Debug, Clone, Serialize)]
 pub enum AgentEvent {
     // ── Query Understanding ──────────────────────────────────────────
-
     /// Query understanding started.
-    QueryUnderstandingStarted {
-        query: String,
-    },
+    QueryUnderstandingStarted { query: String },
 
     /// Query understanding completed (intent, keywords, strategy decided).
     QueryUnderstandingCompleted {
@@ -37,7 +34,6 @@ pub enum AgentEvent {
     },
 
     // ── Orchestrator ─────────────────────────────────────────────────
-
     /// Orchestrator started.
     OrchestratorStarted {
         query: String,
@@ -105,7 +101,6 @@ pub enum AgentEvent {
     },
 
     // ── Worker (per-document navigation) ─────────────────────────────
-
     /// Worker started on a document.
     WorkerStarted {
         doc_name: String,
@@ -122,10 +117,7 @@ pub enum AgentEvent {
     },
 
     /// Worker generated a navigation plan.
-    WorkerPlanGenerated {
-        doc_name: String,
-        plan_len: usize,
-    },
+    WorkerPlanGenerated { doc_name: String, plan_len: usize },
 
     /// A navigation round completed.
     WorkerRound {
@@ -178,7 +170,6 @@ pub enum AgentEvent {
     },
 
     // ── Answer Pipeline ──────────────────────────────────────────────
-
     /// Answer synthesis started.
     AnswerStarted {
         evidence_count: usize,
@@ -192,7 +183,6 @@ pub enum AgentEvent {
     },
 
     // ── Terminal ─────────────────────────────────────────────────────
-
     /// Entire retrieval pipeline completed.
     Completed {
         evidence_count: usize,
@@ -201,10 +191,7 @@ pub enum AgentEvent {
     },
 
     /// An error occurred.
-    Error {
-        stage: String,
-        message: String,
-    },
+    Error { stage: String, message: String },
 }
 
 // ---------------------------------------------------------------------------
@@ -562,12 +549,38 @@ mod tests {
 
         let events: Vec<AgentEvent> = (0..6).map(|_| rx.blocking_recv().unwrap()).collect();
 
-        assert!(matches!(&events[0], AgentEvent::OrchestratorStarted { query, .. } if query == "what is X?"));
-        assert!(matches!(&events[1], AgentEvent::WorkerStarted { doc_name, .. } if doc_name == "doc.md"));
-        assert!(matches!(&events[2], AgentEvent::EvidenceCollected { node_title, .. } if node_title == "Intro"));
-        assert!(matches!(&events[3], AgentEvent::WorkerSufficiencyCheck { sufficient: true, .. }));
-        assert!(matches!(&events[4], AgentEvent::WorkerDone { evidence_count: 1, plan_generated: true, .. }));
-        assert!(matches!(&events[5], AgentEvent::Completed { evidence_count: 1, answer_len: 42, .. }));
+        assert!(
+            matches!(&events[0], AgentEvent::OrchestratorStarted { query, .. } if query == "what is X?")
+        );
+        assert!(
+            matches!(&events[1], AgentEvent::WorkerStarted { doc_name, .. } if doc_name == "doc.md")
+        );
+        assert!(
+            matches!(&events[2], AgentEvent::EvidenceCollected { node_title, .. } if node_title == "Intro")
+        );
+        assert!(matches!(
+            &events[3],
+            AgentEvent::WorkerSufficiencyCheck {
+                sufficient: true,
+                ..
+            }
+        ));
+        assert!(matches!(
+            &events[4],
+            AgentEvent::WorkerDone {
+                evidence_count: 1,
+                plan_generated: true,
+                ..
+            }
+        ));
+        assert!(matches!(
+            &events[5],
+            AgentEvent::Completed {
+                evidence_count: 1,
+                answer_len: 42,
+                ..
+            }
+        ));
     }
 
     #[test]

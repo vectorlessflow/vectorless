@@ -59,12 +59,13 @@ pub async fn replan(
         &find_text,
     );
 
-    let response = llm.complete(&system, &user).await.map_err(|e| {
-        Error::LlmReasoning {
+    let response = llm
+        .complete(&system, &user)
+        .await
+        .map_err(|e| Error::LlmReasoning {
             stage: "orchestrator/replan".to_string(),
             detail: format!("Replan LLM call failed: {e}"),
-        }
-    })?;
+        })?;
 
     info!(
         response_len = response.len(),
@@ -94,7 +95,12 @@ fn format_evidence_context(evidence: &[Evidence]) -> String {
         .iter()
         .map(|e| {
             let doc = e.doc_name.as_deref().unwrap_or("unknown");
-            format!("- [{}] (from {}) {} chars", e.node_title, doc, e.content.len())
+            format!(
+                "- [{}] (from {}) {} chars",
+                e.node_title,
+                doc,
+                e.content.len()
+            )
         })
         .collect::<Vec<_>>()
         .join("\n")
@@ -129,7 +135,8 @@ Output format — for each additional document to query, output a block:
   task: <what specific information to find>
 
 Only include documents not yet dispatched. If no additional documents are likely to help, \
-respond with: NO_ADDITIONAL_DOCS".to_string();
+respond with: NO_ADDITIONAL_DOCS"
+        .to_string();
 
     let user = format!(
         "Original question: {query}

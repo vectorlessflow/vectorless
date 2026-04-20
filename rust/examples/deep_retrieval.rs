@@ -148,9 +148,7 @@ At 14:52 UTC on Day 17, thruster cluster B3 (one of eight attitude control clust
 ///     Day 17, would the spacecraft have been able to recover attitude without
 ///     ground intervention?"
 ///     → Requires combining anomaly timelines and thruster redundancy info.
-const QUERIES: &[&str] = &[
-    "where can i find the backup landing zone",
-];
+const QUERIES: &[&str] = &["where can i find the backup landing zone"];
 
 #[tokio::main]
 async fn main() -> vectorless::Result<()> {
@@ -204,7 +202,10 @@ async fn main() -> vectorless::Result<()> {
                             println!("     {}", line);
                         }
                         if item.content.lines().count() > 10 {
-                            println!("     ... ({} more lines)", item.content.lines().count() - 10);
+                            println!(
+                                "     ... ({} more lines)",
+                                item.content.lines().count() - 10
+                            );
                         }
                     }
                 }

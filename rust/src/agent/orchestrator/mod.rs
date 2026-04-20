@@ -18,11 +18,11 @@ use tracing::info;
 use crate::llm::LlmClient;
 use crate::query::QueryPlan;
 
+use super::Agent;
 use super::config::{AgentConfig, Output, WorkspaceContext};
 use super::events::EventEmitter;
 use super::state::OrchestratorState;
 use super::tools::orchestrator as orch_tools;
-use super::Agent;
 
 use analyze::{AnalyzeOutcome, analyze};
 use evaluate::evaluate;
@@ -77,7 +77,15 @@ impl<'a> Agent for Orchestrator<'a> {
     }
 
     async fn run(self) -> crate::error::Result<Output> {
-        let Orchestrator { query, ws, config, llm, emitter, skip_analysis, query_plan } = self;
+        let Orchestrator {
+            query,
+            ws,
+            config,
+            llm,
+            emitter,
+            skip_analysis,
+            query_plan,
+        } = self;
 
         info!(
             docs = ws.doc_count(),
@@ -93,9 +101,20 @@ impl<'a> Agent for Orchestrator<'a> {
 
         // --- Phase 1: Analyze — LLM selects documents + tasks ---
         let initial_dispatches = match analyze(
-            &query, ws, &mut state, &emitter, skip_analysis, &query_plan, &llm,
-        ).await? {
-            AnalyzeOutcome::Proceed { dispatches, llm_calls } => {
+            &query,
+            ws,
+            &mut state,
+            &emitter,
+            skip_analysis,
+            &query_plan,
+            &llm,
+        )
+        .await?
+        {
+            AnalyzeOutcome::Proceed {
+                dispatches,
+                llm_calls,
+            } => {
                 orch_llm_calls += llm_calls;
                 dispatches
             }
@@ -131,8 +150,15 @@ impl<'a> Agent for Orchestrator<'a> {
                     "Dispatching Workers"
                 );
                 dispatch::dispatch_and_collect(
-                    &query, &current_dispatches, ws, &config, &llm, &mut state, &emitter,
-                ).await;
+                    &query,
+                    &current_dispatches,
+                    ws,
+                    &config,
+                    &llm,
+                    &mut state,
+                    &emitter,
+                )
+                .await;
             }
 
             // No evidence at all — nothing to evaluate
@@ -153,8 +179,7 @@ impl<'a> Agent for Orchestrator<'a> {
             if eval_result.sufficient {
                 info!(
                     evidence = state.all_evidence.len(),
-                    iteration,
-                    "Evidence sufficient — exiting supervisor loop"
+                    iteration, "Evidence sufficient — exiting supervisor loop"
                 );
                 break;
             }
@@ -176,7 +201,8 @@ impl<'a> Agent for Orchestrator<'a> {
                 ws.doc_count(),
                 &doc_cards_text,
                 &llm,
-            ).await?;
+            )
+            .await?;
             orch_llm_calls += 1;
 
             if replan_result.dispatches.is_empty() {
@@ -195,7 +221,16 @@ impl<'a> Agent for Orchestrator<'a> {
         }
 
         let multi_doc = ws.doc_count() > 1;
-        finalize_output(&query, &state, &config, &llm, &emitter, orch_llm_calls, multi_doc).await
+        finalize_output(
+            &query,
+            &state,
+            &config,
+            &llm,
+            &emitter,
+            orch_llm_calls,
+            multi_doc,
+        )
+        .await
     }
 }
 
@@ -210,7 +245,12 @@ pub async fn finalize_output(
     multi_doc: bool,
 ) -> crate::error::Result<Output> {
     let rerank_result = crate::rerank::process(
-        query, &state.all_evidence, config.answer.enable_synthesis, llm, multi_doc, &state.sub_results,
+        query,
+        &state.all_evidence,
+        config.answer.enable_synthesis,
+        llm,
+        multi_doc,
+        &state.sub_results,
     )
     .await?;
 
@@ -224,7 +264,8 @@ pub async fn finalize_output(
     output.score = rerank_result.score;
 
     emitter.emit_orchestrator_completed(
-        output.evidence.len(), output.metrics.llm_calls,
+        output.evidence.len(),
+        output.metrics.llm_calls,
         output.metrics.rounds_used,
     );
 

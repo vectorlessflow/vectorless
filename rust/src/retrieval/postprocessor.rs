@@ -46,7 +46,13 @@ pub fn to_results(output: &Output, doc_id: &str) -> Vec<QueryResultItem> {
         .map(|(name, refs)| {
             let did = name.as_deref().unwrap_or(doc_id);
             let evidence: Vec<Evidence> = refs.iter().map(|e| (*e).clone()).collect();
-            build_item(did, &output.answer, output.score, &evidence, &output.metrics)
+            build_item(
+                did,
+                &output.answer,
+                output.score,
+                &evidence,
+                &output.metrics,
+            )
         })
         .collect()
 }
@@ -90,7 +96,10 @@ fn build_item(
     };
 
     let evidence_count = evidence.len();
-    let confidence = map_confidence(ConfidenceLevel::from_evidence(evidence_count, content.len()));
+    let confidence = map_confidence(ConfidenceLevel::from_evidence(
+        evidence_count,
+        content.len(),
+    ));
 
     QueryResultItem {
         doc_id: doc_id.to_string(),

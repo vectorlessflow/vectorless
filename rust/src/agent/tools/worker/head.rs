@@ -11,20 +11,17 @@ use super::super::ToolResult;
 
 /// Execute `head <target>` — preview first N lines of a node without collecting evidence.
 pub fn head(target: &str, lines: usize, ctx: &DocContext, state: &WorkerState) -> ToolResult {
-    let node_id = match command::resolve_target_extended(
-        target,
-        ctx.nav_index,
-        state.current_node,
-        ctx.tree,
-    ) {
-        Some(id) => id,
-        None => {
-            return ToolResult::fail(format!(
-                "Target '{}' not found. Use ls to see available children.",
-                target
-            ));
-        }
-    };
+    let node_id =
+        match command::resolve_target_extended(target, ctx.nav_index, state.current_node, ctx.tree)
+        {
+            Some(id) => id,
+            None => {
+                return ToolResult::fail(format!(
+                    "Target '{}' not found. Use ls to see available children.",
+                    target
+                ));
+            }
+        };
 
     let content = match ctx.cat(node_id) {
         Some(c) => c,

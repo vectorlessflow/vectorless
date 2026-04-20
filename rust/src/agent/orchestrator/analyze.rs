@@ -21,7 +21,10 @@ use super::super::tools::orchestrator as orch_tools;
 /// Outcome of the analyze phase.
 pub enum AnalyzeOutcome {
     /// Produce dispatch entries for Phase 2.
-    Proceed { dispatches: Vec<DispatchEntry>, llm_calls: u32 },
+    Proceed {
+        dispatches: Vec<DispatchEntry>,
+        llm_calls: u32,
+    },
     /// Cross-doc search already answered the query.
     AlreadyAnswered { llm_calls: u32 },
     /// No relevant documents found.
@@ -54,7 +57,10 @@ pub async fn analyze(
                 task: query.to_string(),
             })
             .collect();
-        return Ok(AnalyzeOutcome::Proceed { dispatches, llm_calls: 0 });
+        return Ok(AnalyzeOutcome::Proceed {
+            dispatches,
+            llm_calls: 0,
+        });
     }
 
     debug!(
@@ -95,7 +101,10 @@ pub async fn analyze(
     let rewritten_text = if query_plan.rewritten.is_empty() {
         String::new()
     } else {
-        format!("\nRewritten queries for matching: {}", query_plan.rewritten.join("; "))
+        format!(
+            "\nRewritten queries for matching: {}",
+            query_plan.rewritten.join("; ")
+        )
     };
 
     let intent_context = format!(
@@ -103,12 +112,13 @@ pub async fn analyze(
         query_plan.intent, query_plan.complexity,
     );
 
-    let (system, user) = orchestrator_analysis(&super::super::prompts::OrchestratorAnalysisParams {
-        query,
-        doc_cards: &doc_cards_text,
-        find_results: &find_text,
-        intent_context: &intent_context,
-    });
+    let (system, user) =
+        orchestrator_analysis(&super::super::prompts::OrchestratorAnalysisParams {
+            query,
+            doc_cards: &doc_cards_text,
+            find_results: &find_text,
+            intent_context: &intent_context,
+        });
 
     let analysis_output = llm.complete(&system, &user).await.map_err(|e| {
         emitter.emit_error("orchestrator/analysis", &e.to_string());
@@ -132,12 +142,18 @@ pub async fn analyze(
         }
     };
 
-    info!(dispatches = dispatches.len(), "Phase 1: parsed dispatch plan");
+    info!(
+        dispatches = dispatches.len(),
+        "Phase 1: parsed dispatch plan"
+    );
 
     if dispatches.is_empty() {
         return Ok(AnalyzeOutcome::NoResults { llm_calls: 1 });
     }
 
     state.analyze_done = true;
-    Ok(AnalyzeOutcome::Proceed { dispatches, llm_calls: 1 })
+    Ok(AnalyzeOutcome::Proceed {
+        dispatches,
+        llm_calls: 1,
+    })
 }

@@ -245,12 +245,16 @@ fn build_semantic_hints(
         for tag in &nav.topic_tags {
             let tag_lower = tag.to_lowercase();
             for kw in query_keywords {
-                if tag_lower.contains(&kw.to_lowercase()) || kw.to_lowercase().contains(&tag_lower) {
+                if tag_lower.contains(&kw.to_lowercase()) || kw.to_lowercase().contains(&tag_lower)
+                {
                     annotations.push(format!("topic \"{}\"", tag));
                     break;
                 }
             }
-            if !annotations.iter().any(|a| a.contains(&format!("topic \"{}\"", tag))) {
+            if !annotations
+                .iter()
+                .any(|a| a.contains(&format!("topic \"{}\"", tag)))
+            {
                 if query_lower.contains(&tag_lower) && tag.len() > 2 {
                     annotations.push(format!("topic \"{}\"", tag));
                 }
@@ -351,7 +355,10 @@ fn build_sibling_hints(state: &WorkerState, ctx: &DocContext<'_>) -> String {
             if !unvisited.is_empty() {
                 hints.push_str("Unvisited sibling branches at current level:\n");
                 for route in &unvisited {
-                    hints.push_str(&format!("  - {} ({} leaves)\n", route.title, route.leaf_count));
+                    hints.push_str(&format!(
+                        "  - {} ({} leaves)\n",
+                        route.title, route.leaf_count
+                    ));
                 }
             }
         }
@@ -365,7 +372,10 @@ fn build_sibling_hints(state: &WorkerState, ctx: &DocContext<'_>) -> String {
                 if !unvisited_parent_siblings.is_empty() {
                     hints.push_str("Unvisited branches at parent level (cd .. then explore):\n");
                     for route in &unvisited_parent_siblings {
-                        hints.push_str(&format!("  - {} ({} leaves)\n", route.title, route.leaf_count));
+                        hints.push_str(&format!(
+                            "  - {} ({} leaves)\n",
+                            route.title, route.leaf_count
+                        ));
                     }
                 }
             }
@@ -436,7 +446,11 @@ mod tests {
                     "What is the total revenue?".to_string(),
                     "What was the Q1 revenue?".to_string(),
                 ],
-                topic_tags: vec!["revenue".to_string(), "sales".to_string(), "income".to_string()],
+                topic_tags: vec![
+                    "revenue".to_string(),
+                    "sales".to_string(),
+                    "income".to_string(),
+                ],
                 leaf_count: 2,
                 level: 1,
             },
@@ -459,8 +473,10 @@ mod tests {
     fn test_build_ancestor_path() {
         let (tree, nav, root, revenue, _) = build_semantic_test_tree();
         let ctx = DocContext {
-            tree: &tree, nav_index: &nav,
-            reasoning_index: &crate::document::ReasoningIndex::default(), doc_name: "test",
+            tree: &tree,
+            nav_index: &nav,
+            reasoning_index: &crate::document::ReasoningIndex::default(),
+            doc_name: "test",
         };
         assert_eq!(build_ancestor_path(revenue, &ctx), "Root > Revenue");
         assert_eq!(build_ancestor_path(root, &ctx), "Root");
@@ -470,12 +486,18 @@ mod tests {
     fn test_semantic_hints_keyword_match() {
         let (tree, nav, _, _, _) = build_semantic_test_tree();
         let ctx = DocContext {
-            tree: &tree, nav_index: &nav,
-            reasoning_index: &crate::document::ReasoningIndex::default(), doc_name: "test",
+            tree: &tree,
+            nav_index: &nav,
+            reasoning_index: &crate::document::ReasoningIndex::default(),
+            doc_name: "test",
         };
         let keywords = extract_keywords("What is the revenue?");
         let hints = build_semantic_hints(&keywords, &"what is the revenue".to_lowercase(), &ctx);
-        assert!(hints.contains("Revenue"), "Should match Revenue section, got: {}", hints);
+        assert!(
+            hints.contains("Revenue"),
+            "Should match Revenue section, got: {}",
+            hints
+        );
         assert!(hints.contains("BM25"));
     }
 
@@ -483,20 +505,29 @@ mod tests {
     fn test_semantic_hints_topic_match() {
         let (tree, nav, _, _, _) = build_semantic_test_tree();
         let ctx = DocContext {
-            tree: &tree, nav_index: &nav,
-            reasoning_index: &crate::document::ReasoningIndex::default(), doc_name: "test",
+            tree: &tree,
+            nav_index: &nav,
+            reasoning_index: &crate::document::ReasoningIndex::default(),
+            doc_name: "test",
         };
         let keywords = extract_keywords("operating costs analysis");
-        let hints = build_semantic_hints(&keywords, &"operating costs analysis".to_lowercase(), &ctx);
-        assert!(hints.contains("Expenses"), "Should match Expenses via topic 'costs', got: {}", hints);
+        let hints =
+            build_semantic_hints(&keywords, &"operating costs analysis".to_lowercase(), &ctx);
+        assert!(
+            hints.contains("Expenses"),
+            "Should match Expenses via topic 'costs', got: {}",
+            hints
+        );
     }
 
     #[test]
     fn test_semantic_hints_no_match() {
         let (tree, nav, _, _, _) = build_semantic_test_tree();
         let ctx = DocContext {
-            tree: &tree, nav_index: &nav,
-            reasoning_index: &crate::document::ReasoningIndex::default(), doc_name: "test",
+            tree: &tree,
+            nav_index: &nav,
+            reasoning_index: &crate::document::ReasoningIndex::default(),
+            doc_name: "test",
         };
         let keywords = extract_keywords("xyzzy foobar");
         let hints = build_semantic_hints(&keywords, &"xyzzy foobar".to_lowercase(), &ctx);
@@ -515,8 +546,10 @@ mod tests {
             doc_name: None,
         });
         let ctx = DocContext {
-            tree: &tree, nav_index: &nav,
-            reasoning_index: &crate::document::ReasoningIndex::default(), doc_name: "test",
+            tree: &tree,
+            nav_index: &nav,
+            reasoning_index: &crate::document::ReasoningIndex::default(),
+            doc_name: "test",
         };
         let (system, user) = build_replan_prompt("What is total revenue?", None, &state, &ctx);
         assert!(system.contains("re-planning"));
@@ -528,11 +561,21 @@ mod tests {
     fn test_build_plan_prompt_with_semantic_hints() {
         let (tree, nav, _, _, _) = build_semantic_test_tree();
         let ctx = DocContext {
-            tree: &tree, nav_index: &nav,
-            reasoning_index: &crate::document::ReasoningIndex::default(), doc_name: "Financial Report",
+            tree: &tree,
+            nav_index: &nav,
+            reasoning_index: &crate::document::ReasoningIndex::default(),
+            doc_name: "Financial Report",
         };
-        let ls_output = "[1] Revenue — Revenue breakdown (2 leaves)\n[2] Expenses — Cost analysis (2 leaves)\n";
-        let (system, user) = build_plan_prompt("What is the revenue?", None, ls_output, "Financial Report", &[], &ctx);
+        let ls_output =
+            "[1] Revenue — Revenue breakdown (2 leaves)\n[2] Expenses — Cost analysis (2 leaves)\n";
+        let (system, user) = build_plan_prompt(
+            "What is the revenue?",
+            None,
+            ls_output,
+            "Financial Report",
+            &[],
+            &ctx,
+        );
         assert!(system.contains("semantic hints"));
         assert!(user.contains("What is the revenue?"));
     }

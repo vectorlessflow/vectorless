@@ -1,6 +1,12 @@
 # CLAUDE.md
 
-A hierarchical, reasoning-native document intelligence engine written in Rust.
+Vectorless is a reasoning-native document intelligence engine written in Rust.
+
+## Principles
+
+- **Reason, don't vector.** — Every retrieval decision is an LLM decision.
+- **Model fails, we fail.** — No silent degradation. No heuristic fallbacks.
+- **No thought, no answer.** — Only LLM-reasoned output counts as an answer.
 
 ## Project Structure
 
@@ -9,8 +15,8 @@ A hierarchical, reasoning-native document intelligence engine written in Rust.
   - `src/document/` - Document data structures (DocumentTree, NavigationIndex, ReasoningIndex)
   - `src/index/` - Compile pipeline (8-stage, checkpointing, incremental update)
   - `src/retrieval/` - Retrieval dispatch layer (preprocessing, dispatch, postprocessing, cache, streaming)
-  - `src/query/` - Query understanding and planning (intent classification, rewrite, decomposition, budget)
-  - `src/agent/` - Retrieval execution (SubAgent: doc navigation, Orchestrator: workspace analysis + multi-doc fusion)
+  - `src/query/` - Query understanding and planning (intent classification, rewrite, decomposition)
+  - `src/agent/` - Retrieval execution (Worker: doc navigation, Orchestrator: supervisor loop + multi-doc fusion)
   - `src/rerank/` - Result reranking and answer synthesis (dedup, scoring, fusion, synthesis)
   - `src/scoring/` - Scoring and ranking strategies (BM25, relevance scoring, score combination)
   - `src/llm/` - LLM client (connection pool, memo/caching, throttle/rate-limiting, fallback)
@@ -31,11 +37,13 @@ A hierarchical, reasoning-native document intelligence engine written in Rust.
 ```
 Engine.query()
   → retrieval/dispatcher
-    → query/understand() → QueryPlan
-    → branch:
-        ├── User specified doc_ids → parallel spawn N × SubAgent
-        └── Workspace scope → Orchestrator (analyze DocCards → spawn SubAgents → fusion)
-    → rerank/ (dedup → score → fusion → synthesis)
+    → query/understand() → QueryPlan (LLM intent + concepts + strategy)
+    → Orchestrator (always, single or multi-doc)
+      → analyze(QueryPlan) → dispatch plan
+      → supervisor loop:
+          dispatch Workers → evaluate() →
+          if insufficient → replan() → loop
+      → rerank/ (dedup → BM25 score → synthesis/fusion)
 ```
 
 ## Build Commands

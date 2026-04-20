@@ -68,7 +68,16 @@ pub async fn dispatch(
 
     // Step 2: Dispatch to Orchestrator with the query plan.
     let orchestrator = Orchestrator::new(
-        query, &ws, config.clone(), llm.clone(), emitter.clone(), skip_analysis, query_plan,
+        query,
+        &ws,
+        config.clone(),
+        llm.clone(),
+        emitter.clone(),
+        skip_analysis,
+        query_plan,
     );
-    orchestrator.run().await.map_err(|e| Error::Retrieval(e.to_string()))
+    orchestrator
+        .run()
+        .await
+        .map_err(|e| Error::Retrieval(e.to_string()))
 }

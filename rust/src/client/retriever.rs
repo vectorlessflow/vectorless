@@ -79,9 +79,7 @@ impl RetrieverClient {
 
         info!(
             docs = documents.len(),
-            skip_analysis,
-            "Querying: {:?}",
-            question
+            skip_analysis, "Querying: {:?}", question
         );
 
         let doc_contexts: Vec<agent::DocContext> = documents

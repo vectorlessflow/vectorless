@@ -7,12 +7,12 @@ use tracing::{info, warn};
 
 use crate::llm::LlmClient;
 
+use super::super::Agent;
 use super::super::config::{AgentConfig, WorkspaceContext};
 use super::super::events::EventEmitter;
 use super::super::prompts::DispatchEntry;
 use super::super::state::OrchestratorState;
 use super::super::worker::Worker;
-use super::super::Agent;
 
 /// Dispatch Workers in parallel and collect results.
 pub async fn dispatch_and_collect(
@@ -45,9 +45,7 @@ pub async fn dispatch_and_collect(
 
             Some(async move {
                 emitter.emit_worker_dispatched(doc_idx, &doc_name, &task, &[]);
-                let worker = Worker::new(
-                    &query, Some(&task), doc, worker_config, llm, sub_emitter,
-                );
+                let worker = Worker::new(&query, Some(&task), doc, worker_config, llm, sub_emitter);
                 let result = worker.run().await;
                 (doc_idx, doc_name, result)
             })
@@ -59,9 +57,14 @@ pub async fn dispatch_and_collect(
     for (doc_idx, doc_name, result) in results {
         match result {
             Ok(output) => {
-                info!(doc_idx, evidence = output.evidence.len(), "Worker completed");
+                info!(
+                    doc_idx,
+                    evidence = output.evidence.len(),
+                    "Worker completed"
+                );
                 emitter.emit_worker_completed(
-                    doc_idx, &doc_name,
+                    doc_idx,
+                    &doc_name,
                     output.evidence.len(),
                     output.metrics.rounds_used,
                     output.metrics.llm_calls,

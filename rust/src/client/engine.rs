@@ -66,9 +66,7 @@ use super::{
     indexer::IndexerClient,
     query_context::{QueryContext, QueryScope},
     retriever::RetrieverClient,
-    types::{
-        DocumentInfo, FailedItem, IndexItem, IndexMode, IndexResult, QueryResult,
-    },
+    types::{DocumentInfo, FailedItem, IndexItem, IndexMode, IndexResult, QueryResult},
     workspace::WorkspaceClient,
 };
 
@@ -471,10 +469,10 @@ impl Engine {
             }
 
             let skip_analysis = !ctx.force_analysis;
-            let mut result =
-                self.retriever
-                    .query(&documents, &ctx.query, skip_analysis)
-                    .await?;
+            let mut result = self
+                .retriever
+                .query(&documents, &ctx.query, skip_analysis)
+                .await?;
             result.failed.extend(failed);
             Ok(result)
         })
@@ -532,156 +530,230 @@ impl Engine {
                     }
 
                     // ── Orchestrator ──
-                    AgentEvent::OrchestratorStarted { query, doc_count, skip_analysis } => {
-                        RetrieveEvent::Started {
-                            query,
-                            strategy: if skip_analysis {
-                                "orchestrator_skip_analysis".to_string()
-                            } else {
-                                format!("orchestrator({}_docs)", doc_count)
-                            },
-                        }
-                    }
-                    AgentEvent::OrchestratorFastPath { keyword, doc_name, node_title, .. } => {
-                        RetrieveEvent::ContentFound {
-                            node_id: format!("{}/{}", doc_name, node_title),
-                            title: node_title,
-                            preview: keyword,
-                            score: 1.0,
-                        }
-                    }
-                    AgentEvent::OrchestratorAnalyzing { doc_count, keywords } => {
-                        RetrieveEvent::StageCompleted {
-                            stage: format!("orchestrator_analyzing_{}_docs_kw_{}", doc_count, keywords.len()),
-                            elapsed_ms: 0,
-                        }
-                    }
+                    AgentEvent::OrchestratorStarted {
+                        query,
+                        doc_count,
+                        skip_analysis,
+                    } => RetrieveEvent::Started {
+                        query,
+                        strategy: if skip_analysis {
+                            "orchestrator_skip_analysis".to_string()
+                        } else {
+                            format!("orchestrator({}_docs)", doc_count)
+                        },
+                    },
+                    AgentEvent::OrchestratorFastPath {
+                        keyword,
+                        doc_name,
+                        node_title,
+                        ..
+                    } => RetrieveEvent::ContentFound {
+                        node_id: format!("{}/{}", doc_name, node_title),
+                        title: node_title,
+                        preview: keyword,
+                        score: 1.0,
+                    },
+                    AgentEvent::OrchestratorAnalyzing {
+                        doc_count,
+                        keywords,
+                    } => RetrieveEvent::StageCompleted {
+                        stage: format!(
+                            "orchestrator_analyzing_{}_docs_kw_{}",
+                            doc_count,
+                            keywords.len()
+                        ),
+                        elapsed_ms: 0,
+                    },
                     AgentEvent::OrchestratorPlanReady { dispatch_count, .. } => {
                         RetrieveEvent::StageCompleted {
                             stage: format!("orchestrator_plan_{}_dispatches", dispatch_count),
                             elapsed_ms: 0,
                         }
                     }
-                    AgentEvent::WorkerDispatched { doc_idx, doc_name, task, .. } => {
-                        RetrieveEvent::StageCompleted {
-                            stage: format!("dispatch_{}_{}_{}", doc_idx, doc_name, task.len().min(30)),
-                            elapsed_ms: 0,
-                        }
-                    }
-                    AgentEvent::WorkerCompleted { doc_idx, doc_name, evidence_count, rounds_used, llm_calls, success } => {
-                        RetrieveEvent::StageCompleted {
-                            stage: format!("worker_{}_{}_done_e{}_r{}_l{}_{}", doc_idx, doc_name, evidence_count, rounds_used, llm_calls, success),
-                            elapsed_ms: 0,
-                        }
-                    }
-                    AgentEvent::OrchestratorEvaluated { sufficient, evidence_count, missing_info: _ } => {
-                        RetrieveEvent::SufficiencyCheck {
-                            level: if sufficient {
-                                crate::retrieval::SufficiencyLevel::Sufficient
-                            } else {
-                                crate::retrieval::SufficiencyLevel::Insufficient
-                            },
-                            tokens: evidence_count,
-                        }
-                    }
-                    AgentEvent::OrchestratorReplanning { reason, evidence_count } => {
-                        RetrieveEvent::StageCompleted {
-                            stage: format!("orchestrator_replan_{}_e{}", &reason[..reason.len().min(30)], evidence_count),
-                            elapsed_ms: 0,
-                        }
-                    }
-                    AgentEvent::OrchestratorCompleted { evidence_count, total_llm_calls, dispatch_rounds } => {
-                        RetrieveEvent::StageCompleted {
-                            stage: format!("orchestrator_done_e{}_l{}_r{}", evidence_count, total_llm_calls, dispatch_rounds),
-                            elapsed_ms: 0,
-                        }
-                    }
+                    AgentEvent::WorkerDispatched {
+                        doc_idx,
+                        doc_name,
+                        task,
+                        ..
+                    } => RetrieveEvent::StageCompleted {
+                        stage: format!("dispatch_{}_{}_{}", doc_idx, doc_name, task.len().min(30)),
+                        elapsed_ms: 0,
+                    },
+                    AgentEvent::WorkerCompleted {
+                        doc_idx,
+                        doc_name,
+                        evidence_count,
+                        rounds_used,
+                        llm_calls,
+                        success,
+                    } => RetrieveEvent::StageCompleted {
+                        stage: format!(
+                            "worker_{}_{}_done_e{}_r{}_l{}_{}",
+                            doc_idx, doc_name, evidence_count, rounds_used, llm_calls, success
+                        ),
+                        elapsed_ms: 0,
+                    },
+                    AgentEvent::OrchestratorEvaluated {
+                        sufficient,
+                        evidence_count,
+                        missing_info: _,
+                    } => RetrieveEvent::SufficiencyCheck {
+                        level: if sufficient {
+                            crate::retrieval::SufficiencyLevel::Sufficient
+                        } else {
+                            crate::retrieval::SufficiencyLevel::Insufficient
+                        },
+                        tokens: evidence_count,
+                    },
+                    AgentEvent::OrchestratorReplanning {
+                        reason,
+                        evidence_count,
+                    } => RetrieveEvent::StageCompleted {
+                        stage: format!(
+                            "orchestrator_replan_{}_e{}",
+                            &reason[..reason.len().min(30)],
+                            evidence_count
+                        ),
+                        elapsed_ms: 0,
+                    },
+                    AgentEvent::OrchestratorCompleted {
+                        evidence_count,
+                        total_llm_calls,
+                        dispatch_rounds,
+                    } => RetrieveEvent::StageCompleted {
+                        stage: format!(
+                            "orchestrator_done_e{}_l{}_r{}",
+                            evidence_count, total_llm_calls, dispatch_rounds
+                        ),
+                        elapsed_ms: 0,
+                    },
 
                     // ── Worker ──
-                    AgentEvent::WorkerStarted { doc_name, task: _, max_rounds } => {
-                        RetrieveEvent::StageCompleted {
-                            stage: format!("worker_started_{}_r{}", doc_name, max_rounds),
-                            elapsed_ms: 0,
-                        }
-                    }
-                    AgentEvent::WorkerFastPath { doc_name, keyword, node_title, weight } => {
-                        RetrieveEvent::ContentFound {
-                            node_id: format!("{}/{}", doc_name, node_title),
-                            title: node_title,
-                            preview: keyword,
-                            score: weight,
-                        }
-                    }
+                    AgentEvent::WorkerStarted {
+                        doc_name,
+                        task: _,
+                        max_rounds,
+                    } => RetrieveEvent::StageCompleted {
+                        stage: format!("worker_started_{}_r{}", doc_name, max_rounds),
+                        elapsed_ms: 0,
+                    },
+                    AgentEvent::WorkerFastPath {
+                        doc_name,
+                        keyword,
+                        node_title,
+                        weight,
+                    } => RetrieveEvent::ContentFound {
+                        node_id: format!("{}/{}", doc_name, node_title),
+                        title: node_title,
+                        preview: keyword,
+                        score: weight,
+                    },
                     AgentEvent::WorkerPlanGenerated { doc_name, plan_len } => {
                         RetrieveEvent::StageCompleted {
                             stage: format!("plan_{}_{}chars", doc_name, plan_len),
                             elapsed_ms: 0,
                         }
                     }
-                    AgentEvent::WorkerRound { doc_name, round, command, success: _, elapsed_ms } => {
-                        RetrieveEvent::StageCompleted {
-                            stage: format!("round_{}_{}_{}", doc_name, round, command),
-                            elapsed_ms,
-                        }
-                    }
-                    AgentEvent::EvidenceCollected { doc_name, node_title, source_path, content_len, total_evidence: _ } => {
-                        RetrieveEvent::ContentFound {
-                            node_id: source_path,
-                            title: format!("[{}] {}", doc_name, node_title),
-                            preview: String::new(),
-                            score: if content_len > 0 { 0.8 } else { 0.0 },
-                        }
-                    }
-                    AgentEvent::WorkerSufficiencyCheck { doc_name: _, sufficient, evidence_count, .. } => {
-                        RetrieveEvent::SufficiencyCheck {
-                            level: if sufficient {
-                                crate::retrieval::SufficiencyLevel::Sufficient
-                            } else {
-                                crate::retrieval::SufficiencyLevel::Insufficient
-                            },
-                            tokens: evidence_count,
-                        }
-                    }
-                    AgentEvent::WorkerReplan { doc_name, missing_info, plan_len } => {
-                        RetrieveEvent::StageCompleted {
-                            stage: format!(
-                                "replan_{}_{}_{}chars",
-                                doc_name,
-                                &missing_info[..missing_info.len().min(30)],
-                                plan_len
-                            ),
-                            elapsed_ms: 0,
-                        }
-                    }
-                    AgentEvent::WorkerBudgetWarning { doc_name, warning_type, round } => {
-                        RetrieveEvent::StageCompleted {
-                            stage: format!("budget_warning_{}_{}_round_{}", doc_name, warning_type, round),
-                            elapsed_ms: 0,
-                        }
-                    }
-                    AgentEvent::WorkerDone { doc_name, evidence_count, rounds_used, llm_calls, budget_exhausted: _, plan_generated: _ } => {
-                        RetrieveEvent::StageCompleted {
-                            stage: format!("worker_done_{}_e{}_r{}_l{}", doc_name, evidence_count, rounds_used, llm_calls),
-                            elapsed_ms: 0,
-                        }
-                    }
+                    AgentEvent::WorkerRound {
+                        doc_name,
+                        round,
+                        command,
+                        success: _,
+                        elapsed_ms,
+                    } => RetrieveEvent::StageCompleted {
+                        stage: format!("round_{}_{}_{}", doc_name, round, command),
+                        elapsed_ms,
+                    },
+                    AgentEvent::EvidenceCollected {
+                        doc_name,
+                        node_title,
+                        source_path,
+                        content_len,
+                        total_evidence: _,
+                    } => RetrieveEvent::ContentFound {
+                        node_id: source_path,
+                        title: format!("[{}] {}", doc_name, node_title),
+                        preview: String::new(),
+                        score: if content_len > 0 { 0.8 } else { 0.0 },
+                    },
+                    AgentEvent::WorkerSufficiencyCheck {
+                        doc_name: _,
+                        sufficient,
+                        evidence_count,
+                        ..
+                    } => RetrieveEvent::SufficiencyCheck {
+                        level: if sufficient {
+                            crate::retrieval::SufficiencyLevel::Sufficient
+                        } else {
+                            crate::retrieval::SufficiencyLevel::Insufficient
+                        },
+                        tokens: evidence_count,
+                    },
+                    AgentEvent::WorkerReplan {
+                        doc_name,
+                        missing_info,
+                        plan_len,
+                    } => RetrieveEvent::StageCompleted {
+                        stage: format!(
+                            "replan_{}_{}_{}chars",
+                            doc_name,
+                            &missing_info[..missing_info.len().min(30)],
+                            plan_len
+                        ),
+                        elapsed_ms: 0,
+                    },
+                    AgentEvent::WorkerBudgetWarning {
+                        doc_name,
+                        warning_type,
+                        round,
+                    } => RetrieveEvent::StageCompleted {
+                        stage: format!(
+                            "budget_warning_{}_{}_round_{}",
+                            doc_name, warning_type, round
+                        ),
+                        elapsed_ms: 0,
+                    },
+                    AgentEvent::WorkerDone {
+                        doc_name,
+                        evidence_count,
+                        rounds_used,
+                        llm_calls,
+                        budget_exhausted: _,
+                        plan_generated: _,
+                    } => RetrieveEvent::StageCompleted {
+                        stage: format!(
+                            "worker_done_{}_e{}_r{}_l{}",
+                            doc_name, evidence_count, rounds_used, llm_calls
+                        ),
+                        elapsed_ms: 0,
+                    },
 
                     // ── Answer Pipeline ──
-                    AgentEvent::AnswerStarted { evidence_count, multi_doc } => {
-                        RetrieveEvent::StageCompleted {
-                            stage: format!("answer_start_{}_e{}", if multi_doc { "multi" } else { "single" }, evidence_count),
-                            elapsed_ms: 0,
-                        }
-                    }
-                    AgentEvent::AnswerCompleted { answer_len, confidence } => {
-                        RetrieveEvent::StageCompleted {
-                            stage: format!("synthesis_{}_{}chars", confidence, answer_len),
-                            elapsed_ms: 0,
-                        }
-                    }
+                    AgentEvent::AnswerStarted {
+                        evidence_count,
+                        multi_doc,
+                    } => RetrieveEvent::StageCompleted {
+                        stage: format!(
+                            "answer_start_{}_e{}",
+                            if multi_doc { "multi" } else { "single" },
+                            evidence_count
+                        ),
+                        elapsed_ms: 0,
+                    },
+                    AgentEvent::AnswerCompleted {
+                        answer_len,
+                        confidence,
+                    } => RetrieveEvent::StageCompleted {
+                        stage: format!("synthesis_{}_{}chars", confidence, answer_len),
+                        elapsed_ms: 0,
+                    },
 
                     // ── Terminal ──
-                    AgentEvent::Completed { evidence_count, llm_calls, answer_len } => {
+                    AgentEvent::Completed {
+                        evidence_count,
+                        llm_calls,
+                        answer_len,
+                    } => {
                         let response = crate::retrieval::RetrieveResponse {
                             results: Vec::new(),
                             content: String::new(),
@@ -697,7 +769,11 @@ impl Engine {
                         break; // Completed is terminal
                     }
                     AgentEvent::Error { stage, message } => {
-                        let _ = retrieve_tx.send(RetrieveEvent::Error { message: format!("[{}] {}", stage, message) }).await;
+                        let _ = retrieve_tx
+                            .send(RetrieveEvent::Error {
+                                message: format!("[{}] {}", stage, message),
+                            })
+                            .await;
                         break; // Error is terminal
                     }
                 };

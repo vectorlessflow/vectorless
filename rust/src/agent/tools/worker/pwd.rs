@@ -15,9 +15,9 @@ pub fn pwd(state: &WorkerState) -> ToolResult {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::document::{ChildRoute, DocumentTree, NavigationIndex};
     use crate::agent::config::DocContext;
     use crate::agent::tools::worker::cd::cd;
+    use crate::document::{ChildRoute, DocumentTree, NavigationIndex};
 
     fn build_test_tree() -> (DocumentTree, NavigationIndex) {
         let mut tree = DocumentTree::new("Root", "root content");
