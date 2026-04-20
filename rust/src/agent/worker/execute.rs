@@ -34,18 +34,21 @@ pub async fn execute_command(
     match command {
         Command::Ls => {
             let result = tools::ls(ctx, state);
+            info!(doc = ctx.doc_name, feedback = %truncate_log(&result.feedback), "ls result");
             state.set_feedback(result.feedback);
             Step::Continue
         }
 
         Command::Cd { target } => {
             let result = tools::cd(target, ctx, state);
+            info!(doc = ctx.doc_name, target, feedback = %truncate_log(&result.feedback), "cd result");
             state.set_feedback(result.feedback);
             Step::Continue
         }
 
         Command::CdUp => {
             let result = tools::cd_up(ctx, state);
+            info!(doc = ctx.doc_name, feedback = %truncate_log(&result.feedback), "cd_up result");
             state.set_feedback(result.feedback);
             Step::Continue
         }
@@ -53,6 +56,7 @@ pub async fn execute_command(
         Command::Cat { target } => {
             let evidence_before = state.evidence.len();
             let result = tools::cat(target, ctx, state);
+            info!(doc = ctx.doc_name, target, feedback = %truncate_log(&result.feedback), "cat result");
             state.set_feedback(result.feedback);
             if state.evidence.len() > evidence_before {
                 if let Some(ev) = state.evidence.last() {
@@ -177,27 +181,41 @@ pub async fn execute_command(
 
         Command::Grep { pattern } => {
             let result = tools::grep(pattern, ctx, state);
+            info!(doc = ctx.doc_name, pattern, feedback = %truncate_log(&result.feedback), "grep result");
             state.set_feedback(result.feedback);
             Step::Continue
         }
 
         Command::Head { target, lines } => {
             let result = tools::head(target, *lines, ctx, state);
+            info!(doc = ctx.doc_name, target, lines, feedback = %truncate_log(&result.feedback), "head result");
             state.set_feedback(result.feedback);
             Step::Continue
         }
 
         Command::FindTree { pattern } => {
             let result = tools::find_tree(pattern, ctx);
+            info!(doc = ctx.doc_name, pattern, feedback = %truncate_log(&result.feedback), "find_tree result");
             state.set_feedback(result.feedback);
             Step::Continue
         }
 
         Command::Wc { target } => {
             let result = tools::wc(target, ctx, state);
+            info!(doc = ctx.doc_name, target, feedback = %truncate_log(&result.feedback), "wc result");
             state.set_feedback(result.feedback);
             Step::Continue
         }
+    }
+}
+
+/// Truncate feedback for log output — keep first 300 chars to avoid noisy logs.
+fn truncate_log(s: &str) -> std::borrow::Cow<'_, str> {
+    const MAX: usize = 300;
+    if s.len() <= MAX {
+        std::borrow::Cow::Borrowed(s)
+    } else {
+        std::borrow::Cow::Owned(format!("{}...(truncated, {} chars total)", &s[..MAX], s.len()))
     }
 }
 
