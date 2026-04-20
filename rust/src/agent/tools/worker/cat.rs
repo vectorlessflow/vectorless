@@ -5,12 +5,12 @@
 
 use crate::agent::command;
 use crate::agent::config::{DocContext, Evidence};
-use crate::agent::state::State;
+use crate::agent::state::WorkerState;
 
 use super::super::ToolResult;
 
 /// Execute `cat <target>` — read node content and collect as evidence.
-pub fn cat(target: &str, ctx: &DocContext, state: &mut State) -> ToolResult {
+pub fn cat(target: &str, ctx: &DocContext, state: &mut WorkerState) -> ToolResult {
     let node_id = match command::resolve_target_extended(
         target,
         ctx.nav_index,
@@ -106,7 +106,7 @@ mod tests {
             reasoning_index: &crate::document::ReasoningIndex::default(),
             doc_name: "test",
         };
-        let mut state = State::new(root, 8);
+        let mut state = WorkerState::new(root, 8);
 
         let result = cat("Getting Started", &ctx, &mut state);
         assert!(result.success);

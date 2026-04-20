@@ -4,12 +4,12 @@
 //! `ls` — list children of the current node.
 
 use crate::agent::config::DocContext;
-use crate::agent::state::State;
+use crate::agent::state::WorkerState;
 
 use super::super::ToolResult;
 
 /// Execute `ls` — list children of the current node.
-pub fn ls(ctx: &DocContext, state: &State) -> ToolResult {
+pub fn ls(ctx: &DocContext, state: &WorkerState) -> ToolResult {
     let mut output = String::new();
 
     if let Some(entry) = ctx.nav_entry(state.current_node) {
@@ -103,7 +103,7 @@ mod tests {
             reasoning_index: &crate::document::ReasoningIndex::default(),
             doc_name: "test",
         };
-        let state = State::new(root, 8);
+        let state = WorkerState::new(root, 8);
 
         let result = ls(&ctx, &state);
         assert!(result.success);

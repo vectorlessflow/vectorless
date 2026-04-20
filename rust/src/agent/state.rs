@@ -59,7 +59,7 @@ const MAX_HISTORY_ENTRIES: usize = 6;
 /// Prevents large cat/grep outputs from bloating subsequent prompts.
 const MAX_FEEDBACK_CHARS: usize = 500;
 
-impl State {
+impl WorkerState {
     /// Create a new state starting at the given root node.
     pub fn new(root: NodeId, max_rounds: u32) -> Self {
         Self {

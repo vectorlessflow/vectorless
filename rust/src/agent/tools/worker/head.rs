@@ -5,12 +5,12 @@
 
 use crate::agent::command;
 use crate::agent::config::DocContext;
-use crate::agent::state::State;
+use crate::agent::state::WorkerState;
 
 use super::super::ToolResult;
 
 /// Execute `head <target>` — preview first N lines of a node without collecting evidence.
-pub fn head(target: &str, lines: usize, ctx: &DocContext, state: &State) -> ToolResult {
+pub fn head(target: &str, lines: usize, ctx: &DocContext, state: &WorkerState) -> ToolResult {
     let node_id = match command::resolve_target_extended(
         target,
         ctx.nav_index,
@@ -57,7 +57,7 @@ pub fn head(target: &str, lines: usize, ctx: &DocContext, state: &State) -> Tool
 mod tests {
     use super::*;
     use crate::agent::config::DocContext;
-    use crate::agent::state::State;
+    use crate::agent::state::WorkerState;
     use crate::document::{ChildRoute, DocumentTree, NavigationIndex, NodeId};
 
     fn build_rich_tree() -> (DocumentTree, NavigationIndex, NodeId) {
@@ -101,7 +101,7 @@ mod tests {
     fn test_head_preview() {
         let (tree, nav, root) = build_rich_tree();
         let ctx = rich_ctx!(tree, nav);
-        let state = State::new(root, 8);
+        let state = WorkerState::new(root, 8);
 
         let result = head("Revenue", 2, &ctx, &state);
         assert!(result.success);
@@ -114,7 +114,7 @@ mod tests {
     fn test_head_not_found() {
         let (tree, nav, root) = build_rich_tree();
         let ctx = rich_ctx!(tree, nav);
-        let state = State::new(root, 8);
+        let state = WorkerState::new(root, 8);
 
         let result = head("NonExistent", 10, &ctx, &state);
         assert!(!result.success);

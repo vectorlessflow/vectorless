@@ -3,22 +3,47 @@
 
 //! Query understanding and planning.
 //!
-//! This module is responsible for analyzing a user's raw query and producing
-//! a structured [`QueryPlan`] that downstream modules (retrieval, agent) can
-//! consume. It does **not** perform any retrieval itself.
+//! Analyzes a user's raw query and produces a structured [`QueryPlan`]
+//! for downstream modules (Orchestrator, Worker).
 //!
 //! # Pipeline
 //!
 //! ```text
 //! raw query string
-//!   → extract keywords            (from utils/bm25)
+//!   → extract keywords            (from scoring/bm25)
+//!   → LLM query understanding     (intent, concepts, complexity)
 //!   → QueryPlan
 //! ```
 //!
-//! Future additions (not yet implemented):
-//! - Intent classification (`QueryIntent`)
-//! - Query rewrite / expansion
-//! - Multi-query decomposition
+//! On LLM failure, falls back to keyword-only analysis.
 
 mod text;
 mod types;
+mod understand;
+
+#[allow(unused_imports)]
+pub use types::{Complexity, QueryIntent, QueryPlan, SubQuery};
+
+use crate::llm::LlmClient;
+use crate::scoring::bm25::extract_keywords;
+
+/// Query understanding pipeline.
+///
+/// Produces a [`QueryPlan`] from a raw query string.
+/// Uses LLM for deep understanding with graceful fallback.
+pub struct QueryPipeline;
+
+impl QueryPipeline {
+    /// Analyze a query and produce a structured plan.
+    ///
+    /// 1. Extract keywords (zero-cost, no LLM)
+    /// 2. LLM deep understanding (intent, concepts, complexity)
+    /// 3. Graceful fallback to keyword-only plan on LLM failure
+    pub async fn understand(
+        query: &str,
+        llm: &LlmClient,
+    ) -> crate::error::Result<QueryPlan> {
+        let keywords = extract_keywords(query);
+        understand::understand(query, &keywords, llm).await
+    }
+}

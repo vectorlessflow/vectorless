@@ -4,14 +4,14 @@
 //! Formatting helpers for prompts and synthesis.
 
 use super::super::config::Evidence;
-use super::super::state::State;
+use super::super::state::WorkerState;
 use super::super::config::DocContext;
 
 /// Maximum total characters for evidence in the synthesis prompt.
 const SYNTHESIS_EVIDENCE_CAP: usize = 8000;
 
 /// Resolve visited NodeIds to their titles for prompt injection.
-pub fn format_visited_titles(state: &State, ctx: &DocContext<'_>) -> String {
+pub fn format_visited_titles(state: &WorkerState, ctx: &DocContext<'_>) -> String {
     if state.visited.is_empty() {
         return "(none)".to_string();
     }

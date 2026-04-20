@@ -9,7 +9,7 @@ use crate::scoring::bm25::{Bm25Engine, FieldDocument, extract_keywords};
 
 use super::super::config::DocContext;
 use super::super::context::FindHit;
-use super::super::state::State;
+use super::super::state::WorkerState;
 use super::format::format_visited_titles;
 
 /// Maximum total chars for keyword + semantic sections in planning prompt.
@@ -104,7 +104,7 @@ pub fn build_plan_prompt(
 pub fn build_replan_prompt(
     query: &str,
     task: Option<&str>,
-    state: &State,
+    state: &WorkerState,
     ctx: &DocContext<'_>,
 ) -> (String, String) {
     let task_section = match task {
@@ -339,7 +339,7 @@ fn build_deep_expansion(keyword_hits: &[FindHit], ctx: &DocContext<'_>) -> Strin
 }
 
 /// Build unvisited sibling branch hints for structured backtracking.
-fn build_sibling_hints(state: &State, ctx: &DocContext<'_>) -> String {
+fn build_sibling_hints(state: &WorkerState, ctx: &DocContext<'_>) -> String {
     let mut hints = String::new();
 
     if let Some(parent) = ctx.parent(state.current_node) {
@@ -384,7 +384,7 @@ mod tests {
     use super::*;
     use crate::agent::config::DocContext;
     use crate::agent::config::Evidence;
-    use crate::agent::state::State;
+    use crate::agent::state::WorkerState;
     use crate::document::{ChildRoute, NavEntry, NodeId};
     use crate::scoring::bm25::extract_keywords;
 
@@ -506,7 +506,7 @@ mod tests {
     #[test]
     fn test_build_replan_prompt() {
         let (tree, nav, root, _, _) = build_semantic_test_tree();
-        let mut state = State::new(root, 8);
+        let mut state = WorkerState::new(root, 8);
         state.missing_info = "Need Q2 revenue figures".to_string();
         state.add_evidence(Evidence {
             source_path: "root/Revenue".to_string(),

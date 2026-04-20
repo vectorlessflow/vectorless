@@ -5,7 +5,7 @@
 
 use crate::agent::command;
 use crate::agent::config::DocContext;
-use crate::agent::state::State;
+use crate::agent::state::WorkerState;
 
 use super::super::ToolResult;
 
@@ -14,7 +14,7 @@ use super::super::ToolResult;
 /// Supports:
 /// - Relative names (child of current node): `cd "Getting Started"`
 /// - Absolute paths starting with `/`: `cd /root/Chapter 1/Section 1.2`
-pub fn cd(target: &str, ctx: &DocContext, state: &mut State) -> ToolResult {
+pub fn cd(target: &str, ctx: &DocContext, state: &mut WorkerState) -> ToolResult {
     if target.starts_with('/') {
         return cd_absolute(target, ctx, state);
     }
@@ -33,7 +33,7 @@ pub fn cd(target: &str, ctx: &DocContext, state: &mut State) -> ToolResult {
 }
 
 /// Navigate using an absolute path (e.g., `/root/Chapter 1/Section 1.2`).
-fn cd_absolute(path: &str, ctx: &DocContext, state: &mut State) -> ToolResult {
+fn cd_absolute(path: &str, ctx: &DocContext, state: &mut WorkerState) -> ToolResult {
     let segments: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
 
     if segments.is_empty() {
@@ -76,7 +76,7 @@ fn cd_absolute(path: &str, ctx: &DocContext, state: &mut State) -> ToolResult {
 }
 
 /// Execute `cd ..` — navigate back to parent.
-pub fn cd_up(ctx: &DocContext, state: &mut State) -> ToolResult {
+pub fn cd_up(ctx: &DocContext, state: &mut WorkerState) -> ToolResult {
     match ctx.parent(state.current_node) {
         Some(parent) => {
             if state.cd_up(parent) {
@@ -131,7 +131,7 @@ mod tests {
             reasoning_index: &crate::document::ReasoningIndex::default(),
             doc_name: "test",
         };
-        let mut state = State::new(root, 8);
+        let mut state = WorkerState::new(root, 8);
 
         let result = cd("Getting Started", &ctx, &mut state);
         assert!(result.success);
@@ -148,7 +148,7 @@ mod tests {
             reasoning_index: &crate::document::ReasoningIndex::default(),
             doc_name: "test",
         };
-        let mut state = State::new(root, 8);
+        let mut state = WorkerState::new(root, 8);
 
         cd("Getting Started", &ctx, &mut state);
         let result = cd_up(&ctx, &mut state);

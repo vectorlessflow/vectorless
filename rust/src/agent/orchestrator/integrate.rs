@@ -7,17 +7,11 @@ use tracing::{info, warn};
 
 use crate::llm::LlmClient;
 
-use super::super::config::{Config, Evidence, WorkspaceContext};
+use super::super::config::{AgentConfig, Evidence, WorkspaceContext};
 use super::super::events::EventEmitter;
 use super::super::prompts::{check_sufficiency, parse_sufficiency_response};
 use super::super::state::OrchestratorState;
 use super::dispatch::dispatch_and_collect;
-
-/// Maximum number of integration retries (supplemental dispatches).
-const MAX_INTEGRATE_RETRIES: u32 = 3;
-
-/// Maximum number of documents to dispatch per supplemental retry.
-const MAX_SUPPLEMENTAL_DISPATCH: usize = 3;
 
 /// Check cross-doc sufficiency and supplement if needed.
 ///
@@ -25,11 +19,14 @@ const MAX_SUPPLEMENTAL_DISPATCH: usize = 3;
 pub async fn integrate(
     query: &str,
     ws: &WorkspaceContext<'_>,
-    config: &Config,
+    config: &AgentConfig,
     llm: &LlmClient,
     state: &mut OrchestratorState,
     emitter: &EventEmitter,
 ) -> u32 {
+    let max_retries = config.orchestrator.max_integration_retries;
+    let max_supplemental = config.orchestrator.max_supplemental_docs;
+
     info!(
         evidence = state.all_evidence.len(),
         sub_results = state.sub_results.len(),
@@ -39,7 +36,7 @@ pub async fn integrate(
     let mut llm_calls: u32 = 0;
     let mut retries = 0;
 
-    while retries < MAX_INTEGRATE_RETRIES {
+    while retries < max_retries {
         let evidence_summary = format_evidence_summary(&state.all_evidence);
         let sufficient = check_cross_doc_sufficiency(query, &evidence_summary, llm).await;
         llm_calls += 1;
@@ -57,7 +54,7 @@ pub async fn integrate(
         warn!(retry = retries, "Cross-doc evidence insufficient, supplementing");
         retries += 1;
 
-        let max_dispatch = MAX_SUPPLEMENTAL_DISPATCH.min(ws.doc_count() - state.dispatched.len());
+        let max_dispatch = max_supplemental.min(ws.doc_count() - state.dispatched.len());
         let undispatched: Vec<super::super::prompts::DispatchEntry> = (0..ws.doc_count())
             .filter(|i| !state.dispatched.contains(i))
             .take(max_dispatch)

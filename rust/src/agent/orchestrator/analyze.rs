@@ -8,7 +8,7 @@ use tracing::{debug, info, warn};
 use crate::llm::LlmClient;
 use crate::scoring::bm25::extract_keywords;
 
-use super::super::config::{Config, WorkspaceContext};
+use super::super::config::{AgentConfig, WorkspaceContext};
 use super::super::events::EventEmitter;
 use super::super::prompts::{DispatchEntry, OrchestratorAnalysisParams, orchestrator_analysis, parse_dispatch_plan};
 use super::super::state::OrchestratorState;
@@ -31,7 +31,7 @@ pub enum AnalyzeOutcome {
 pub async fn analyze(
     query: &str,
     ws: &WorkspaceContext<'_>,
-    config: &Config,
+    config: &AgentConfig,
     llm: &LlmClient,
     state: &mut OrchestratorState,
     emitter: &EventEmitter,
@@ -111,7 +111,7 @@ pub async fn analyze(
 async fn expanded_analysis(
     query: &str,
     ws: &WorkspaceContext<'_>,
-    config: &Config,
+    config: &AgentConfig,
     llm: &LlmClient,
     state: &mut OrchestratorState,
     emitter: &EventEmitter,

@@ -5,12 +5,12 @@
 
 use crate::agent::command;
 use crate::agent::config::DocContext;
-use crate::agent::state::State;
+use crate::agent::state::WorkerState;
 
 use super::super::ToolResult;
 
 /// Execute `wc <target>` — show node content statistics.
-pub fn wc(target: &str, ctx: &DocContext, state: &State) -> ToolResult {
+pub fn wc(target: &str, ctx: &DocContext, state: &WorkerState) -> ToolResult {
     let node_id = match command::resolve_target_extended(
         target,
         ctx.nav_index,
@@ -46,7 +46,7 @@ pub fn wc(target: &str, ctx: &DocContext, state: &State) -> ToolResult {
 mod tests {
     use super::*;
     use crate::agent::config::DocContext;
-    use crate::agent::state::State;
+    use crate::agent::state::WorkerState;
     use crate::document::{ChildRoute, DocumentTree, NavigationIndex, NodeId};
 
     fn build_rich_tree() -> (DocumentTree, NavigationIndex, NodeId) {
@@ -90,7 +90,7 @@ mod tests {
     fn test_wc_stats() {
         let (tree, nav, root) = build_rich_tree();
         let ctx = rich_ctx!(tree, nav);
-        let state = State::new(root, 8);
+        let state = WorkerState::new(root, 8);
 
         let result = wc("Revenue", &ctx, &state);
         assert!(result.success);
@@ -104,7 +104,7 @@ mod tests {
     fn test_wc_not_found() {
         let (tree, nav, root) = build_rich_tree();
         let ctx = rich_ctx!(tree, nav);
-        let state = State::new(root, 8);
+        let state = WorkerState::new(root, 8);
 
         let result = wc("NonExistent", &ctx, &state);
         assert!(!result.success);

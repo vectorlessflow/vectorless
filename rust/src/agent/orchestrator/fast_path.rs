@@ -7,7 +7,7 @@ use tracing::info;
 
 use crate::scoring::bm25::extract_keywords;
 
-use super::super::config::{Config, Output, WorkspaceContext};
+use super::super::config::{Output, WorkspaceContext};
 use super::super::context::FindHit;
 use super::super::events::EventEmitter;
 
@@ -15,7 +15,8 @@ use super::super::events::EventEmitter;
 pub fn fast_path(
     query: &str,
     ws: &WorkspaceContext<'_>,
-    config: &Config,
+    _enabled: bool,
+    fast_path_threshold: &f32,
     emitter: &EventEmitter,
 ) -> Option<Output> {
     let keywords = extract_keywords(query);
@@ -35,7 +36,7 @@ pub fn fast_path(
                 let is_better = best
                     .as_ref()
                     .map_or(true, |(_, _, best_e)| entry.weight > best_e.weight);
-                if is_better && entry.weight >= config.fast_path_threshold {
+                if is_better && entry.weight >= *fast_path_threshold {
                     best = Some((*doc_idx, hit.clone(), entry));
                 }
             }

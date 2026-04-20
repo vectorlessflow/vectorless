@@ -25,7 +25,7 @@ pub mod types;
 
 use tracing::info;
 
-use crate::agent::{Config, Evidence, Output};
+use crate::agent::{Evidence, Output};
 use crate::llm::LlmClient;
 use types::{ConfidenceLevel, RerankOutput};
 
@@ -38,7 +38,7 @@ use types::{ConfidenceLevel, RerankOutput};
 pub async fn process(
     query: &str,
     evidence: &[Evidence],
-    config: &Config,
+    enable_synthesis: bool,
     llm: &LlmClient,
     multi_doc: bool,
     sub_results: &[Output],
@@ -70,7 +70,7 @@ pub async fn process(
     );
 
     // Step 3: Synthesize answer
-    if !config.enable_synthesis {
+    if !enable_synthesis {
         return RerankOutput {
             answer: synthesis::format_evidence_as_answer(&sorted_evidence),
             score: top_score,

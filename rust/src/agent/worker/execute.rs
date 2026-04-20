@@ -10,7 +10,7 @@ use crate::llm::LlmClient;
 use super::super::command::{Command, parse_command};
 use super::super::config::{DocContext, Step};
 use super::super::events::EventEmitter;
-use super::super::state::State;
+use super::super::state::WorkerState;
 use super::super::prompts::{check_sufficiency, parse_sufficiency_response};
 use super::sufficiency::heuristic_sufficiency;
 use super::super::tools::worker as tools;
@@ -21,7 +21,7 @@ use super::super::tools::worker as tools;
 pub async fn execute_command(
     command: &Command,
     ctx: &DocContext<'_>,
-    state: &mut State,
+    state: &mut WorkerState,
     query: &str,
     llm: &LlmClient,
     llm_calls: &mut u32,

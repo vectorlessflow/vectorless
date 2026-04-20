@@ -7,18 +7,19 @@ use tracing::{info, warn};
 
 use crate::llm::LlmClient;
 
-use super::super::config::{Config, Output, WorkspaceContext};
+use super::super::config::{AgentConfig, Output, WorkspaceContext};
 use super::super::events::EventEmitter;
 use super::super::prompts::DispatchEntry;
 use super::super::state::OrchestratorState;
-use super::super::worker;
+use super::super::worker::Worker;
+use super::super::Agent;
 
 /// Dispatch Workers in parallel and collect results.
 pub async fn dispatch_and_collect(
     query: &str,
     dispatches: &[DispatchEntry],
     ws: &WorkspaceContext<'_>,
-    config: &Config,
+    config: &AgentConfig,
     llm: &LlmClient,
     state: &mut OrchestratorState,
     emitter: &EventEmitter,
@@ -38,7 +39,7 @@ pub async fn dispatch_and_collect(
 
             let query = query.to_string();
             let task = dispatch.task.clone();
-            let config = config.for_worker();
+            let worker_config = config.worker.clone();
             let doc_idx = dispatch.doc_idx;
             let doc_name = doc.doc_name.to_string();
             let llm = llm.clone();
@@ -46,8 +47,10 @@ pub async fn dispatch_and_collect(
 
             Some(async move {
                 emitter.emit_worker_dispatched(doc_idx, &doc_name, &task, &[]);
-                let result =
-                    worker::run(&query, Some(&task), doc, &config, &llm, &sub_emitter).await;
+                let worker = Worker::new(
+                    &query, Some(&task), doc, worker_config, llm, sub_emitter,
+                );
+                let result = worker.run().await;
                 (doc_idx, doc_name, result)
             })
         })
@@ -80,7 +83,7 @@ pub async fn dispatch_and_collect(
 pub async fn fallback_dispatch_all(
     query: &str,
     ws: &WorkspaceContext<'_>,
-    config: &Config,
+    config: &AgentConfig,
     llm: &LlmClient,
     emitter: &EventEmitter,
 ) -> crate::error::Result<Output> {

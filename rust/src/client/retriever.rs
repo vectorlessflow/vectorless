@@ -8,7 +8,7 @@
 
 use tracing::info;
 
-use crate::agent::{self, events::EventEmitter as AgentEventEmitter};
+use crate::agent::{self, config::AgentConfig, events::EventEmitter as AgentEventEmitter};
 use crate::client::types::QueryResult;
 use crate::document::{DocumentTree, NavigationIndex, ReasoningIndex};
 use crate::error::Result;
@@ -24,7 +24,7 @@ pub(crate) struct RetrieverClient {
     llm: LlmClient,
 
     /// Agent configuration.
-    config: agent::Config,
+    config: AgentConfig,
 
     /// Event emitter.
     events: EventEmitter,
@@ -35,7 +35,7 @@ impl RetrieverClient {
     pub fn new(llm: LlmClient) -> Self {
         Self {
             llm,
-            config: agent::Config::default(),
+            config: AgentConfig::default(),
             events: EventEmitter::new(),
         }
     }
@@ -47,13 +47,13 @@ impl RetrieverClient {
     }
 
     /// Set custom agent configuration.
-    pub fn with_config(mut self, config: agent::Config) -> Self {
+    pub fn with_config(mut self, config: AgentConfig) -> Self {
         self.config = config;
         self
     }
 
     /// Get a reference to the agent configuration.
-    pub fn config(&self) -> &agent::Config {
+    pub fn config(&self) -> &AgentConfig {
         &self.config
     }
 

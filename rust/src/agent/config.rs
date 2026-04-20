@@ -5,9 +5,13 @@
 
 use serde::{Deserialize, Serialize};
 
-/// Agent configuration.
+// ---------------------------------------------------------------------------
+// Worker configuration
+// ---------------------------------------------------------------------------
+
+/// Worker configuration — navigation budget and fast-path settings.
 #[derive(Debug, Clone)]
-pub struct Config {
+pub struct WorkerConfig {
     /// Maximum navigation rounds per Worker loop (ls/cd/cat/grep/head/find etc.).
     /// `check` does NOT count against this budget.
     pub max_rounds: u32,
@@ -16,41 +20,98 @@ pub struct Config {
     pub max_llm_calls: u32,
     /// Enable fast-path (keyword lookup before full navigation).
     pub enable_fast_path: bool,
-    /// Enable answer synthesis after evidence collection.
-    pub enable_synthesis: bool,
     /// Confidence threshold for fast-path direct hit.
     pub fast_path_threshold: f32,
 }
 
-impl Default for Config {
+impl Default for WorkerConfig {
     fn default() -> Self {
         Self {
             max_rounds: 8,
             max_llm_calls: 15,
             enable_fast_path: true,
-            enable_synthesis: true,
             fast_path_threshold: 0.85,
         }
     }
 }
 
-impl Config {
-    /// Create a new config with default values.
+impl WorkerConfig {
     pub fn new() -> Self {
         Self::default()
     }
+}
 
-    /// Derive a Worker-specific config (used by Orchestrator for dispatched agents).
-    pub fn for_worker(&self) -> Self {
+// ---------------------------------------------------------------------------
+// Orchestrator configuration
+// ---------------------------------------------------------------------------
+
+/// Orchestrator configuration — analysis and dispatch settings.
+#[derive(Debug, Clone)]
+pub struct OrchestratorConfig {
+    /// Enable fast-path (keyword lookup before full analysis).
+    pub enable_fast_path: bool,
+    /// Maximum integration retries (re-dispatch after insufficient evidence).
+    pub max_integration_retries: u32,
+    /// Maximum supplemental documents to add during re-dispatch.
+    pub max_supplemental_docs: usize,
+    /// Worker configuration for dispatched agents.
+    pub worker_config: WorkerConfig,
+}
+
+impl Default for OrchestratorConfig {
+    fn default() -> Self {
         Self {
-            max_rounds: self.max_rounds,
-            max_llm_calls: self.max_llm_calls,
-            enable_fast_path: self.enable_fast_path,
-            enable_synthesis: true,
-            fast_path_threshold: self.fast_path_threshold,
+            enable_fast_path: true,
+            max_integration_retries: 1,
+            max_supplemental_docs: 2,
+            worker_config: WorkerConfig::default(),
         }
     }
 }
+
+// ---------------------------------------------------------------------------
+// Answer pipeline configuration
+// ---------------------------------------------------------------------------
+
+/// Answer pipeline configuration — synthesis settings.
+#[derive(Debug, Clone)]
+pub struct AnswerConfig {
+    /// Enable answer synthesis (LLM-generated answer from evidence).
+    pub enable_synthesis: bool,
+    /// Maximum number of evidence items to feed into synthesis.
+    pub evidence_cap: usize,
+}
+
+impl Default for AnswerConfig {
+    fn default() -> Self {
+        Self {
+            enable_synthesis: true,
+            evidence_cap: 20,
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Aggregated agent configuration
+// ---------------------------------------------------------------------------
+
+/// Aggregated configuration for the entire retrieval agent system.
+#[derive(Debug, Clone, Default)]
+pub struct AgentConfig {
+    pub worker: WorkerConfig,
+    pub orchestrator: OrchestratorConfig,
+    pub answer: AnswerConfig,
+}
+
+impl AgentConfig {
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Output types
+// ---------------------------------------------------------------------------
 
 /// Agent output — the final result of a retrieval operation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -106,21 +167,13 @@ pub struct Evidence {
 /// Agent execution metrics.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Metrics {
-    /// Number of navigation rounds used (ls/cd/cat/grep etc., excludes check).
     pub rounds_used: u32,
-    /// Number of LLM calls made (includes planning + nav + check + synthesis).
     pub llm_calls: u32,
-    /// Number of distinct nodes visited.
     pub nodes_visited: usize,
-    /// Whether the fast-path was hit.
     pub fast_path_hit: bool,
-    /// Whether the LLM call budget was exhausted.
     pub budget_exhausted: bool,
-    /// Whether a navigation plan was generated (Phase 1.5).
     pub plan_generated: bool,
-    /// Number of times `check` was called.
     pub check_count: u32,
-    /// Total characters of collected evidence.
     pub evidence_chars: usize,
 }
 
@@ -134,6 +187,10 @@ pub enum Step {
     /// Forced done due to budget exhaustion or error.
     ForceDone(String),
 }
+
+// ---------------------------------------------------------------------------
+// Scope types
+// ---------------------------------------------------------------------------
 
 /// Scope context — determines which path the dispatcher takes.
 ///

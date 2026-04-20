@@ -17,7 +17,9 @@
 
 use tracing::info;
 
-use crate::agent::{Config, EventEmitter, Output, Scope, WorkspaceContext};
+use crate::agent::config::{AgentConfig, Scope, WorkspaceContext};
+use crate::agent::orchestrator::Orchestrator;
+use crate::agent::{Agent, EventEmitter, Output};
 use crate::error::{Error, Result};
 use crate::llm::LlmClient;
 
@@ -31,7 +33,7 @@ use crate::llm::LlmClient;
 pub async fn dispatch(
     query: &str,
     scope: Scope<'_>,
-    config: &Config,
+    config: &AgentConfig,
     llm: &LlmClient,
     emitter: &EventEmitter,
 ) -> Result<Output> {
@@ -49,7 +51,8 @@ pub async fn dispatch(
         }
     };
 
-    crate::agent::orchestrator::run(query, &ws, config, llm, emitter, skip_analysis)
-        .await
-        .map_err(|e| Error::Retrieval(e.to_string()))
+    let orchestrator = Orchestrator::new(
+        query, &ws, config.clone(), llm.clone(), emitter.clone(), skip_analysis,
+    );
+    orchestrator.run().await.map_err(|e| Error::Retrieval(e.to_string()))
 }

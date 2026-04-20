@@ -7,7 +7,7 @@ use tracing::{debug, info};
 
 use crate::scoring::bm25::extract_keywords;
 
-use super::super::config::{Config, DocContext, Evidence, Output};
+use super::super::config::{DocContext, Evidence, Output, WorkerConfig};
 use super::super::context::FindHit;
 use super::super::events::EventEmitter;
 
@@ -23,7 +23,7 @@ pub enum FastPathResult {
 pub fn fast_path(
     query: &str,
     ctx: &DocContext<'_>,
-    config: &Config,
+    config: &WorkerConfig,
     emitter: &EventEmitter,
 ) -> FastPathResult {
     let keywords = extract_keywords(query);
@@ -99,7 +99,7 @@ mod tests {
     fn test_fast_path_no_keywords() {
         let (tree, nav, ridx) = build_ctx();
         let ctx = DocContext { tree: &tree, nav_index: &nav, reasoning_index: &ridx, doc_name: "test" };
-        let config = Config::default();
+        let config = WorkerConfig::default();
         let emitter = EventEmitter::noop();
         let result = fast_path("the a an", &ctx, &config, &emitter);
         assert!(matches!(result, FastPathResult::Miss(ref hits) if hits.is_empty()));
@@ -109,7 +109,7 @@ mod tests {
     fn test_fast_path_empty_index() {
         let (tree, nav, ridx) = build_ctx();
         let ctx = DocContext { tree: &tree, nav_index: &nav, reasoning_index: &ridx, doc_name: "test" };
-        let config = Config::default();
+        let config = WorkerConfig::default();
         let emitter = EventEmitter::noop();
         let result = fast_path("revenue finance", &ctx, &config, &emitter);
         assert!(matches!(result, FastPathResult::Miss(ref hits) if hits.is_empty()));

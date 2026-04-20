@@ -3,12 +3,12 @@
 
 //! `pwd` — show current navigation path.
 
-use crate::agent::state::State;
+use crate::agent::state::WorkerState;
 
 use super::super::ToolResult;
 
 /// Execute `pwd` — show current navigation path.
-pub fn pwd(state: &State) -> ToolResult {
+pub fn pwd(state: &WorkerState) -> ToolResult {
     ToolResult::ok(format!("Current path: {}", state.path_str()))
 }
 
@@ -48,7 +48,7 @@ mod tests {
             reasoning_index: &crate::document::ReasoningIndex::default(),
             doc_name: "test",
         };
-        let mut state = State::new(root, 8);
+        let mut state = WorkerState::new(root, 8);
         cd("API Reference", &ctx, &mut state);
 
         let result = pwd(&state);
