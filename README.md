@@ -15,44 +15,12 @@
 
 **Vectorless** is a reasoning-native document engine with the core written in Rust. It will reason through any of your structured documents — **PDFs, Markdown, reports, contracts** — and retrieve only what's relevant. Nothing more, nothing less.
 
+- **Reason, don't vector.** — Retrieval is guided by reasoning over document structure.
+- **Model fails, we fail.** — No silent degradation. No heuristic fallbacks.
+- **No thought, no answer.** — Only LLM-reasoned output counts as an answer.
+
 
 ## Quick Start
-
-### Rust
-
-```toml
-[dependencies]
-vectorless = "0.1"
-```
-
-```rust
-use vectorless::{EngineBuilder, IndexContext, QueryContext};
-
-#[tokio::main]
-async fn main() -> vectorless::Result<()> {
-    let engine = EngineBuilder::new()
-        .with_key("sk-...")
-        .with_model("gpt-4o")
-        .with_endpoint("https://api.openai.com/v1")
-        .build()
-        .await?;
-
-    // Index a document
-    let result = engine.index(IndexContext::from_path("./report.pdf")).await?;
-    let doc_id = result.doc_id().unwrap();
-
-    // Query
-    let result = engine.query(
-        QueryContext::new("What is the total revenue?")
-            .with_doc_ids(vec![doc_id.to_string()])
-    ).await?;
-    println!("{}", result.content);
-
-    Ok(())
-}
-```
-
-### Python
 
 ```bash
 pip install vectorless
