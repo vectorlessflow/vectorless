@@ -29,12 +29,16 @@ pub struct ReasoningIndex {
 
     /// Nodes marked as hot (frequently retrieved).
     /// NodeId → cumulative hit count and rolling average score.
+    /// Uses `node_id_map` because serde_json cannot deserialize
+    /// `HashMap<NodeId, _>` (integer keys are incompatible with JSON).
+    #[serde(with = "super::serde_helpers")]
     hot_nodes: HashMap<NodeId, HotNodeEntry>,
 
     /// Depth-1 section title → NodeId mapping for fast ToC lookup.
     section_map: HashMap<String, NodeId>,
 
     /// Configuration used to build this index (for cache invalidation).
+    #[serde(default)]
     config_hash: u64,
 }
 
@@ -362,5 +366,79 @@ mod tests {
     fn test_config_disabled() {
         let config = ReasoningIndexConfig::disabled();
         assert!(!config.enabled);
+    }
+
+    #[test]
+    fn test_serialization_roundtrip_empty() {
+        let mut tree = crate::document::DocumentTree::new("Root", "content");
+        let child = tree.add_child(tree.root(), "Section 1", "s1 content");
+
+        let mut builder = ReasoningIndexBuilder::new();
+        builder.add_section("Section 1", child);
+        builder.add_topic_entry(
+            "section",
+            TopicEntry {
+                node_id: child,
+                weight: 0.8,
+                depth: 1,
+            },
+        );
+        let index = builder.build();
+
+        let json = serde_json::to_string(&index).unwrap();
+        let restored: ReasoningIndex = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(restored.topic_count(), 1);
+        assert_eq!(restored.section_count(), 1);
+        assert_eq!(restored.hot_node_count(), 0);
+    }
+
+    #[test]
+    fn test_serialization_roundtrip_with_hot_nodes() {
+        let mut tree = crate::document::DocumentTree::new("Root", "");
+        let root = tree.root();
+        let c1 = tree.add_child(root, "S1", "content 1");
+        let c2 = tree.add_child(root, "S2", "content 2");
+
+        let mut index = ReasoningIndex::new();
+        index.update_hot_nodes(&[(c1, 0.9), (c2, 0.7), (c1, 0.8)], 2);
+
+        // c1 should be hot (2 hits >= threshold 2)
+        assert!(index.is_hot(c1));
+        // c2 should not be hot (1 hit < threshold 2)
+        assert!(!index.is_hot(c2));
+
+        let json = serde_json::to_string(&index).unwrap();
+
+        // hot_nodes should serialize as array of pairs, not as object
+        assert!(!json.contains("\"hot_nodes\":{}"));
+        assert!(json.contains("\"hot_nodes\":["));
+
+        let restored: ReasoningIndex = serde_json::from_str(&json).unwrap();
+        assert!(restored.is_hot(c1));
+        assert!(!restored.is_hot(c2));
+
+        let entry = restored.hot_entry(c1).unwrap();
+        assert_eq!(entry.hit_count, 2);
+        assert!(entry.avg_score > 0.0);
+    }
+
+    #[test]
+    fn test_backward_compat_hot_nodes_empty_object() {
+        // Simulate old JSON where hot_nodes was serialized as {} by derive.
+        let mut tree = crate::document::DocumentTree::new("Root", "");
+        let child = tree.add_child(tree.root(), "S1", "c");
+
+        let mut builder = ReasoningIndexBuilder::new();
+        builder.add_section("s1", child);
+        let index = builder.build();
+
+        // Serialize normally (produces "hot_nodes":[]), then replace with
+        // the old format to test backward compat
+        let json = serde_json::to_string(&index).unwrap();
+        let old_json = json.replace("\"hot_nodes\":[]", "\"hot_nodes\":{}");
+
+        let restored: ReasoningIndex = serde_json::from_str(&old_json).unwrap();
+        assert_eq!(restored.hot_node_count(), 0);
     }
 }

@@ -10,11 +10,13 @@ use std::sync::Arc;
 
 use crate::client::engine::Engine;
 use crate::client::indexer::IndexerClient;
+use crate::client::retriever::RetrieverClient;
 use crate::config::Config;
 use crate::events::EventEmitter;
 use crate::index::PipelineExecutor;
+use crate::llm::LlmClient;
+use crate::llm::config::LlmConfig;
 use crate::metrics::MetricsHub;
-use crate::retrieval::PipelineRetriever;
 use crate::storage::Workspace;
 
 /// Build an `Engine` with a no-LLM pipeline for integration testing.
@@ -37,7 +39,7 @@ pub async fn build_test_engine(workspace_dir: &std::path::Path) -> Engine {
     let indexer = IndexerClient::with_factory(executor_factory);
 
     let workspace = Workspace::new(workspace_dir).await.unwrap();
-    let retriever = PipelineRetriever::new();
+    let retriever = RetrieverClient::new(LlmClient::new(LlmConfig::default()));
 
     Engine::with_components(
         config,

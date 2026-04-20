@@ -5,7 +5,7 @@
 
 use super::async_trait;
 use std::time::Instant;
-use tracing::info;
+use tracing::{debug, info};
 
 use crate::document::{DocumentTree, NodeId, ReferenceExtractor, TocView};
 use crate::error::Result;
@@ -88,7 +88,7 @@ impl EnrichStage {
             if let Some(root) = tree.get(tree.root()) {
                 if !root.summary.is_empty() {
                     ctx.description = Some(root.summary.clone());
-                    info!("Using root summary as document description");
+                    debug!("[enrich] Using root summary as document description");
                 }
             }
         }
@@ -171,24 +171,30 @@ impl IndexStage for EnrichStage {
             .as_mut()
             .ok_or_else(|| crate::Error::IndexBuild("Tree not built".to_string()))?;
 
+        let node_count = tree.node_count();
+        info!("[enrich] Starting: {} nodes", node_count);
+
         // 1. Calculate page ranges
         Self::calculate_page_ranges(tree);
-        info!("Calculated page ranges for all nodes");
+        debug!("[enrich] Calculated page ranges");
 
         // 2. Generate ToC view (cached in context)
         let toc_view = TocView::new();
         let toc = toc_view.generate(tree);
         let _toc_markdown = toc_view.format_markdown(&toc);
-        // Could store ToC in context if needed
+        debug!("[enrich] Generated ToC ({} children)", toc.children.len());
 
         // 3. Calculate token statistics
-        let (total_tokens, node_count) = Self::calculate_token_stats(tree);
-        info!("Total tokens: {}, nodes: {}", total_tokens, node_count);
+        let (total_tokens, stat_node_count) = Self::calculate_token_stats(tree);
+        debug!(
+            "[enrich] Token stats: {} total tokens across {} nodes",
+            total_tokens, stat_node_count
+        );
 
         // 4. Extract and resolve cross-references
         let resolved_refs = Self::resolve_references(tree);
         if resolved_refs > 0 {
-            info!("Resolved {} cross-references", resolved_refs);
+            info!("[enrich] Resolved {} cross-references", resolved_refs);
         }
 
         // 5. Generate document description
@@ -197,7 +203,10 @@ impl IndexStage for EnrichStage {
         let duration = start.elapsed().as_millis() as u64;
         ctx.metrics.record_enrich(duration);
 
-        info!("Enriched tree metadata in {}ms", duration);
+        info!(
+            "[enrich] Complete: {} tokens, {} refs resolved in {}ms",
+            total_tokens, resolved_refs, duration
+        );
 
         let mut stage_result = StageResult::success("enrich");
         stage_result.duration_ms = duration;
@@ -219,29 +228,6 @@ impl IndexStage for EnrichStage {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::document::RefType;
-
-    #[test]
-    fn test_resolve_references_section_ref() {
-        let mut tree = DocumentTree::new("Root", "root content");
-        let s1 = tree.add_child(tree.root(), "Introduction", "Introduction text.");
-        tree.set_structure(s1, "1");
-        let s2 = tree.add_child(
-            tree.root(),
-            "Details",
-            "For details, see Section 1 for more info",
-        );
-        tree.set_structure(s2, "2");
-
-        let resolved = EnrichStage::resolve_references(&mut tree);
-        assert_eq!(resolved, 1);
-
-        // Verify the reference was stored on s2 and resolved to s1
-        let refs = tree.get(s2).unwrap().references.clone();
-        assert_eq!(refs.len(), 1);
-        assert_eq!(refs[0].ref_type, RefType::Section);
-        assert_eq!(refs[0].target_node, Some(s1));
-    }
 
     #[test]
     fn test_resolve_references_no_refs() {

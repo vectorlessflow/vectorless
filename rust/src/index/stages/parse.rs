@@ -5,7 +5,7 @@
 
 use super::async_trait;
 use std::time::Instant;
-use tracing::info;
+use tracing::{debug, info};
 
 use crate::error::Result;
 use crate::index::parse::DocumentFormat;
@@ -70,9 +70,15 @@ impl IndexStage for ParseStage {
         let format = self.detect_format(ctx)?;
         ctx.format = format;
 
-        info!("Parsing document with format: {:?}", format);
+        let input_type = match &ctx.input {
+            IndexInput::File(_) => "file",
+            IndexInput::Content { .. } => "content",
+            IndexInput::Bytes { .. } => "bytes",
+        };
         info!(
-            "ParseStage llm_client present: {}",
+            "[parse] Starting: format={:?}, input={}, llm={}",
+            format,
+            input_type,
             self.llm_client.is_some()
         );
 
@@ -90,6 +96,8 @@ impl IndexStage for ParseStage {
                     .unwrap_or("document")
                     .to_string();
 
+                debug!("[parse] Reading file: {:?}", ctx.source_path);
+
                 // Parse directly
                 crate::index::parse::parse_file(&path, format, self.llm_client.clone()).await?
             }
@@ -101,6 +109,8 @@ impl IndexStage for ParseStage {
                 // Set name
                 ctx.name = name.clone();
 
+                debug!("[parse] Parsing inline content ({} chars)", content.len());
+
                 // Parse content directly
                 crate::index::parse::parse_content(content, *format, self.llm_client.clone())
                     .await?
@@ -108,6 +118,8 @@ impl IndexStage for ParseStage {
             IndexInput::Bytes { data, name, format } => {
                 // Set name
                 ctx.name = name.clone();
+
+                debug!("[parse] Parsing bytes ({} bytes)", data.len());
 
                 // Parse bytes
                 crate::index::parse::parse_bytes(data, *format, self.llm_client.clone()).await?
@@ -121,6 +133,7 @@ impl IndexStage for ParseStage {
         // Store metadata
         if let Some(page_count) = result.meta.page_count {
             ctx.page_count = Some(page_count);
+            debug!("[parse] Document has {} pages", page_count);
         }
         ctx.line_count = Some(result.meta.line_count);
 
@@ -132,7 +145,7 @@ impl IndexStage for ParseStage {
         ctx.metrics.record_parse(duration);
 
         info!(
-            "Parsed {} nodes from {} ({}ms)",
+            "[parse] Complete: {} nodes from '{}' ({}ms)",
             ctx.raw_nodes.len(),
             ctx.name,
             duration

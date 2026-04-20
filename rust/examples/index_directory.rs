@@ -85,7 +85,7 @@ async fn main() -> vectorless::Result<()> {
     let answer = engine.query(vectorless::QueryContext::new(query)).await?;
 
     for item in &answer.items {
-        println!("  [{} score={:.2}]", item.doc_id, item.score);
+        println!("  [{} confidence={:.2}]", item.doc_id, item.confidence);
         let preview: String = item.content.chars().take(200).collect();
         println!("  {preview}");
         if item.content.len() > 200 {

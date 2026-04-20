@@ -284,14 +284,22 @@ impl SummaryGenerator for LlmSummaryGenerator {
             Focus on the key information and facts presented. \
             Respond with only the summary, no additional text."
         } else {
-            // Non-leaf (branch) nodes: navigation-oriented — "what does this section cover"
-            "You are a document summarization assistant. \
-            Generate a concise overview (2-3 sentences) describing what topics and subtopics \
-            this section covers. This summary will be used as a navigation guide. \
-            Respond with only the summary, no additional text."
+            // Non-leaf (branch) nodes: navigation-oriented with structured output.
+            // Produces OVERVIEW, QUESTIONS, and TAGS sections that EnhanceStage parses.
+            "You are a document navigation assistant. \
+            Generate a structured overview of this section for navigation purposes. \
+            Respond in EXACTLY this format (one section per line):\n\
+            OVERVIEW: <2-3 sentence description of what topics this section covers>\n\
+            QUESTIONS: <comma-separated list of 3-5 typical questions this section can answer>\n\
+            TAGS: <comma-separated list of 2-4 topic keywords>"
         };
 
-        let user_prompt = format!("Title: {}\n\nContent:\n{}", title, content);
+        let user_prompt = if is_leaf {
+            format!("Title: {}\n\nContent:\n{}", title, content)
+        } else {
+            // For non-leaf nodes, include children info for better routing summaries
+            format!("Title: {}\n\nContent:\n{}", title, content)
+        };
 
         let summary = self
             .client

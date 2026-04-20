@@ -29,6 +29,9 @@
 //! Priority  45: ┌────▼──────────┐
 //!               │ Reasoning Idx │  Pre-computed reasoning index
 //!               └────┬──────────┘
+//! Priority  50: ┌────▼──────────┐
+//!               │ Navigation Idx│  Agent navigation index
+//!               └────┬──────────┘
 //! Priority  60: ┌────▼──────┐
 //!               │ Optimize  │  Final tree optimization
 //!               └───────────┘

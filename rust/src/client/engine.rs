@@ -41,7 +41,7 @@ use std::{
     collections::HashMap,
     sync::Arc,
     sync::Mutex,
-    sync::atomic::{AtomicBool, AtomicU32, Ordering},
+    sync::atomic::{AtomicBool, Ordering},
 };
 
 use futures::StreamExt;
@@ -57,7 +57,7 @@ use crate::{
         incremental::{self, IndexAction},
     },
     metrics::MetricsHub,
-    retrieval::{PipelineRetriever, RetrieveEventReceiver},
+    retrieval::RetrieveEventReceiver,
     storage::{PersistedDocument, Workspace},
 };
 
@@ -66,17 +66,12 @@ use super::{
     indexer::IndexerClient,
     query_context::{QueryContext, QueryScope},
     retriever::RetrieverClient,
-    types::{
-        DocumentInfo, FailedItem, IndexItem, IndexMode, IndexResult, QueryResult, QueryResultItem,
-    },
+    types::{DocumentInfo, FailedItem, IndexItem, IndexMode, IndexResult, QueryResult},
     workspace::WorkspaceClient,
 };
 
 /// Shared cancel state: `true` means cancelled.
 type CancelFlag = Arc<AtomicBool>;
-
-/// Max consecutive graph rebuild failures before giving up.
-const GRAPH_REBUILD_MAX_FAILURES: u32 = 3;
 
 /// The main Engine client.
 ///
@@ -107,12 +102,6 @@ pub struct Engine {
     /// Central metrics hub for unified collection.
     metrics_hub: Arc<MetricsHub>,
 
-    /// Whether the document graph needs rebuilding (set after index, consumed in query).
-    graph_dirty: Arc<AtomicBool>,
-
-    /// Consecutive graph rebuild failures — skip rebuild after threshold.
-    graph_fail_count: Arc<AtomicU32>,
-
     /// Shared cancel flag — set by `cancel()`, checked by long-running operations.
     cancelled: CancelFlag,
 
@@ -129,7 +118,7 @@ impl Engine {
     pub(crate) async fn with_components(
         config: Config,
         workspace: Workspace,
-        retriever: PipelineRetriever,
+        retriever: RetrieverClient,
         indexer: IndexerClient,
         events: EventEmitter,
         metrics_hub: Arc<MetricsHub>,
@@ -139,8 +128,8 @@ impl Engine {
         // Attach event emitter to indexer
         let indexer = indexer.with_events(events.clone());
 
-        // Create retriever client
-        let retriever = RetrieverClient::new(retriever).with_events(events.clone());
+        // Attach event emitter to retriever
+        let retriever = retriever.with_events(events.clone());
 
         // Create workspace client
         let workspace_client = WorkspaceClient::new(workspace)
@@ -153,8 +142,6 @@ impl Engine {
             retriever,
             workspace: workspace_client,
             metrics_hub,
-            graph_dirty: Arc::new(AtomicBool::new(false)),
-            graph_fail_count: Arc::new(AtomicU32::new(0)),
             cancelled: Arc::new(AtomicBool::new(false)),
             active_ops: Arc::new(Mutex::new(0)),
         })
@@ -205,11 +192,15 @@ impl Engine {
                 )));
             }
 
-            // Mark graph as dirty — will be lazily rebuilt on next query()
-            // Also reset failure count so the new data gets a fresh rebuild attempt.
+            // Rebuild cross-document graph in the background so index returns immediately.
             if !items.is_empty() && self.config.graph.enabled {
-                self.graph_dirty.store(true, Ordering::Relaxed);
-                self.graph_fail_count.store(0, Ordering::Relaxed);
+                let engine = self.clone();
+                tokio::spawn(async move {
+                    info!("Rebuilding document graph in background...");
+                    if let Err(e) = engine.rebuild_graph().await {
+                        tracing::warn!("Background graph rebuild failed: {e}");
+                    }
+                });
             }
 
             Ok(IndexResult::with_partial(items, failed))
@@ -460,108 +451,22 @@ impl Engine {
 
         self.with_timeout(timeout_secs, async move {
             let doc_ids = self.resolve_scope(&ctx.scope).await?;
-            let mut options = ctx.to_retrieve_options(&self.config);
 
-            // Lazy graph rebuild: only rebuild if index() marked it dirty
-            if self.config.graph.enabled {
-                let fail_count = self.graph_fail_count.load(Ordering::Relaxed);
-                let should_try = fail_count < GRAPH_REBUILD_MAX_FAILURES;
-
-                if self.graph_dirty.swap(false, Ordering::Relaxed) {
-                    if should_try {
-                        if let Err(e) = self.rebuild_graph().await {
-                            let count = self.graph_fail_count.fetch_add(1, Ordering::Relaxed) + 1;
-                            tracing::warn!(count, "Graph rebuild failed: {e}");
-                            // Re-mark dirty so next query retries
-                            self.graph_dirty.store(true, Ordering::Relaxed);
-                        } else {
-                            // Reset failure count on success
-                            self.graph_fail_count.store(0, Ordering::Relaxed);
-                        }
-                    } else {
-                        tracing::warn!(
-                            count = fail_count,
-                            "Skipping graph rebuild after {} consecutive failures",
-                            fail_count
-                        );
-                    }
-                }
-                // Load (now up-to-date) graph for retrieval
-                if let Ok(Some(graph)) = self.workspace.get_graph().await {
-                    options = options.with_document_graph(Arc::new(graph));
-                }
-            }
-
-            // Query documents in parallel (with concurrency limit)
-            let concurrency = self.config.llm.throttle.max_concurrent_requests;
-            let query = ctx.query.clone();
-            let cancelled = Arc::clone(&self.cancelled);
-
-            let results: Vec<(String, std::result::Result<QueryResultItem, String>)> =
-                futures::stream::iter(doc_ids.into_iter())
-                    .map(|doc_id| {
-                        let engine = self.clone();
-                        let options = options.clone();
-                        let query = query.clone();
-                        let cancelled = Arc::clone(&cancelled);
-                        async move {
-                            if cancelled.load(Ordering::Relaxed) {
-                                return (doc_id, Err("Operation cancelled".to_string()));
-                            }
-
-                            let (tree, reasoning_index) = match engine.get_structure(&doc_id).await
-                            {
-                                Ok(t) => t,
-                                Err(e) => return (doc_id, Err(e.to_string())),
-                            };
-
-                            match engine
-                                .retriever
-                                .query_with_reasoning_index(
-                                    &tree,
-                                    &query,
-                                    &options,
-                                    reasoning_index,
-                                )
-                                .await
-                            {
-                                Ok(mut result) => {
-                                    result.doc_id = doc_id.clone();
-                                    (doc_id, Ok(result))
-                                }
-                                Err(e) => (doc_id, Err(e.to_string())),
-                            }
-                        }
-                    })
-                    .buffer_unordered(concurrency)
-                    .collect()
-                    .await;
-
-            let mut items = Vec::new();
-            let mut failed = Vec::new();
-            for (doc_id, result) in results {
-                match result {
-                    Ok(item) => items.push(item),
-                    Err(e) => {
-                        tracing::warn!("Query failed for {}: {}", doc_id, e);
-                        failed.push(FailedItem::new(&doc_id, e));
-                    }
-                }
-            }
-
-            if items.is_empty() && !failed.is_empty() {
+            let (documents, failed) = self.load_documents(&doc_ids).await?;
+            if documents.is_empty() {
                 return Err(Error::Config(format!(
-                    "Query failed for all {} document(s): {}",
-                    failed.len(),
-                    failed
-                        .iter()
-                        .map(|f| format!("{} ({})", f.source, f.error))
-                        .collect::<Vec<_>>()
-                        .join("; ")
+                    "No documents available for query: {} failures",
+                    failed.len()
                 )));
             }
 
-            Ok(QueryResult::with_partial(items, failed))
+            let skip_analysis = !ctx.force_analysis;
+            let mut result = self
+                .retriever
+                .query(&documents, &ctx.query, skip_analysis)
+                .await?;
+            result.failed.extend(failed);
+            Ok(result)
         })
         .await
     }
@@ -569,28 +474,337 @@ impl Engine {
     /// Query a document with streaming results.
     ///
     /// Returns a receiver that yields retrieval events
-    /// as the retrieval pipeline progresses through each stage.
+    /// as the retrieval agent progresses through navigation.
     ///
-    /// Only supports single-document scope (via `with_doc_ids` with one ID).
+    /// Supports single-document and multi-document scope.
+    /// Events are translated from the agent's internal [`AgentEvent`](crate::agent::AgentEvent)
+    /// into the public [`RetrieveEvent`] stream.
     pub async fn query_stream(&self, ctx: QueryContext) -> Result<RetrieveEventReceiver> {
-        let doc_id = match &ctx.scope {
-            QueryScope::Documents(ids) if ids.len() == 1 => ids[0].clone(),
-            _ => {
-                return Err(Error::Config(
-                    "query_stream requires a single doc_id via with_doc_ids".to_string(),
-                ));
+        self.check_cancel()?;
+        let _guard = self.inc_active();
+
+        let doc_ids = self.resolve_scope(&ctx.scope).await?;
+        let query = ctx.query.clone();
+
+        // Load all requested documents (need owned PersistedDocument for spawned task)
+        let mut docs = Vec::new();
+        for doc_id in &doc_ids {
+            let doc = match self.workspace.load(doc_id).await? {
+                Some(d) => d,
+                None => return Err(Error::Config(format!("Document not found: {}", doc_id))),
+            };
+            docs.push((doc_id.clone(), doc));
+        }
+
+        // Create agent event channel
+        let (agent_tx, mut agent_rx) =
+            crate::agent::events::channel(crate::agent::events::DEFAULT_AGENT_EVENT_BOUND);
+        let (retrieve_tx, retrieve_rx) =
+            crate::retrieval::stream::channel(crate::retrieval::stream::DEFAULT_STREAM_BOUND);
+
+        // Spawn a task that translates AgentEvents → RetrieveEvents
+        tokio::spawn(async move {
+            use crate::agent::AgentEvent;
+            use crate::retrieval::stream::RetrieveEvent;
+
+            while let Some(event) = agent_rx.recv().await {
+                let translated = match event {
+                    // ── Query Understanding ──
+                    AgentEvent::QueryUnderstandingStarted { query } => RetrieveEvent::Started {
+                        query,
+                        strategy: "query_understanding".to_string(),
+                    },
+                    AgentEvent::QueryUnderstandingCompleted { query, .. } => {
+                        RetrieveEvent::StageCompleted {
+                            stage: format!("query_understanding: {}", query),
+                            elapsed_ms: 0,
+                        }
+                    }
+
+                    // ── Orchestrator ──
+                    AgentEvent::OrchestratorStarted {
+                        query,
+                        doc_count,
+                        skip_analysis,
+                    } => RetrieveEvent::Started {
+                        query,
+                        strategy: if skip_analysis {
+                            "orchestrator_skip_analysis".to_string()
+                        } else {
+                            format!("orchestrator({}_docs)", doc_count)
+                        },
+                    },
+                    AgentEvent::OrchestratorAnalyzing {
+                        doc_count,
+                        keywords,
+                    } => RetrieveEvent::StageCompleted {
+                        stage: format!(
+                            "orchestrator_analyzing_{}_docs_kw_{}",
+                            doc_count,
+                            keywords.len()
+                        ),
+                        elapsed_ms: 0,
+                    },
+                    AgentEvent::WorkerDispatched {
+                        doc_idx,
+                        doc_name,
+                        task,
+                        ..
+                    } => RetrieveEvent::StageCompleted {
+                        stage: format!("dispatch_{}_{}_{}", doc_idx, doc_name, task.len().min(30)),
+                        elapsed_ms: 0,
+                    },
+                    AgentEvent::WorkerCompleted {
+                        doc_idx,
+                        doc_name,
+                        evidence_count,
+                        rounds_used,
+                        llm_calls,
+                        success,
+                    } => RetrieveEvent::StageCompleted {
+                        stage: format!(
+                            "worker_{}_{}_done_e{}_r{}_l{}_{}",
+                            doc_idx, doc_name, evidence_count, rounds_used, llm_calls, success
+                        ),
+                        elapsed_ms: 0,
+                    },
+                    AgentEvent::OrchestratorEvaluated {
+                        sufficient,
+                        evidence_count,
+                        missing_info: _,
+                    } => RetrieveEvent::SufficiencyCheck {
+                        level: if sufficient {
+                            crate::retrieval::SufficiencyLevel::Sufficient
+                        } else {
+                            crate::retrieval::SufficiencyLevel::Insufficient
+                        },
+                        tokens: evidence_count,
+                    },
+                    AgentEvent::OrchestratorReplanning {
+                        reason,
+                        evidence_count,
+                    } => RetrieveEvent::StageCompleted {
+                        stage: format!(
+                            "orchestrator_replan_{}_e{}",
+                            &reason[..reason.len().min(30)],
+                            evidence_count
+                        ),
+                        elapsed_ms: 0,
+                    },
+                    AgentEvent::OrchestratorCompleted {
+                        evidence_count,
+                        total_llm_calls,
+                        dispatch_rounds,
+                    } => RetrieveEvent::StageCompleted {
+                        stage: format!(
+                            "orchestrator_done_e{}_l{}_r{}",
+                            evidence_count, total_llm_calls, dispatch_rounds
+                        ),
+                        elapsed_ms: 0,
+                    },
+
+                    // ── Worker ──
+                    AgentEvent::WorkerStarted {
+                        doc_name,
+                        task: _,
+                        max_rounds,
+                    } => RetrieveEvent::StageCompleted {
+                        stage: format!("worker_started_{}_r{}", doc_name, max_rounds),
+                        elapsed_ms: 0,
+                    },
+                    AgentEvent::WorkerPlanGenerated { doc_name, plan_len } => {
+                        RetrieveEvent::StageCompleted {
+                            stage: format!("plan_{}_{}chars", doc_name, plan_len),
+                            elapsed_ms: 0,
+                        }
+                    }
+                    AgentEvent::WorkerRound {
+                        doc_name,
+                        round,
+                        command,
+                        success: _,
+                        elapsed_ms,
+                    } => RetrieveEvent::StageCompleted {
+                        stage: format!("round_{}_{}_{}", doc_name, round, command),
+                        elapsed_ms,
+                    },
+                    AgentEvent::EvidenceCollected {
+                        doc_name,
+                        node_title,
+                        source_path,
+                        content_len,
+                        total_evidence: _,
+                    } => RetrieveEvent::ContentFound {
+                        node_id: source_path,
+                        title: format!("[{}] {}", doc_name, node_title),
+                        preview: String::new(),
+                        score: if content_len > 0 { 0.8 } else { 0.0 },
+                    },
+                    AgentEvent::WorkerSufficiencyCheck {
+                        doc_name: _,
+                        sufficient,
+                        evidence_count,
+                        ..
+                    } => RetrieveEvent::SufficiencyCheck {
+                        level: if sufficient {
+                            crate::retrieval::SufficiencyLevel::Sufficient
+                        } else {
+                            crate::retrieval::SufficiencyLevel::Insufficient
+                        },
+                        tokens: evidence_count,
+                    },
+                    AgentEvent::WorkerReplan {
+                        doc_name,
+                        missing_info,
+                        plan_len,
+                    } => RetrieveEvent::StageCompleted {
+                        stage: format!(
+                            "replan_{}_{}_{}chars",
+                            doc_name,
+                            &missing_info[..missing_info.len().min(30)],
+                            plan_len
+                        ),
+                        elapsed_ms: 0,
+                    },
+                    AgentEvent::WorkerBudgetWarning {
+                        doc_name,
+                        warning_type,
+                        round,
+                    } => RetrieveEvent::StageCompleted {
+                        stage: format!(
+                            "budget_warning_{}_{}_round_{}",
+                            doc_name, warning_type, round
+                        ),
+                        elapsed_ms: 0,
+                    },
+                    AgentEvent::WorkerDone {
+                        doc_name,
+                        evidence_count,
+                        rounds_used,
+                        llm_calls,
+                        budget_exhausted: _,
+                        plan_generated: _,
+                    } => RetrieveEvent::StageCompleted {
+                        stage: format!(
+                            "worker_done_{}_e{}_r{}_l{}",
+                            doc_name, evidence_count, rounds_used, llm_calls
+                        ),
+                        elapsed_ms: 0,
+                    },
+
+                    // ── Answer Pipeline ──
+                    AgentEvent::AnswerStarted {
+                        evidence_count,
+                        multi_doc,
+                    } => RetrieveEvent::StageCompleted {
+                        stage: format!(
+                            "answer_start_{}_e{}",
+                            if multi_doc { "multi" } else { "single" },
+                            evidence_count
+                        ),
+                        elapsed_ms: 0,
+                    },
+                    AgentEvent::AnswerCompleted {
+                        answer_len,
+                        confidence,
+                    } => RetrieveEvent::StageCompleted {
+                        stage: format!("synthesis_{}_{}chars", confidence, answer_len),
+                        elapsed_ms: 0,
+                    },
+
+                    // ── Terminal ──
+                    AgentEvent::Completed {
+                        evidence_count,
+                        llm_calls,
+                        answer_len,
+                    } => {
+                        let response = crate::retrieval::RetrieveResponse {
+                            results: Vec::new(),
+                            content: String::new(),
+                            confidence: if evidence_count > 0 { 0.8 } else { 0.0 },
+                            is_sufficient: true,
+                            strategy_used: format!("agent(l={},a={})", llm_calls, answer_len),
+                            reasoning_chain: crate::retrieval::ReasoningChain::default(),
+                            tokens_used: answer_len,
+                        };
+                        let _ = retrieve_tx
+                            .send(RetrieveEvent::Completed { response })
+                            .await;
+                        break; // Completed is terminal
+                    }
+                    AgentEvent::Error { stage, message } => {
+                        let _ = retrieve_tx
+                            .send(RetrieveEvent::Error {
+                                message: format!("[{}] {}", stage, message),
+                            })
+                            .await;
+                        break; // Error is terminal
+                    }
+                };
+
+                // For non-terminal events, send the translated event
+                if !matches!(
+                    translated,
+                    RetrieveEvent::Completed { .. } | RetrieveEvent::Error { .. }
+                ) {
+                    if retrieve_tx.send(translated).await.is_err() {
+                        break; // Receiver dropped
+                    }
+                }
             }
-        };
+        });
 
-        let (tree, _reasoning_index) = self.get_structure(&doc_id).await?;
-        let options = ctx.to_retrieve_options(&self.config);
+        // Run the agent in a background task
+        let config = self.retriever.config().clone();
+        let llm = self.retriever.llm().clone();
+        let emitter = crate::agent::EventEmitter::new(agent_tx);
+        let metrics_hub = Arc::clone(&self.metrics_hub);
+        let start = std::time::Instant::now();
 
-        let rx = self
-            .retriever
-            .query_stream(&tree, &ctx.query, &options)
-            .await?;
+        tokio::spawn(async move {
+            // Prepare owned indices (fill defaults for missing)
+            let owned_docs: Vec<(
+                String,
+                crate::storage::PersistedDocument,
+                crate::document::NavigationIndex,
+                crate::document::ReasoningIndex,
+            )> = docs
+                .into_iter()
+                .map(|(id, doc)| {
+                    let nav = doc.navigation_index.clone().unwrap_or_default();
+                    let ridx = doc.reasoning_index.clone().unwrap_or_default();
+                    (id, doc, nav, ridx)
+                })
+                .collect();
 
-        Ok(rx)
+            // All streaming queries are user-specified docs → always use Scope::Specified
+            let doc_contexts: Vec<crate::agent::DocContext> = owned_docs
+                .iter()
+                .map(|(id, doc, nav, ridx)| crate::agent::DocContext {
+                    tree: &doc.tree,
+                    nav_index: nav,
+                    reasoning_index: ridx,
+                    doc_name: id.as_str(),
+                })
+                .collect();
+            let scope = crate::agent::Scope::Specified(doc_contexts);
+            let result =
+                crate::retrieval::dispatcher::dispatch(&query, scope, &config, &llm, &emitter)
+                    .await;
+
+            // Bridge agent metrics into global MetricsHub
+            if let Ok(output) = result {
+                let m = &output.metrics;
+                let elapsed = start.elapsed();
+                metrics_hub.record_retrieval_query(
+                    m.rounds_used as u64,
+                    m.nodes_visited as u64,
+                    elapsed.as_millis() as u64,
+                );
+            }
+        });
+
+        Ok(retrieve_rx)
     }
 
     // ============================================================
@@ -660,6 +874,39 @@ impl Engine {
     // Internal
     // ============================================================
 
+    /// Load documents by ID, returning loaded artifacts and failures.
+    async fn load_documents(
+        &self,
+        doc_ids: &[String],
+    ) -> Result<(
+        Vec<(
+            crate::document::DocumentTree,
+            crate::document::NavigationIndex,
+            crate::document::ReasoningIndex,
+            String,
+        )>,
+        Vec<FailedItem>,
+    )> {
+        let mut documents = Vec::new();
+        let mut failed = Vec::new();
+        for doc_id in doc_ids {
+            match self.workspace.load(doc_id).await {
+                Ok(Some(doc)) => {
+                    let nav_index = doc.navigation_index.unwrap_or_default();
+                    let reasoning_index = doc.reasoning_index.unwrap_or_default();
+                    documents.push((doc.tree, nav_index, reasoning_index, doc_id.clone()));
+                }
+                Ok(None) => {
+                    failed.push(FailedItem::new(doc_id, "Document not found"));
+                }
+                Err(e) => {
+                    failed.push(FailedItem::new(doc_id, &e.to_string()));
+                }
+            }
+        }
+        Ok((documents, failed))
+    }
+
     /// Check cancel flag, returning an error if cancelled.
     fn check_cancel(&self) -> Result<()> {
         if self.cancelled.load(Ordering::Relaxed) {
@@ -677,11 +924,6 @@ impl Engine {
         }
     }
 
-    /// Get current active operation count.
-    pub fn active_operations(&self) -> usize {
-        *self.active_ops.lock().unwrap()
-    }
-
     /// Run a future with an optional timeout.
     /// If `timeout_secs` is `Some`, wraps the future in `tokio::time::timeout`.
     async fn with_timeout<F, T>(&self, timeout_secs: Option<u64>, fut: F) -> Result<T>
@@ -697,19 +939,6 @@ impl Engine {
             }
             None => fut.await,
         }
-    }
-
-    /// Get document structure (tree) and optional reasoning index. Internal use only.
-    pub(crate) async fn get_structure(
-        &self,
-        doc_id: &str,
-    ) -> Result<(DocumentTree, Option<crate::document::ReasoningIndex>)> {
-        let doc =
-            self.workspace.load(doc_id).await?.ok_or_else(|| {
-                Error::DocumentNotFound(format!("Document not found: {}", doc_id))
-            })?;
-
-        Ok((doc.tree, doc.reasoning_index))
     }
 
     /// Resolve QueryScope into a list of document IDs.
@@ -844,6 +1073,7 @@ impl Engine {
 
         // Load all documents in parallel and extract keyword profiles
         let doc_ids = self.workspace.inner().list_documents().await;
+        info!(doc_count = doc_ids.len(), "Loading documents for graph rebuild");
         let concurrency = self.config.llm.throttle.max_concurrent_requests;
 
         let loaded: Vec<Option<PersistedDocument>> = futures::stream::iter(doc_ids.iter().cloned())
@@ -854,6 +1084,9 @@ impl Engine {
             .buffer_unordered(concurrency)
             .collect()
             .await;
+
+        let loaded_count = loaded.iter().filter(|d| d.is_some()).count();
+        info!(loaded_count, "Documents loaded, building graph");
 
         let mut builder = crate::graph::DocumentGraphBuilder::new(self.config.graph.clone());
         for doc in loaded.into_iter().flatten() {
@@ -868,6 +1101,7 @@ impl Engine {
         }
 
         let graph = builder.build();
+        info!(nodes = graph.node_count(), edges = graph.edge_count(), "Graph built, persisting");
         self.workspace.set_graph(&graph).await?;
         Ok(())
     }
@@ -894,8 +1128,6 @@ impl Clone for Engine {
             retriever: self.retriever.clone(),
             workspace: self.workspace.clone(),
             metrics_hub: Arc::clone(&self.metrics_hub),
-            graph_dirty: Arc::clone(&self.graph_dirty),
-            graph_fail_count: Arc::clone(&self.graph_fail_count),
             cancelled: Arc::clone(&self.cancelled),
             active_ops: Arc::clone(&self.active_ops),
         }
@@ -939,20 +1171,6 @@ mod tests {
 
         flag.store(false, Ordering::Relaxed);
         assert!(!flag.load(Ordering::Relaxed));
-    }
-
-    #[test]
-    fn test_graph_dirty_flag() {
-        let dirty = Arc::new(AtomicBool::new(false));
-        assert!(!dirty.load(Ordering::Relaxed));
-
-        // Simulate: index marks dirty
-        dirty.store(true, Ordering::Relaxed);
-
-        // Simulate: query swaps to false and rebuilds
-        let was_dirty = dirty.swap(false, Ordering::Relaxed);
-        assert!(was_dirty);
-        assert!(!dirty.load(Ordering::Relaxed));
     }
 
     #[test]

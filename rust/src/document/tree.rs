@@ -213,6 +213,8 @@ impl DocumentTree {
             physical_index: None,
             token_count: None,
             references: Vec::new(),
+            routing_keywords: Vec::new(),
+            question_hints: Vec::new(),
         };
         let root_id = arena.new_node(root_data);
 
@@ -297,6 +299,8 @@ impl DocumentTree {
             physical_index: None,
             token_count: None,
             references: Vec::new(),
+            routing_keywords: Vec::new(),
+            question_hints: Vec::new(),
         };
         let child_id = self.arena.new_node(child_data);
         parent.0.append(child_id, &mut self.arena);
@@ -415,6 +419,21 @@ impl DocumentTree {
     /// Get the depth of a node (root = 0).
     pub fn depth(&self, id: NodeId) -> usize {
         self.get(id).map(|n| n.depth).unwrap_or(0)
+    }
+
+    /// Get the maximum depth of any node in the tree (root = 0, leaf ≥ 0).
+    ///
+    /// Uses a single BFS pass. Returns 0 for a single-node tree.
+    pub fn max_depth(&self) -> usize {
+        let mut max_d = 0;
+        let mut stack = vec![(self.root_id, 0usize)];
+        while let Some((id, d)) = stack.pop() {
+            max_d = max_d.max(d);
+            for child in self.children_iter(id) {
+                stack.push((child, d + 1));
+            }
+        }
+        max_d
     }
 
     /// Get the first child of a node.

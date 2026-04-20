@@ -6,7 +6,7 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use crate::document::{DocumentTree, NodeId, ReasoningIndex};
+use crate::document::{DocumentTree, NavigationIndex, NodeId, ReasoningIndex};
 use crate::index::parse::{DocumentFormat, RawNode};
 use crate::llm::LlmClient;
 
@@ -248,6 +248,9 @@ pub struct IndexContext {
     /// Pre-computed reasoning index (built by ReasoningIndexStage).
     pub reasoning_index: Option<ReasoningIndex>,
 
+    /// Navigation index for Agent-based retrieval (built by NavigationIndexStage).
+    pub navigation_index: Option<NavigationIndex>,
+
     /// Existing tree from previous indexing (for incremental updates).
     /// When set, the enhance and reasoning stages can reuse data from unchanged nodes.
     pub existing_tree: Option<DocumentTree>,
@@ -285,6 +288,7 @@ impl IndexContext {
             llm_client: None,
             summary_cache: SummaryCache::default(),
             reasoning_index: None,
+            navigation_index: None,
             existing_tree: None,
             stage_results: HashMap::new(),
             metrics: IndexMetrics::default(),
@@ -382,6 +386,7 @@ impl IndexContext {
             metrics: self.metrics,
             summary_cache: self.summary_cache,
             reasoning_index: self.reasoning_index,
+            navigation_index: self.navigation_index,
         }
     }
 }
@@ -421,6 +426,9 @@ pub struct PipelineResult {
 
     /// Pre-computed reasoning index for retrieval acceleration.
     pub reasoning_index: Option<ReasoningIndex>,
+
+    /// Navigation index for Agent-based retrieval.
+    pub navigation_index: Option<NavigationIndex>,
 }
 
 impl PipelineResult {
@@ -443,6 +451,7 @@ impl PipelineResult {
             + self.metrics.enhance_time_ms
             + self.metrics.enrich_time_ms
             + self.metrics.reasoning_index_time_ms
+            + self.metrics.navigation_index_time_ms
             + self.metrics.optimize_time_ms
     }
 }

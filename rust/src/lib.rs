@@ -40,6 +40,7 @@
 
 // ── Modules ──────────────────────────────────────────────────────────────────
 
+mod agent;
 mod client;
 mod config;
 mod document;
@@ -50,7 +51,10 @@ mod metrics;
 
 mod index;
 mod llm;
+mod query;
+mod rerank;
 mod retrieval;
+mod scoring;
 mod storage;
 mod utils;
 
@@ -58,8 +62,9 @@ mod utils;
 
 // Client
 pub use client::{
-    BuildError, DocumentFormat, DocumentInfo, Engine, EngineBuilder, FailedItem, IndexContext,
-    IndexItem, IndexMode, IndexOptions, IndexResult, QueryContext, QueryResult, QueryResultItem,
+    BuildError, Confidence, DocumentFormat, DocumentInfo, Engine, EngineBuilder, EvidenceItem,
+    FailedItem, IndexContext, IndexItem, IndexMode, IndexOptions, IndexResult, QueryContext,
+    QueryMetrics, QueryResult, QueryResultItem,
 };
 
 // Config

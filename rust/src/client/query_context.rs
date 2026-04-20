@@ -19,9 +19,6 @@
 //! let ctx = QueryContext::new("Explain the algorithm");
 //! ```
 
-use crate::config::Config;
-use crate::retrieval::{RetrieveOptions, StrategyPreference};
-
 /// Query scope — determines which documents to search.
 #[derive(Debug, Clone)]
 pub(crate) enum QueryScope {
@@ -54,14 +51,19 @@ pub struct QueryContext {
     pub(crate) scope: QueryScope,
     /// Maximum tokens for the result content.
     pub(crate) max_tokens: Option<usize>,
-    /// Retrieval strategy override.
-    pub(crate) strategy: Option<StrategyPreference>,
     /// Whether to include the pilot reasoning chain in the result.
     pub(crate) include_reasoning: bool,
     /// Maximum tree traversal depth for the pilot.
     pub(crate) depth_limit: Option<usize>,
     /// Per-operation timeout (seconds). `None` means no timeout.
     pub(crate) timeout_secs: Option<u64>,
+    /// Force Orchestrator analysis even when documents are specified.
+    ///
+    /// When `true`, the Orchestrator analyzes DocCards to select relevant
+    /// documents instead of dispatching all specified docs directly.
+    /// Useful when the user wants the system to decide which documents
+    /// (or sections) are most relevant to the query.
+    pub(crate) force_analysis: bool,
 }
 
 impl QueryContext {
@@ -71,10 +73,10 @@ impl QueryContext {
             query: query.into(),
             scope: QueryScope::Workspace,
             max_tokens: None,
-            strategy: None,
             include_reasoning: true,
             depth_limit: None,
             timeout_secs: None,
+            force_analysis: false,
         }
     }
 
@@ -99,12 +101,6 @@ impl QueryContext {
         self
     }
 
-    /// Set the retrieval strategy.
-    pub fn with_strategy(mut self, strategy: StrategyPreference) -> Self {
-        self.strategy = Some(strategy);
-        self
-    }
-
     /// Set whether to include the pilot reasoning chain.
     pub fn with_include_reasoning(mut self, include: bool) -> Self {
         self.include_reasoning = include;
@@ -123,22 +119,19 @@ impl QueryContext {
         self
     }
 
-    /// Convert to internal `RetrieveOptions`, merging with engine config.
-    pub(crate) fn to_retrieve_options(&self, config: &Config) -> RetrieveOptions {
-        let mut opts = RetrieveOptions::new()
-            .with_top_k(config.retrieval.top_k)
-            .with_include_content(true)
-            .with_include_summaries(true);
-
-        if let Some(max_tokens) = self.max_tokens {
-            opts = opts.with_max_tokens(max_tokens);
-        }
-
-        if let Some(strategy) = &self.strategy {
-            opts = opts.with_strategy(strategy.clone());
-        }
-
-        opts
+    /// Force the Orchestrator to analyze documents before dispatching Workers.
+    ///
+    /// By default, when documents are specified via `with_doc_ids()`, the
+    /// Orchestrator skips its analysis phase and dispatches Workers to all
+    /// specified documents directly. Setting this to `true` forces the
+    /// Orchestrator to analyze DocCards and decide which documents are
+    /// relevant, even when the user specified documents explicitly.
+    ///
+    /// This is useful when querying across many documents where only a subset
+    /// is likely relevant to the specific question.
+    pub fn with_force_analysis(mut self, force: bool) -> Self {
+        self.force_analysis = force;
+        self
     }
 }
 

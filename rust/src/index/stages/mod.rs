@@ -6,6 +6,7 @@
 mod build;
 mod enhance;
 mod enrich;
+mod navigation;
 mod optimize;
 mod parse;
 mod reasoning;
@@ -15,6 +16,7 @@ mod validate;
 pub use build::BuildStage;
 pub use enhance::EnhanceStage;
 pub use enrich::EnrichStage;
+pub use navigation::NavigationIndexStage;
 pub use optimize::OptimizeStage;
 pub use parse::ParseStage;
 pub use reasoning::ReasoningIndexStage;
@@ -35,6 +37,8 @@ pub struct AccessPattern {
     pub writes_tree: bool,
     /// Whether this stage writes to `reasoning_index`.
     pub writes_reasoning_index: bool,
+    /// Whether this stage writes to `navigation_index`.
+    pub writes_navigation_index: bool,
     /// Whether this stage writes to `description`.
     pub writes_description: bool,
 }

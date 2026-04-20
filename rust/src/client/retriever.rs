@@ -3,47 +3,39 @@
 
 //! Document retrieval client.
 //!
-//! This module provides query and retrieval operations for document content.
-//!
-//! # Example
-//!
-//! ```rust,ignore
-//! let retriever = RetrieverClient::new(pipeline_retriever);
-//!
-//! let result = retriever
-//!     .query(&tree, "What is this?", RetrieveOptions::default())
-//!     .await?;
-//!
-//! println!("Found {} results", result.results.len());
-//! ```
-
-use std::sync::Arc;
+//! This module provides query and retrieval operations for document content,
+//! dispatching through the retrieval layer to the agent-based system.
 
 use tracing::info;
 
-use super::types::QueryResultItem;
-use crate::document::{DocumentTree, ReasoningIndex};
-use crate::error::{Error, Result};
+use crate::agent::{self, config::AgentConfig, events::EventEmitter as AgentEventEmitter};
+use crate::client::types::QueryResult;
+use crate::document::{DocumentTree, NavigationIndex, ReasoningIndex};
+use crate::error::Result;
 use crate::events::{EventEmitter, QueryEvent};
-use crate::retrieval::stream::RetrieveEventReceiver;
-use crate::retrieval::{RetrieveOptions, RetrieveResponse};
+use crate::llm::LlmClient;
+use crate::retrieval::{dispatcher, postprocessor};
 
 /// Document retrieval client.
 ///
-/// Provides operations for querying document content.
+/// Delegates to the agent-based retrieval system.
 pub(crate) struct RetrieverClient {
-    /// Pipeline retriever.
-    retriever: Arc<crate::retrieval::PipelineRetriever>,
+    /// LLM client for agent navigation decisions.
+    llm: LlmClient,
+
+    /// Agent configuration.
+    config: AgentConfig,
 
     /// Event emitter.
     events: EventEmitter,
 }
 
 impl RetrieverClient {
-    /// Create a new retriever client.
-    pub fn new(retriever: crate::retrieval::PipelineRetriever) -> Self {
+    /// Create a new retriever client with an LLM client.
+    pub fn new(llm: LlmClient) -> Self {
         Self {
-            retriever: Arc::new(retriever),
+            llm,
+            config: AgentConfig::default(),
             events: EventEmitter::new(),
         }
     }
@@ -54,141 +46,83 @@ impl RetrieverClient {
         self
     }
 
-    /// Query a document tree with optional reasoning index for fast-path lookup.
-    #[tracing::instrument(skip_all, fields(question = %question))]
+    /// Set custom agent configuration.
+    pub fn with_config(mut self, config: AgentConfig) -> Self {
+        self.config = config;
+        self
+    }
+
+    /// Get a reference to the agent configuration.
+    pub fn config(&self) -> &AgentConfig {
+        &self.config
+    }
+
+    /// Get a reference to the LLM client.
+    pub fn llm(&self) -> &LlmClient {
+        &self.llm
+    }
+
+    /// Query documents through the agent-based retrieval system.
     ///
-    /// # Errors
-    ///
-    /// Returns an error if the retrieval pipeline fails.
-    pub async fn query_with_reasoning_index(
+    /// - `skip_analysis = true` → `Scope::Specified` (user-specified docs, skip Orchestrator analysis)
+    /// - `skip_analysis = false` → `Scope::Workspace` (full Orchestrator analysis flow)
+    #[tracing::instrument(skip_all, fields(question = %question, docs = documents.len()))]
+    pub async fn query(
         &self,
-        tree: &DocumentTree,
+        documents: &[(DocumentTree, NavigationIndex, ReasoningIndex, String)],
         question: &str,
-        options: &RetrieveOptions,
-        reasoning_index: Option<ReasoningIndex>,
-    ) -> Result<QueryResultItem> {
+        skip_analysis: bool,
+    ) -> Result<QueryResult> {
         self.events.emit_query(QueryEvent::Started {
             query: question.to_string(),
         });
 
-        info!("Querying: {:?}", question);
+        info!(
+            docs = documents.len(),
+            skip_analysis, "Querying: {:?}", question
+        );
 
-        // Execute retrieval with reasoning index
-        let response = self
-            .retriever
-            .retrieve_with_reasoning_index(tree, question, options, reasoning_index)
-            .await
-            .map_err(|e| Error::Retrieval(e.to_string()))?;
-
-        // Build result
-        let result = self.build_query_result(&response);
-
-        self.events.emit_query(QueryEvent::Complete {
-            total_results: result.node_ids.len(),
-            confidence: result.score,
-        });
-
-        Ok(result)
-    }
-
-    /// Query a document tree with streaming results.
-    ///
-    /// Returns a channel receiver that yields [`RetrieveEvent`]s
-    /// incrementally as the pipeline progresses through its stages.
-    /// The stream always terminates with either `Completed` or `Error`.
-    ///
-    /// Also emits events through the [`EventEmitter`] (configured via
-    /// [`with_events`](Self::with_events)), so existing `on_query()` handlers
-    /// receive streaming events too.
-    ///
-    /// This is the streaming counterpart of [`query`](Self::query).
-    /// The non-streaming path is completely unaffected.
-    ///
-    /// # Example
-    ///
-    /// ```rust,ignore
-    /// let options = RetrieveOptions::new().with_streaming(true);
-    /// let mut rx = client.query_stream(&tree, "query", &options).await?;
-    ///
-    /// while let Some(event) = rx.recv().await {
-    ///     match event {
-    ///         RetrieveEvent::StageCompleted { stage, .. } => println!("{stage} done"),
-    ///         RetrieveEvent::Completed { response } => {
-    ///             println!("Confidence: {}", response.confidence);
-    ///             break;
-    ///         }
-    ///         RetrieveEvent::Error { message } => { eprintln!("{message}"); break; }
-    ///         _ => {}
-    ///     }
-    /// }
-    /// ```
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the retriever cannot be cloned for streaming.
-    pub async fn query_stream(
-        &self,
-        tree: &DocumentTree,
-        question: &str,
-        options: &RetrieveOptions,
-    ) -> Result<RetrieveEventReceiver> {
-        self.events.emit_query(QueryEvent::Started {
-            query: question.to_string(),
-        });
-
-        info!("Streaming query: {:?}", question);
-
-        let (_handle, rx) = self.retriever.retrieve_streaming(tree, question, options);
-
-        // Note: The Complete event is NOT emitted via EventEmitter here because
-        // the streaming handle returns () — the actual result flows through the
-        // rx channel as RetrieveEvent::Completed { response }. Callers who need
-        // completion metrics should consume the channel.
-
-        Ok(rx)
-    }
-
-    /// Build QueryResultItem from RetrieveResponse.
-    fn build_query_result(&self, response: &RetrieveResponse) -> QueryResultItem {
-        // Extract node IDs
-        let node_ids: Vec<String> = response
-            .results
+        let doc_contexts: Vec<agent::DocContext> = documents
             .iter()
-            .filter_map(|r| r.node_id.clone())
-            .collect();
-
-        // Build content
-        let content_parts: Vec<String> = response
-            .results
-            .iter()
-            .map(|r| {
-                let mut parts = vec![format!("## {}", r.title)];
-                if let Some(ref content) = r.content {
-                    parts.push(content.clone());
-                }
-                parts.join("\n\n")
+            .map(|(tree, nav, ridx, id)| agent::DocContext {
+                tree,
+                nav_index: nav,
+                reasoning_index: ridx,
+                doc_name: id.as_str(),
             })
             .collect();
 
-        let content = if content_parts.is_empty() {
-            response.content.clone()
+        let scope = if skip_analysis {
+            agent::Scope::Specified(doc_contexts)
         } else {
-            content_parts.join("\n\n---\n\n")
+            agent::Scope::Workspace(agent::WorkspaceContext::new(doc_contexts))
         };
 
-        QueryResultItem {
-            doc_id: String::new(), // Will be set by caller
-            node_ids,
-            content,
-            score: response.confidence,
-        }
+        let emitter = AgentEventEmitter::noop();
+        let output =
+            dispatcher::dispatch(question, scope, &self.config, &self.llm, &emitter).await?;
+
+        let fallback_id = documents
+            .first()
+            .map(|(_, _, _, id)| id.as_str())
+            .unwrap_or("");
+        let items = postprocessor::to_results(&output, fallback_id);
+        let result = QueryResult::new_with_items(items);
+
+        self.events.emit_query(QueryEvent::Complete {
+            total_results: result.len(),
+            confidence: result.single().map(|i| i.confidence).unwrap_or(0.0),
+        });
+
+        Ok(result)
     }
 }
 
 impl Clone for RetrieverClient {
     fn clone(&self) -> Self {
         Self {
-            retriever: Arc::clone(&self.retriever),
+            llm: self.llm.clone(),
+            config: self.config.clone(),
             events: self.events.clone(),
         }
     }
@@ -200,7 +134,7 @@ mod tests {
 
     #[test]
     fn test_retriever_client_creation() {
-        let retriever = crate::retrieval::PipelineRetriever::new();
-        let _client = RetrieverClient::new(retriever);
+        let _client =
+            RetrieverClient::new(LlmClient::new(crate::llm::config::LlmConfig::default()));
     }
 }

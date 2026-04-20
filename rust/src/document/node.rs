@@ -105,6 +105,20 @@ pub struct TreeNode {
     /// "refer to Table 5.3" that can be followed during retrieval.
     #[serde(default)]
     pub references: Vec<NodeReference>,
+
+    /// Routing keywords for navigation (non-leaf nodes).
+    ///
+    /// Populated by EnhanceStage with LLM-extracted topic tags.
+    /// Used by NavigationIndexStage to populate `NavEntry::topic_tags`.
+    #[serde(default)]
+    pub routing_keywords: Vec<String>,
+
+    /// Typical questions this subtree can answer (non-leaf nodes).
+    ///
+    /// Populated by EnhanceStage with LLM-extracted question hints.
+    /// Used by NavigationIndexStage to populate `NavEntry::question_hints`.
+    #[serde(default)]
+    pub question_hints: Vec<String>,
 }
 
 impl Default for TreeNode {
@@ -123,6 +137,8 @@ impl Default for TreeNode {
             physical_index: None,
             token_count: None,
             references: Vec::new(),
+            routing_keywords: Vec::new(),
+            question_hints: Vec::new(),
         }
     }
 }

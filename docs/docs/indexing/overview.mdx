@@ -2,97 +2,222 @@
 sidebar_position: 1
 ---
 
-# Indexing Overview
+# Indexing Pipeline
 
-The indexing pipeline transforms documents into searchable hierarchical trees. This page describes each stage and how they work together.
+The compile pipeline transforms raw documents into hierarchical tree structures with pre-computed navigation indexes, ready for Agent-driven retrieval.
 
-## Pipeline Stages
+## Pipeline Overview
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                      Compile Pipeline                           │
+│                                                                 │
+│  Document ──→ Parse ──→ Build ──→ Validate ──→ Split           │
+│  (md/pdf)     (10)     (20)     (22)       (25)               │
+│                                                                 │
+│             ──→ Enhance ──→ Enrich ──→ ReasoningIndex (45)     │
+│                (30)       (40)                                  │
+│                                                                 │
+│             ──→ NavigationIndex ──→ Optimize                   │
+│                 (50)              (60)                          │
+│                                                                 │
+│  Output: DocumentTree + ReasoningIndex + NavigationIndex       │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+Numbers in parentheses are stage priorities — lower values execute first. Stages at the same priority level run in parallel when their dependency graph allows it.
+
+---
+
+## Stage Details
 
 ### Parse (Priority 10)
 
-Parses raw documents into a list of `RawNode` structures:
+Parses raw documents into `RawNode` structures, preserving the source hierarchy.
 
-- **Markdown** — Splits by headings (`#`, `##`, `###`), preserving hierarchy
-- **PDF** — Extracts text per page, groups into sections by layout analysis
+| Format | Strategy |
+|--------|----------|
+| **Markdown** | Splits by heading levels (`#`, `##`, `###`). Each heading becomes a node, content between headings becomes node content. |
+| **PDF** | Extracts text per page, groups into sections by layout analysis and font-size heuristics. |
+
+Each `RawNode` carries: title, content, heading level, line range, page number, and an estimated token count.
 
 ### Build (Priority 20)
 
-Constructs an arena-based `DocumentTree` from raw nodes:
+Constructs an arena-based [`DocumentTree`](https://docs.rs/vectorless) from the parsed raw nodes.
 
-- Creates parent-child relationships based on heading levels
-- Applies **thinning** — merges single-child chains to reduce tree depth
-- Merges content from nodes that don't add structural value
+- Creates parent-child relationships based on heading level nesting
+- Applies **thinning** — collapses single-child chains where a parent has exactly one child and no meaningful content of its own. This reduces unnecessary tree depth
+- Assigns sequential node IDs and hierarchical structure indices (e.g. `"1"`, `"1.2"`, `"1.2.3"`)
 
-### Validate (Priority 22)
+### Validate (Priority 22, optional)
 
-Checks tree integrity:
+Checks tree integrity before expensive LLM stages run:
 
-- No orphaned nodes
-- Consistent depth values
-- Valid parent-child relationships
+- No orphaned nodes (every node reachable from root)
+- Consistent depth values (child depth = parent depth + 1)
+- Valid parent-child relationships in the arena
 
-### Split (Priority 25)
+Failures at this stage prevent broken trees from propagating downstream.
 
-Splits oversized leaf nodes that exceed the token threshold (default: 4000 tokens):
+### Split (Priority 25, optional)
 
-- Finds paragraph or heading boundaries for clean splits
-- Preserves semantic coherence within each split
+Splits oversized leaf nodes that exceed the token threshold (default: 4000 tokens).
+
+- Finds paragraph boundaries or heading-like patterns for clean splits
+- Each split becomes a new leaf node under the same parent
+- Preserves semantic coherence — splits don't break mid-sentence
 
 ### Enhance (Priority 30)
 
-Generates LLM summaries for tree nodes:
+Generates LLM summaries for tree nodes. This is the most expensive stage (LLM API calls) and produces data that all downstream indexes consume.
 
-- **Full** — Summarize every node (default)
-- **Selective** — Only branch nodes above a token threshold
-- **Lazy** — Generate summaries on-demand at query time
+**Leaf nodes** receive content-oriented summaries:
 
-Branch nodes get navigation-oriented summaries ("what does this section cover"), while leaf nodes get content-oriented summaries ("what does this section say").
+> *What does this section say?*
+
+**Non-leaf (branch) nodes** receive structured navigation output with three components:
+
+| Component | Purpose | Consumed by |
+|-----------|---------|-------------|
+| **OVERVIEW** | 2-3 sentence routing summary ("what this branch covers") | `NavEntry.overview` |
+| **QUESTIONS** | 3-5 typical questions this branch can answer | `NavEntry.question_hints` |
+| **TAGS** | 2-4 topic keywords for fast-path matching | `NavEntry.topic_tags` |
+
+Example LLM output for a non-leaf node:
+
+```
+OVERVIEW: Covers the Wix payment ecosystem, spanning payment processing, account management, and financial operations.
+QUESTIONS: How to set up Wix Payments?, What payout schedules are available?, How to handle chargebacks?
+TAGS: payments, billing, invoices, refunds
+```
+
+The stage supports four strategies:
+
+| Strategy | Behavior |
+|----------|----------|
+| **Full** | Summarize every node (default) |
+| **Selective** | Only branch nodes above a token threshold |
+| **Lazy** | Generate summaries on-demand at query time |
+| **None** | Skip LLM summaries entirely |
+
+All LLM calls run concurrently with configurable concurrency limits, and results are cached via the [MemoStore](../features/summary-strategies.mdx) for incremental re-indexing.
 
 ### Enrich (Priority 40)
 
-Adds metadata to the tree:
+Adds structural metadata to the tree — no LLM calls, pure computation:
 
-- **Page ranges** — Propagates page boundaries from leaves to parents
-- **Token statistics** — Calculates total tokens and node counts
-- **Cross-reference resolution** — Parses "see Section 2.1", "Appendix G" references and resolves them to actual `NodeId`s in the tree
+- **Page ranges** — Propagates page boundaries from leaves up to parent nodes, enabling page-level citation
+- **Token statistics** — Calculates total tokens and node counts per subtree
+- **Cross-reference resolution** — Parses inline references like "see Section 2.1" or "refer to Appendix G" and resolves them to actual `NodeId`s in the tree
 - **Document description** — Generates a description from the root summary
 
 ### Reasoning Index (Priority 45)
 
-Builds a pre-computed index for fast retrieval:
+Builds a [`ReasoningIndex`](https://docs.rs/vectorless) — a flat keyword-to-node mapping optimized for traditional retrieval:
 
-- **Topic paths** — Maps keywords to nodes with weights (title: 2.0x, summary: 1.5x, content: 1.0x)
-- **Synonym expansion** — Expands top keywords with LLM-generated synonyms (0.6x weight)
-- **Summary shortcut** — Pre-computed document overview for "what is this about" queries
-- **Section map** — Depth-1 section titles for fast ToC lookup
+| Field | Description |
+|-------|-------------|
+| `topic_paths` | Keywords → nodes with weighted mappings. Title keywords get 2.0×, summary 1.5×, content 1.0× |
+| `summary_shortcut` | Pre-computed document overview for "what is this about" queries |
+| `section_map` | Depth-1 section titles → `NodeId` for fast ToC lookup |
+| `hot_nodes` | Frequently retrieved nodes tracked over time |
 
-### Optimize (Priority 60)
+Optionally expands top keywords with **LLM-generated synonyms** at 0.6× weight, enabling fuzzy keyword matching without vector embeddings.
 
-Final tree optimization:
+### Navigation Index (Priority 50)
 
-- Removes redundant metadata
-- Compacts tree structure for efficient storage
+Builds a [`NavigationIndex`](https://docs.rs/vectorless) — the primary data source for the retrieval Agent. This stage is pure data organization: no LLM calls, it restructures data produced by the Enhance stage.
 
-## Pipeline Options
+For every non-leaf node, it creates:
 
-```python
-from vectorless import IndexOptions
+**`NavEntry`** — routing metadata for the Agent to decide "should I enter this branch?"
 
-# Default options (synonym expansion enabled)
-opts = IndexOptions()
-
-# Force re-indexing
-opts = IndexOptions(mode="force")
-
-# Disable summaries for speed
-opts = IndexOptions(generate_summaries=False)
+```rust
+pub struct NavEntry {
+    pub overview: String,          // Routing summary from Enhance
+    pub question_hints: Vec<String>, // Typical questions from Enhance
+    pub topic_tags: Vec<String>,   // Topic keywords from Enhance
+    pub leaf_count: usize,         // Total leaves in this subtree
+    pub level: usize,              // Depth in tree (root = 0)
+}
 ```
 
-## Incremental Indexing
+**`ChildRoute`** — compact routing info for one child, enabling progressive disclosure:
 
-When indexing with `mode="incremental"`, the pipeline:
+```rust
+pub struct ChildRoute {
+    pub node_id: NodeId,
+    pub title: String,
+    pub description: String,       // One-sentence routing description
+    pub leaf_count: usize,         // Leaves in this child's subtree
+}
+```
 
-1. Computes a content fingerprint (hash) of the input
-2. Compares against the previously stored fingerprint
-3. Skips reprocessing if the content hasn't changed
-4. Reuses existing summaries and reasoning index data for unchanged nodes
+The Agent reads `child_routes` at each decision point to see all available sub-topics and their descriptions, then chooses where to navigate next — without accessing the content layer.
+
+This design is the in-memory equivalent of the [SKILL.md / INDEX.md files](https://arxiv.org/abs/2604.14572) described in the Corpus2Skill paper.
+
+### Optimize (Priority 60, optional)
+
+Final tree structure optimizations:
+
+- **Merge small leaves** — Adjacent sibling leaves below the token threshold are merged into a single node, with content prefixed by `## Title` to preserve boundaries
+- **Remove empty intermediates** — Non-leaf nodes with no content and exactly one child are marked for removal (collapsing the chain)
+
+---
+
+## Data Flow
+
+```
+Document (md/pdf)
+      │
+      ▼
+  ┌─────────┐     ┌──────────────┐     ┌─────────────────┐
+  │ TreeNode  │     │ReasoningIndex│     │NavigationIndex  │
+  │ (content) │     │ (keyword →   │     │ (Node → NavEntry│
+  │           │     │  node map)   │     │ + ChildRoutes)  │
+  └────┬─────┘     └──────┬───────┘     └───────┬─────────┘
+       │                  │                      │
+       │    Retrieved by  │   Retrieved by       │
+       │    content       │   keyword lookup     │   Agent navigation
+       │    collection    │                      │
+       ▼                  ▼                      ▼
+  ┌──────────────────────────────────────────────────────┐
+  │                  Retrieval Phase                      │
+  │  Agent reads NavigationIndex to decide where to go,  │
+  │  then reads TreeNode.content only when needed.        │
+  └──────────────────────────────────────────────────────┘
+```
+
+---
+
+## Usage
+
+```python
+from vectorless import Engine
+
+engine = Engine.builder().build()
+
+# Compile a document (runs all stages)
+result = engine.compile("./docs/")
+
+# Access the indexes
+print(f"Tree nodes: {result.node_count()}")
+print(f"Reasoning index keywords: {result.keyword_count()}")
+print(f"Navigation entries: {result.nav_entry_count()}")
+```
+
+```rust
+use vectorless::client::EngineBuilder;
+
+let engine = EngineBuilder::new().build()?;
+let result = engine.compile("./docs/").await?;
+
+println!("Tree nodes: {}", result.node_count());
+println!("Nav entries: {}", result.nav_entry_count());
+```
+
+## Configuration
+
+See [Indexing Configuration](./configuration.mdx) for all available options including summary strategies, token thresholds, and concurrency settings.

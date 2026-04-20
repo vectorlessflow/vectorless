@@ -28,7 +28,7 @@ def config_cmd(
         llm.model           LLM model name
         llm.api_key         API key (or env VECTORLESS_API_KEY)
         llm.endpoint        API endpoint
-        retrieval.strategy  agent | pipeline
+        retrieval.strategy  agent
         retrieval.max_rounds  navigation budget
         index.summary       full | selective | lazy | navigation
         index.compact_mode  true | false

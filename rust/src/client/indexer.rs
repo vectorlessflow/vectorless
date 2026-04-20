@@ -279,6 +279,7 @@ impl IndexerClient {
             .with_metrics(result.metrics);
 
         doc.reasoning_index = result.reasoning_index;
+        doc.navigation_index = result.navigation_index;
 
         if let Some(p) = path {
             doc = doc.with_source_path(p);
@@ -365,6 +366,7 @@ impl IndexerClient {
         }
 
         persisted.reasoning_index = doc.reasoning_index;
+        persisted.navigation_index = doc.navigation_index;
         persisted
             .meta
             .update_processing_stats(node_count, summary_tokens, duration_ms);

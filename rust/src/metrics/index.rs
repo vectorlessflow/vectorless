@@ -40,6 +40,18 @@ pub struct IndexMetrics {
     #[serde(default)]
     pub reasoning_index_time_ms: u64,
 
+    /// Navigation index build duration (ms).
+    #[serde(default)]
+    pub navigation_index_time_ms: u64,
+
+    /// Number of nav entries in navigation index.
+    #[serde(default)]
+    pub nav_entries_indexed: usize,
+
+    /// Number of child routes in navigation index.
+    #[serde(default)]
+    pub child_routes_indexed: usize,
+
     /// Number of topics indexed in reasoning index.
     #[serde(default)]
     pub topics_indexed: usize,
@@ -125,6 +137,18 @@ impl IndexMetrics {
         self.keywords_indexed = keywords;
     }
 
+    /// Record navigation index build time.
+    pub fn record_navigation_index(
+        &mut self,
+        duration_ms: u64,
+        nav_entries: usize,
+        child_routes: usize,
+    ) {
+        self.navigation_index_time_ms = duration_ms;
+        self.nav_entries_indexed = nav_entries;
+        self.child_routes_indexed = child_routes;
+    }
+
     /// Increment LLM calls.
     pub fn increment_llm_calls(&mut self) {
         self.llm_calls += 1;
@@ -169,6 +193,7 @@ impl IndexMetrics {
             + self.enhance_time_ms
             + self.enrich_time_ms
             + self.reasoning_index_time_ms
+            + self.navigation_index_time_ms
             + self.optimize_time_ms
     }
 }

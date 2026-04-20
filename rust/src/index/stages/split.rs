@@ -4,7 +4,7 @@
 //! Split stage - Break large leaf nodes into smaller ones.
 
 use std::time::Instant;
-use tracing::info;
+use tracing::{debug, info};
 
 use crate::document::{DocumentTree, NodeId};
 use crate::error::Result;
@@ -226,6 +226,7 @@ impl IndexStage for SplitStage {
             reads_tree: true,
             writes_tree: true,
             writes_reasoning_index: false,
+            writes_navigation_index: false,
             writes_description: false,
         }
     }
@@ -236,14 +237,21 @@ impl IndexStage for SplitStage {
         let tree = match ctx.tree.as_mut() {
             Some(t) => t,
             None => {
+                info!("[split] No tree, skipping");
                 return Ok(StageResult::success("split"));
             }
         };
 
         let config = &ctx.options.split;
         if !config.enabled {
+            debug!("[split] Disabled, skipping");
             return Ok(StageResult::success("split"));
         }
+
+        info!(
+            "[split] Starting: max_tokens_per_node={}",
+            config.max_tokens_per_node
+        );
 
         let node_count_before = tree.node_count();
         let split_count = Self::split_tree(tree, config);
@@ -254,7 +262,7 @@ impl IndexStage for SplitStage {
         ctx.metrics.nodes_merged += split_count;
 
         info!(
-            "Split {} oversized nodes ({} → {} total nodes) in {}ms",
+            "[split] Complete: {} nodes split ({} → {} total) in {}ms",
             split_count, node_count_before, node_count_after, duration
         );
 

@@ -49,6 +49,9 @@ pub(crate) struct IndexedDocument {
 
     /// Pre-computed reasoning index for retrieval acceleration.
     pub reasoning_index: Option<crate::document::ReasoningIndex>,
+
+    /// Pre-computed navigation index for agent-based retrieval.
+    pub navigation_index: Option<crate::document::NavigationIndex>,
 }
 
 impl IndexedDocument {
@@ -65,6 +68,7 @@ impl IndexedDocument {
             pages: Vec::new(),
             metrics: None,
             reasoning_index: None,
+            navigation_index: None,
         }
     }
 
