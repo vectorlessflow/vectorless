@@ -35,8 +35,6 @@ pub async fn dispatch_and_collect(
                 }
             };
 
-            state.record_dispatch(dispatch.doc_idx);
-
             let query = query.to_string();
             let task = dispatch.task.clone();
             let worker_config = config.worker.clone();
@@ -69,7 +67,7 @@ pub async fn dispatch_and_collect(
                     output.metrics.llm_calls,
                     true,
                 );
-                state.collect_result(output);
+                state.collect_result(doc_idx, output);
             }
             Err(e) => {
                 warn!(doc_idx, error = %e, "Worker failed");

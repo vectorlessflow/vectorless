@@ -223,6 +223,26 @@ pub struct WorkerMetrics {
     pub evidence_chars: usize,
 }
 
+impl From<WorkerOutput> for Output {
+    fn from(wo: WorkerOutput) -> Self {
+        Output {
+            answer: String::new(),
+            evidence: wo.evidence,
+            metrics: Metrics {
+                rounds_used: wo.metrics.rounds_used,
+                llm_calls: wo.metrics.llm_calls,
+                nodes_visited: wo.metrics.nodes_visited,
+                fast_path_hit: false,
+                budget_exhausted: wo.metrics.budget_exhausted,
+                plan_generated: wo.metrics.plan_generated,
+                check_count: wo.metrics.check_count,
+                evidence_chars: wo.metrics.evidence_chars,
+            },
+            score: 0.0,
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Scope types
 // ---------------------------------------------------------------------------

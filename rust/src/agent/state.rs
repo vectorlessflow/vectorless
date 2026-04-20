@@ -166,28 +166,22 @@ impl WorkerState {
             .join("\n")
     }
 
-    /// Convert this state into an Output (consuming the state).
-    pub fn into_output(self, llm_calls: u32) -> Output {
-        self.into_output_with_budget(llm_calls, false)
-    }
-
-    /// Convert this state into an Output (consuming the state), with budget flag.
-    pub fn into_output_with_budget(self, llm_calls: u32, budget_exhausted: bool) -> Output {
+    /// Convert this state into a WorkerOutput (consuming the state), with budget flag.
+    /// Worker returns evidence only — no answer synthesis.
+    pub fn into_worker_output(self, llm_calls: u32, budget_exhausted: bool, doc_name: &str) -> super::config::WorkerOutput {
         let evidence_chars: usize = self.evidence.iter().map(|e| e.content.len()).sum();
-        Output {
-            answer: String::new(), // filled by synthesis
+        super::config::WorkerOutput {
             evidence: self.evidence,
-            metrics: super::config::Metrics {
+            metrics: super::config::WorkerMetrics {
                 rounds_used: self.max_rounds.saturating_sub(self.remaining),
                 llm_calls,
                 nodes_visited: self.visited.len(),
-                fast_path_hit: false,
                 budget_exhausted,
                 plan_generated: self.plan_generated,
                 check_count: self.check_count,
                 evidence_chars,
             },
-            score: 0.0,
+            doc_name: doc_name.to_string(),
         }
     }
 }
@@ -231,11 +225,12 @@ impl OrchestratorState {
         }
     }
 
-    /// Collect a Worker result.
-    pub fn collect_result(&mut self, result: Output) {
+    /// Collect a Worker result, converting WorkerOutput to Output for internal tracking.
+    pub fn collect_result(&mut self, doc_idx: usize, result: super::config::WorkerOutput) {
         self.total_llm_calls += result.metrics.llm_calls;
         self.all_evidence.extend(result.evidence.iter().cloned());
-        self.sub_results.push(result);
+        self.sub_results.push(result.into());
+        self.record_dispatch(doc_idx);
     }
 
     /// Clone results into an Output without consuming self.

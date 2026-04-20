@@ -21,7 +21,7 @@ use crate::llm::LlmClient;
 use crate::scoring::bm25::extract_keywords;
 use super::Agent;
 use super::command::Command;
-use super::config::{DocContext, Output, Step, WorkerConfig};
+use super::config::{DocContext, Step, WorkerConfig, WorkerOutput};
 use super::context::FindHit;
 use super::events::EventEmitter;
 use super::prompts::{
@@ -68,13 +68,13 @@ impl<'a> Worker<'a> {
 }
 
 impl<'a> Agent for Worker<'a> {
-    type Output = Output;
+    type Output = WorkerOutput;
 
     fn name(&self) -> &str {
         "worker"
     }
 
-    async fn run(self) -> crate::error::Result<Output> {
+    async fn run(self) -> crate::error::Result<WorkerOutput> {
         let Worker { query, task, ctx, config, llm, emitter } = self;
         let task_ref = task.as_deref();
 
@@ -309,14 +309,7 @@ impl<'a> Agent for Worker<'a> {
 
         // Worker returns raw evidence — no synthesis.
         // The Orchestrator owns the single synthesis/fusion point via rerank::process.
-        let mut output = state.into_output_with_budget(llm_calls, budget_exhausted);
-
-        if output.evidence.is_empty() {
-            output.answer = format!(
-                "I was unable to find relevant information in document '{}' to answer your question.",
-                ctx.doc_name
-            );
-        }
+        let output = state.into_worker_output(llm_calls, budget_exhausted, ctx.doc_name);
 
         emitter.emit_worker_done(
             ctx.doc_name, output.evidence.len(),
