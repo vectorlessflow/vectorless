@@ -2,19 +2,21 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! Phase 1: Analyze documents and produce a dispatch plan.
+//!
+//! Uses the [`QueryPlan`] from query understanding to inform document selection.
+//! LLM errors propagate — no silent degradation.
 
-use tracing::{debug, info, warn};
+use tracing::{debug, info};
 
+use crate::error::Error;
 use crate::llm::LlmClient;
 use crate::query::QueryPlan;
 use crate::scoring::bm25::extract_keywords;
 
-use super::super::config::{AgentConfig, WorkspaceContext};
-use super::super::events::EventEmitter;
-use super::super::prompts::{DispatchEntry, OrchestratorAnalysisParams, orchestrator_analysis, parse_dispatch_plan};
+use super::super::config::WorkspaceContext;
+use super::super::prompts::{DispatchEntry, orchestrator_analysis, parse_dispatch_plan};
 use super::super::state::OrchestratorState;
 use super::super::tools::orchestrator as orch_tools;
-use super::dispatch::dispatch_and_collect;
 
 /// Outcome of the analyze phase.
 pub enum AnalyzeOutcome {
@@ -24,21 +26,25 @@ pub enum AnalyzeOutcome {
     AlreadyAnswered { llm_calls: u32 },
     /// No relevant documents found.
     NoResults { llm_calls: u32 },
-    /// Analysis LLM call failed — caller should fallback.
-    AnalysisFailed,
 }
 
 /// Analyze documents and produce a dispatch plan.
+///
+/// Uses the [`QueryPlan`] for intent-aware analysis:
+/// - Intent and key concepts inform the LLM about what to look for
+/// - Complexity hints at how many documents may be needed
+/// - Strategy hint guides the analysis approach
+///
+/// LLM failures propagate as [`Error::LlmReasoning`] — no fallback.
 pub async fn analyze(
     query: &str,
     ws: &WorkspaceContext<'_>,
-    config: &AgentConfig,
-    llm: &LlmClient,
     state: &mut OrchestratorState,
-    emitter: &EventEmitter,
+    emitter: &crate::agent::EventEmitter,
     skip_analysis: bool,
-    _query_plan: &QueryPlan,
-) -> AnalyzeOutcome {
+    query_plan: &QueryPlan,
+    llm: &LlmClient,
+) -> crate::error::Result<AnalyzeOutcome> {
     if skip_analysis {
         debug!("Phase 1: skipping (user-specified documents)");
         let dispatches = (0..ws.doc_count())
@@ -48,11 +54,15 @@ pub async fn analyze(
                 task: query.to_string(),
             })
             .collect();
-        return AnalyzeOutcome::Proceed { dispatches, llm_calls: 0 };
+        return Ok(AnalyzeOutcome::Proceed { dispatches, llm_calls: 0 });
     }
 
-    debug!("Phase 1: analyzing doc cards and cross-doc keywords");
-    let mut llm_calls: u32 = 0;
+    debug!(
+        intent = %query_plan.intent,
+        complexity = %query_plan.complexity,
+        strategy = query_plan.strategy_hint,
+        "Phase 1: analyzing doc cards with query understanding"
+    );
 
     let doc_cards_text = orch_tools::ls_docs(ws).feedback;
     let keywords = extract_keywords(query);
@@ -69,21 +79,44 @@ pub async fn analyze(
         "Phase 1: analysis input"
     );
 
-    let (system, user) = orchestrator_analysis(&OrchestratorAnalysisParams {
+    // Build analysis prompt enriched with query understanding
+    let concepts_text = if query_plan.key_concepts.is_empty() {
+        String::new()
+    } else {
+        format!("\nKey concepts: {}", query_plan.key_concepts.join(", "))
+    };
+
+    let strategy_text = if query_plan.strategy_hint.is_empty() {
+        String::new()
+    } else {
+        format!("\nRetrieval strategy: {}", query_plan.strategy_hint)
+    };
+
+    let rewritten_text = if query_plan.rewritten.is_empty() {
+        String::new()
+    } else {
+        format!("\nRewritten queries for matching: {}", query_plan.rewritten.join("; "))
+    };
+
+    let intent_context = format!(
+        "\nQuery intent: {} (complexity: {}){concepts_text}{strategy_text}{rewritten_text}",
+        query_plan.intent, query_plan.complexity,
+    );
+
+    let (system, user) = orchestrator_analysis(&super::super::prompts::OrchestratorAnalysisParams {
         query,
         doc_cards: &doc_cards_text,
         find_results: &find_text,
+        intent_context: &intent_context,
     });
 
-    let analysis_output = match llm.complete(&system, &user).await {
-        Ok(output) => output,
-        Err(e) => {
-            warn!(error = %e, "Orchestrator analysis LLM call failed");
-            emitter.emit_error("orchestrator/analysis", &e.to_string());
-            return AnalyzeOutcome::AnalysisFailed;
+    let analysis_output = llm.complete(&system, &user).await.map_err(|e| {
+        emitter.emit_error("orchestrator/analysis", &e.to_string());
+        Error::LlmReasoning {
+            stage: "orchestrator/analysis".to_string(),
+            detail: format!("LLM call failed: {e}"),
         }
-    };
-    llm_calls += 1;
+    })?;
 
     info!(
         response_len = analysis_output.len(),
@@ -95,118 +128,16 @@ pub async fn analyze(
         Some(entries) => entries,
         None => {
             info!("Orchestrator: analysis indicates already answered");
-            return AnalyzeOutcome::AlreadyAnswered { llm_calls };
+            return Ok(AnalyzeOutcome::AlreadyAnswered { llm_calls: 1 });
         }
     };
 
     info!(dispatches = dispatches.len(), "Phase 1: parsed dispatch plan");
 
     if dispatches.is_empty() {
-        return expanded_analysis(query, ws, config, llm, state, emitter, &doc_cards_text, llm_calls).await;
+        return Ok(AnalyzeOutcome::NoResults { llm_calls: 1 });
     }
 
     state.analyze_done = true;
-    AnalyzeOutcome::Proceed { dispatches, llm_calls }
-}
-
-/// Retry analysis with expanded keyword context.
-async fn expanded_analysis(
-    query: &str,
-    ws: &WorkspaceContext<'_>,
-    config: &AgentConfig,
-    llm: &LlmClient,
-    state: &mut OrchestratorState,
-    emitter: &EventEmitter,
-    doc_cards_text: &str,
-    mut llm_calls: u32,
-) -> AnalyzeOutcome {
-    info!("No dispatches from initial analysis — retrying with expanded context");
-    let expanded_find = format_expanded_find_context(query, ws);
-    let (system, user) = expanded_analysis_prompt(query, doc_cards_text, &expanded_find);
-
-    match llm.complete(&system, &user).await {
-        Ok(second_output) => {
-            llm_calls += 1;
-            info!(
-                response_len = second_output.len(),
-                response = %if second_output.len() > 500 { &second_output[..500] } else { &second_output },
-                "Phase 1 (expanded): second analysis LLM response"
-            );
-            if let Some(second_dispatches) = parse_dispatch_plan(&second_output, ws.doc_count()) {
-                if !second_dispatches.is_empty() {
-                    info!(docs = second_dispatches.len(), "Second analysis produced dispatches");
-                    state.analyze_done = true;
-                    dispatch_and_collect(query, &second_dispatches, ws, config, llm, state, emitter).await;
-                }
-            }
-        }
-        Err(e) => {
-            warn!(error = %e, "Second analysis LLM call failed");
-        }
-    }
-
-    if state.all_evidence.is_empty() {
-        AnalyzeOutcome::NoResults { llm_calls }
-    } else {
-        AnalyzeOutcome::Proceed { dispatches: Vec::new(), llm_calls }
-    }
-}
-
-/// Format per-document keyword hit details for expanded analysis.
-fn format_expanded_find_context(query: &str, ws: &WorkspaceContext<'_>) -> String {
-    let keywords = extract_keywords(query);
-    if keywords.is_empty() {
-        return "(no keywords to search)".to_string();
-    }
-
-    let mut output = String::new();
-    for (doc_idx, doc) in ws.docs.iter().enumerate() {
-        let hits = doc.find_all(&keywords);
-        if hits.is_empty() {
-            continue;
-        }
-        output.push_str(&format!("Document [{}] {} keyword matches:\n", doc_idx + 1, doc.doc_name));
-        for hit in &hits {
-            for entry in &hit.entries {
-                let title = doc.node_title(entry.node_id).unwrap_or("?");
-                let summary = doc.nav_entry(entry.node_id).map(|e| e.overview.as_str()).unwrap_or("");
-                output.push_str(&format!(
-                    "  keyword '{}' → {} (depth {}, weight {:.2})",
-                    hit.keyword, title, entry.depth, entry.weight
-                ));
-                if !summary.is_empty() {
-                    output.push_str(&format!(" — {}", summary));
-                }
-                output.push('\n');
-            }
-        }
-        output.push('\n');
-    }
-
-    if output.is_empty() { "(no keyword matches across documents)".to_string() } else { output }
-}
-
-/// Build the expanded analysis prompt for the second LLM pass.
-fn expanded_analysis_prompt(query: &str, doc_cards: &str, expanded_find: &str) -> (String, String) {
-    let system =
-        "You are a multi-document retrieval coordinator. The initial analysis did not identify \
-         relevant documents. Review the detailed keyword matching results below and reconsider \
-         which documents may contain relevant information.
-
-Output format — for each relevant document, output a block:
-- doc: <number>
-  reason: <why this document is relevant>
-  task: <what specific information to find in this document>
-
-Only include documents that are likely to contain relevant information."
-            .to_string();
-
-    let user = format!(
-        "Available documents:\n{doc_cards}\n\n\
-         Detailed keyword matching results:\n{expanded_find}\n\n\
-         User question: {query}\n\n\
-         Relevant documents:"
-    );
-
-    (system, user)
+    Ok(AnalyzeOutcome::Proceed { dispatches, llm_calls: 1 })
 }

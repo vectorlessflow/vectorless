@@ -7,7 +7,7 @@ use tracing::{info, warn};
 
 use crate::llm::LlmClient;
 
-use super::super::config::{AgentConfig, Output, WorkspaceContext};
+use super::super::config::{AgentConfig, WorkspaceContext};
 use super::super::events::EventEmitter;
 use super::super::prompts::DispatchEntry;
 use super::super::state::OrchestratorState;
@@ -75,34 +75,4 @@ pub async fn dispatch_and_collect(
             }
         }
     }
-}
-
-/// Fallback: dispatch Workers to all documents with the original query.
-pub async fn fallback_dispatch_all(
-    query: &str,
-    ws: &WorkspaceContext<'_>,
-    config: &AgentConfig,
-    llm: &LlmClient,
-    emitter: &EventEmitter,
-) -> crate::error::Result<Output> {
-    warn!("Falling back to dispatch-all");
-
-    let dispatches: Vec<DispatchEntry> = (0..ws.doc_count())
-        .map(|idx| DispatchEntry {
-            doc_idx: idx,
-            reason: "Fallback dispatch".to_string(),
-            task: query.to_string(),
-        })
-        .collect();
-
-    let mut state = OrchestratorState::new();
-    dispatch_and_collect(query, &dispatches, ws, config, llm, &mut state, emitter).await;
-
-    if state.all_evidence.is_empty() {
-        emitter.emit_orchestrator_completed(0, 0, 0);
-        return Ok(state.into_output(String::new()));
-    }
-
-    let multi_doc = ws.doc_count() > 1;
-    super::finalize_output(query, &state, config, llm, emitter, 0, multi_doc).await
 }

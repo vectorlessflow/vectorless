@@ -26,7 +26,6 @@ use super::state::OrchestratorState;
 use super::Agent;
 
 use analyze::{AnalyzeOutcome, analyze};
-use dispatch::fallback_dispatch_all;
 use integrate::integrate;
 
 /// Orchestrator agent — coordinates multi-document retrieval.
@@ -105,7 +104,7 @@ impl<'a> Agent for Orchestrator<'a> {
         }
 
         // --- Phase 1: Analyze (uses query_plan for intent-aware strategy) ---
-        let dispatches = match analyze(&query, ws, &config, &llm, &mut state, &emitter, skip_analysis, &query_plan).await {
+        let dispatches = match analyze(&query, ws, &mut state, &emitter, skip_analysis, &query_plan, &llm).await? {
             AnalyzeOutcome::Proceed { dispatches, llm_calls } => {
                 orch_llm_calls += llm_calls;
                 dispatches
@@ -119,9 +118,6 @@ impl<'a> Agent for Orchestrator<'a> {
             AnalyzeOutcome::NoResults { llm_calls } => {
                 emitter.emit_orchestrator_completed(0, orch_llm_calls + llm_calls, 0);
                 return Ok(Output::empty());
-            }
-            AnalyzeOutcome::AnalysisFailed => {
-                return fallback_dispatch_all(&query, ws, &config, &llm, &emitter).await;
             }
         };
 
@@ -155,8 +151,6 @@ impl<'a> Agent for Orchestrator<'a> {
 }
 
 /// Rerank evidence and emit completion events.
-///
-/// Shared by the Orchestrator loop and fallback_dispatch_all.
 pub async fn finalize_output(
     query: &str,
     state: &OrchestratorState,

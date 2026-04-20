@@ -150,12 +150,15 @@ pub struct OrchestratorAnalysisParams<'a> {
     pub doc_cards: &'a str,
     /// Formatted cross-document search results.
     pub find_results: &'a str,
+    /// Query understanding context (intent, concepts, strategy, complexity).
+    pub intent_context: &'a str,
 }
 
 pub fn orchestrator_analysis(params: &OrchestratorAnalysisParams) -> (String, String) {
     let doc_cards = params.doc_cards;
     let find_results = params.find_results;
     let query = params.query;
+    let intent_context = params.intent_context;
 
     let system =
         "You are a multi-document retrieval coordinator. Analyze the user's question, \
@@ -175,6 +178,7 @@ If the cross-document search results already fully answer the question, respond 
 
 Cross-document search results:
 {find_results}
+{intent_context}
 
 User question: {query}
 
@@ -390,12 +394,14 @@ mod tests {
             query: "Compare 2024 and 2023 revenue",
             doc_cards: "[1] 2024 Report\n[2] 2023 Report",
             find_results: "doc 1: keyword 'revenue' matched",
+            intent_context: "\nQuery intent: analytical (complexity: moderate)",
         };
 
         let (system, user) = orchestrator_analysis(&params);
         assert!(system.contains("multi-document"));
         assert!(user.contains("2024 Report"));
         assert!(user.contains("revenue"));
+        assert!(user.contains("analytical"));
     }
 
     #[test]
