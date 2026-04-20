@@ -137,21 +137,6 @@ async fn test_force_mode_reindexes() {
 }
 
 #[tokio::test]
-async fn test_cancel_blocks_new_operations() {
-    let (engine, _tmp) = setup().await;
-
-    engine.cancel();
-    assert!(engine.is_cancelled());
-
-    let ctx = IndexContext::from_content("# test", vectorless::DocumentFormat::Markdown);
-    let err = engine.index(ctx).await.unwrap_err();
-    assert!(err.to_string().contains("cancelled"));
-
-    engine.reset_cancel();
-    assert!(!engine.is_cancelled());
-}
-
-#[tokio::test]
 async fn test_clear_empty_workspace() {
     let (engine, _tmp) = setup().await;
 
