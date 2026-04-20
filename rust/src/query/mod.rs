@@ -18,12 +18,10 @@
 //! LLM understanding is required — this is a pure reasoning engine.
 //! Errors are propagated, not silently degraded.
 
-mod text;
 mod types;
 mod understand;
 
-#[allow(unused_imports)]
-pub use types::{Complexity, QueryIntent, QueryPlan, SubQuery};
+pub use types::{QueryIntent, QueryPlan};
 
 use crate::llm::LlmClient;
 use crate::scoring::bm25::extract_keywords;
