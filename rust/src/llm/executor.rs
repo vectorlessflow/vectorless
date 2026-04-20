@@ -392,11 +392,11 @@ impl LlmExecutor {
         model: &str,
         system: &str,
         user: &str,
-        max_tokens: Option<u16>,
+        _max_tokens: Option<u16>,
     ) -> LlmResult<String> {
         // Build request — only set max_tokens when explicitly provided,
         // letting the API use its own default otherwise.
-        let mut request = CreateChatCompletionRequestArgs::default()
+        let request = CreateChatCompletionRequestArgs::default()
             .model(model)
             .messages([
                 ChatCompletionRequestSystemMessage::from(system).into(),
@@ -406,9 +406,9 @@ impl LlmExecutor {
             .build()
             .map_err(|e| LlmError::Request(format!("Failed to build request: {}", e)))?;
 
-        if let Some(mt) = max_tokens {
-            request.max_tokens = Some(mt as u32);
-        }
+        // if let Some(mt) = max_tokens {
+        //     request.max_tokens = Some(mt as u32);
+        // }
 
         info!(
             "LLM request → endpoint: {}, model: {}, system: {} chars, user: {} chars",
