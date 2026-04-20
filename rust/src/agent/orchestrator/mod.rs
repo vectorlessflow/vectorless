@@ -1,20 +1,16 @@
 // Copyright (c) 2026 vectorless developers
 // SPDX-License-Identifier: Apache-2.0
 
-//! Orchestrator agent — multi-document retrieval via MapReduce.
+//! Orchestrator agent — supervisor loop for multi-document retrieval.
 //!
 //! The Orchestrator is a consuming-self struct implementing [`Agent`]:
-//! 1. Fast path: find_cross → direct hit across all docs
-//! 2. Analyze: ls_docs + find_cross → LLM decides which docs + tasks
-//! 3. Dispatch: fan-out N Workers in parallel
-//! 4. Integrate: merge evidence, check cross-doc sufficiency, optionally re-dispatch
-//! 5. Rerank: dedup → BM25 scoring → synthesis/fusion
+//! 1. Analyze: LLM selects documents + tasks (informed by QueryPlan)
+//! 2. Supervisor loop: dispatch → evaluate → replan if insufficient
+//! 3. Rerank: dedup → BM25 scoring → synthesis/fusion
 
 mod analyze;
 mod dispatch;
 mod evaluate;
-mod fast_path;
-mod integrate;
 mod replan;
 
 use tracing::info;
@@ -25,10 +21,15 @@ use crate::query::QueryPlan;
 use super::config::{AgentConfig, Output, WorkspaceContext};
 use super::events::EventEmitter;
 use super::state::OrchestratorState;
+use super::tools::orchestrator as orch_tools;
 use super::Agent;
 
 use analyze::{AnalyzeOutcome, analyze};
-use integrate::integrate;
+use evaluate::evaluate;
+use replan::replan;
+
+/// Maximum supervisor loop iterations to prevent infinite loops.
+const MAX_SUPERVISOR_ITERATIONS: u32 = 3;
 
 /// Orchestrator agent — coordinates multi-document retrieval.
 ///
@@ -90,23 +91,10 @@ impl<'a> Agent for Orchestrator<'a> {
         let mut state = OrchestratorState::new();
         let mut orch_llm_calls: u32 = 0;
 
-        // --- Phase 0: Fast path ---
-        if config.orchestrator.enable_fast_path {
-            if let Some(output) = fast_path::fast_path(
-                &query, ws, config.orchestrator.enable_fast_path,
-                &config.orchestrator.worker_config.fast_path_threshold, &emitter,
-            ) {
-                info!("Orchestrator fast path hit — skipping dispatch");
-                emitter.emit_orchestrator_completed(
-                    output.evidence.len(), output.metrics.llm_calls,
-                    output.metrics.rounds_used,
-                );
-                return Ok(output);
-            }
-        }
-
-        // --- Phase 1: Analyze (uses query_plan for intent-aware strategy) ---
-        let dispatches = match analyze(&query, ws, &mut state, &emitter, skip_analysis, &query_plan, &llm).await? {
+        // --- Phase 1: Analyze — LLM selects documents + tasks ---
+        let initial_dispatches = match analyze(
+            &query, ws, &mut state, &emitter, skip_analysis, &query_plan, &llm,
+        ).await? {
             AnalyzeOutcome::Proceed { dispatches, llm_calls } => {
                 orch_llm_calls += llm_calls;
                 dispatches
@@ -123,31 +111,90 @@ impl<'a> Agent for Orchestrator<'a> {
             }
         };
 
-        // --- Phase 2: Dispatch ---
-        if !dispatches.is_empty() {
+        // --- Phase 2: Supervisor loop ---
+        // Initial dispatch with the plan from analysis
+        let mut current_dispatches = initial_dispatches;
+        let mut iteration: u32 = 0;
+
+        loop {
+            if iteration >= MAX_SUPERVISOR_ITERATIONS {
+                info!(iteration, "Supervisor loop budget exhausted");
+                break;
+            }
+
+            // Dispatch current plan
+            if !current_dispatches.is_empty() {
+                info!(
+                    docs = current_dispatches.len(),
+                    docs_list = ?current_dispatches.iter().map(|d| d.doc_idx).collect::<Vec<_>>(),
+                    iteration,
+                    "Dispatching Workers"
+                );
+                dispatch::dispatch_and_collect(
+                    &query, &current_dispatches, ws, &config, &llm, &mut state, &emitter,
+                ).await;
+            }
+
+            // No evidence at all — nothing to evaluate
+            if state.all_evidence.is_empty() {
+                info!("No evidence collected from any Worker");
+                break;
+            }
+
+            // Skip evaluation for user-specified documents (no replan needed)
+            if skip_analysis {
+                break;
+            }
+
+            // Evaluate sufficiency
+            let eval_result = evaluate(&query, &state.all_evidence, &llm).await?;
+            orch_llm_calls += 1;
+
+            if eval_result.sufficient {
+                info!(
+                    evidence = state.all_evidence.len(),
+                    iteration,
+                    "Evidence sufficient — exiting supervisor loop"
+                );
+                break;
+            }
+
+            // Insufficient — replan
             info!(
-                docs = dispatches.len(),
-                docs_list = ?dispatches.iter().map(|d| d.doc_idx).collect::<Vec<_>>(),
-                "Phase 2: dispatching Workers"
+                evidence = state.all_evidence.len(),
+                missing = eval_result.missing_info.len(),
+                iteration,
+                "Evidence insufficient — replanning"
             );
-            dispatch::dispatch_and_collect(&query, &dispatches, ws, &config, &llm, &mut state, &emitter).await;
+
+            let doc_cards_text = orch_tools::ls_docs(ws).feedback;
+            let replan_result = replan(
+                &query,
+                &eval_result.missing_info,
+                &state.all_evidence,
+                &state.dispatched,
+                ws.doc_count(),
+                &doc_cards_text,
+                &llm,
+            ).await?;
+            orch_llm_calls += 1;
+
+            if replan_result.dispatches.is_empty() {
+                info!("Replan produced no new dispatches — exiting supervisor loop");
+                break;
+            }
+
+            current_dispatches = replan_result.dispatches;
+            iteration += 1;
         }
 
-        // --- Phase 3: Integrate ---
+        // --- Phase 3: Finalize — rerank + synthesize ---
         if state.all_evidence.is_empty() {
-            info!("No evidence collected from any Worker");
             emitter.emit_orchestrator_completed(0, orch_llm_calls, 0);
-            return Ok(state.into_output(
-                "I was unable to find relevant information across the available documents to answer your question.".to_string()
-            ));
+            return Ok(state.into_output(String::new()));
         }
 
-        if !skip_analysis {
-            orch_llm_calls += integrate(&query, ws, &config, &llm, &mut state, &emitter).await;
-        }
-
-        // --- Phase 4: Rerank ---
-        let multi_doc = !skip_analysis || ws.doc_count() > 1;
+        let multi_doc = ws.doc_count() > 1;
         finalize_output(&query, &state, &config, &llm, &emitter, orch_llm_calls, multi_doc).await
     }
 }

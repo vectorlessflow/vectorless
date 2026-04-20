@@ -15,8 +15,9 @@ mod execute;
 mod format;
 mod planning;
 
-use tracing::{debug, info, warn};
+use tracing::{debug, info};
 
+use crate::error::Error;
 use crate::llm::LlmClient;
 use crate::scoring::bm25::extract_keywords;
 use super::Agent;
@@ -122,20 +123,19 @@ impl<'a> Agent for Worker<'a> {
             let plan_prompt = build_plan_prompt(
                 &query, task_ref, &state.last_feedback, ctx.doc_name, &index_hits, ctx,
             );
-            match llm.complete(&plan_prompt.0, &plan_prompt.1).await {
-                Ok(plan_output) => {
-                    llm_calls += 1;
-                    let plan_text = plan_output.trim().to_string();
-                    if !plan_text.is_empty() {
-                        info!(doc = ctx.doc_name, plan_len = plan_text.len(), "Navigation plan generated");
-                        emitter.emit_worker_plan_generated(ctx.doc_name, plan_text.len());
-                        state.plan = plan_text;
-                        state.plan_generated = true;
-                    }
+            let plan_output = llm.complete(&plan_prompt.0, &plan_prompt.1).await.map_err(|e| {
+                Error::LlmReasoning {
+                    stage: "worker/plan".to_string(),
+                    detail: format!("Navigation plan LLM call failed: {e}"),
                 }
-                Err(e) => {
-                    warn!(doc = ctx.doc_name, error = %e, "Plan LLM call failed");
-                }
+            })?;
+            llm_calls += 1;
+            let plan_text = plan_output.trim().to_string();
+            if !plan_text.is_empty() {
+                info!(doc = ctx.doc_name, plan_len = plan_text.len(), "Navigation plan generated");
+                emitter.emit_worker_plan_generated(ctx.doc_name, plan_text.len());
+                state.plan = plan_text;
+                state.plan_generated = true;
             }
         }
 
@@ -203,16 +203,12 @@ impl<'a> Agent for Worker<'a> {
 
             // LLM decision
             let round_start = std::time::Instant::now();
-            let llm_output = match llm.complete(&system, &user).await {
-                Ok(output) => output,
-                Err(e) => {
-                    warn!(doc = ctx.doc_name, error = %e, "LLM call failed in nav loop");
-                    llm_calls += 1;
-                    state.dec_round();
-                    state.last_feedback = "LLM error occurred, retrying.".to_string();
-                    continue;
+            let llm_output = llm.complete(&system, &user).await.map_err(|e| {
+                Error::LlmReasoning {
+                    stage: "worker/navigation".to_string(),
+                    detail: format!("Nav loop LLM call failed (round {}): {e}", config.max_rounds - state.remaining + 1),
                 }
-            };
+            })?;
             llm_calls += 1;
 
             // Parse command
@@ -253,20 +249,18 @@ impl<'a> Agent for Worker<'a> {
             if is_check && !state.missing_info.is_empty() && state.remaining >= 3 && !llm_budget_exhausted!() {
                 let missing = state.missing_info.clone();
                 let replan = build_replan_prompt(&query, task_ref, &state, ctx);
-                match llm.complete(&replan.0, &replan.1).await {
-                    Ok(new_plan) => {
-                        llm_calls += 1;
-                        let plan_text = new_plan.trim().to_string();
-                        if !plan_text.is_empty() {
-                            info!(doc = ctx.doc_name, plan_len = plan_text.len(), "Re-plan generated");
-                            emitter.emit_worker_replan(ctx.doc_name, &missing, plan_text.len());
-                            state.plan = plan_text;
-                        }
+                let new_plan = llm.complete(&replan.0, &replan.1).await.map_err(|e| {
+                    Error::LlmReasoning {
+                        stage: "worker/replan".to_string(),
+                        detail: format!("Re-plan LLM call failed: {e}"),
                     }
-                    Err(e) => {
-                        warn!(doc = ctx.doc_name, error = %e, "Re-plan LLM call failed");
-                        state.plan.clear();
-                    }
+                })?;
+                llm_calls += 1;
+                let plan_text = new_plan.trim().to_string();
+                if !plan_text.is_empty() {
+                    info!(doc = ctx.doc_name, plan_len = plan_text.len(), "Re-plan generated");
+                    emitter.emit_worker_replan(ctx.doc_name, &missing, plan_text.len());
+                    state.plan = plan_text;
                 }
                 state.missing_info.clear();
             } else if is_check && !state.missing_info.is_empty() {
