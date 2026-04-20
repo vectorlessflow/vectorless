@@ -17,7 +17,7 @@ mod tests {
     use super::*;
     use crate::document::{ChildRoute, DocumentTree, NavigationIndex};
     use crate::agent::config::DocContext;
-    use crate::agent::tools::subagent::cd::cd;
+    use crate::agent::tools::worker::cd::cd;
 
     fn build_test_tree() -> (DocumentTree, NavigationIndex) {
         let mut tree = DocumentTree::new("Root", "root content");

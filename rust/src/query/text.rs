@@ -3,7 +3,7 @@
 
 //! Text analysis utilities for query understanding.
 //!
-//! Migrated from `agent::subagent` private functions so they can be shared
+//! Migrated from `agent::worker` private functions so they can be shared
 //! across modules.
 
 /// Estimate word count, handling both CJK and Latin text.

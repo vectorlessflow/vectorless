@@ -119,10 +119,10 @@ impl QueryContext {
         self
     }
 
-    /// Force the Orchestrator to analyze documents before dispatching SubAgents.
+    /// Force the Orchestrator to analyze documents before dispatching Workers.
     ///
     /// By default, when documents are specified via `with_doc_ids()`, the
-    /// Orchestrator skips its analysis phase and dispatches SubAgents to all
+    /// Orchestrator skips its analysis phase and dispatches Workers to all
     /// specified documents directly. Setting this to `true` forces the
     /// Orchestrator to analyze DocCards and decide which documents are
     /// relevant, even when the user specified documents explicitly.

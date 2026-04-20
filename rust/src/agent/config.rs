@@ -8,10 +8,10 @@ use serde::{Deserialize, Serialize};
 /// Agent configuration.
 #[derive(Debug, Clone)]
 pub struct Config {
-    /// Maximum navigation rounds per SubAgent loop (ls/cd/cat/grep/head/find etc.).
+    /// Maximum navigation rounds per Worker loop (ls/cd/cat/grep/head/find etc.).
     /// `check` does NOT count against this budget.
     pub max_rounds: u32,
-    /// Hard cap on total LLM calls per SubAgent (planning + nav + check + synthesis).
+    /// Hard cap on total LLM calls per Worker (planning + nav + check + synthesis).
     /// Prevents runaway costs regardless of max_rounds. 0 = no limit.
     pub max_llm_calls: u32,
     /// Enable fast-path (keyword lookup before full navigation).
@@ -40,8 +40,8 @@ impl Config {
         Self::default()
     }
 
-    /// Derive a SubAgent-specific config (used by Orchestrator for dispatched agents).
-    pub fn for_subagent(&self) -> Self {
+    /// Derive a Worker-specific config (used by Orchestrator for dispatched agents).
+    pub fn for_worker(&self) -> Self {
         Self {
             max_rounds: self.max_rounds,
             max_llm_calls: self.max_llm_calls,
@@ -142,7 +142,7 @@ pub enum Step {
 /// - `Workspace`: user didn't specify → Orchestrator analyzes DocCards to select docs
 pub enum Scope<'a> {
     /// User specified one or more documents (by doc_id).
-    /// Orchestrator skips analysis, spawns SubAgents directly.
+    /// Orchestrator skips analysis, spawns Workers directly.
     Specified(Vec<DocContext<'a>>),
     /// Workspace scope — user didn't specify documents.
     /// Orchestrator analyzes DocCards and selects relevant ones.

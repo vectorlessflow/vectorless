@@ -1,9 +1,9 @@
 // Copyright (c) 2026 vectorless developers
 // SPDX-License-Identifier: Apache-2.0
 
-//! SubAgent loop — document navigation and evidence collection.
+//! Worker loop — document navigation and evidence collection.
 //!
-//! The SubAgent is a pure-function loop:
+//! The Worker is a pure-function loop:
 //! 1. Fast path: keyword lookup → direct hit?
 //! 2. Bird's-eye: ls(root) for initial overview
 //! 3. Navigation loop: LLM → parse → execute → repeat (max N rounds)
@@ -25,10 +25,10 @@ use super::config::{Config, DocContext, Output, Step};
 use super::context::FindHit;
 use super::events::EventEmitter;
 use super::prompts::{
-    NavigationParams, subagent_dispatch, subagent_navigation,
+    NavigationParams, worker_dispatch, worker_navigation,
 };
 use super::state::State;
-use super::tools::subagent as tools;
+use super::tools::worker as tools;
 use crate::rerank::synthesis::{SynthesisParams, answer_synthesis_prompt as answer_synthesis};
 
 use execute::{execute_command, parse_and_detect_failure};
@@ -36,7 +36,7 @@ use fast_path::{FastPathResult, fast_path};
 use format::{format_evidence_as_answer, format_evidence_for_synthesis, format_visited_titles};
 use planning::{build_plan_prompt, build_replan_prompt};
 
-/// Run the SubAgent loop on a single document.
+/// Run the Worker loop on a single document.
 pub async fn run(
     query: &str,
     task: Option<&str>,
@@ -53,7 +53,7 @@ pub async fn run(
         task = task.unwrap_or("(full query)"),
         max_rounds = config.max_rounds,
         max_llm_calls = config.max_llm_calls,
-        "SubAgent starting"
+        "Worker starting"
     );
 
     let mut llm_calls: u32 = 0;
@@ -161,7 +161,7 @@ pub async fn run(
 
         // Build prompt
         let (system, user) = if use_dispatch_prompt && state.remaining == config.max_rounds {
-            subagent_dispatch(&super::prompts::SubagentDispatchParams {
+            worker_dispatch(&super::prompts::WorkerDispatchParams {
                 original_query: query,
                 task: task.unwrap_or(query),
                 doc_name: ctx.doc_name,
@@ -169,7 +169,7 @@ pub async fn run(
             })
         } else {
             let visited_titles = format_visited_titles(&state, ctx);
-            subagent_navigation(&NavigationParams {
+            worker_navigation(&NavigationParams {
                 query, task,
                 breadcrumb: &state.path_str(),
                 evidence_summary: &state.evidence_summary(),
@@ -334,7 +334,7 @@ pub async fn run(
         evidence = output.evidence.len(),
         rounds = output.metrics.rounds_used,
         llm_calls = output.metrics.llm_calls,
-        "SubAgent complete"
+        "Worker complete"
     );
 
     Ok(output)

@@ -10,10 +10,10 @@ use crate::document::NodeId;
 use super::config::{Evidence, Output};
 
 // ---------------------------------------------------------------------------
-// SubAgent state
+// Worker state
 // ---------------------------------------------------------------------------
 
-/// Mutable navigation state for a SubAgent loop.
+/// Mutable navigation state for a Worker loop.
 ///
 /// Created at loop start, destroyed at loop end. Never escapes the call.
 pub struct State {
@@ -198,11 +198,11 @@ impl State {
 
 /// Mutable state for the Orchestrator loop.
 ///
-/// Tracks which documents have been dispatched and collects SubAgent results.
+/// Tracks which documents have been dispatched and collects Worker results.
 pub struct OrchestratorState {
     /// Indices of documents that have been dispatched.
     pub dispatched: Vec<usize>,
-    /// Results returned by dispatched SubAgents.
+    /// Results returned by dispatched Workers.
     pub sub_results: Vec<Output>,
     /// All evidence merged from sub-results.
     pub all_evidence: Vec<Evidence>,
@@ -231,7 +231,7 @@ impl OrchestratorState {
         }
     }
 
-    /// Collect a SubAgent result.
+    /// Collect a Worker result.
     pub fn collect_result(&mut self, result: Output) {
         self.total_llm_calls += result.metrics.llm_calls;
         self.all_evidence.extend(result.evidence.iter().cloned());

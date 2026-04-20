@@ -524,7 +524,7 @@ impl Engine {
                         strategy: if multi_doc {
                             "orchestrator".to_string()
                         } else {
-                            "subagent".to_string()
+                            "worker".to_string()
                         },
                     },
                     AgentEvent::FastPathHit {
@@ -594,18 +594,18 @@ impl Engine {
                         stage: format!("budget_warning_{}_round_{}", warning_type, round),
                         elapsed_ms: 0,
                     },
-                    AgentEvent::SubAgentDispatched {
+                    AgentEvent::WorkerDispatched {
                         doc_idx, doc_name, ..
                     } => RetrieveEvent::StageCompleted {
                         stage: format!("dispatch_{}_{}", doc_idx, doc_name),
                         elapsed_ms: 0,
                     },
-                    AgentEvent::SubAgentCompleted {
+                    AgentEvent::WorkerCompleted {
                         doc_idx,
                         evidence_count,
                         success,
                     } => RetrieveEvent::StageCompleted {
-                        stage: format!("subagent_{}_done_{}_{}", doc_idx, evidence_count, success),
+                        stage: format!("worker_{}_done_{}_{}", doc_idx, evidence_count, success),
                         elapsed_ms: 0,
                     },
                     AgentEvent::SynthesisCompleted { answer_len } => {

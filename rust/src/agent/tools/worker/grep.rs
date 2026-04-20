@@ -172,7 +172,7 @@ mod tests {
         let ctx = rich_ctx!(tree, nav);
         let mut state = State::new(root, 8);
 
-        crate::agent::tools::subagent::cd::cd("Expenses", &ctx, &mut state);
+        crate::agent::tools::worker::cd::cd("Expenses", &ctx, &mut state);
         let result = grep("revenue", &ctx, &state);
         assert!(result.success);
         assert!(result.feedback.contains("No matches"));

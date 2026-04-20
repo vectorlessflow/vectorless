@@ -4,13 +4,13 @@
 //! Tool definitions for the retrieval agent.
 //!
 //! Tools are organized by role:
-//! - `common` — shared between Orchestrator and SubAgent (find, check, done)
-//! - `subagent` — SubAgent-specific (ls, cd, cd_up, cat, pwd)
+//! - `common` — shared between Orchestrator and Worker (find, check, done)
+//! - `worker` — Worker-specific (ls, cd, cd_up, cat, pwd)
 //! - `orchestrator` — Orchestrator-specific (ls_docs, find_cross, dispatch)
 
 pub mod common;
 pub mod orchestrator;
-pub mod subagent;
+pub mod worker;
 
 /// Result of executing a tool command.
 #[derive(Debug, Clone)]

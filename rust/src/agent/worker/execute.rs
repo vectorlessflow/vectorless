@@ -13,7 +13,7 @@ use super::super::events::EventEmitter;
 use super::super::state::State;
 use super::super::prompts::{check_sufficiency, parse_sufficiency_response};
 use super::sufficiency::heuristic_sufficiency;
-use super::super::tools::subagent as tools;
+use super::super::tools::worker as tools;
 
 /// Execute a single parsed command, mutating state.
 ///

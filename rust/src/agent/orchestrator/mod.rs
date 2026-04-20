@@ -6,7 +6,7 @@
 //! Flow:
 //! 1. Fast path: find_cross → direct hit across all docs
 //! 2. Analyze: ls_docs + find_cross → LLM decides which docs + tasks
-//! 3. Dispatch: fan-out N SubAgents in parallel
+//! 3. Dispatch: fan-out N Workers in parallel
 //! 4. Integrate: merge evidence, check cross-doc sufficiency, optionally re-dispatch
 //! 5. Rerank: dedup → BM25 scoring → synthesis/fusion
 
@@ -80,14 +80,14 @@ pub async fn run(
         info!(
             docs = dispatches.len(),
             docs_list = ?dispatches.iter().map(|d| d.doc_idx).collect::<Vec<_>>(),
-            "Phase 2: dispatching SubAgents"
+            "Phase 2: dispatching Workers"
         );
         dispatch::dispatch_and_collect(query, &dispatches, ws, config, llm, &mut state, emitter).await;
     }
 
     // --- Phase 3: Integrate ---
     if state.all_evidence.is_empty() {
-        info!("No evidence collected from any SubAgent");
+        info!("No evidence collected from any Worker");
         emitter.emit_completed(0, orch_llm_calls, 0, false, false, false, 0);
         return Ok(state.into_output(
             "I was unable to find relevant information across the available documents to answer your question.".to_string()

@@ -8,8 +8,8 @@ use tracing::{info, warn};
 use crate::agent::Output;
 use crate::llm::LlmClient;
 
-/// Summary of a SubAgent result for the fusion prompt.
-pub struct SubAgentSummary<'a> {
+/// Summary of a Worker result for the fusion prompt.
+pub struct WorkerSummary<'a> {
     pub doc_name: &'a str,
     pub evidence_count: usize,
     pub evidence_text: &'a str,
@@ -19,7 +19,7 @@ pub struct SubAgentSummary<'a> {
 /// Parameters for the multi-doc fusion prompt.
 pub struct FusionParams<'a> {
     pub query: &'a str,
-    pub sub_results: &'a [SubAgentSummary<'a>],
+    pub sub_results: &'a [WorkerSummary<'a>],
 }
 
 /// Build the cross-document fusion prompt.
@@ -60,7 +60,7 @@ Requirements:
     (system, user)
 }
 
-/// Fuse multiple SubAgent results into a single answer via LLM.
+/// Fuse multiple Worker results into a single answer via LLM.
 ///
 /// Returns (answer, llm_calls).
 pub async fn fuse(query: &str, sub_results: &[&Output], llm: &LlmClient) -> (String, u32) {
@@ -95,9 +95,9 @@ pub async fn fuse(query: &str, sub_results: &[&Output], llm: &LlmClient) -> (Str
         })
         .collect();
 
-    let summary_refs: Vec<SubAgentSummary<'_>> = summaries
+    let summary_refs: Vec<WorkerSummary<'_>> = summaries
         .iter()
-        .map(|s| SubAgentSummary {
+        .map(|s| WorkerSummary {
             doc_name: &s.doc_name,
             evidence_count: s.evidence_count,
             evidence_text: &s.evidence_text,
@@ -138,7 +138,7 @@ mod tests {
 
     #[test]
     fn test_fusion_prompt() {
-        let summaries = [SubAgentSummary {
+        let summaries = [WorkerSummary {
             doc_name: "doc1",
             evidence_count: 2,
             evidence_text: "[A] content A\n[B] content B",

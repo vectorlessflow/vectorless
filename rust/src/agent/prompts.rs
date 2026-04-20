@@ -4,22 +4,22 @@
 //! Prompt templates for the retrieval agent.
 //!
 //! Prompts for agent-level operations:
-//! 1. `subagent_navigation` — SubAgent nav loop, every round
+//! 1. `worker_navigation` — Worker nav loop, every round
 //! 2. `orchestrator_analysis` — Orchestrator Phase 1
-//! 3. `subagent_dispatch` — SubAgent first round (when dispatched by Orchestrator)
+//! 3. `worker_dispatch` — Worker first round (when dispatched by Orchestrator)
 //! 4. `check_sufficiency` — evidence sufficiency evaluation
 //!
 //! Post-processing prompts (answer synthesis, multi-doc fusion) have been
 //! moved to `rerank/synthesis.rs` and `rerank/fusion.rs`.
 
 // ---------------------------------------------------------------------------
-// Prompt 1: SubAgent Navigation (used every round in the nav loop)
+// Prompt 1: Worker Navigation (used every round in the nav loop)
 // ---------------------------------------------------------------------------
 
 /// Parameters for the sub-agent navigation prompt.
 pub struct NavigationParams<'a> {
     pub query: &'a str,
-    /// Sub-task description (None when SubAgent is called directly).
+    /// Sub-task description (None when Worker is called directly).
     pub task: Option<&'a str>,
     /// Current breadcrumb path.
     pub breadcrumb: &'a str,
@@ -41,7 +41,7 @@ pub struct NavigationParams<'a> {
     pub plan: &'a str,
 }
 
-pub fn subagent_navigation(params: &NavigationParams) -> (String, String) {
+pub fn worker_navigation(params: &NavigationParams) -> (String, String) {
     let query = params.query;
     let breadcrumb = params.breadcrumb;
     let evidence_summary = params.evidence_summary;
@@ -185,18 +185,18 @@ Relevant documents:"
 }
 
 // ---------------------------------------------------------------------------
-// Prompt 3: SubAgent Dispatch (first-round prompt when Orchestrator dispatches)
+// Prompt 3: Worker Dispatch (first-round prompt when Orchestrator dispatches)
 // ---------------------------------------------------------------------------
 
 /// Parameters for the dispatch prompt.
-pub struct SubagentDispatchParams<'a> {
+pub struct WorkerDispatchParams<'a> {
     pub original_query: &'a str,
     pub task: &'a str,
     pub doc_name: &'a str,
     pub breadcrumb: &'a str,
 }
 
-pub fn subagent_dispatch(params: &SubagentDispatchParams) -> (String, String) {
+pub fn worker_dispatch(params: &WorkerDispatchParams) -> (String, String) {
     let doc_name = params.doc_name;
     let original_query = params.original_query;
     let task = params.task;
@@ -338,7 +338,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_subagent_navigation_without_task() {
+    fn test_worker_navigation_without_task() {
         let params = NavigationParams {
             query: "What is the revenue?",
             task: None,
@@ -353,7 +353,7 @@ mod tests {
             plan: "",
         };
 
-        let (system, user) = subagent_navigation(&params);
+        let (system, user) = worker_navigation(&params);
         assert!(system.contains("document navigation"));
         assert!(user.contains("What is the revenue?"));
         assert!(user.contains("root/Financial Statements"));
@@ -364,7 +364,7 @@ mod tests {
     }
 
     #[test]
-    fn test_subagent_navigation_with_task() {
+    fn test_worker_navigation_with_task() {
         let params = NavigationParams {
             query: "Compare 2024 and 2023 revenue",
             task: Some("Find revenue data in this document"),
@@ -379,7 +379,7 @@ mod tests {
             plan: "",
         };
 
-        let (_, user) = subagent_navigation(&params);
+        let (_, user) = worker_navigation(&params);
         assert!(user.contains("Find revenue data"));
         assert!(user.contains("sub-task"));
     }
@@ -399,15 +399,15 @@ mod tests {
     }
 
     #[test]
-    fn test_subagent_dispatch() {
-        let params = SubagentDispatchParams {
+    fn test_worker_dispatch() {
+        let params = WorkerDispatchParams {
             original_query: "Compare revenue",
             task: "Find 2024 revenue figures",
             doc_name: "2024 Annual Report",
             breadcrumb: "root",
         };
 
-        let (system, user) = subagent_dispatch(&params);
+        let (system, user) = worker_dispatch(&params);
         assert!(system.contains("2024 Annual Report"));
         assert!(user.contains("Compare revenue"));
         assert!(user.contains("Find 2024 revenue"));

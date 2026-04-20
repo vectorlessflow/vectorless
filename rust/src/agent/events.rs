@@ -88,8 +88,8 @@ pub enum AgentEvent {
         round: u32,
     },
 
-    /// Sub-agent dispatched (orchestrator only).
-    SubAgentDispatched {
+    /// Worker dispatched (orchestrator only).
+    WorkerDispatched {
         /// Document index.
         doc_idx: usize,
         /// Document name.
@@ -98,8 +98,8 @@ pub enum AgentEvent {
         task: String,
     },
 
-    /// Sub-agent completed (orchestrator only).
-    SubAgentCompleted {
+    /// Worker completed (orchestrator only).
+    WorkerCompleted {
         /// Document index.
         doc_idx: usize,
         /// Number of evidence items collected.
@@ -231,18 +231,18 @@ impl EventEmitter {
         });
     }
 
-    /// Emit a sub-agent dispatched event.
-    pub fn emit_subagent_dispatched(&self, doc_idx: usize, doc_name: &str, task: &str) {
-        self.emit(AgentEvent::SubAgentDispatched {
+    /// Emit a worker dispatched event.
+    pub fn emit_worker_dispatched(&self, doc_idx: usize, doc_name: &str, task: &str) {
+        self.emit(AgentEvent::WorkerDispatched {
             doc_idx,
             doc_name: doc_name.to_string(),
             task: task.to_string(),
         });
     }
 
-    /// Emit a sub-agent completed event.
-    pub fn emit_subagent_completed(&self, doc_idx: usize, evidence_count: usize, success: bool) {
-        self.emit(AgentEvent::SubAgentCompleted {
+    /// Emit a worker completed event.
+    pub fn emit_worker_completed(&self, doc_idx: usize, evidence_count: usize, success: bool) {
+        self.emit(AgentEvent::WorkerCompleted {
             doc_idx,
             evidence_count,
             success,

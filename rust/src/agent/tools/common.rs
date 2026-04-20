@@ -1,7 +1,7 @@
 // Copyright (c) 2026 vectorless developers
 // SPDX-License-Identifier: Apache-2.0
 
-//! Common tools shared between Orchestrator and SubAgent (find, check, done).
+//! Common tools shared between Orchestrator and Worker (find, check, done).
 
 use super::ToolResult;
 

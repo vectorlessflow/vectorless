@@ -6,7 +6,7 @@
 //! This module sits between the client API and the agent execution layer.
 //! It is responsible for:
 //!
-//! - **Dispatching** queries to the appropriate agent path (SubAgent vs Orchestrator)
+//! - **Dispatching** queries to the appropriate agent path (Worker vs Orchestrator)
 //! - **Post-processing** agent output into client-facing results
 //! - **Caching** query results (L1 exact, L2 path patterns, L3 strategy scores)
 //! - **Streaming** retrieval events for async progress monitoring
@@ -14,7 +14,7 @@
 //! Call flow:
 //! ```text
 //! client → retrieval::dispatch()
-//!   ├── User specified doc_ids → parallel N × SubAgent
+//!   ├── User specified doc_ids → parallel N × Worker
 //!   └── Workspace scope → Orchestrator (analyze → spawn → fusion)
 //! ```
 

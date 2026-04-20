@@ -1,7 +1,7 @@
 // Copyright (c) 2026 vectorless developers
 // SPDX-License-Identifier: Apache-2.0
 
-//! SubAgent tools: ls, cd, cd_up, cat, pwd, grep, head, find_tree, wc.
+//! Worker tools: ls, cd, cd_up, cat, pwd, grep, head, find_tree, wc.
 
 mod cat;
 mod cd;

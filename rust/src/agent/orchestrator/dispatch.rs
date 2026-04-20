@@ -1,7 +1,7 @@
 // Copyright (c) 2026 vectorless developers
 // SPDX-License-Identifier: Apache-2.0
 
-//! Phase 2: Dispatch SubAgents and collect results.
+//! Phase 2: Dispatch Workers and collect results.
 
 use tracing::{info, warn};
 
@@ -11,9 +11,9 @@ use super::super::config::{Config, Output, WorkspaceContext};
 use super::super::events::EventEmitter;
 use super::super::prompts::DispatchEntry;
 use super::super::state::OrchestratorState;
-use super::super::subagent;
+use super::super::worker;
 
-/// Dispatch SubAgents in parallel and collect results.
+/// Dispatch Workers in parallel and collect results.
 pub async fn dispatch_and_collect(
     query: &str,
     dispatches: &[DispatchEntry],
@@ -38,16 +38,16 @@ pub async fn dispatch_and_collect(
 
             let query = query.to_string();
             let task = dispatch.task.clone();
-            let config = config.for_subagent();
+            let config = config.for_worker();
             let doc_idx = dispatch.doc_idx;
             let doc_name = doc.doc_name.to_string();
             let llm = llm.clone();
             let sub_emitter = EventEmitter::noop();
 
             Some(async move {
-                emitter.emit_subagent_dispatched(doc_idx, &doc_name, &task);
+                emitter.emit_worker_dispatched(doc_idx, &doc_name, &task);
                 let result =
-                    subagent::run(&query, Some(&task), doc, &config, &llm, &sub_emitter).await;
+                    worker::run(&query, Some(&task), doc, &config, &llm, &sub_emitter).await;
                 (doc_idx, result)
             })
         })
@@ -58,19 +58,19 @@ pub async fn dispatch_and_collect(
     for (doc_idx, result) in results {
         match result {
             Ok(output) => {
-                info!(doc_idx, evidence = output.evidence.len(), "SubAgent completed");
-                emitter.emit_subagent_completed(doc_idx, output.evidence.len(), true);
+                info!(doc_idx, evidence = output.evidence.len(), "Worker completed");
+                emitter.emit_worker_completed(doc_idx, output.evidence.len(), true);
                 state.collect_result(output);
             }
             Err(e) => {
-                warn!(doc_idx, error = %e, "SubAgent failed");
-                emitter.emit_subagent_completed(doc_idx, 0, false);
+                warn!(doc_idx, error = %e, "Worker failed");
+                emitter.emit_worker_completed(doc_idx, 0, false);
             }
         }
     }
 }
 
-/// Fallback: dispatch SubAgents to all documents with the original query.
+/// Fallback: dispatch Workers to all documents with the original query.
 pub async fn fallback_dispatch_all(
     query: &str,
     ws: &WorkspaceContext<'_>,
