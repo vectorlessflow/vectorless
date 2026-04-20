@@ -123,21 +123,6 @@ pub fn format_evidence_for_synthesis(evidence: &[Evidence]) -> String {
     result
 }
 
-/// Format evidence as a simple answer (fallback when synthesis is disabled or fails).
-pub fn format_evidence_as_answer(evidence: &[Evidence]) -> String {
-    evidence
-        .iter()
-        .map(|e| {
-            let doc = e.doc_name.as_deref().unwrap_or("unknown");
-            format!(
-                "**{}** (from {} at {}):\n{}",
-                e.node_title, doc, e.source_path, e.content
-            )
-        })
-        .collect::<Vec<_>>()
-        .join("\n\n")
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -158,14 +143,6 @@ mod tests {
         assert!(formatted.contains("[A]"));
         assert!(formatted.contains("my_doc"));
         assert!(formatted.contains("the answer"));
-    }
-
-    #[test]
-    fn test_format_evidence_as_answer() {
-        let evidence = vec![make_evidence("Y", "y content")];
-        let formatted = format_evidence_as_answer(&evidence);
-        assert!(formatted.contains("**Y**"));
-        assert!(formatted.contains("my_doc"));
     }
 
     #[test]

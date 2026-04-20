@@ -27,6 +27,7 @@ use super::state::WorkerState;
 use super::tools::worker as tools;
 use crate::error::Error;
 use crate::llm::LlmClient;
+use crate::query::QueryPlan;
 use crate::scoring::bm25::extract_keywords;
 
 use execute::{execute_command, parse_and_detect_failure};
@@ -43,6 +44,7 @@ pub struct Worker<'a> {
     config: WorkerConfig,
     llm: LlmClient,
     emitter: EventEmitter,
+    query_plan: QueryPlan,
 }
 
 impl<'a> Worker<'a> {
@@ -54,6 +56,7 @@ impl<'a> Worker<'a> {
         config: WorkerConfig,
         llm: LlmClient,
         emitter: EventEmitter,
+        query_plan: QueryPlan,
     ) -> Self {
         Self {
             query: query.to_string(),
@@ -62,6 +65,7 @@ impl<'a> Worker<'a> {
             config,
             llm,
             emitter,
+            query_plan,
         }
     }
 }
@@ -81,8 +85,11 @@ impl<'a> Agent for Worker<'a> {
             config,
             llm,
             emitter,
+            query_plan,
         } = self;
         let task_ref = task.as_deref();
+
+        let intent_context = format!("{} — {}", query_plan.intent, query_plan.strategy_hint);
 
         emitter.emit_worker_started(ctx.doc_name, task_ref, config.max_rounds);
 
@@ -114,20 +121,8 @@ impl<'a> Agent for Worker<'a> {
             );
         }
 
-        // --- Phase 1: Bird's-eye view + adaptive budget ---
-        let doc_depth = ctx.tree.max_depth();
-        let adaptive_rounds = adaptive_rounds(config.max_rounds, doc_depth);
-        if adaptive_rounds != config.max_rounds {
-            info!(
-                doc = ctx.doc_name,
-                doc_depth,
-                configured_rounds = config.max_rounds,
-                adaptive_rounds,
-                "Adaptive budget: deep document"
-            );
-        }
-
-        let mut state = WorkerState::new(ctx.root(), adaptive_rounds);
+        // --- Phase 1: Bird's-eye view ---
+        let mut state = WorkerState::new(ctx.root(), config.max_rounds);
         let ls_result = tools::ls(ctx, &state);
         state.set_feedback(ls_result.feedback);
 
@@ -164,7 +159,6 @@ impl<'a> Agent for Worker<'a> {
 
         // --- Phase 2: Navigation loop ---
         let use_dispatch_prompt = task_ref.is_some();
-        const STUCK_THRESHOLD: u32 = 3;
 
         loop {
             if state.remaining == 0 {
@@ -177,36 +171,6 @@ impl<'a> Agent for Worker<'a> {
                     llm_calls, max_llm, "LLM call budget exhausted"
                 );
                 break;
-            }
-
-            // Stuck detection
-            if state.rounds_since_evidence >= STUCK_THRESHOLD
-                && !state.last_feedback.contains("[Warning:")
-            {
-                state.last_feedback.push_str(&format!(
-                    "\n[Warning: No new evidence collected in {} rounds. \
-                     Consider using grep, findtree, or cd .. to explore a different path.]",
-                    state.rounds_since_evidence
-                ));
-                emitter.emit_worker_budget_warning(
-                    ctx.doc_name,
-                    "stuck",
-                    state.max_rounds - state.remaining + 1,
-                );
-            }
-
-            // Mid-budget checkpoint
-            let half_budget = state.max_rounds / 2;
-            let rounds_used = state.max_rounds - state.remaining;
-            if rounds_used == half_budget
-                && !state.check_called
-                && state.remaining > 1
-                && !state.last_feedback.contains("[Hint:")
-            {
-                state.last_feedback.push_str(
-                    "\n[Hint: You've used half your budget. Consider running `check` to evaluate if collected evidence is sufficient.]",
-                );
-                emitter.emit_worker_budget_warning(ctx.doc_name, "half_budget", rounds_used);
             }
 
             // Build prompt
@@ -231,6 +195,7 @@ impl<'a> Agent for Worker<'a> {
                     history: &state.history_text(),
                     visited_titles: &visited_titles,
                     plan: &state.plan,
+                    intent_context: &intent_context,
                 })
             };
 
@@ -268,7 +233,6 @@ impl<'a> Agent for Worker<'a> {
             debug!(doc = ctx.doc_name, ?command, "Parsed command");
 
             let round_num = config.max_rounds - state.remaining + 1;
-            let evidence_before = state.evidence.len();
             let is_check = matches!(command, Command::Check);
 
             // Execute
@@ -282,14 +246,6 @@ impl<'a> Agent for Worker<'a> {
                 &emitter,
             )
             .await;
-
-            if !is_check {
-                state.rounds_since_evidence = if state.evidence.len() > evidence_before {
-                    0
-                } else {
-                    state.rounds_since_evidence + 1
-                };
-            }
 
             // Dynamic re-planning after insufficient check
             if is_check
@@ -383,16 +339,4 @@ impl<'a> Agent for Worker<'a> {
 
         Ok(output)
     }
-}
-
-/// Compute adaptive rounds based on document depth.
-///
-/// Deep documents (depth > 2) get extra rounds, capped at 1.5x base.
-fn adaptive_rounds(base_rounds: u32, doc_depth: usize) -> u32 {
-    if doc_depth <= 2 {
-        return base_rounds;
-    }
-    let extra = (doc_depth - 2) * 2;
-    let capped = base_rounds + extra as u32;
-    capped.min((base_rounds as f32 * 1.5).ceil() as u32)
 }

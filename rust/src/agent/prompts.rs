@@ -39,6 +39,9 @@ pub struct NavigationParams<'a> {
     pub visited_titles: &'a str,
     /// Navigation plan from bird's-eye analysis (empty if no plan).
     pub plan: &'a str,
+    /// Query intent context from QueryPlan (e.g. "factual — find specific answer").
+    /// Empty string if not available.
+    pub intent_context: &'a str,
 }
 
 pub fn worker_navigation(params: &NavigationParams) -> (String, String) {
@@ -92,6 +95,12 @@ pub fn worker_navigation(params: &NavigationParams) -> (String, String) {
         )
     };
 
+    let intent_section = if params.intent_context.is_empty() {
+        String::new()
+    } else {
+        format!("\nQuery context: {}", params.intent_context)
+    };
+
     let system = format!(
         "You are a document navigation assistant. You navigate inside a document to find \
          information that answers the user's question.
@@ -125,7 +134,7 @@ Rules:
 
     let user = format!(
         "{last_feedback_section}\
-User question: {query}{task_section}
+User question: {query}{task_section}{intent_section}
 
 Current position: /{breadcrumb}
 Collected evidence:
@@ -355,6 +364,7 @@ mod tests {
             history: "(no history yet)",
             visited_titles: "(none)",
             plan: "",
+            intent_context: "",
         };
 
         let (system, user) = worker_navigation(&params);
@@ -381,6 +391,7 @@ mod tests {
             history: "(no history yet)",
             visited_titles: "(none)",
             plan: "",
+            intent_context: "analytical — comparative analysis",
         };
 
         let (_, user) = worker_navigation(&params);

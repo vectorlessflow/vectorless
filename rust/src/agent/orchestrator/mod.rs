@@ -157,6 +157,7 @@ impl<'a> Agent for Orchestrator<'a> {
                     &llm,
                     &mut state,
                     &emitter,
+                    &query_plan,
                 )
                 .await;
             }
@@ -229,6 +230,7 @@ impl<'a> Agent for Orchestrator<'a> {
             &emitter,
             orch_llm_calls,
             multi_doc,
+            query_plan.intent,
         )
         .await
     }
@@ -243,14 +245,16 @@ pub async fn finalize_output(
     emitter: &EventEmitter,
     orch_llm_calls: u32,
     multi_doc: bool,
+    intent: crate::query::QueryIntent,
 ) -> crate::error::Result<Output> {
+    let _ = config;
     let rerank_result = crate::rerank::process(
         query,
         &state.all_evidence,
-        config.answer.enable_synthesis,
         llm,
         multi_doc,
         &state.sub_results,
+        intent,
     )
     .await?;
 

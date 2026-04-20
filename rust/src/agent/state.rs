@@ -40,12 +40,6 @@ pub struct WorkerState {
     /// Navigation plan generated after bird's-eye view (Phase 1.5).
     /// Injected into subsequent prompts as guidance (non-binding).
     pub plan: String,
-    /// Number of consecutive rounds without new evidence.
-    /// Used for stuck detection.
-    pub rounds_since_evidence: u32,
-    /// Whether the `check` command has been called at least once.
-    /// Used to trigger mid-budget checkpoint reminder.
-    pub check_called: bool,
     /// Number of times `check` has been called.
     pub check_count: u32,
     /// Whether a navigation plan was generated in Phase 1.5.
@@ -73,8 +67,6 @@ impl WorkerState {
             missing_info: String::new(),
             history: Vec::new(),
             plan: String::new(),
-            rounds_since_evidence: 0,
-            check_called: false,
             check_count: 0,
             plan_generated: false,
         }

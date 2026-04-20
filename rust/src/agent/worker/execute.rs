@@ -122,7 +122,6 @@ pub async fn execute_command(
             match llm.complete(&system, &user).await {
                 Ok(response) => {
                     *llm_calls += 1;
-                    state.check_called = true;
                     state.check_count += 1;
                     let sufficient = parse_sufficiency_response(&response);
                     info!(

@@ -61,18 +61,13 @@ impl Default for OrchestratorConfig {
 /// Answer pipeline configuration — synthesis settings.
 #[derive(Debug, Clone)]
 pub struct AnswerConfig {
-    /// Enable answer synthesis (LLM-generated answer from evidence).
-    pub enable_synthesis: bool,
     /// Maximum number of evidence items to feed into synthesis.
     pub evidence_cap: usize,
 }
 
 impl Default for AnswerConfig {
     fn default() -> Self {
-        Self {
-            enable_synthesis: true,
-            evidence_cap: 20,
-        }
+        Self { evidence_cap: 20 }
     }
 }
 

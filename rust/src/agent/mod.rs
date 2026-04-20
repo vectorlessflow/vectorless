@@ -29,8 +29,6 @@ pub mod command;
 pub mod config;
 pub mod context;
 pub mod events;
-pub mod nav_plan;
-pub mod plan;
 pub mod state;
 pub mod tools;
 

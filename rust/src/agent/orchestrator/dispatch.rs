@@ -13,6 +13,7 @@ use super::super::events::EventEmitter;
 use super::super::prompts::DispatchEntry;
 use super::super::state::OrchestratorState;
 use super::super::worker::Worker;
+use crate::query::QueryPlan;
 
 /// Dispatch Workers in parallel and collect results.
 pub async fn dispatch_and_collect(
@@ -23,6 +24,7 @@ pub async fn dispatch_and_collect(
     llm: &LlmClient,
     state: &mut OrchestratorState,
     emitter: &EventEmitter,
+    query_plan: &QueryPlan,
 ) {
     let futures: Vec<_> = dispatches
         .iter()
@@ -42,10 +44,19 @@ pub async fn dispatch_and_collect(
             let doc_name = doc.doc_name.to_string();
             let llm = llm.clone();
             let sub_emitter = EventEmitter::noop();
+            let worker_plan = query_plan.clone();
 
             Some(async move {
                 emitter.emit_worker_dispatched(doc_idx, &doc_name, &task, &[]);
-                let worker = Worker::new(&query, Some(&task), doc, worker_config, llm, sub_emitter);
+                let worker = Worker::new(
+                    &query,
+                    Some(&task),
+                    doc,
+                    worker_config,
+                    llm,
+                    sub_emitter,
+                    worker_plan,
+                );
                 let result = worker.run().await;
                 (doc_idx, doc_name, result)
             })
