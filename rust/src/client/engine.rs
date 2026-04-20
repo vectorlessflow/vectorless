@@ -37,12 +37,7 @@
 //! # }
 //! ```
 
-use std::{
-    collections::HashMap,
-    sync::Arc,
-    sync::Mutex,
-    sync::atomic::{AtomicBool, Ordering},
-};
+use std::{collections::HashMap, sync::Arc};
 
 use futures::StreamExt;
 use tracing::info;
@@ -69,9 +64,6 @@ use super::{
     types::{DocumentInfo, FailedItem, IndexItem, IndexMode, IndexResult, QueryResult},
     workspace::WorkspaceClient,
 };
-
-/// Shared cancel state: `true` means cancelled.
-type CancelFlag = Arc<AtomicBool>;
 
 /// The main Engine client.
 ///
@@ -101,12 +93,6 @@ pub struct Engine {
 
     /// Central metrics hub for unified collection.
     metrics_hub: Arc<MetricsHub>,
-
-    /// Shared cancel flag — set by `cancel()`, checked by long-running operations.
-    cancelled: CancelFlag,
-
-    /// Active operation count so `cancel()` can wait for drain.
-    active_ops: Arc<Mutex<usize>>,
 }
 
 impl Engine {
@@ -142,8 +128,6 @@ impl Engine {
             retriever,
             workspace: workspace_client,
             metrics_hub,
-            cancelled: Arc::new(AtomicBool::new(false)),
-            active_ops: Arc::new(Mutex::new(0)),
         })
     }
 
@@ -160,12 +144,10 @@ impl Engine {
     /// Returns an [`IndexResult`] containing the indexed document metadata.
     #[tracing::instrument(skip_all, fields(sources = ctx.sources.len()))]
     pub async fn index(&self, ctx: IndexContext) -> Result<IndexResult> {
-        self.check_cancel()?;
         if ctx.is_empty() {
             return Err(Error::Config("No document sources provided".into()));
         }
 
-        let _guard = self.inc_active();
         let timeout_secs = ctx.options.timeout_secs;
 
         self.with_timeout(timeout_secs, async move {
@@ -252,16 +234,6 @@ impl Engine {
         options: &super::types::IndexOptions,
         name: Option<&str>,
     ) -> (Vec<IndexItem>, Vec<FailedItem>) {
-        if self.is_cancelled() {
-            return (
-                Vec::new(),
-                vec![FailedItem::new(
-                    source.to_string(),
-                    "Operation cancelled".to_string(),
-                )],
-            );
-        }
-
         let source_label = source.to_string();
 
         match self.resolve_index_action(source, options).await {
@@ -352,10 +324,6 @@ impl Engine {
         let max_attempts = retry.max_attempts;
 
         for attempt in 0..max_attempts {
-            if self.is_cancelled() {
-                return Err(Error::Config("Operation cancelled".into()));
-            }
-
             let result = if let Some(tree) = existing_tree {
                 self.indexer
                     .index_with_existing(source, name, pipeline_options.clone(), Some(tree))
@@ -445,8 +413,6 @@ impl Engine {
     /// (single document, multiple documents, or entire workspace).
     #[tracing::instrument(skip_all, fields(query = %ctx.query))]
     pub async fn query(&self, ctx: QueryContext) -> Result<QueryResult> {
-        self.check_cancel()?;
-        let _guard = self.inc_active();
         let timeout_secs = ctx.timeout_secs;
 
         self.with_timeout(timeout_secs, async move {
@@ -480,9 +446,6 @@ impl Engine {
     /// Events are translated from the agent's internal event stream
     /// into the public `RetrieveEventReceiver` stream.
     pub async fn query_stream(&self, ctx: QueryContext) -> Result<RetrieveEventReceiver> {
-        self.check_cancel()?;
-        let _guard = self.inc_active();
-
         let doc_ids = self.resolve_scope(&ctx.scope).await?;
         let query = ctx.query.clone();
 
@@ -844,30 +807,9 @@ impl Engine {
     /// Generate a complete metrics report.
     ///
     /// Returns a [`MetricsReport`](crate::metrics::MetricsReport) containing
-    /// LLM usage, pilot decision, and retrieval operation metrics.
+    /// LLM usage and retrieval operation metrics.
     pub fn metrics_report(&self) -> crate::metrics::MetricsReport {
         self.metrics_hub.generate_report()
-    }
-
-    /// Cancel all in-flight `index()` and `query()` operations.
-    ///
-    /// After calling this, running operations will return at the next
-    /// convenient point with a cancellation error. New operations will
-    /// also fail until [`reset_cancel`](Self::reset_cancel) is called.
-    pub fn cancel(&self) {
-        self.cancelled.store(true, Ordering::Relaxed);
-        tracing::info!("Cancellation requested");
-    }
-
-    /// Reset the cancel flag so new operations can proceed.
-    pub fn reset_cancel(&self) {
-        self.cancelled.store(false, Ordering::Relaxed);
-        tracing::info!("Cancel flag reset");
-    }
-
-    /// Returns `true` if cancellation has been requested.
-    pub fn is_cancelled(&self) -> bool {
-        self.cancelled.load(Ordering::Relaxed)
     }
 
     // ============================================================
@@ -905,23 +847,6 @@ impl Engine {
             }
         }
         Ok((documents, failed))
-    }
-
-    /// Check cancel flag, returning an error if cancelled.
-    fn check_cancel(&self) -> Result<()> {
-        if self.cancelled.load(Ordering::Relaxed) {
-            return Err(Error::Config("Operation cancelled".into()));
-        }
-        Ok(())
-    }
-
-    /// Increment active operation counter. Returns a guard that decrements on drop.
-    fn inc_active(&self) -> ActiveGuard {
-        let mut ops = self.active_ops.lock().unwrap();
-        *ops += 1;
-        ActiveGuard {
-            active_ops: Arc::clone(&self.active_ops),
-        }
     }
 
     /// Run a future with an optional timeout.
@@ -1135,21 +1060,7 @@ impl Clone for Engine {
             retriever: self.retriever.clone(),
             workspace: self.workspace.clone(),
             metrics_hub: Arc::clone(&self.metrics_hub),
-            cancelled: Arc::clone(&self.cancelled),
-            active_ops: Arc::clone(&self.active_ops),
         }
-    }
-}
-
-/// RAII guard that decrements `active_ops` on drop.
-struct ActiveGuard {
-    active_ops: Arc<Mutex<usize>>,
-}
-
-impl Drop for ActiveGuard {
-    fn drop(&mut self) {
-        let mut ops = self.active_ops.lock().unwrap();
-        *ops = ops.saturating_sub(1);
     }
 }
 
@@ -1163,43 +1074,6 @@ impl std::fmt::Debug for Engine {
 mod tests {
     use super::*;
     use crate::client::types::IndexMode;
-
-    // ── Cancel ────────────────────────────────────────────────────────────
-
-    #[test]
-    fn test_cancel_flag() {
-        // We can't construct a full Engine without async + LLM, so test the
-        // underlying primitives directly.
-        let flag = Arc::new(AtomicBool::new(false));
-        assert!(!flag.load(Ordering::Relaxed));
-
-        flag.store(true, Ordering::Relaxed);
-        assert!(flag.load(Ordering::Relaxed));
-
-        flag.store(false, Ordering::Relaxed);
-        assert!(!flag.load(Ordering::Relaxed));
-    }
-
-    #[test]
-    fn test_active_guard_decrement() {
-        let active_ops: Arc<Mutex<usize>> = Arc::new(Mutex::new(0));
-
-        // Increment
-        {
-            let mut ops = active_ops.lock().unwrap();
-            *ops += 1;
-        }
-
-        assert_eq!(*active_ops.lock().unwrap(), 1);
-
-        // Drop guard (simulate ActiveGuard drop)
-        {
-            let mut ops = active_ops.lock().unwrap();
-            *ops = ops.saturating_sub(1);
-        }
-
-        assert_eq!(*active_ops.lock().unwrap(), 0);
-    }
 
     // ── resolve_index_action Default mode ──────────────────────────────────
 
