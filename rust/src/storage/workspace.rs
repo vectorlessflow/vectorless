@@ -47,6 +47,7 @@ use crate::Error;
 use crate::error::Result;
 
 const META_KEY: &str = "meta";
+const CATALOG_KEY: &str = "catalog";
 const DEFAULT_CACHE_SIZE: usize = 100;
 
 /// Lightweight metadata entry for the async workspace index.
@@ -108,6 +109,8 @@ struct WorkspaceInner {
     root: Option<PathBuf>,
     /// Document metadata index.
     meta_index: HashMap<String, DocumentMetaEntry>,
+    /// DocCard catalog — lightweight document summaries for Orchestrator analysis.
+    catalog: HashMap<String, crate::document::DocCard>,
     /// LRU cache for loaded documents.
     cache: DocumentCache,
     /// Cross-document relationship graph (cached).
@@ -149,11 +152,13 @@ impl Workspace {
             backend,
             root: None,
             meta_index: HashMap::new(),
+            catalog: HashMap::new(),
             cache: DocumentCache::with_capacity(options.cache_size),
             document_graph: None,
         };
 
         Self::load_meta_index(&mut inner)?;
+        Self::load_catalog_index(&mut inner)?;
 
         Ok(Self {
             inner: Arc::new(RwLock::new(inner)),
@@ -186,11 +191,13 @@ impl Workspace {
             backend,
             root: Some(root),
             meta_index: HashMap::new(),
+            catalog: HashMap::new(),
             cache: DocumentCache::with_capacity(options.cache_size),
             document_graph: None,
         };
 
         Self::load_meta_index(&mut inner)?;
+        Self::load_catalog_index(&mut inner)?;
 
         Ok(Self {
             inner: Arc::new(RwLock::new(inner)),
@@ -253,6 +260,16 @@ impl Workspace {
 
         inner.meta_index.insert(doc_id.clone(), meta_entry);
         Self::save_meta_index(&inner)?;
+
+        // Update catalog with DocCard
+        if let Some(card) = doc
+            .navigation_index
+            .as_ref()
+            .and_then(|nav| nav.doc_card().cloned())
+        {
+            inner.catalog.insert(doc_id.clone(), card);
+            Self::save_catalog_index(&inner)?;
+        }
 
         // Remove from cache if present
         let _ = inner.cache.remove(&doc_id);
@@ -356,10 +373,12 @@ impl Workspace {
 
         inner.meta_index.remove(id);
 
-        // Remove from cache
+        // Remove from cache and catalog
         let _ = inner.cache.remove(id);
+        inner.catalog.remove(id);
 
         Self::save_meta_index(&inner)?;
+        Self::save_catalog_index(&inner)?;
 
         info!("Removed document {} from async workspace", id);
 
@@ -513,10 +532,84 @@ impl Workspace {
         Ok(())
     }
 
+    /// Load the DocCard catalog from backend.
+    fn load_catalog_index(inner: &mut WorkspaceInner) -> Result<()> {
+        match inner.backend.get(CATALOG_KEY)? {
+            Some(bytes) => {
+                let catalog: HashMap<String, crate::document::DocCard> =
+                    serde_json::from_slice(&bytes).map_err(|e| {
+                        Error::Parse(format!("Failed to parse catalog index: {}", e))
+                    })?;
+                inner.catalog = catalog;
+                info!("Loaded DocCard catalog: {} entries", inner.catalog.len());
+            }
+            None => {
+                // Rebuild from existing documents
+                Self::rebuild_catalog(inner)?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Save the DocCard catalog to backend.
+    fn save_catalog_index(inner: &WorkspaceInner) -> Result<()> {
+        let bytes = serde_json::to_vec_pretty(&inner.catalog)
+            .map_err(|e| Error::Parse(format!("Failed to serialize catalog: {}", e)))?;
+        inner.backend.put(CATALOG_KEY, &bytes)?;
+        Ok(())
+    }
+
+    /// Rebuild the DocCard catalog from existing documents.
+    fn rebuild_catalog(inner: &mut WorkspaceInner) -> Result<()> {
+        let keys = inner.backend.keys()?;
+        let reserved = ["meta", "_graph", "catalog"];
+        let doc_keys: Vec<_> = keys
+            .iter()
+            .filter(|k| !reserved.contains(&k.as_str()))
+            .collect();
+
+        for key in doc_keys {
+            if let Some(bytes) = inner.backend.get(key)? {
+                if let Ok(doc) = load_document_from_bytes(&bytes) {
+                    if let Some(card) = doc
+                        .navigation_index
+                        .as_ref()
+                        .and_then(|nav| nav.doc_card().cloned())
+                    {
+                        inner.catalog.insert(doc.meta.id.clone(), card);
+                    }
+                }
+            }
+        }
+
+        if !inner.catalog.is_empty() {
+            Self::save_catalog_index(inner)?;
+            info!("Rebuilt DocCard catalog: {} entries", inner.catalog.len());
+        }
+
+        Ok(())
+    }
+
+    /// Get all DocCards from the catalog.
+    pub async fn list_catalog(&self) -> Vec<(String, crate::document::DocCard)> {
+        let inner = self.inner.read().await;
+        inner
+            .catalog
+            .iter()
+            .map(|(id, card)| (id.clone(), card.clone()))
+            .collect()
+    }
+
+    /// Get a single DocCard by document ID.
+    pub async fn get_doc_card(&self, id: &str) -> Option<crate::document::DocCard> {
+        let inner = self.inner.read().await;
+        inner.catalog.get(id).cloned()
+    }
+
     /// Rebuild the meta index from existing documents.
     fn rebuild_meta_index(inner: &mut WorkspaceInner) -> Result<()> {
         let keys = inner.backend.keys()?;
-        let reserved = ["meta", "_graph"];
+        let reserved = ["meta", "_graph", "catalog"];
         let doc_keys: Vec<_> = keys
             .iter()
             .filter(|k| !reserved.contains(&k.as_str()))

@@ -24,10 +24,11 @@ pub fn answer_synthesis_prompt(params: &SynthesisParams) -> (String, String) {
     let evidence_text = params.evidence_text;
 
     let system =
-        "You are an expert analyst. Based on the provided evidence, directly answer the user's \
-         question. Cite the source section for each piece of information you use. \
-         If the evidence is insufficient to fully answer the question, clearly state what is known \
-         and what is missing."
+        "You are a precise retrieval assistant. Extract and return the exact passages from the \
+         evidence that answer the user's question. Quote the original text — do not paraphrase, \
+         summarize, or add preamble like 'Based on the evidence'. If multiple passages are \
+         relevant, list them with their source section in brackets. If the evidence is insufficient \
+         to answer, state what was found and what is missing."
             .to_string();
 
     let missing_section = if params.missing_info.is_empty() {

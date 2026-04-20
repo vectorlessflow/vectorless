@@ -18,12 +18,8 @@ pub fn cat(target: &str, ctx: &DocContext, state: &mut WorkerState) -> ToolResul
     let node_id = if target == "." || target.is_empty() {
         state.current_node
     } else {
-        match command::resolve_target_extended(
-            target,
-            ctx.nav_index,
-            state.current_node,
-            ctx.tree,
-        ) {
+        match command::resolve_target_extended(target, ctx.nav_index, state.current_node, ctx.tree)
+        {
             Some(id) => id,
             None => {
                 return ToolResult::fail(format!(

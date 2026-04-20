@@ -482,9 +482,7 @@ impl LlmExecutor {
         if content.is_empty() {
             warn!(
                 elapsed_ms = request_elapsed.as_millis(),
-                prompt_tokens,
-                completion_tokens,
-                "LLM returned empty response"
+                prompt_tokens, completion_tokens, "LLM returned empty response"
             );
         } else {
             info!(
