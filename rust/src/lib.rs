@@ -83,9 +83,7 @@ pub use graph::{DocumentGraph, DocumentGraphNode, EdgeEvidence, GraphEdge, Weigh
 pub use events::{EventEmitter, IndexEvent, QueryEvent, WorkspaceEvent};
 
 // Metrics
-pub use metrics::{
-    IndexMetrics, LlmMetricsReport, MetricsReport, PilotMetricsReport, RetrievalMetricsReport,
-};
+pub use metrics::{IndexMetrics, LlmMetricsReport, MetricsReport, RetrievalMetricsReport};
 
 // Errors
 pub use error::{Error, Result};

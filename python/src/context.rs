@@ -44,13 +44,14 @@ pub struct PyIndexOptions {
 #[pymethods]
 impl PyIndexOptions {
     #[new]
-    #[pyo3(signature = (mode="default", generate_summaries=true, generate_description=false, generate_ids=true, enable_synonym_expansion=false))]
+    #[pyo3(signature = (mode="default", generate_summaries=true, generate_description=false, generate_ids=true, enable_synonym_expansion=true, timeout_secs=None))]
     fn new(
         mode: &str,
         generate_summaries: bool,
         generate_description: bool,
         generate_ids: bool,
         enable_synonym_expansion: bool,
+        timeout_secs: Option<u64>,
     ) -> PyResult<Self> {
         let mut opts = IndexOptions::new();
         match mode {
@@ -71,6 +72,9 @@ impl PyIndexOptions {
         opts.generate_description = generate_description;
         opts.generate_ids = generate_ids;
         opts.enable_synonym_expansion = enable_synonym_expansion;
+        if let Some(secs) = timeout_secs {
+            opts = opts.with_timeout_secs(secs);
+        }
         Ok(Self { inner: opts })
     }
 
@@ -260,9 +264,15 @@ impl PyQueryContext {
         Self { inner: ctx }
     }
 
-    /// Set the maximum tokens for the result content.
-    fn with_max_tokens(&self, tokens: usize) -> Self {
-        let ctx = self.inner.clone().with_max_tokens(tokens);
+    /// Set per-operation timeout in seconds.
+    fn with_timeout_secs(&self, secs: u64) -> Self {
+        let ctx = self.inner.clone().with_timeout_secs(secs);
+        Self { inner: ctx }
+    }
+
+    /// Force the Orchestrator to analyze documents before dispatching Workers.
+    fn with_force_analysis(&self, force: bool) -> Self {
+        let ctx = self.inner.clone().with_force_analysis(force);
         Self { inner: ctx }
     }
 

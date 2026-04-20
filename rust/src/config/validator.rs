@@ -97,13 +97,6 @@ impl ValidationRule for RangeValidator {
             ));
         }
 
-        if config.llm.pilot.max_tokens == 0 {
-            errors.push(ValidationError::error(
-                "llm.pilot.max_tokens",
-                "Pilot max tokens must be greater than 0",
-            ));
-        }
-
         // Retrieval ranges
         if config.retrieval.top_k == 0 {
             errors.push(ValidationError::error(

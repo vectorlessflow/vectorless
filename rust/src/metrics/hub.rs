@@ -6,7 +6,6 @@
 use std::sync::Arc;
 
 use super::llm::{LlmMetrics, LlmMetricsReport};
-use super::pilot::{InterventionPoint, PilotMetrics, PilotMetricsReport};
 use super::retrieval::{RetrievalMetrics, RetrievalMetricsReport};
 use crate::config::MetricsConfig;
 
@@ -14,7 +13,6 @@ use crate::config::MetricsConfig;
 ///
 /// Provides a single point for all metrics collection across:
 /// - LLM operations (tokens, latency, cost)
-/// - Pilot decisions (accuracy, confidence, feedback)
 /// - Retrieval operations (paths, scores, cache)
 ///
 /// # Thread Safety
@@ -24,16 +22,13 @@ use crate::config::MetricsConfig;
 /// # Example
 ///
 /// ```rust
-/// use vectorless::metrics::{MetricsHub, MetricsConfig, InterventionPoint};
+/// use vectorless::metrics::{MetricsHub, MetricsConfig};
 ///
 /// let config = MetricsConfig::default();
 /// let hub = MetricsHub::new(config);
 ///
 /// // Record LLM call
 /// hub.record_llm_call(100, 50, 150, true);
-///
-/// // Record Pilot decision
-/// hub.record_pilot_decision(0.85, InterventionPoint::Fork);
 ///
 /// // Get report
 /// let report = hub.generate_report();
@@ -42,7 +37,6 @@ use crate::config::MetricsConfig;
 pub struct MetricsHub {
     config: MetricsConfig,
     llm: LlmMetrics,
-    pilot: PilotMetrics,
     retrieval: RetrievalMetrics,
 }
 
@@ -52,7 +46,6 @@ impl MetricsHub {
         Self {
             config,
             llm: LlmMetrics::new(),
-            pilot: PilotMetrics::new(),
             retrieval: RetrievalMetrics::new(),
         }
     }
@@ -133,67 +126,6 @@ impl MetricsHub {
     }
 
     // ========================================================================
-    // Pilot Metrics
-    // ========================================================================
-
-    /// Record a Pilot decision.
-    pub fn record_pilot_decision(&self, confidence: f64, point: InterventionPoint) {
-        if !self.config.enabled || !self.config.pilot.track_decisions {
-            return;
-        }
-        self.pilot
-            .record_decision(confidence, point, &self.config.pilot);
-    }
-
-    /// Record feedback on a Pilot decision.
-    pub fn record_pilot_feedback(&self, was_correct: bool) {
-        if !self.config.enabled || !self.config.pilot.track_feedback {
-            return;
-        }
-        self.pilot.record_feedback(was_correct, &self.config.pilot);
-    }
-
-    /// Record a Pilot LLM call.
-    pub fn record_pilot_llm_call(&self) {
-        if self.config.enabled {
-            self.pilot.record_llm_call();
-        }
-    }
-
-    /// Record a Pilot intervention.
-    pub fn record_pilot_intervention(&self) {
-        if self.config.enabled {
-            self.pilot.record_intervention();
-        }
-    }
-
-    /// Record a skipped Pilot intervention.
-    pub fn record_pilot_intervention_skipped(&self) {
-        if self.config.enabled {
-            self.pilot.record_skipped_intervention();
-        }
-    }
-
-    /// Record Pilot budget exhausted.
-    pub fn record_pilot_budget_exhausted(&self) {
-        if self.config.enabled {
-            self.pilot.record_budget_exhausted();
-        }
-    }
-
-    /// Record Pilot fallback to algorithm.
-    pub fn record_pilot_algorithm_fallback(&self) {
-        if self.config.enabled {
-            self.pilot.record_algorithm_fallback();
-        }
-    }
-
-    /// Get Pilot metrics report.
-    pub fn pilot_report(&self) -> PilotMetricsReport {
-        self.pilot.generate_report()
-    }
-
-    // ========================================================================
     // Retrieval Metrics
     // ========================================================================
 
@@ -261,7 +193,6 @@ impl MetricsHub {
     /// Reset all metrics.
     pub fn reset(&self) {
         self.llm.reset();
-        self.pilot.reset();
         self.retrieval.reset();
     }
 
@@ -269,7 +200,6 @@ impl MetricsHub {
     pub fn generate_report(&self) -> MetricsReport {
         MetricsReport {
             llm: self.llm_report(),
-            pilot: self.pilot_report(),
             retrieval: self.retrieval_report(),
         }
     }
@@ -286,8 +216,6 @@ impl Default for MetricsHub {
 pub struct MetricsReport {
     /// LLM metrics.
     pub llm: LlmMetricsReport,
-    /// Pilot metrics.
-    pub pilot: PilotMetricsReport,
     /// Retrieval metrics.
     pub retrieval: RetrievalMetricsReport,
 }
@@ -307,15 +235,12 @@ mod tests {
     fn test_metrics_hub_recording() {
         let hub = MetricsHub::with_defaults();
 
-        // Record various metrics
         hub.record_llm_call(100, 50, 150, true);
-        hub.record_pilot_decision(0.9, InterventionPoint::Fork);
         hub.record_retrieval_query(5, 10, 100);
 
         let report = hub.generate_report();
 
         assert_eq!(report.llm.total_calls, 1);
-        assert_eq!(report.pilot.total_decisions, 1);
         assert_eq!(report.retrieval.total_queries, 1);
     }
 
@@ -325,12 +250,10 @@ mod tests {
         let hub = MetricsHub::new(config);
 
         hub.record_llm_call(100, 50, 150, true);
-        hub.record_pilot_decision(0.9, InterventionPoint::Fork);
 
         let report = hub.generate_report();
 
         assert_eq!(report.llm.total_calls, 0);
-        assert_eq!(report.pilot.total_decisions, 0);
     }
 
     #[test]
@@ -348,11 +271,8 @@ mod tests {
     fn test_llm_metrics_success_and_failure() {
         let hub = MetricsHub::with_defaults();
 
-        // Record successes
         hub.record_llm_call(100, 50, 150, true);
         hub.record_llm_call(200, 100, 300, true);
-
-        // Record failure
         hub.record_llm_call(0, 0, 50, false);
 
         let report = hub.llm_report();
@@ -383,7 +303,6 @@ mod tests {
     fn test_shared_arc_metrics() {
         let hub = MetricsHub::shared();
 
-        // Clone the Arc — both references point to the same hub
         let hub2 = hub.clone();
         hub.record_llm_call(100, 50, 100, true);
         hub2.record_llm_call(200, 100, 200, true);
@@ -400,7 +319,6 @@ mod tests {
         hub.record_llm_call(1000, 500, 200, true);
 
         let report = hub.generate_report();
-        // Cost should be positive (exact value depends on config pricing)
         assert!(report.total_cost_usd() >= 0.0);
     }
 }

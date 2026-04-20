@@ -12,6 +12,5 @@ mod validator;
 pub use types::Config;
 pub(crate) use types::{
     CompressionAlgorithm, FallbackBehavior, FallbackConfig, IndexerConfig, LlmConfig,
-    LlmMetricsConfig, MetricsConfig, OnAllFailedBehavior, PilotMetricsConfig,
-    RetrievalMetricsConfig, SlotConfig,
+    LlmMetricsConfig, MetricsConfig, OnAllFailedBehavior, RetrievalMetricsConfig, SlotConfig,
 };

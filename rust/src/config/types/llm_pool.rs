@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 ///
 /// Contains:
 /// - Global credentials (`api_key`, `model`, `endpoint`)
-/// - Per-purpose slot overrides (`index`, `retrieval`, `pilot`)
+/// - Per-purpose slot overrides (`index`, `retrieval`)
 /// - Infrastructure settings (`retry`, `throttle`, `fallback`)
 ///
 /// # Simple usage (via EngineBuilder)
@@ -71,11 +71,6 @@ pub struct LlmConfig {
     #[serde(default = "default_retrieval_slot")]
     pub retrieval: SlotConfig,
 
-    /// Pilot slot (navigation guidance).
-    /// Uses a fast model with higher token limit.
-    #[serde(default = "default_pilot_slot")]
-    pub pilot: SlotConfig,
-
     /// Retry configuration for LLM calls.
     #[serde(default)]
     pub retry: RetryConfig,
@@ -96,13 +91,6 @@ fn default_retrieval_slot() -> SlotConfig {
     }
 }
 
-fn default_pilot_slot() -> SlotConfig {
-    SlotConfig {
-        max_tokens: 300,
-        ..SlotConfig::default()
-    }
-}
-
 impl Default for LlmConfig {
     fn default() -> Self {
         Self {
@@ -111,7 +99,6 @@ impl Default for LlmConfig {
             endpoint: None,
             index: SlotConfig::default(),
             retrieval: default_retrieval_slot(),
-            pilot: default_pilot_slot(),
             retry: RetryConfig::default(),
             throttle: ThrottleConfig::default(),
             fallback: FallbackConfig::default(),
@@ -158,12 +145,6 @@ impl LlmConfig {
         self
     }
 
-    /// Set the pilot slot configuration.
-    pub fn with_pilot(mut self, slot: SlotConfig) -> Self {
-        self.pilot = slot;
-        self
-    }
-
     /// Set the retry configuration.
     pub fn with_retry(mut self, retry: RetryConfig) -> Self {
         self.retry = retry;
@@ -199,7 +180,7 @@ impl LlmConfig {
 /// Per-purpose LLM slot override.
 ///
 /// Controls model selection and generation parameters for a specific
-/// LLM usage (index, retrieval, or pilot).
+/// LLM usage (index or retrieval).
 ///
 /// - `model`: Override the default model (optional).
 /// - `max_tokens`: Maximum response tokens.
@@ -591,10 +572,8 @@ mod tests {
         assert!(config.endpoint.is_none());
         assert!(config.index.model.is_none());
         assert!(config.retrieval.model.is_none());
-        assert!(config.pilot.model.is_none());
         assert_eq!(config.index.max_tokens, 200);
         assert_eq!(config.retrieval.max_tokens, 100);
-        assert_eq!(config.pilot.max_tokens, 300);
     }
 
     #[test]
@@ -617,7 +596,6 @@ mod tests {
 
         assert_eq!(config.resolve_model(&config.index), "gpt-4o");
         assert_eq!(config.resolve_model(&config.retrieval), "gpt-4o-mini");
-        assert_eq!(config.resolve_model(&config.pilot), "gpt-4o");
     }
 
     #[test]

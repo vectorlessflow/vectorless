@@ -5,7 +5,7 @@
 
 use pyo3::prelude::*;
 
-use ::vectorless::{LlmMetricsReport, MetricsReport, PilotMetricsReport, RetrievalMetricsReport};
+use ::vectorless::{LlmMetricsReport, MetricsReport, RetrievalMetricsReport};
 
 /// LLM usage metrics report.
 #[pyclass(name = "LlmMetricsReport")]
@@ -97,106 +97,6 @@ impl PyLlmMetricsReport {
         format!(
             "LlmMetricsReport(calls={}, tokens={}, cost=${:.4})",
             self.inner.total_calls, self.inner.total_tokens, self.inner.estimated_cost_usd,
-        )
-    }
-}
-
-/// Pilot decision metrics report.
-#[pyclass(name = "PilotMetricsReport")]
-pub struct PyPilotMetricsReport {
-    pub(crate) inner: PilotMetricsReport,
-}
-
-#[pymethods]
-impl PyPilotMetricsReport {
-    /// Total number of Pilot decisions.
-    #[getter]
-    fn total_decisions(&self) -> u64 {
-        self.inner.total_decisions
-    }
-
-    /// Number of start guidance calls.
-    #[getter]
-    fn start_guidance_calls(&self) -> u64 {
-        self.inner.start_guidance_calls
-    }
-
-    /// Number of fork decisions.
-    #[getter]
-    fn fork_decisions(&self) -> u64 {
-        self.inner.fork_decisions
-    }
-
-    /// Number of backtrack calls.
-    #[getter]
-    fn backtrack_calls(&self) -> u64 {
-        self.inner.backtrack_calls
-    }
-
-    /// Number of evaluate calls.
-    #[getter]
-    fn evaluate_calls(&self) -> u64 {
-        self.inner.evaluate_calls
-    }
-
-    /// Decision accuracy based on feedback (0.0 - 1.0).
-    #[getter]
-    fn accuracy(&self) -> f64 {
-        self.inner.accuracy
-    }
-
-    /// Number of correct decisions.
-    #[getter]
-    fn correct_decisions(&self) -> u64 {
-        self.inner.correct_decisions
-    }
-
-    /// Number of incorrect decisions.
-    #[getter]
-    fn incorrect_decisions(&self) -> u64 {
-        self.inner.incorrect_decisions
-    }
-
-    /// Average confidence across all decisions.
-    #[getter]
-    fn avg_confidence(&self) -> f64 {
-        self.inner.avg_confidence
-    }
-
-    /// Number of LLM calls made by Pilot.
-    #[getter]
-    fn llm_calls(&self) -> u64 {
-        self.inner.llm_calls
-    }
-
-    /// Number of interventions.
-    #[getter]
-    fn interventions(&self) -> u64 {
-        self.inner.interventions
-    }
-
-    /// Number of skipped interventions.
-    #[getter]
-    fn skipped_interventions(&self) -> u64 {
-        self.inner.skipped_interventions
-    }
-
-    /// Number of budget exhausted events.
-    #[getter]
-    fn budget_exhausted(&self) -> u64 {
-        self.inner.budget_exhausted
-    }
-
-    /// Number of algorithm fallbacks.
-    #[getter]
-    fn algorithm_fallbacks(&self) -> u64 {
-        self.inner.algorithm_fallbacks
-    }
-
-    fn __repr__(&self) -> String {
-        format!(
-            "PilotMetricsReport(decisions={}, accuracy={:.2}, avg_confidence={:.2})",
-            self.inner.total_decisions, self.inner.accuracy, self.inner.avg_confidence,
         )
     }
 }
@@ -334,14 +234,6 @@ impl PyMetricsReport {
     fn llm(&self) -> PyLlmMetricsReport {
         PyLlmMetricsReport {
             inner: self.inner.llm.clone(),
-        }
-    }
-
-    /// Pilot metrics.
-    #[getter]
-    fn pilot(&self) -> PyPilotMetricsReport {
-        PyPilotMetricsReport {
-            inner: self.inner.pilot.clone(),
         }
     }
 

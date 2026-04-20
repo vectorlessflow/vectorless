@@ -15,9 +15,7 @@ pub(crate) use indexer::IndexerConfig;
 pub(crate) use llm_pool::{
     FallbackBehavior, FallbackConfig, LlmConfig, OnAllFailedBehavior, SlotConfig,
 };
-pub(crate) use metrics::{
-    LlmMetricsConfig, MetricsConfig, PilotMetricsConfig, RetrievalMetricsConfig,
-};
+pub(crate) use metrics::{LlmMetricsConfig, MetricsConfig, RetrievalMetricsConfig};
 pub(crate) use retrieval::RetrievalConfig;
 pub(crate) use storage::{CompressionAlgorithm, StorageConfig};
 

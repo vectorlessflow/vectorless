@@ -52,14 +52,11 @@ let result = engine.index(
 
 ```rust
 use vectorless::QueryContext;
-use vectorless::StrategyPreference;
 
 let result = engine.query(
     QueryContext::new("What is the total revenue?")
         .with_doc_ids(vec![doc_id.to_string()])
-        .with_strategy(StrategyPreference::ForceHybrid)
-        .with_max_tokens(4000)
-        .with_include_reasoning(true)
+        .with_timeout_secs(60)
 ).await?;
 
 if let Some(item) = result.single() {

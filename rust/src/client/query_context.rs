@@ -49,12 +49,6 @@ pub struct QueryContext {
     pub(crate) query: String,
     /// Target scope.
     pub(crate) scope: QueryScope,
-    /// Maximum tokens for the result content.
-    pub(crate) max_tokens: Option<usize>,
-    /// Whether to include the pilot reasoning chain in the result.
-    pub(crate) include_reasoning: bool,
-    /// Maximum tree traversal depth for the pilot.
-    pub(crate) depth_limit: Option<usize>,
     /// Per-operation timeout (seconds). `None` means no timeout.
     pub(crate) timeout_secs: Option<u64>,
     /// Force Orchestrator analysis even when documents are specified.
@@ -72,9 +66,6 @@ impl QueryContext {
         Self {
             query: query.into(),
             scope: QueryScope::Workspace,
-            max_tokens: None,
-            include_reasoning: true,
-            depth_limit: None,
             timeout_secs: None,
             force_analysis: false,
         }
@@ -92,24 +83,6 @@ impl QueryContext {
     /// Set scope to entire workspace.
     pub fn with_workspace(mut self) -> Self {
         self.scope = QueryScope::Workspace;
-        self
-    }
-
-    /// Set the maximum tokens for the result content.
-    pub fn with_max_tokens(mut self, tokens: usize) -> Self {
-        self.max_tokens = Some(tokens);
-        self
-    }
-
-    /// Set whether to include the pilot reasoning chain.
-    pub fn with_include_reasoning(mut self, include: bool) -> Self {
-        self.include_reasoning = include;
-        self
-    }
-
-    /// Set the maximum tree traversal depth for the pilot.
-    pub fn with_depth_limit(mut self, depth: usize) -> Self {
-        self.depth_limit = Some(depth);
         self
     }
 
@@ -193,14 +166,8 @@ mod tests {
     fn test_builder_options() {
         let ctx = QueryContext::new("test")
             .with_doc_ids(vec!["doc-1".to_string()])
-            .with_max_tokens(4000)
-            .with_include_reasoning(false)
-            .with_depth_limit(5)
             .with_timeout_secs(60);
 
-        assert_eq!(ctx.max_tokens, Some(4000));
-        assert!(!ctx.include_reasoning);
-        assert_eq!(ctx.depth_limit, Some(5));
         assert_eq!(ctx.timeout_secs, Some(60));
     }
 
