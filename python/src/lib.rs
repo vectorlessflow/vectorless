@@ -20,9 +20,7 @@ use document::PyDocumentInfo;
 use engine::PyEngine;
 use error::VectorlessError;
 use graph::{PyDocumentGraph, PyDocumentGraphNode, PyEdgeEvidence, PyGraphEdge, PyWeightedKeyword};
-use metrics::{
-    PyLlmMetricsReport, PyMetricsReport, PyPilotMetricsReport, PyRetrievalMetricsReport,
-};
+use metrics::{PyLlmMetricsReport, PyMetricsReport, PyRetrievalMetricsReport};
 use results::{
     PyEvidenceItem, PyFailedItem, PyIndexItem, PyIndexMetrics, PyIndexResult, PyQueryMetrics,
     PyQueryResult, PyQueryResultItem,
@@ -59,7 +57,6 @@ fn _vectorless(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyEdgeEvidence>()?;
     m.add_class::<PyWeightedKeyword>()?;
     m.add_class::<PyLlmMetricsReport>()?;
-    m.add_class::<PyPilotMetricsReport>()?;
     m.add_class::<PyRetrievalMetricsReport>()?;
     m.add_class::<PyMetricsReport>()?;
     m.add_class::<PyConfig>()?;

@@ -24,10 +24,6 @@ pub struct MetricsConfig {
     #[serde(default)]
     pub llm: LlmMetricsConfig,
 
-    /// Pilot metrics configuration.
-    #[serde(default)]
-    pub pilot: PilotMetricsConfig,
-
     /// Retrieval metrics configuration.
     #[serde(default)]
     pub retrieval: RetrievalMetricsConfig,
@@ -52,7 +48,6 @@ impl Default for MetricsConfig {
             storage_path: default_storage_path(),
             retention_days: default_retention_days(),
             llm: LlmMetricsConfig::default(),
-            pilot: PilotMetricsConfig::default(),
             retrieval: RetrievalMetricsConfig::default(),
         }
     }
@@ -122,32 +117,6 @@ impl LlmMetricsConfig {
     pub fn calculate_cost(&self, input_tokens: u64, output_tokens: u64) -> f64 {
         (input_tokens as f64 / 1000.0) * self.cost_per_1k_input_tokens
             + (output_tokens as f64 / 1000.0) * self.cost_per_1k_output_tokens
-    }
-}
-
-/// Pilot-specific metrics configuration.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PilotMetricsConfig {
-    /// Track Pilot decisions.
-    #[serde(default = "default_true")]
-    pub track_decisions: bool,
-
-    /// Track decision accuracy (requires feedback).
-    #[serde(default = "default_true")]
-    pub track_accuracy: bool,
-
-    /// Track user feedback.
-    #[serde(default = "default_true")]
-    pub track_feedback: bool,
-}
-
-impl Default for PilotMetricsConfig {
-    fn default() -> Self {
-        Self {
-            track_decisions: default_true(),
-            track_accuracy: default_true(),
-            track_feedback: default_true(),
-        }
     }
 }
 

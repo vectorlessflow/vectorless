@@ -2,7 +2,7 @@
 
 <img src="https://vectorless.dev/img/with-title.png" alt="Vectorless" width="400">
 
-<h1>Document Engine for AI</h1>
+<h1>Agentic-based Document Engine</h1>
 
 [![PyPI](https://img.shields.io/pypi/v/vectorless.svg)](https://pypi.org/project/vectorless/)
 [![PyPI Downloads](https://static.pepy.tech/badge/vectorless/month)](https://pepy.tech/projects/vectorless)
@@ -13,11 +13,9 @@
 
 </div>
 
-**Vectorless** is a reasoning-native document engine with the core written in Rust. It will reason through any of your structured documents — **PDFs, Markdown, reports, contracts** — and retrieve only what's relevant. Nothing more, nothing less.
+**Reason, don't vector.**
 
-- **Reason, don't vector.** — Retrieval is guided by reasoning over document structure.
-- **Model fails, we fail.** — No silent degradation. No heuristic fallbacks.
-- **No thought, no answer.** — Only LLM-reasoned output counts as an answer.
+**Vectorless** is an agentic-based document engine with the core written in Rust. It will reason through any of your structured documents — **PDFs, Markdown, reports, contracts** — and retrieve only what's relevant. Nothing more, nothing less.
 
 
 ## Quick Start

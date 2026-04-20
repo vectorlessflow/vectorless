@@ -42,7 +42,7 @@ The indexing pipeline processes documents through multiple stages: parsing, tree
 
 ### Retrieval Engine
 
-The retrieval engine supports multiple search strategies including greedy depth-first search, beam search, and MCTS. A Pilot component provides LLM-guided navigation at key decision points during tree traversal. The engine is budget-aware, tracking token usage and making cost-conscious decisions about when to invoke the LLM versus using cheaper heuristic scoring.
+The retrieval engine uses an agent-based architecture where an Orchestrator coordinates Workers that navigate the document tree using LLM-guided decisions (ls, cd, cat, find, grep). The Orchestrator evaluates progress after each step and can replan when results are insufficient. The engine is budget-aware, tracking token usage and making cost-conscious decisions about when to invoke the LLM versus using cheaper heuristic scoring.
 
 ## Performance
 

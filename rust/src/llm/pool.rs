@@ -39,7 +39,6 @@ use crate::metrics::MetricsHub;
 pub struct LlmPool {
     index: Arc<LlmClient>,
     retrieval: Arc<LlmClient>,
-    pilot: Arc<LlmClient>,
 }
 
 impl LlmPool {
@@ -103,7 +102,6 @@ impl LlmPool {
         Self {
             index: build_client(&config.index),
             retrieval: build_client(&config.retrieval),
-            pilot: build_client(&config.pilot),
         }
     }
 
@@ -120,11 +118,6 @@ impl LlmPool {
     /// Get the retrieval client.
     pub fn retrieval(&self) -> &LlmClient {
         &self.retrieval
-    }
-
-    /// Get the pilot client.
-    pub fn pilot(&self) -> &LlmClient {
-        &self.pilot
     }
 }
 
@@ -149,7 +142,6 @@ mod tests {
 
         assert_eq!(pool.index().config().model, "gpt-4o-mini");
         assert_eq!(pool.retrieval().config().model, "gpt-4o");
-        assert_eq!(pool.pilot().config().model, "gpt-4o");
         assert_eq!(pool.index().config().max_tokens, 100);
     }
 
@@ -162,15 +154,11 @@ mod tests {
         let hub = MetricsHub::shared();
         let pool = LlmPool::from_config(&config, Some(hub.clone()));
 
-        // Verify each client has fallback (which means executor was built correctly)
         assert!(pool.index().fallback().is_some());
         assert!(pool.retrieval().fallback().is_some());
-        assert!(pool.pilot().fallback().is_some());
 
-        // Verify models are resolved correctly
         assert_eq!(pool.index().config().model, "gpt-4o");
         assert_eq!(pool.retrieval().config().model, "gpt-4o");
-        assert_eq!(pool.pilot().config().model, "gpt-4o");
     }
 
     #[test]

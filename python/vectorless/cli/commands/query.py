@@ -12,7 +12,7 @@ def query_cmd(
     workspace_scope: bool = False,
     fmt: str = "text",
     verbose: bool = False,
-    max_tokens: Optional[int] = None,
+    timeout_secs: Optional[int] = None,
 ) -> None:
     """Execute a single query against indexed documents.
 
@@ -22,19 +22,12 @@ def query_cmd(
         workspace_scope: Query across all documents.
         fmt: Output format — "text" or "json".
         verbose: Show Agent navigation steps.
-        max_tokens: Max result tokens.
+        timeout_secs: Per-operation timeout in seconds.
 
     Uses:
         Engine.query(QueryContext(question)
             .with_doc_ids([...])  or  .with_workspace()
-            .with_max_tokens(n))
+            .with_timeout_secs(n))
         -> QueryResult
-
-    Verbose mode prints Agent navigation:
-        [1/8] Bird's-eye: 3 top-level branches
-        [2/8] Descend → payment-configuration
-        [3/8] GetContent → doc 29139b
-        [4/8] Evaluate → sufficient
-        → Answer: ...
     """
     raise NotImplementedError

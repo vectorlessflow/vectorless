@@ -5,7 +5,6 @@
 //!
 //! This module provides centralized metrics collection across all components:
 //! - **LLM Metrics** — Token usage, latency, cost
-//! - **Pilot Metrics** — Decisions, accuracy, feedback
 //! - **Retrieval Metrics** — Paths, scores, iterations, cache
 //!
 //! # Architecture
@@ -14,13 +13,13 @@
 //! ┌─────────────────────────────────────────────────────────────────┐
 //! │                        MetricsHub                                │
 //! │                                                                  │
-//! │   ┌─────────────┐   ┌─────────────┐   ┌─────────────┐          │
-//! │   │  LlmMetrics │   │PilotMetrics │   │RetrievalMetrics│        │
-//! │   │             │   │             │   │             │          │
-//! │   │ - tokens    │   │ - decisions │   │ - paths     │          │
-//! │   │ - latency   │   │ - accuracy  │   │ - scores    │          │
-//! │   │ - cost      │   │ - feedback  │   │ - cache     │          │
-//! │   └─────────────┘   └─────────────┘   └─────────────┘          │
+//! │   ┌─────────────┐   ┌──────────────────┐                       │
+//! │   │  LlmMetrics │   │RetrievalMetrics  │                       │
+//! │   │             │   │                  │                       │
+//! │   │ - tokens    │   │ - paths          │                       │
+//! │   │ - latency   │   │ - scores         │                       │
+//! │   │ - cost      │   │ - cache          │                       │
+//! │   └─────────────┘   └──────────────────┘                       │
 //! │                                                                  │
 //! │   ┌─────────────────────────────────────────────────────────┐  │
 //! │   │                    MetricsReport                         │  │
@@ -33,16 +32,13 @@
 //! # Example
 //!
 //! ```rust
-//! use vectorless::metrics::{MetricsHub, MetricsConfig, InterventionPoint};
+//! use vectorless::metrics::{MetricsHub, MetricsConfig};
 //!
 //! let config = MetricsConfig::default();
 //! let hub = MetricsHub::new(config);
 //!
 //! // Record LLM call
 //! hub.record_llm_call(100, 50, 150, true);
-//!
-//! // Record Pilot decision
-//! hub.record_pilot_decision(0.85, InterventionPoint::Fork);
 //!
 //! // Generate report
 //! let report = hub.generate_report();
@@ -52,11 +48,9 @@
 mod hub;
 mod index;
 mod llm;
-mod pilot;
 mod retrieval;
 
 pub use hub::{MetricsHub, MetricsReport};
 pub use index::IndexMetrics;
 pub use llm::LlmMetricsReport;
-pub use pilot::PilotMetricsReport;
 pub use retrieval::RetrievalMetricsReport;
