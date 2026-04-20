@@ -12,8 +12,10 @@
 
 mod analyze;
 mod dispatch;
+mod evaluate;
 mod fast_path;
 mod integrate;
+mod replan;
 
 use tracing::info;
 
