@@ -3,6 +3,7 @@
 <img src="https://vectorless.dev/img/with-title.png" alt="Vectorless" width="400">
 
 <h1>Reasoning-based Document Engine</h1>
+**Reason, don't vector.** · **Structure, not chunks.** · **Agents, not embeddings.** · **Exact, not synthesized.**
 
 [![PyPI](https://img.shields.io/pypi/v/vectorless.svg)](https://pypi.org/project/vectorless/)
 [![PyPI Downloads](https://static.pepy.tech/badge/vectorless/month)](https://pepy.tech/projects/vectorless)
@@ -13,17 +14,14 @@
 
 </div>
 
-**Reason, don't vector.** · **Structure, not chunks.** · **Agents, not embeddings.** · **Exact, not synthesized.**
-
 **Vectorless** is a reasoning-native document engine written in Rust. It compiles documents into navigable trees, then dispatches **multiple agents** to find exactly what's relevant across your **PDFs, Markdown, reports, contracts**. No embeddings, no chunking, no approximate nearest neighbors. Every retrieval is a **reasoning** act.
 
-Three rules govern every decision in this system. **No exceptions**:
+Light up a star and shine with us! ⭐
 
+## Three Rules
 - **Reason, don't vector.** Retrieval is a reasoning act, not a similarity computation.
 - **Model fails, we fail.** No heuristic fallbacks, no silent degradation.
 - **No thought, no answer.** Only reasoned output counts as an answer.
-
-Light up a star and shine with us! ⭐
 
 ## Why Vectorless
 
