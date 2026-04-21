@@ -4,9 +4,9 @@ Vectorless is a reasoning-native document intelligence engine written in Rust.
 
 ## Principles
 
-- **Reason, don't vector.** — Every retrieval decision is an LLM decision.
-- **Model fails, we fail.** — No silent degradation. No heuristic fallbacks.
-- **No thought, no answer.** — Only LLM-reasoned output counts as an answer.
+- **Reason, don't vector.** Retrieval is a reasoning act, not a similarity computation.
+- **Model fails, we fail.** No heuristic fallbacks, no silent degradation.
+- **No thought, no answer.** Only reasoned output counts as an answer.
 
 ## Project Structure
 
