@@ -20,7 +20,7 @@ function HomepageHeader() {
             <span className={styles.heroTaglineHighlight}>Vectorless</span> will reason through any of your structured documents — <span className={styles.heroTaglineHighlight}>PDFs, Markdown, reports, contracts</span>,
           </span>
           <br />
-          <span className={styles.heroTaglineLine2}>and retrieve only what's relevant. <span className={styles.heroTaglineHighlight}>Nothing more, nothing less.</span></span>
+          <span className={styles.heroTaglineLine2}>and retrieve only what's relevant. <span className={styles.heroTaglineHighlight}>Every retrieval is a reasoning act.</span></span>
         </p>
         <div className={styles.heroActions}>
           <Link
@@ -88,7 +88,6 @@ function highlight(code: string, lang: 'python' | 'rust'): ReactNode[] {
   return nodes;
 }
 
-// Exact code from README
 const PYTHON_CODE = `import asyncio
 from vectorless import Engine, IndexContext, QueryContext
 
@@ -99,18 +98,12 @@ async def main():
     result = await engine.index(IndexContext.from_path("./report.pdf"))
     doc_id = result.doc_id
 
-    # Query with evidence and metrics
+    # Query
     result = await engine.query(
         QueryContext("What is the total revenue?")
             .with_doc_ids([doc_id])
     )
-    item = result.single()
-    print(f"Answer:  {item.content}")
-    print(f"Score:   {item.score:.2f}  Confidence: {item.confidence}")
-    for ev in item.evidence:
-        print(f"  [{ev.title}] {ev.path}")
-    print(f"LLM calls: {item.metrics.llm_calls}  "
-          f"Rounds: {item.metrics.rounds_used}")
+    print(result.single().content)
 
 asyncio.run(main())`;
 
@@ -129,20 +122,12 @@ async fn main() -> vectorless::Result<()> {
     let result = engine.index(IndexContext::from_path("./report.pdf")).await?;
     let doc_id = result.doc_id().unwrap();
 
-    // Query with evidence and metrics
+    // Query
     let result = engine.query(
         QueryContext::new("What is the total revenue?")
             .with_doc_ids(vec![doc_id.to_string()])
     ).await?;
-    let item = result.single().unwrap();
-    println!("Answer:  {}", item.content);
-    println!("Score:   {:.2}  Confidence: {:?}", item.score, item.confidence);
-    for ev in &item.evidence {
-        println!("  [{}] {}", ev.title, ev.path);
-    }
-    if let Some(m) = &item.metrics {
-        println!("LLM calls: {}  Rounds: {}", m.llm_calls, m.rounds_used);
-    }
+    println!("{}", result.content);
     Ok(())
 }`;
 
@@ -154,6 +139,35 @@ function PythonCode() {
 function RustCode() {
   const nodes = useMemo(() => highlight(RUST_CODE, 'rust'), []);
   return <pre className={styles.demoPre}><code>{nodes}</code></pre>;
+}
+
+function SectionThreeRules() {
+  return (
+    <section className={styles.section}>
+      <div className={styles.sectionInner}>
+        <Heading as="h2" className={styles.sectionTitle}>
+          Three rules. No exceptions.
+        </Heading>
+        <p className={styles.sectionSubtitle}>
+          Every decision in this system follows these principles.
+        </p>
+        <div className={styles.rulesRow}>
+          <div className={styles.ruleCard}>
+            <div className={styles.ruleTitle}>Reason, don't vector</div>
+            <div className={styles.ruleDesc}>Every retrieval is a reasoning act, not a similarity computation.</div>
+          </div>
+          <div className={styles.ruleCard}>
+            <div className={styles.ruleTitle}>Model fails, we fail</div>
+            <div className={styles.ruleDesc}>No heuristic fallbacks. No silent degradation.</div>
+          </div>
+          <div className={styles.ruleCard}>
+            <div className={styles.ruleTitle}>No thought, no answer</div>
+            <div className={styles.ruleDesc}>Only reasoned output counts as an answer.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
 }
 
 function SectionGetStarted() {
@@ -183,8 +197,12 @@ function SectionGetStarted() {
           Get Started
         </Heading>
         <p className={styles.sectionSubtitle}>
-          Just a few lines of code to get up and running.
+          Three lines to index. One line to query.
         </p>
+        <div className={styles.formatPills}>
+          <span className={styles.formatPill}>PDF</span>
+          <span className={styles.formatPill}>Markdown</span>
+        </div>
         <div className={styles.demoCard}>
           {/* Tabs */}
           <div className={styles.demoTabs}>
@@ -214,11 +232,7 @@ function SectionGetStarted() {
               <PythonCode />
               <div className={styles.terminalOutput}>
                 <span className={styles.terminalPrompt}>$</span> python demo.py<br />
-                <span className={styles.terminalAnswer}>Answer:&nbsp; The total revenue for fiscal year 2024 was $2.3 billion, a 15% increase YoY.<br />
-                Score:&nbsp;&nbsp; 0.91&nbsp;&nbsp; Confidence: high<br />
-                &nbsp;&nbsp;[Revenue Summary] Root/Financial Overview/Q3 2024<br />
-                &nbsp;&nbsp;[Revenue Breakdown] Root/Financial Overview/Q3 2024<br />
-                LLM calls: 4&nbsp;&nbsp; Rounds: 3</span>
+                <span className={styles.terminalAnswer}>The total revenue for fiscal year 2024 was $2.3 billion, a 15% increase YoY.</span>
                 <span className={styles.terminalCursor} />
               </div>
             </div>
@@ -238,11 +252,7 @@ function SectionGetStarted() {
               <RustCode />
               <div className={styles.terminalOutput}>
                 <span className={styles.terminalPrompt}>$</span> cargo run<br />
-                <span className={styles.terminalAnswer}>Answer:&nbsp; The total revenue for fiscal year 2024 was $2.3 billion, a 15% increase YoY.<br />
-                Score:&nbsp;&nbsp; 0.91&nbsp;&nbsp; Confidence: High<br />
-                &nbsp;&nbsp;[Revenue Summary] Root/Financial Overview/Q3 2024<br />
-                &nbsp;&nbsp;[Revenue Breakdown] Root/Financial Overview/Q3 2024<br />
-                LLM calls: 4&nbsp;&nbsp; Rounds: 3</span>
+                <span className={styles.terminalAnswer}>The total revenue for fiscal year 2024 was $2.3 billion, a 15% increase YoY.</span>
                 <span className={styles.terminalCursor} />
               </div>
             </div>
@@ -269,7 +279,7 @@ function SectionHowItWorks() {
           How does Vectorless work?
         </Heading>
         <p className={styles.sectionSubtitle}>
-          You declare a few lines of code. We do everything else.
+          Documents are compiled into navigable trees. Multiple agents reason through them.
         </p>
         <div className={styles.narrativeDemo}>
           <div className={styles.narrativeHeader}>
@@ -286,7 +296,7 @@ function SectionHowItWorks() {
                 <i className="fas fa-database" /> Index
               </div>
               <div className={styles.stepContent}>
-                3 documents indexed → hierarchical trees + NavigationIndex + ReasoningIndex built
+                3 documents indexed → hierarchical trees + NavigationIndex + ReasoningIndex + DocCards built
               </div>
             </div>
             {/* Step 2: Query */}
@@ -304,7 +314,7 @@ function SectionHowItWorks() {
                 <i className="fas fa-sitemap" /> Orchestrator · Analyze
               </div>
               <div className={styles.stepContent}>
-                LLM understands query intent (complex, analytical) → reads DocCards → dispatches Worker to doc #1
+                LLM understands query intent (complex, analytical) → reads <span style={{color: 'var(--primary)'}}>DocCards</span> → dispatches Worker to doc #1
               </div>
             </div>
             {/* Step 4: Bird's-eye view */}
@@ -346,7 +356,7 @@ function SectionHowItWorks() {
             {/* Step 8: Rerank + Synthesize */}
             <div className={styles.hamsterVoice}>
               <i className="fas fa-lightbulb" style={{color: 'var(--primary)', marginRight: 8}} />
-              <strong>Rerank pipeline:</strong> dedup → BM25 scoring (score: 0.87, confidence: <span style={{color: 'var(--accent-green)'}}>high</span>) → synthesis LLM generates cross-referenced answer.
+              <strong>Rerank pipeline:</strong> dedup → LLM-scored relevance (score: 0.87, confidence: <span style={{color: 'var(--accent-green)'}}>high</span>) → return original passages with source attribution.
             </div>
             {/* Step 9: Final Answer */}
             <div className={styles.trackStep}>
@@ -358,6 +368,56 @@ function SectionHowItWorks() {
               </div>
             </div>
           </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+const KEY_FEATURES = [
+  {
+    title: 'Rust Core',
+    desc: 'The entire engine is implemented in Rust for performance and reliability. Python SDK and CLI also provided.',
+  },
+  {
+    title: 'Multi-Agent Retrieval',
+    desc: 'An Orchestrator plans and evaluates. Workers navigate documents. Each retrieval is a reasoning act.',
+  },
+  {
+    title: 'Zero Vectors',
+    desc: 'No embedding model, no vector store, no similarity search. Eliminates wrong chunk boundaries and stale embeddings.',
+  },
+  {
+    title: 'Tree Navigation',
+    desc: 'Documents compiled into hierarchical trees. Workers navigate like a human: scan TOC, jump to section, read passage.',
+  },
+  {
+    title: 'Document-Exact Output',
+    desc: 'Returns original text passages. No synthesis, no rewriting, no hallucinated content.',
+  },
+  {
+    title: 'Incremental Updates',
+    desc: 'Content fingerprinting detects changes. Only recompiles modified sections. Checkpointable 8-stage pipeline.',
+  },
+];
+
+function SectionKeyFeatures() {
+  return (
+    <section className={styles.section}>
+      <div className={styles.sectionInner}>
+        <Heading as="h2" className={styles.sectionTitle}>
+          Key Features
+        </Heading>
+        <p className={styles.sectionSubtitle}>
+          Reasoning-native, from the ground up.
+        </p>
+        <div className={styles.featureGrid}>
+          {KEY_FEATURES.map((f, i) => (
+            <div key={i} className={styles.featureCard}>
+              <Heading as="h3" className={styles.featureTitle}>{f.title}</Heading>
+              <p className={styles.featureDesc}>{f.desc}</p>
+            </div>
+          ))}
         </div>
       </div>
     </section>
@@ -535,11 +595,13 @@ export default function Home(): ReactNode {
   return (
     <Layout
       title={`${siteConfig.title}`}
-      description="Reasoning-native document intelligence engine. No vector database, no embeddings. Retrieve by reasoning.">
+      description="Reasoning-based document engine. No embeddings, no chunking. Multiple agents navigate your documents to find exactly what's relevant.">
       <HomepageHeader />
       <main>
+        <SectionThreeRules />
         <SectionGetStarted />
         <SectionHowItWorks />
+        <SectionKeyFeatures />
         <SectionUseCases />
         <SectionCTA />
       </main>
