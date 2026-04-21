@@ -1,0 +1,61 @@
+.widget {
+  background: var(--bg-offset);
+  backdrop-filter: blur(12px);
+  border-radius: 1.2rem;
+  border: 1px solid var(--border);
+  padding: 0.9rem 1.2rem;
+  width: 130px;
+  min-width: 130px;
+  box-sizing: border-box;
+  transition: all 0.2s ease;
+  box-shadow: 0 8px 20px -6px rgba(0, 0, 0, 0.1);
+  cursor: pointer;
+}
+
+.widget:hover {
+  border-color: var(--primary);
+}
+
+.statList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.statRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.4rem 0;
+}
+
+.statLabel {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 500;
+  font-size: 0.8rem;
+  color: var(--text-light);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.statNumber {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.9rem;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+  color: var(--text);
+  white-space: nowrap;
+  margin-left: auto;
+}
+
+.errorText { color: #F87171; }
+
+@media (max-width: 880px) {
+  .widget {
+    width: 100%;
+    min-width: unset;
+  }
+}

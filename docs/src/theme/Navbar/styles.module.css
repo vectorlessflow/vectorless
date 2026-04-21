@@ -73,7 +73,7 @@
   opacity: 1;
 }
 
-/* Right: github star */
+/* Right: theme toggle */
 .navbarRight {
   display: flex;
   align-items: center;
@@ -81,11 +81,6 @@
   flex-shrink: 0;
   margin-left: auto;
   padding-right: 24px;
-}
-
-.githubStarWrapper {
-  display: flex;
-  align-items: center;
 }
 
 /* Theme toggle */

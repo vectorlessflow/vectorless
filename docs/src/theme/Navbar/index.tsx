@@ -5,7 +5,6 @@ import NavbarItem from '@theme/NavbarItem';
 import NavbarMobileSidebarToggle from '@theme/Navbar/MobileSidebar/Toggle';
 import useBaseUrl from '@docusaurus/useBaseUrl';
 import Link from '@docusaurus/Link';
-import GitHubStar from '../../components/GitHubStar';
 import type {Props as NavbarItemConfig} from '@theme/NavbarItem';
 import styles from './styles.module.css';
 
@@ -61,9 +60,6 @@ export default function Navbar(): React.ReactElement {
           {centerItems.map((item, i) => <NavbarItem {...(item as NavbarItemConfig)} key={i} />)}
         </div>
         <div className={styles.navbarRight}>
-          <div className={styles.githubStarWrapper}>
-            <GitHubStar />
-          </div>
           <ColorModeToggle />
         </div>
       </div>

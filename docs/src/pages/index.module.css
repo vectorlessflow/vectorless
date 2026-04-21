@@ -9,17 +9,22 @@
   padding: 0;
   height: calc(100vh - 68px);
   overflow: hidden;
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
   background-color: var(--bg);
-  background-image:
-    linear-gradient(rgba(175, 120, 139, 0.06) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(175, 120, 139, 0.06) 1px, transparent 1px);
-  background-size: 48px 48px;
   font-family: 'Space Grotesk', sans-serif;
   color: var(--text);
   line-height: 1.5;
+}
+
+/* ===== Stats widget (top-right corner) ===== */
+.statsCorner {
+  position: absolute;
+  top: 20px;
+  right: 32px;
+  z-index: 2;
 }
 
 /* ===== Hero Container ===== */
