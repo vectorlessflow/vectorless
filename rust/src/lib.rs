@@ -86,7 +86,7 @@ pub use events::{EventEmitter, IndexEvent, QueryEvent, WorkspaceEvent};
 pub use metrics::{IndexMetrics, LlmMetricsReport, MetricsReport, RetrievalMetricsReport};
 
 // Retrieval (streaming)
-pub use retrieval::RetrieveEvent;
+pub use retrieval::{RetrieveEvent, SufficiencyLevel};
 
 // Errors
 pub use error::{Error, Result};

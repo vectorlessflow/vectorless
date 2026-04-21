@@ -25,4 +25,4 @@ pub mod stream;
 mod types;
 
 pub use stream::{RetrieveEvent, RetrieveEventReceiver};
-pub use types::*;
+pub use types::{ReasoningChain, RetrieveResponse, SufficiencyLevel};
