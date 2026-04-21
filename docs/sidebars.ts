@@ -42,6 +42,14 @@ const sidebars: SidebarsConfig = {
         'sdk/rust',
       ],
     },
+    {
+      type: 'category',
+      label: 'RFC',
+      items: [
+        'rfc/router',
+        'rfc/roadmap',
+      ],
+    },
     'api-reference',
     {
       type: 'category',

@@ -28,14 +28,38 @@ classifiers = [
 ]
 keywords = ["rag", "document", "retrieval", "llm", "document-intelligence"]
 
-dependencies = []
+dependencies = [
+    "pydantic>=2.0",
+    "click>=8.0",
+    "tomli>=2.0; python_version < '3.11'",
+]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=7.0",
     "pytest-asyncio>=0.21",
     "mypy>=1.0",
+    "rich>=13.0",
 ]
+cli = [
+    "rich>=13.0",
+]
+langchain = [
+    "langchain-core>=0.1.0",
+]
+llamaindex = [
+    "llama-index-core>=0.10.0",
+]
+jupyter = [
+    "rich>=13.0",
+    "ipywidgets>=8.0",
+]
+all = [
+    "vectorless[cli,langchain,llamaindex,jupyter]",
+]
+
+[project.scripts]
+vectorless = "vectorless.cli.main:app"
 
 [project.urls]
 Homepage = "https://vectorless.dev"

@@ -1,947 +1,260 @@
 /**
  * Homepage styles for Vectorless.
- * Color tokens come from src/css/custom.css (--primary, --text, etc.)
- *
- * NOTE: Do NOT use bare class ".container" — it collides with Docusaurus'
- * built-in container. Use scoped names like .heroInner / .sectionInner instead.
+ * Uses rose color scheme tokens from custom.css.
  */
 
-/* ===== Hero ===== */
+/* ===== Hero Banner ===== */
 .heroBanner {
-  padding: 10rem 1.5rem 6rem;
-  position: relative;
+  margin: 0;
+  padding: 0;
+  height: calc(100vh - 68px);
   overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   background-color: var(--bg);
+  background-image:
+    linear-gradient(rgba(175, 120, 139, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(175, 120, 139, 0.06) 1px, transparent 1px);
+  background-size: 48px 48px;
+  font-family: 'Space Grotesk', sans-serif;
+  color: var(--text);
+  line-height: 1.5;
 }
 
-.heroInner {
-  max-width: 1100px;
+/* ===== Hero Container ===== */
+.hero {
+  max-width: 1280px;
+  width: 90%;
   margin: 0 auto;
-  text-align: center;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 36px;
+  padding: 32px 28px;
+  background: radial-gradient(circle at 20% 30%, var(--primary-soft), transparent 70%);
+  border-radius: 48px;
 }
 
-.heroTitle {
-  font-size: 5.5rem;
+/* ===== Left: Brand + Features ===== */
+.heroContent {
+  flex: 1.2;
+  min-width: 280px;
+}
+
+.mainTitle {
+  font-size: 3.8rem;
   font-weight: 800;
-  font-family: 'Inter', 'Libre Franklin', -apple-system, BlinkMacSystemFont, sans-serif;
-  color: var(--text);
-  margin: 0 0 1.75rem;
   letter-spacing: -0.03em;
+  background: linear-gradient(135deg, var(--text) 0%, var(--text-light) 80%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  margin-bottom: 8px;
   line-height: 1.1;
-  white-space: nowrap;
 }
 
-.heroTitleEmphasis {
+.subTitle {
+  font-size: 1.4rem;
+  font-weight: 500;
   color: var(--primary);
+  margin-bottom: 24px;
+  letter-spacing: -0.2px;
+  border-left: 3px solid var(--primary);
+  padding-left: 16px;
 }
 
-.heroTitleLight {
-  color: #9AA4BF;
-  font-weight: 300;
+/* ===== Feature Pills ===== */
+.featureList {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-bottom: 24px;
 }
 
-.heroTagline {
-  color: var(--text-light);
-  font-size: 1.3rem;
-  line-height: 1.7;
-  margin: 0 0 3rem;
+.featureItem {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 1rem;
+  font-weight: 500;
+  background: var(--primary-soft);
+  padding: 10px 16px;
+  border-radius: 60px;
+  width: fit-content;
+  backdrop-filter: blur(4px);
 }
 
-.heroTaglineHighlight {
-  color: var(--text);
-  font-weight: 600;
+.featureIcon {
+  width: 32px;
+  height: 32px;
+  background: var(--primary-soft);
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--primary);
+  font-size: 1rem;
 }
 
-.heroTaglineLine1 {
-  /* first line is naturally longer */
-}
-
-.heroTaglineLine2 {
-  /* second line shorter */
-}
-
-.heroTagline strong {
-  color: var(--text);
-  font-weight: 600;
-}
-
-.heroTagline em {
-  color: var(--primary-dark);
-  font-style: italic;
-}
-
+/* ===== GitHub Star Button ===== */
 .heroActions {
   display: flex;
   gap: 1rem;
-  justify-content: center;
+  justify-content: flex-start;
   align-items: center;
   flex-wrap: wrap;
 }
 
-/* ===== Three Rules ===== */
-.rulesRow {
-  display: flex;
-  gap: 1.5rem;
-  justify-content: center;
-  flex-wrap: wrap;
-  max-width: 1000px;
-  margin: 0 auto;
-}
-
-.ruleCard {
-  flex: 1;
-  min-width: 240px;
-  max-width: 320px;
-  background: var(--card-bg);
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  padding: 2.25rem 2rem;
-  text-align: center;
-}
-
-.ruleTitle {
-  font-size: 1.1rem;
-  font-weight: 700;
-  color: var(--primary-dark);
-  margin-bottom: 0.75rem;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-}
-
-[data-theme='dark'] .ruleTitle {
-  color: var(--primary);
-}
-
-.ruleDesc {
-  font-size: 0.92rem;
-  line-height: 1.65;
-  color: var(--text-light);
-}
-
-/* GitHub Star button */
 .githubStarButton {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.8rem 1.8rem;
+  padding: 0.9rem 2rem;
   font-size: 1rem;
   font-weight: 600;
   border-radius: 999px;
   background-color: var(--text);
-  color: #fff;
+  color: var(--bg);
   text-decoration: none;
+  transition: transform 0.15s, box-shadow 0.15s;
+  font-family: 'Space Grotesk', sans-serif;
 }
 
-[data-theme='dark'] .githubStarButton {
-  background-color: #f3f3f3;
-  color: #333;
+.githubStarButton:hover {
+  color: var(--bg);
+  text-decoration: none;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
 }
 
 .starIcon {
   margin-left: 0.4rem;
 }
 
-/* ===== Buttons ===== */
-.buttonPrimary {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.75rem 2rem;
-  font-size: 0.95rem;
-  font-weight: 600;
-  border-radius: 8px;
-  background-color: var(--primary-dark);
-  color: #fff;
-  text-decoration: none;
-  transition: background-color 0.2s, transform 0.1s;
-}
-
-.buttonPrimary:hover {
-  background-color: var(--primary-deeper);
-  color: #fff;
-  text-decoration: none;
-  transform: translateY(-1px);
-}
-
-.buttonSecondary {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.75rem 2rem;
-  font-size: 0.95rem;
-  font-weight: 600;
-  border-radius: 8px;
-  background-color: transparent;
-  color: var(--text);
-  border: 1.5px solid var(--border);
-  text-decoration: none;
-  transition: border-color 0.2s, transform 0.1s;
-}
-
-.buttonSecondary:hover {
-  border-color: var(--primary);
-  color: var(--primary-dark);
-  text-decoration: none;
-  transform: translateY(-1px);
-}
-
-/* ===== Sections ===== */
-.section {
-  padding: 5rem 1.5rem;
-}
-
-.sectionAlt {
-  background-color: var(--bg-offset);
-}
-
-.sectionInner {
-  max-width: 1200px;
-  margin: 0 auto;
-}
-
-.sectionTitle {
-  font-size: 2rem;
-  font-weight: 700;
-  text-align: center;
-  margin: 0 0 0.5rem;
-  color: var(--text);
-}
-
-.sectionSubtitle {
-  text-align: center;
-  font-size: 1.1rem;
-  color: var(--text-light);
-  margin: 0 0 3rem;
-}
-
-/* ===== Get Started — Linear Dark Demo Card ===== */
-.demoCard {
-  max-width: 1200px;
-  margin: 0 auto;
-  background: #161A1F;
-  border-radius: 16px;
-  border: 1px solid #252A30;
-  overflow: hidden;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
-}
-
-.demoTabs {
-  display: flex;
-  align-items: center;
-  gap: 1.5rem;
-  padding: 0 1.25rem;
-  border-bottom: 1px solid #252A30;
-  background: #161A1F;
-}
-
-.demoTab {
-  padding: 0.875rem 0 0.75rem;
-  font-size: 0.8rem;
-  font-weight: 500;
-  color: #9AA4BF;
-  border: none;
-  border-bottom: 2px solid transparent;
-  background: transparent;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  letter-spacing: -0.2px;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-}
-
-.demoTabActive {
-  color: #F59E0B;
-  border-bottom-color: #F59E0B;
-}
-
-.demoTab:not(.demoTabActive):hover {
-  color: #EDF2F8;
-}
-
-.demoPanel {
-  background: #111317;
-}
-
-.demoCodeHeader {
-  padding: 0.75rem 1.25rem;
-  background: #111317;
-  border-bottom: 1px solid #252A30;
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.windowDots {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.windowDot {
-  width: 11px;
-  height: 11px;
-  border-radius: 50%;
-  display: inline-block;
-}
-
-.dotRed {
-  background: #ED6A5E;
-}
-
-.dotYellow {
-  background: #F5BD4F;
-}
-
-.dotGreen {
-  background: #61C454;
-}
-
-.copyBtn {
-  margin-left: auto;
-  background: transparent;
-  border: none;
-  color: #9AA4BF;
-  font-size: 0.7rem;
-  font-family: 'JetBrains Mono', 'Fira Code', monospace;
-  cursor: pointer;
-  padding: 0.25rem 0.75rem;
-  border-radius: 6px;
-  transition: all 0.15s;
-  letter-spacing: -0.2px;
-}
-
-.copyBtn:hover {
-  background: rgba(175, 120, 139, 0.1);
-  color: #F59E0B;
-}
-
-.demoPre {
-  margin: 0;
-  padding: 1.75rem 2rem;
-  overflow-x: auto;
-  font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', Menlo, monospace;
-  font-size: 0.85rem;
-  line-height: 1.75;
-  color: #EDF2F8;
-  background: #111317;
-}
-
-.demoPre code {
-  font-family: inherit;
-  background: transparent;
-  border: none;
-  padding: 0;
-  color: inherit;
-}
-
-/* Syntax highlight tokens */
-.hlKeyword {
-  color: #F59E0B;
-  font-weight: 500;
-}
-
-.hlFunction {
-  color: #5E6AD2;
-}
-
-.hlString {
-  color: #10B981;
-}
-
-.hlComment {
-  color: #6B7280;
-  font-style: italic;
-}
-
-.hlType {
-  color: #5E6AD2;
-}
-
-.hlAttribute {
-  color: #D9A7E8;
-}
-
-.terminalOutput {
-  background: #111317;
-  border-top: 1px solid #252A30;
-  padding: 1rem 2rem;
-  font-family: 'JetBrains Mono', 'Fira Code', monospace;
-  font-size: 0.78rem;
-  color: #9AA4BF;
-  line-height: 1.7;
-}
-
-.terminalPrompt {
-  color: #10B981;
-}
-
-.terminalAnswer {
-  color: #EDF2F8;
-}
-
-.terminalCursor {
-  display: inline-block;
-  width: 7px;
-  height: 13px;
-  background-color: #AF788B;
-  vertical-align: middle;
-  margin-left: 4px;
-  animation: cursorBlink 1s step-end infinite;
-}
-
-@keyframes cursorBlink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0; }
-}
-
-.installBar {
-  padding: 1rem 2rem;
-  background: #161A1F;
-  border-top: 1px solid #252A30;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-}
-
-.installCommand {
-  font-family: 'JetBrains Mono', 'Fira Code', monospace;
-  font-size: 0.75rem;
-  color: #9AA4BF;
-  background: #111317;
-  padding: 0.4rem 1rem;
-  border-radius: 8px;
-  border: 1px solid #252A30;
-}
-
-.installCommand span {
-  color: #F59E0B;
-}
-
-.installBtn {
-  background: #F59E0B;
-  border: none;
-  color: white;
-  font-size: 0.75rem;
-  font-weight: 500;
-  padding: 0.4rem 1.2rem;
-  border-radius: 20px;
-  cursor: pointer;
-  transition: background 0.15s;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-}
-
-.installBtn:hover {
-  background: #D97706;
-}
-
-/* ===== Format Pills ===== */
-.formatPills {
-  display: flex;
-  justify-content: center;
-  gap: 0.75rem;
-  margin-bottom: 2rem;
-}
-
-.formatPill {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.35rem 1rem;
-  border-radius: 20px;
-  font-size: 0.8rem;
-  font-weight: 600;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  letter-spacing: -0.2px;
-  background: var(--primary-soft);
-  color: var(--primary-dark);
-  border: 1px solid var(--primary);
-}
-
-[data-theme='dark'] .formatPill {
-  color: var(--primary);
-}
-
-/* ===== Key Features Grid ===== */
-.featureGrid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 1.5rem;
-  max-width: 1100px;
-  margin: 0 auto;
-}
-
-.featureCard {
-  background: var(--card-bg);
+/* ===== Right: Principles Card ===== */
+.heroPrinciples {
+  flex: 0.9;
+  min-width: 280px;
+  background: var(--bg-offset);
+  backdrop-filter: blur(12px);
   border: 1px solid var(--border);
-  border-radius: 16px;
-  padding: 2rem 1.75rem;
-  transition: border-color 0.2s, box-shadow 0.2s;
-}
-
-.featureCard:hover {
-  border-color: var(--primary);
-  box-shadow: 0 4px 20px rgba(245, 158, 11, 0.08);
-}
-
-.featureTitle {
-  font-size: 1.1rem;
-  font-weight: 700;
-  color: var(--text);
-  margin: 0 0 0.75rem;
-}
-
-.featureDesc {
-  font-size: 0.92rem;
-  line-height: 1.65;
-  color: var(--text-light);
-  margin: 0;
-}
-
-/* ===== Navigation Theater ===== */
-.narrativeDemo {
-  background: #161A1F;
-  border: 1px solid #252A30;
-  border-radius: 16px;
-  padding: 2rem 2.5rem;
-  max-width: 780px;
-  margin: 0 auto;
-}
-
-.narrativeHeader {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  margin-bottom: 28px;
-}
-
-.narrativeTitle {
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: #E2E8F0;
-  margin: 0;
-}
-
-.narrativeBadge {
-  background: rgba(245, 158, 11, 0.12);
-  color: var(--primary);
-  padding: 2px 12px;
-  border-radius: 30px;
-  font-size: 0.7rem;
-  margin-left: auto;
-}
-
-.navTrack {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-  position: relative;
-}
-
-/* vertical timeline line */
-.navTrack::before {
-  content: '';
-  position: absolute;
-  left: 18px;
-  top: 24px;
-  bottom: 24px;
-  width: 2px;
-  background: #252A30;
-  border-radius: 1px;
-}
-
-.trackStep {
-  display: flex;
-  flex-direction: column;
-  padding: 0.75rem 0 0.75rem 48px;
-  position: relative;
-}
-
-.trackStep .stepBadge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 0.78rem;
-  font-weight: 600;
-  color: var(--primary);
-  margin-bottom: 4px;
-  position: relative;
-}
-
-/* dot on the timeline */
-.trackStep .stepBadge::before {
-  content: '';
-  position: absolute;
-  left: -36px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--primary);
-  border: 2px solid #161A1F;
-  z-index: 1;
-}
-
-.stepBadgeGreen {
-  color: var(--accent-green) !important;
-}
-
-.stepBadgeGreen::before {
-  background: var(--accent-green) !important;
-}
-
-.stepContent {
-  font-size: 0.9rem;
-  line-height: 1.6;
-  color: #C8D0DE;
-}
-
-/* inline <code> inside narrative demo — dark-friendly */
-.stepContent code {
-  background: #1A1F27;
-  color: #E2E8F0;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 0.85em;
-  border: 1px solid #2A3040;
-}
-
-.hamsterVoice {
-  background: rgba(245, 158, 11, 0.08);
-  border-left: 3px solid var(--primary);
-  border-radius: 8px;
-  padding: 1rem 1.25rem;
-  margin: 0.75rem 0 0.75rem 48px;
-  font-size: 0.85rem;
-  line-height: 1.6;
-  color: #B0B8C8;
-}
-
-/* ===== Use Cases Slider ===== */
-.sliderOuter {
-  overflow: hidden;
-  width: 100%;
-  padding: 1rem 0;
-}
-
-.sliderTrack {
-  display: flex;
-  gap: 1.5rem;
-  transition: transform 0.45s cubic-bezier(0.2, 0.9, 0.4, 1.1);
-  will-change: transform;
-}
-
-.caseCard {
-  flex: 0 0 calc(65% - 0.75rem);
-  background: #161A1F;
-  border: 1px solid #252A30;
-  border-radius: 16px;
-  padding: 3rem 3rem 2.5rem;
-  opacity: 0.4;
-  transform: scale(0.94);
-  transition: all 0.35s ease;
-  filter: brightness(0.75);
-  min-height: 460px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 0.5rem;
-}
-
-.caseCardActive {
-  opacity: 1;
-  transform: scale(1);
-  filter: brightness(1);
-  border-color: #F59E0B;
-  box-shadow: 0 12px 40px rgba(245, 158, 11, 0.18);
-}
-
-.caseTitle {
-  font-size: 1.55rem;
-  font-weight: 600;
-  margin: 0 0 0.75rem;
-  color: #EDF2F8;
-}
-
-.caseDesc {
-  color: #9AA4BF;
-  font-size: 1.05rem;
-  line-height: 1.7;
-  margin: 0 0 1.75rem;
-}
-
-.caseQuery {
-  background: #111317;
-  border-radius: 12px;
-  padding: 1.5rem 1.75rem;
-  font-family: 'JetBrains Mono', 'Fira Code', monospace;
-  font-size: 0.88rem;
-  color: #EDF2F8;
-  border: 1px solid #252A30;
-  line-height: 1.7;
-}
-
-.caseQueryLabel {
-  color: #F59E0B;
-  font-weight: 600;
-  margin-bottom: 0.5rem;
-}
-
-.caseQueryText {
-  color: #EDF2F8;
-}
-
-.caseAnswer {
-  color: #9AA4BF;
-  margin-top: 0.75rem;
-  padding-top: 0.75rem;
-  border-top: 1px solid #252A30;
-  font-size: 0.75rem;
-}
-
-.sliderNav {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 1rem;
-  margin-top: 2.5rem;
-}
-
-.sliderBtn {
-  background: var(--card-bg);
-  border: 1px solid var(--border);
-  color: var(--text-light);
-  font-size: 1.2rem;
-  width: 44px;
-  height: 44px;
-  border-radius: 44px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.sliderBtn:hover {
-  border-color: var(--primary);
-  color: var(--primary-dark);
-  background: var(--primary-soft);
-}
-
-.sliderDots {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.sliderDot {
-  width: 8px;
-  height: 8px;
-  border-radius: 8px;
-  background: var(--text-light);
-  border: none;
-  padding: 0;
-  cursor: pointer;
-  transition: all 0.25s;
-  opacity: 0.4;
-}
-
-.sliderDotActive {
-  width: 28px;
-  background: var(--primary);
-  opacity: 1;
-}
-
-/* ===== CTA ===== */
-.sectionCtaDark {
-  background: #111317;
-  padding: 3rem 1.5rem;
-}
-
-.ctaBox {
-  max-width: 880px;
-  margin: 0 auto;
-  text-align: center;
-  padding: 4rem 2rem;
-}
-
-.ctaTitle {
-  font-size: 2.5rem;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  margin: 0 0 1rem;
-  color: var(--primary);
-}
-
-.ctaDesc {
-  font-size: 1.05rem;
-  color: #9AA4BF;
-  max-width: 520px;
-  margin: 0 auto 2rem;
-  line-height: 1.6;
-}
-
-.ctaButtons {
-  display: flex;
-  justify-content: center;
-  gap: 1rem;
-  margin-bottom: 1.5rem;
-  flex-wrap: wrap;
-}
-
-.ctaBtnSecondary {
-  padding: 0.7rem 1.8rem;
   border-radius: 40px;
-  font-weight: 600;
-  font-size: 0.88rem;
-  background: transparent;
-  border: 1px solid #252A30;
-  color: #EDF2F8;
-  text-decoration: none;
-  cursor: pointer;
-  transition: all 0.2s;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  padding: 24px 22px;
+  box-shadow: 0 20px 35px -12px rgba(0,0,0,0.2);
+  transition: transform 0.2s ease, border-color 0.2s ease;
 }
 
-.ctaBtnSecondary:hover {
-  border-color: #F59E0B;
-  background: rgba(245, 158, 11, 0.12);
-  color: #F59E0B;
-  text-decoration: none;
+.heroPrinciples:hover {
+  border-color: var(--primary);
+  transform: translateY(-4px);
 }
 
-.ctaInstallCards {
-  display: flex;
-  justify-content: center;
-  gap: 1rem;
-  flex-wrap: wrap;
-  margin-bottom: 2rem;
-}
-
-.ctaInstallItem {
-  background: #161A1F;
-  border: 1px solid #252A30;
-  border-radius: 12px;
-  padding: 0.65rem 1.25rem;
+.principlesTitle {
+  font-size: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: var(--primary);
+  margin-bottom: 18px;
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 8px;
 }
 
-.ctaInstallCommand {
-  font-family: 'JetBrains Mono', 'Fira Code', monospace;
-  font-size: 0.82rem;
-  color: #EDF2F8;
+.principle {
+  margin-bottom: 18px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
 }
 
-.ctaInstallCommand span {
-  color: #F59E0B;
+.principle:last-of-type {
+  border-bottom: none;
+  margin-bottom: 0;
+  padding-bottom: 0;
 }
 
-.ctaCopyIcon {
-  background: transparent;
-  border: none;
-  color: #9AA4BF;
-  cursor: pointer;
-  padding: 0.25rem 0.65rem;
-  border-radius: 6px;
-  font-size: 0.7rem;
-  font-family: 'Inter', sans-serif;
-  transition: all 0.15s;
-}
-
-.ctaCopyIcon:hover {
-  background: rgba(245, 158, 11, 0.12);
-  color: #F59E0B;
-}
-
-/* ===== Dark theme overrides ===== */
-[data-theme='dark'] .heroTitleEmphasis {
-  color: var(--primary);
-}
-
-[data-theme='dark'] .heroTitleLight {
-  color: #6B7A8A;
-}
-
-[data-theme='dark'] .heroTaglineHighlight {
+.principleHead {
+  font-weight: 700;
+  font-size: 1rem;
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   color: var(--text);
 }
 
-[data-theme='dark'] .card:hover {
-  border-color: var(--primary);
+.principleDesc {
+  font-size: 0.8rem;
+  color: var(--text-light);
+  line-height: 1.4;
+}
+
+.badgeRust {
+  background: var(--primary-soft);
+  color: var(--primary);
+  border-radius: 30px;
+  padding: 2px 8px;
+  font-size: 0.7rem;
+  font-weight: 500;
+  margin-left: 8px;
+}
+
+.principlesFooter {
+  margin-top: 14px;
+  font-size: 0.7rem;
+  text-align: right;
+  opacity: 0.6;
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  color: var(--text-light);
 }
 
 /* ===== Responsive ===== */
-@media screen and (max-width: 996px) {
-  .heroBanner {
-    padding: 6rem 1.5rem 4rem;
+@media (max-width: 880px) {
+  .hero {
+    flex-direction: column;
+    padding: 40px 20px;
   }
 
-  .heroTitle {
-    font-size: 3.2rem;
+  .mainTitle {
+    font-size: 2.8rem;
   }
 
-  .heroTagline {
-    font-size: 1.15rem;
+  .subTitle {
+    font-size: 1.2rem;
   }
 
-  .caseCard {
-    flex: 0 0 calc(70% - 0.75rem);
-  }
-
-  .section {
-    padding: 3.5rem 1.5rem;
-  }
-
-  .featureGrid {
-    grid-template-columns: repeat(2, 1fr);
+  .featureItem {
+    width: 100%;
   }
 }
 
-@media screen and (max-width: 600px) {
+@media (max-width: 480px) {
   .heroBanner {
-    padding: 4.5rem 1rem 3rem;
-  }
-
-  .heroTitle {
-    font-size: 2rem;
-  }
-
-  .heroActions {
-    flex-direction: column;
-    align-items: center;
-  }
-
-  .buttonPrimary,
-  .buttonSecondary {
-    width: 100%;
-    justify-content: center;
-    max-width: 280px;
-  }
-
-  .caseCard {
-    flex: 0 0 calc(90% - 0.75rem);
-  }
-
-  .demoPre {
-    font-size: 0.65rem;
-  }
-
-  .installBar {
-    flex-direction: column;
     align-items: flex-start;
+    padding-top: 80px;
   }
 
-  .sectionTitle {
-    font-size: 1.5rem;
+  .mainTitle {
+    font-size: 2.2rem;
   }
 
-  .featureGrid {
-    grid-template-columns: 1fr;
+  .subTitle {
+    font-size: 1.05rem;
+    padding-left: 12px;
   }
 
-  .rulesRow {
-    flex-direction: column;
-    align-items: center;
+  .featureItem {
+    font-size: 0.9rem;
+    padding: 8px 12px;
   }
 
-  .ruleCard {
-    max-width: 100%;
+  .heroPrinciples {
+    border-radius: 24px;
+    padding: 20px 16px;
   }
 }

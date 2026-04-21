@@ -5,6 +5,19 @@ from typing import Optional
 
 import click
 
+from vectorless.cli.commands import (
+    init_cmd,
+    add_cmd,
+    list_cmd,
+    info_cmd,
+    remove_cmd,
+    query_cmd,
+    ask_cmd,
+    tree_cmd,
+    stats_cmd,
+    config_cmd,
+)
+
 
 @click.group()
 @click.version_option(package_name="vectorless")
@@ -22,7 +35,7 @@ def app(ctx: click.Context, workspace: str) -> None:
 @click.option("--workspace", "-w", default=".", help="Directory to initialize.")
 def init(workspace: str) -> None:
     """Initialize a .vectorless/ workspace."""
-    raise NotImplementedError
+    init_cmd(workspace)
 
 
 @app.command()
@@ -44,21 +57,28 @@ def add(
 
     PATH can be a file (.md, .pdf) or a directory.
     """
-    raise NotImplementedError
+    add_cmd(
+        path,
+        recursive=recursive,
+        fmt=fmt,
+        force=force,
+        jobs=jobs,
+        verbose=verbose,
+    )
 
 
 @app.command("list")
 @click.option("--format", "fmt", type=click.Choice(["table", "json"]), default="table")
-def list_cmd(fmt: str) -> None:
+def list_documents(fmt: str) -> None:
     """List all indexed documents."""
-    raise NotImplementedError
+    list_cmd(fmt=fmt)
 
 
 @app.command()
 @click.argument("doc_id")
 def info(doc_id: str) -> None:
     """Show details of an indexed document."""
-    raise NotImplementedError
+    info_cmd(doc_id)
 
 
 @app.command()
@@ -66,7 +86,7 @@ def info(doc_id: str) -> None:
 @click.confirmation_option(prompt="Remove this document index?")
 def remove(doc_id: str) -> None:
     """Remove a document from the index."""
-    raise NotImplementedError
+    remove_cmd(doc_id)
 
 
 # ── Query commands ──────────────────────────────────────────
@@ -90,7 +110,14 @@ def query(
 
     QUESTION is the natural-language question to ask.
     """
-    raise NotImplementedError
+    query_cmd(
+        question,
+        doc_ids=doc,
+        workspace_scope=workspace_scope,
+        fmt=fmt,
+        verbose=verbose,
+        timeout_secs=max_tokens,
+    )
 
 
 @app.command()
@@ -101,7 +128,7 @@ def ask(doc: Optional[str], verbose: bool) -> None:
 
     Start a multi-turn conversation with your documents.
     """
-    raise NotImplementedError
+    ask_cmd(doc_id=doc, verbose=verbose)
 
 
 # ── Debug / tool commands ───────────────────────────────────
@@ -113,20 +140,25 @@ def ask(doc: Optional[str], verbose: bool) -> None:
 @click.option("--show-keywords", is_flag=True, help="Show routing keywords.")
 def tree(doc_id: str, depth: Optional[int], show_summary: bool, show_keywords: bool) -> None:
     """Visualize document tree structure."""
-    raise NotImplementedError
+    tree_cmd(
+        doc_id,
+        depth=depth,
+        show_summary=show_summary,
+        show_keywords=show_keywords,
+    )
 
 
 @app.command()
 def stats() -> None:
     """Show workspace statistics."""
-    raise NotImplementedError
+    stats_cmd()
 
 
 @app.command("config")
 @click.argument("key", required=False)
 @click.argument("value", required=False)
 @click.option("--init", "init_config", is_flag=True, help="Re-initialize default config.")
-def config_cmd(key: Optional[str], value: Optional[str], init_config: bool) -> None:
+def config_cli(key: Optional[str], value: Optional[str], init_config: bool) -> None:
     """View or modify configuration.
 
     \b
@@ -135,4 +167,4 @@ def config_cmd(key: Optional[str], value: Optional[str], init_config: bool) -> N
     vectorless-cli config llm.model gpt-4o   Set a value
     vectorless-cli config --init             Reset to defaults
     """
-    raise NotImplementedError
+    config_cmd(key=key, value=value, init_config=init_config)
