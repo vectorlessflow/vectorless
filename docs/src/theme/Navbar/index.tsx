@@ -41,8 +41,7 @@ function ColorModeToggle(): React.ReactElement {
 
 export default function Navbar(): React.ReactElement {
   const {navbar: {items, logo, title}} = useThemeConfig();
-  const leftItems = items.filter(item => item.position === 'left');
-  const rightItems = items.filter(item => item.position === 'right');
+  const centerItems = items;
 
   return (
     <NavbarLayout>
@@ -59,10 +58,9 @@ export default function Navbar(): React.ReactElement {
         <div className={styles.logo}>Vectorless</div>
         </div>
         <div className={styles.navbarCenter}>
-          {leftItems.map((item, i) => <NavbarItem {...(item as NavbarItemConfig)} key={i} />)}
+          {centerItems.map((item, i) => <NavbarItem {...(item as NavbarItemConfig)} key={i} />)}
         </div>
         <div className={styles.navbarRight}>
-          {rightItems.map((item, i) => <NavbarItem {...(item as NavbarItemConfig)} key={i} />)}
           <div className={styles.githubStarWrapper}>
             <GitHubStar />
           </div>

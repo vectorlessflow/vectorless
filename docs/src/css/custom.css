@@ -1,66 +1,66 @@
 /**
  * Any CSS included here will be global. The classic template
- * bundles Infima by default. Infima is a CSS framework designed to
+ * bundles Infira by default. Infima is a CSS framework designed to
  * work well for content-centric websites.
  *
- * Color scheme: dark-first with amber accent.
+ * Color scheme: rose accent.
  */
 
 :root {
-  --primary: #F59E0B;
-  --primary-dark: #D97706;
-  --primary-deeper: #B45309;
-  --primary-light: #FBBF24;
-  --primary-soft: rgba(245, 158, 11, 0.12);
+  --primary: #AF788B;
+  --primary-dark: #8B5E6F;
+  --primary-deeper: #6D4A58;
+  --primary-light: #C9A0AE;
+  --primary-soft: rgba(175, 120, 139, 0.12);
   --accent-tech: #5E6AD2;
   --accent-green: #10B981;
-  --text: #1F2937;
-  --text-light: #6B7280;
+  --text: #1E293B;
+  --text-light: #5B6E8C;
   --bg: #FFFFFF;
-  --bg-secondary: #F9FAFB;
-  --bg-offset: #F3F4F6;
+  --bg-secondary: #F6F8FA;
+  --bg-offset: #F6F8FA;
   --card-bg: #FFFFFF;
-  --border: #E5E7EB;
+  --border: #E2E8F0;
   --code-bg: #0F172A;
   --code-text: #E2E8F0;
-  --code-comment: #6B7280;
-  --code-keyword: #5E6AD2;
+  --code-comment: #6272A4;
+  --code-keyword: #FF79C6;
 
-  --ifm-color-primary: #F59E0B;
-  --ifm-color-primary-dark: #D97706;
-  --ifm-color-primary-darker: #B45309;
-  --ifm-color-primary-darkest: #92400E;
-  --ifm-color-primary-light: #FBBF24;
-  --ifm-color-primary-lighter: #FCD34D;
-  --ifm-color-primary-lightest: #FDE68A;
+  --ifm-color-primary: #AF788B;
+  --ifm-color-primary-dark: #8B5E6F;
+  --ifm-color-primary-darker: #6D4A58;
+  --ifm-color-primary-darkest: #573D4A;
+  --ifm-color-primary-light: #C9A0AE;
+  --ifm-color-primary-lighter: #D4B3BF;
+  --ifm-color-primary-lightest: #E6CDD6;
   --ifm-code-font-size: 95%;
   --ifm-background-color: #FFFFFF;
-  --docusaurus-highlighted-code-line-bg: rgba(245, 158, 11, 0.08);
+  --docusaurus-highlighted-code-line-bg: rgba(175, 120, 139, 0.08);
 }
 
 [data-theme='dark'] {
-  --text: #EDF2F8;
-  --text-light: #9AA4BF;
-  --bg: #141720;
-  --bg-secondary: #1A1F27;
-  --bg-offset: #1A1F27;
-  --card-bg: #1E2430;
-  --border: #2A3040;
-  --primary-soft: rgba(245, 158, 11, 0.12);
-  --code-bg: #0E1117;
-  --code-text: #CBD5E1;
-  --code-comment: #6B7280;
-  --code-keyword: #5E6AD2;
+  --text: #EEF2FF;
+  --text-light: #8B9AB0;
+  --bg: #0A0C10;
+  --bg-secondary: #11151A;
+  --bg-offset: #11151A;
+  --card-bg: #131720;
+  --border: #1E293B;
+  --primary-soft: rgba(201, 160, 174, 0.15);
+  --code-bg: #010409;
+  --code-text: #E2E8F0;
+  --code-comment: #6272A4;
+  --code-keyword: #FF79C6;
 
-  --ifm-color-primary: #FBBF24;
-  --ifm-color-primary-dark: #F59E0B;
-  --ifm-color-primary-darker: #D97706;
-  --ifm-color-primary-darkest: #B45309;
-  --ifm-color-primary-light: #FCD34D;
-  --ifm-color-primary-lighter: #FDE68A;
-  --ifm-color-primary-lightest: #FEF3C7;
-  --docusaurus-highlighted-code-line-bg: rgba(245, 158, 11, 0.15);
-  --ifm-background-color: #141720;
+  --ifm-color-primary: #C9A0AE;
+  --ifm-color-primary-dark: #AF788B;
+  --ifm-color-primary-darker: #8B5E6F;
+  --ifm-color-primary-darkest: #6D4A58;
+  --ifm-color-primary-light: #D4B3BF;
+  --ifm-color-primary-lighter: #E0C5CE;
+  --ifm-color-primary-lightest: #E6CDD6;
+  --docusaurus-highlighted-code-line-bg: rgba(175, 120, 139, 0.15);
+  --ifm-background-color: #0A0C10;
 }
 
 /* ===== Navbar ===== */
@@ -69,13 +69,26 @@
   border-bottom: none !important;
   box-shadow: none !important;
   height: 68px !important;
-  padding: 0 1.5rem !important;
+  padding: 0 !important;
 }
 
 .navbar__inner {
   height: 68px !important;
   max-width: 1280px;
   margin: 0 auto;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.navbar__items {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+}
+
+.navbar__items--right {
+  flex: 0;
 }
 
 .navbar__brand {
@@ -109,58 +122,11 @@
   color: var(--primary) !important;
 }
 
-[data-theme='dark'] .navbar {
-  background-color: var(--bg) !important;
-  border-bottom-color: var(--border) !important;
+/* ===== Prevent scroll on homepage ===== */
+html:has(.heroBanner) {
+  overflow: hidden;
 }
 
-[data-theme='dark'] .navbar__title {
-  color: var(--text) !important;
-}
-
-[data-theme='dark'] .navbar__link {
-  color: var(--text-light) !important;
-}
-
-[data-theme='dark'] .navbar__link:hover {
-  color: var(--primary) !important;
-}
-
-[data-theme='dark'] .navbar__link--active {
-  color: var(--primary) !important;
-}
-
-/* ===== Footer ===== */
-.footer {
-  background-color: transparent !important;
-  padding: 5rem 1.5rem 1.5rem;
-}
-
-.footer__title {
-  font-size: 0.85rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--text);
-  margin-bottom: 1rem;
-}
-
-.footer__link-item {
-  font-size: 0.92rem;
-  color: var(--text-light);
-  line-height: 2;
-  transition: color 0.15s;
-}
-
-.footer__link-item:hover {
-  color: var(--primary);
-}
-
-.footer__link-item svg {
-  display: none;
-}
-
-.footer__copyright {
-  font-size: 0.88rem;
-  color: var(--text-light);
+html:has(.heroBanner) body {
+  overflow: hidden;
 }

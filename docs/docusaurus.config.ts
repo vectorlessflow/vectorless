@@ -16,6 +16,10 @@ const config: Config = {
   url: 'https://vectorless.dev',
   baseUrl: '/',
 
+  stylesheets: [
+    'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css',
+  ],
+
   organizationName: 'vectorlessflow',
   projectName: 'vectorless',
 
@@ -69,72 +73,11 @@ const config: Config = {
         target: '_self' // This makes the logo click follow the link in the same window
       },
       items: [
+        {to: '/docs/sdk/python', label: 'Python', position: 'left'},
+        {to: '/docs/sdk/rust', label: 'Rust', position: 'left'},
         {to: '/docs/intro', label: 'Documentation', position: 'left'},
-        // {
-        //   href: 'https://github.com/vectorlessflow/vectorless/tree/main/examples',
-        //   label: 'Examples',
-        //   position: 'left',
-        //   target: '_self',
-        // },
         {to: '/blog', label: 'Blog', position: 'left'},
       ],
-    },
-    footer: {
-      style: 'light',
-      links: [
-        {
-          title: 'Product',
-          items: [
-            {
-              label: 'Getting Started',
-              to: '/docs/intro',
-            },
-            {
-              label: 'Documentation',
-              to: '/docs/intro',
-            },
-            {
-              label: 'Blog',
-              to: '/blog',
-            },
-          ],
-        },
-        {
-          title: 'Integrations',
-          items: [
-            {
-              label: 'Python SDK',
-              href: 'https://pypi.org/project/vectorless/',
-            },
-            {
-              label: 'Rust Crate',
-              href: 'https://crates.io/crates/vectorless',
-            },
-            {
-              label: 'API Reference',
-              to: '/docs/api-reference',
-            },
-          ],
-        },
-        {
-          title: 'Community',
-          items: [
-            {
-              label: 'GitHub',
-              href: 'https://github.com/vectorlessflow/vectorless',
-            },
-            {
-              label: 'Report a Bug',
-              href: 'https://github.com/vectorlessflow/vectorless/issues',
-            },
-            {
-              label: 'Apache 2.0 License',
-              href: 'https://github.com/vectorlessflow/vectorless/blob/main/LICENSE',
-            },
-          ],
-        },
-      ],
-      copyright: `Copyright \u00A9 ${new Date().getFullYear()} Vectorless`,
     },
     prism: {
       theme: prismThemes.github,
