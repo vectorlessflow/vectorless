@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import asyncio
 from typing import Any, List, Optional
 
+from vectorless._async_utils import run_async
 from vectorless.session import Session
 
 
@@ -35,19 +35,23 @@ class VectorlessRetriever:
         doc_ids: Optional[List[str]] = None,
         top_k: int = 3,
         workspace_scope: bool = False,
+        session: Optional[Session] = None,
     ) -> None:
-        self._session = Session(
-            api_key=api_key or None,
-            model=model or None,
-            endpoint=endpoint or None,
-        )
+        if session is not None:
+            self._session = session
+        else:
+            self._session = Session(
+                api_key=api_key or None,
+                model=model or None,
+                endpoint=endpoint or None,
+            )
         self._doc_ids = doc_ids or []
         self._top_k = top_k
         self._workspace_scope = workspace_scope
 
     def retrieve(self, query: str) -> List[Any]:
         """Synchronous retrieval, returns LlamaIndex NodeWithScore objects."""
-        response = asyncio.run(self._query(query))
+        response = run_async(self._query(query))
         return self._to_nodes(response)
 
     async def aretrieve(self, query: str) -> List[Any]:

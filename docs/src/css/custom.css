@@ -66,10 +66,29 @@
 /* ===== Navbar ===== */
 .navbar {
   background-color: var(--bg) !important;
+  background-image:
+    linear-gradient(rgba(175, 120, 139, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(175, 120, 139, 0.06) 1px, transparent 1px);
+  background-size: 48px 48px;
   border-bottom: none !important;
   box-shadow: none !important;
   height: 68px !important;
   padding: 0 !important;
+}
+
+nav.navbar,
+.navbar--fixed-top {
+  border-bottom: none !important;
+  box-shadow: none !important;
+}
+
+.navbar::after,
+.navbar::before {
+  display: none !important;
+}
+
+.navbar-sidebar {
+  background-color: var(--bg) !important;
 }
 
 .navbar__inner {

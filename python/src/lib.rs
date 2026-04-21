@@ -13,6 +13,7 @@ mod error;
 mod graph;
 mod metrics;
 mod results;
+mod streaming;
 
 use config::PyConfig;
 use context::{PyIndexContext, PyIndexOptions, PyQueryContext};
@@ -25,6 +26,7 @@ use results::{
     PyEvidenceItem, PyFailedItem, PyIndexItem, PyIndexMetrics, PyIndexResult, PyQueryMetrics,
     PyQueryResult, PyQueryResultItem,
 };
+use streaming::PyStreamingQuery;
 
 /// Vectorless - Reasoning-native document intelligence engine.
 ///
@@ -60,6 +62,7 @@ fn _vectorless(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyRetrievalMetricsReport>()?;
     m.add_class::<PyMetricsReport>()?;
     m.add_class::<PyConfig>()?;
+    m.add_class::<PyStreamingQuery>()?;
     m.add_class::<PyEngine>()?;
 
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
