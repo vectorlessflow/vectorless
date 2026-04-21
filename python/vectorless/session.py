@@ -280,15 +280,33 @@ class Session:
     async def query_stream(
         self,
         question: str,
-        **kwargs: Any,
+        *,
+        doc_ids: Optional[List[str]] = None,
+        workspace_scope: bool = False,
+        timeout_secs: Optional[int] = None,
     ) -> StreamingQueryResult:
         """Stream query progress as an async iterator.
 
-        Note: Currently wraps ``ask()`` and yields synthetic events.
-        Real-time streaming requires Rust-side ``query_stream()`` exposure.
+        Yields real-time events from the retrieval pipeline.
+        Terminal events are ``'completed'`` (with results) or ``'error'``.
+
+        Usage::
+
+            stream = await session.query_stream("What is the revenue?")
+            async for event in stream:
+                print(event["type"], event)
+            result = stream.result
         """
-        response = await self.ask(question, **kwargs)
-        return StreamingQueryResult(response)
+        ctx = QueryContext(question)
+        if doc_ids is not None:
+            ctx = ctx.with_doc_ids(doc_ids)
+        elif workspace_scope:
+            ctx = ctx.with_workspace()
+        if timeout_secs is not None:
+            ctx = ctx.with_timeout_secs(timeout_secs)
+
+        raw_stream = await self._engine.query_stream(ctx)
+        return StreamingQueryResult(raw_stream)
 
     # ── Document Management ───────────────────────────────────
 

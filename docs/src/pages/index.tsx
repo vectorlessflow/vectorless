@@ -2,6 +2,7 @@ import type {ReactNode} from 'react';
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
 import Layout from '@theme/Layout';
 import Link from '@docusaurus/Link';
+import GitHubStats from '@site/src/components/GitHubStats';
 
 import styles from './index.module.css';
 
@@ -34,6 +35,9 @@ function HamsterIcon({size = 14}: {size?: number}) {
 function HomepageHeader() {
   return (
     <header className={styles.heroBanner}>
+      <div className={styles.statsCorner}>
+        <GitHubStats />
+      </div>
       <div className={styles.hero}>
         {/* Left: Brand + Features */}
         <div className={styles.heroContent}>

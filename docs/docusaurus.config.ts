@@ -76,7 +76,7 @@ const config: Config = {
         {to: '/docs/sdk/python', label: 'Python', position: 'left'},
         {to: '/docs/sdk/rust', label: 'Rust', position: 'left'},
         {to: '/docs/intro', label: 'Documentation', position: 'left'},
-        {to: '/blog', label: 'Blog', position: 'left'},
+        // {to: '/blog', label: 'Blog', position: 'left'},
       ],
     },
     prism: {

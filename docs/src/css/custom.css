@@ -72,6 +72,21 @@
   padding: 0 !important;
 }
 
+nav.navbar,
+.navbar--fixed-top {
+  border-bottom: none !important;
+  box-shadow: none !important;
+}
+
+.navbar::after,
+.navbar::before {
+  display: none !important;
+}
+
+.navbar-sidebar {
+  background-color: var(--bg) !important;
+}
+
 .navbar__inner {
   height: 68px !important;
   max-width: 1280px;

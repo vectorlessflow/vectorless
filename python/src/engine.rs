@@ -18,6 +18,7 @@ use super::error::to_py_err;
 use super::graph::PyDocumentGraph;
 use super::metrics::PyMetricsReport;
 use super::results::{PyIndexResult, PyQueryResult};
+use super::streaming::PyStreamingQuery;
 
 // ============================================================
 // Engine async helpers (named functions to avoid FnOnce HRTB issue)
@@ -56,6 +57,11 @@ async fn run_exists(engine: Arc<Engine>, doc_id: String) -> PyResult<bool> {
 async fn run_get_graph(engine: Arc<Engine>) -> PyResult<Option<PyDocumentGraph>> {
     let graph = engine.get_graph().await.map_err(to_py_err)?;
     Ok(graph.map(|g| PyDocumentGraph { inner: g }))
+}
+
+async fn run_query_stream(engine: Arc<Engine>, ctx: QueryContext) -> PyResult<PyStreamingQuery> {
+    let rx = engine.query_stream(ctx).await.map_err(to_py_err)?;
+    Ok(PyStreamingQuery::new(rx))
 }
 
 fn run_metrics_report(engine: Arc<Engine>) -> PyMetricsReport {
@@ -184,6 +190,29 @@ impl PyEngine {
         let engine = Arc::clone(&self.inner);
         let query_ctx = ctx.inner.clone();
         future_into_py(py, run_query(engine, query_ctx))
+    }
+
+    /// Query documents with streaming progress events.
+    ///
+    /// Returns a StreamingQuery async iterator that yields real-time
+    /// retrieval events as dicts with a ``"type"`` key.
+    ///
+    /// Args:
+    ///     ctx: QueryContext with query text and scope.
+    ///
+    /// Returns:
+    ///     StreamingQuery async iterator.
+    ///
+    /// Raises:
+    ///     VectorlessError: If query setup fails.
+    fn query_stream<'py>(
+        &self,
+        py: Python<'py>,
+        ctx: &PyQueryContext,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let engine = Arc::clone(&self.inner);
+        let query_ctx = ctx.inner.clone();
+        future_into_py(py, run_query_stream(engine, query_ctx))
     }
 
     /// List all indexed documents.

@@ -1,30 +1,30 @@
-"""Streaming query compatibility layer.
+"""Streaming query results backed by real-time Rust streaming events.
 
-Provides an async iterator interface for queries. Currently wraps the
-synchronous ``query()`` and yields synthetic progress events. Real-time
-streaming requires exposing ``query_stream()`` from Rust via PyO3.
+Wraps the PyO3 ``StreamingQuery`` async iterator and builds a
+``QueryResponse`` from the terminal ``completed`` event.
 """
 
 from __future__ import annotations
 
-from typing import AsyncIterator, Dict, List, Optional
+from typing import Any, AsyncIterator, Dict, List, Optional
 
-from vectorless.types.results import QueryResponse
+from vectorless.types.results import QueryResponse, QueryResult
 
 
 class StreamingQueryResult:
-    """Async iterator for query progress events.
+    """Async iterator for real-time query progress events.
 
     Usage::
 
         stream = await session.query_stream("What is the revenue?")
         async for event in stream:
-            print(event)
-        result = stream.result
+            print(event["type"], event)
+        result = stream.result  # Available after iteration completes
     """
 
-    def __init__(self, response: QueryResponse) -> None:
-        self._response = response
+    def __init__(self, raw_stream: Any) -> None:
+        self._stream = raw_stream  # PyStreamingQuery from Rust
+        self._result: Optional[QueryResponse] = None
         self._consumed = False
 
     def __aiter__(self) -> AsyncIterator[Dict]:
@@ -35,43 +35,41 @@ class StreamingQueryResult:
             return
         self._consumed = True
 
-        # Synthetic events from the final result
-        yield {"type": "started", "message": "Query started"}
+        completed_event: Optional[Dict] = None
 
-        for i, item in enumerate(self._response.items):
-            yield {
-                "type": "candidate_found",
-                "doc_id": item.doc_id,
-                "score": item.score,
-                "confidence": item.confidence,
-                "index": i,
-            }
+        async for event in self._stream:
+            event_type = event.get("type", "")
 
-            for j, evidence in enumerate(item.evidence):
-                yield {
-                    "type": "evidence",
-                    "doc_id": item.doc_id,
-                    "evidence_title": evidence.title,
-                    "evidence_path": evidence.path,
-                    "content_length": len(evidence.content),
-                    "index": j,
-                }
+            yield event
 
-        if self._response.has_failures():
-            for failed in self._response.failed:
-                yield {
-                    "type": "error",
-                    "source": failed.source,
-                    "error": failed.error,
-                }
+            if event_type in ("completed", "error"):
+                if event_type == "completed":
+                    completed_event = event
+                break  # Terminal events end the stream
 
-        yield {
-            "type": "completed",
-            "total_results": len(self._response.items),
-            "total_failures": len(self._response.failed),
-        }
+        if completed_event is not None:
+            self._result = self._build_response(completed_event)
+
+    @staticmethod
+    def _build_response(event: Dict) -> QueryResponse:
+        """Build a QueryResponse from the completed event dict."""
+        items: List[QueryResult] = []
+        for r in event.get("results", []):
+            node_id = r.get("node_id")
+            items.append(
+                QueryResult(
+                    doc_id=node_id or "",
+                    content=r.get("content") or "",
+                    score=r.get("score", 0.0),
+                    confidence=event.get("confidence", 0.0),
+                    node_ids=[node_id] if node_id else [],
+                    evidence=[],
+                    metrics=None,
+                )
+            )
+        return QueryResponse(items=items, failed=[])
 
     @property
     def result(self) -> Optional[QueryResponse]:
         """Final result, available after iteration completes."""
-        return self._response if self._consumed else None
+        return self._result if self._consumed else None

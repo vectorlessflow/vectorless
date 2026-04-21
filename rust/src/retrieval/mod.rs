@@ -24,5 +24,5 @@ pub mod postprocessor;
 pub mod stream;
 mod types;
 
-pub use stream::RetrieveEventReceiver;
+pub use stream::{RetrieveEvent, RetrieveEventReceiver};
 pub use types::*;

@@ -14,8 +14,10 @@ Quick Start:
 
 # High-level API (recommended)
 from vectorless.session import Session
+from vectorless.sync_session import SyncSession
 from vectorless.config import EngineConfig, load_config, load_config_from_env, load_config_from_file
 from vectorless.events import EventEmitter
+from vectorless.streaming import StreamingQueryResult
 from vectorless.types import (
     DocumentGraphWrapper,
     EdgeEvidence,
@@ -38,6 +40,7 @@ from vectorless._vectorless import VectorlessError, __version__
 __all__ = [
     # Primary API
     "Session",
+    "SyncSession",
     # Configuration
     "EngineConfig",
     "load_config",
@@ -45,6 +48,8 @@ __all__ = [
     "load_config_from_file",
     # Events
     "EventEmitter",
+    # Streaming
+    "StreamingQueryResult",
     # Result types
     "QueryResponse",
     "QueryResult",
