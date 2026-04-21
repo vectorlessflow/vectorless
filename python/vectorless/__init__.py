@@ -1,64 +1,66 @@
 """
-Vectorless - Reasoning-native document intelligence engine for AI.
+Vectorless — Reasoning-native document engine.
 
-An ultra-performant reasoning-native document intelligence engine
-that transforms documents into rich semantic trees and uses LLMs to
-intelligently traverse the hierarchy for accurate, explainable retrieval.
+Every retrieval is a reasoning act.
 
 Quick Start:
-    from vectorless import Engine, IndexContext, QueryContext
+    from vectorless import Session
 
-    # Create engine
-    engine = Engine(api_key="sk-...", model="gpt-4o")
-
-    # Index a document
-    ctx = IndexContext.from_path("./report.pdf")
-    result = await engine.index(ctx)
-    doc_id = result.doc_id
-
-    # Query
-    answer = await engine.query(QueryContext("What is the revenue?").with_doc_ids([doc_id]))
+    session = Session(api_key="sk-...", model="gpt-4o")
+    result = await session.index(path="./report.pdf")
+    answer = await session.ask("What is the revenue?", doc_ids=[result.doc_id])
     print(answer.single().content)
 """
 
-from vectorless._vectorless import (
-    Engine,
-    IndexContext,
-    IndexOptions,
-    IndexResult,
-    IndexItem,
-    IndexMetrics,
-    QueryContext,
-    QueryResult,
-    QueryResultItem,
-    DocumentInfo,
-    DocumentGraph,
-    DocumentGraphNode,
-    GraphEdge,
+# High-level API (recommended)
+from vectorless.session import Session
+from vectorless.config import EngineConfig, load_config, load_config_from_env, load_config_from_file
+from vectorless.events import EventEmitter
+from vectorless.types import (
+    DocumentGraphWrapper,
     EdgeEvidence,
-    WeightedKeyword,
+    Evidence,
     FailedItem,
-    VectorlessError,
-    __version__,
+    GraphEdge,
+    GraphNode,
+    IndexItemWrapper,
+    IndexMetrics,
+    IndexResultWrapper,
+    QueryMetrics,
+    QueryResponse,
+    QueryResult,
+    WeightedKeyword,
 )
 
+# Version and error types
+from vectorless._vectorless import VectorlessError, __version__
+
 __all__ = [
-    "Engine",
-    "IndexContext",
-    "IndexOptions",
-    "IndexResult",
-    "IndexItem",
-    "IndexMetrics",
-    "QueryContext",
+    # Primary API
+    "Session",
+    # Configuration
+    "EngineConfig",
+    "load_config",
+    "load_config_from_env",
+    "load_config_from_file",
+    # Events
+    "EventEmitter",
+    # Result types
+    "QueryResponse",
     "QueryResult",
-    "QueryResultItem",
-    "DocumentInfo",
-    "DocumentGraph",
-    "DocumentGraphNode",
+    "QueryMetrics",
+    "Evidence",
+    "IndexResultWrapper",
+    "IndexItemWrapper",
+    "IndexMetrics",
+    "FailedItem",
+    # Graph types
+    "DocumentGraphWrapper",
+    "GraphNode",
     "GraphEdge",
     "EdgeEvidence",
     "WeightedKeyword",
-    "FailedItem",
+    # Error and version
     "VectorlessError",
     "__version__",
 ]
