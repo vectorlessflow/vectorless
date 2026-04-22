@@ -160,9 +160,9 @@ pub async fn execute_command(
         }
 
         Command::Check => {
-            let evidence_summary = state.evidence_summary();
+            let evidence_text = state.evidence_for_check();
 
-            let (system, user) = check_sufficiency(query, &evidence_summary);
+            let (system, user) = check_sufficiency(query, &evidence_text);
 
             info!(
                 doc = ctx.doc_name,

@@ -30,7 +30,7 @@ pub fn cat(target: &str, ctx: &DocContext, state: &mut WorkerState) -> ToolResul
         }
     };
 
-    if state.visited.contains(&node_id) {
+    if state.has_evidence_for(node_id) {
         let title = ctx.node_title(node_id).unwrap_or("unknown");
         return ToolResult::ok(format!(
             "[Already collected: {}]. Use a different target or cd to another branch.",
@@ -50,6 +50,7 @@ pub fn cat(target: &str, ctx: &DocContext, state: &mut WorkerState) -> ToolResul
                 doc_name: Some(ctx.doc_name.to_string()),
             });
 
+            state.collected_nodes.insert(node_id);
             state.visited.insert(node_id);
 
             let preview = if content_string.len() > 500 {

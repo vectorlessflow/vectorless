@@ -25,6 +25,9 @@ pub struct WorkerState {
     pub evidence: Vec<Evidence>,
     /// Nodes already visited (prevents redundant reads).
     pub visited: HashSet<NodeId>,
+    /// Nodes whose content has been collected via cat. Separate from visited
+    /// because cd-ing through a node ≠ reading its content.
+    pub collected_nodes: HashSet<NodeId>,
     /// Remaining navigation rounds.
     pub remaining: u32,
     /// Maximum rounds (for display in prompts).
@@ -61,6 +64,7 @@ impl WorkerState {
             current_node: root,
             evidence: Vec::new(),
             visited: HashSet::new(),
+            collected_nodes: HashSet::new(),
             remaining: max_rounds,
             max_rounds,
             last_feedback: String::new(),
@@ -118,6 +122,11 @@ impl WorkerState {
         self.evidence.push(evidence);
     }
 
+    /// Check if evidence has already been collected for a specific node.
+    pub fn has_evidence_for(&self, node_id: crate::document::NodeId) -> bool {
+        self.collected_nodes.contains(&node_id)
+    }
+
     /// Push a history entry (command + result summary).
     /// Keeps only the last `MAX_HISTORY_ENTRIES` entries.
     pub fn push_history(&mut self, entry: String) {
@@ -155,6 +164,26 @@ impl WorkerState {
             .map(|e| format!("- [{}] {} chars", e.node_title, e.content.len()))
             .collect::<Vec<_>>()
             .join("\n")
+    }
+
+    /// Evidence with actual content for sufficiency evaluation.
+    /// Truncates each item to 500 chars to keep the prompt manageable.
+    pub fn evidence_for_check(&self) -> String {
+        if self.evidence.is_empty() {
+            return "(no evidence collected yet)".to_string();
+        }
+        self.evidence
+            .iter()
+            .map(|e| {
+                let content = if e.content.len() > 500 {
+                    format!("{}...(truncated)", &e.content[..500])
+                } else {
+                    e.content.clone()
+                };
+                format!("[{}]\n{}", e.node_title, content)
+            })
+            .collect::<Vec<_>>()
+            .join("\n\n")
     }
 
     /// Convert this state into a WorkerOutput (consuming the state), with budget flag.

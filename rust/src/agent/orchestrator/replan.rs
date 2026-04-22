@@ -88,6 +88,7 @@ pub async fn replan(
 }
 
 /// Format collected evidence for the replan prompt.
+/// Includes content excerpts so the LLM can reason about what's actually been found.
 fn format_evidence_context(evidence: &[Evidence]) -> String {
     if evidence.is_empty() {
         return "(no evidence collected)".to_string();
@@ -96,15 +97,15 @@ fn format_evidence_context(evidence: &[Evidence]) -> String {
         .iter()
         .map(|e| {
             let doc = e.doc_name.as_deref().unwrap_or("unknown");
-            format!(
-                "- [{}] (from {}) {} chars",
-                e.node_title,
-                doc,
-                e.content.len()
-            )
+            let content = if e.content.len() > 500 {
+                format!("{}...(truncated)", &e.content[..500])
+            } else {
+                e.content.clone()
+            };
+            format!("[{}] (from {})\n{}", e.node_title, doc, content)
         })
         .collect::<Vec<_>>()
-        .join("\n")
+        .join("\n\n")
 }
 
 /// Build the replan prompt.
