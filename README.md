@@ -3,7 +3,7 @@
 <img src="https://vectorless.dev/img/with-title.png" alt="Vectorless" width="400">
 
 <h1>Document Understanding Engine for AI</h1>
-<h5>Reason, don't vector · Structure, not chunks · Think, then answer</h5>
+<h3>Reason, don't vector · Structure, not chunks · Think, then answer</h3>
 
 [![PyPI](https://img.shields.io/pypi/v/vectorless.svg)](https://pypi.org/project/vectorless/)
 [![PyPI Downloads](https://static.pepy.tech/badge/vectorless/month)](https://pepy.tech/projects/vectorless)
@@ -14,7 +14,7 @@
 
 </div>
 
-**Vectorless** is a document understanding engine for AI. It reads documents as structured trees of meaning, then dispatches multiple agents to reason through headings, sections, and paragraphs — understanding how each part relates to the whole. The problem it solves is not "where to look", but "what does this mean in context". Every understanding is a **reasoning** act.
+**Vectorless** is a document understanding engine for AI. It compiles documents into structured trees of meaning, then dispatches multiple agents to reason through headings, sections, and paragraphs — evaluating how each part relates to the whole. The problem it solves is not "where to look", but "what does this mean in context". Every answer is a reasoning act, not a retrieval result.
 
 Light up a star and shine with us! ⭐
 
@@ -60,7 +60,7 @@ Engine.query("What drove the revenue decline?")
   │   │
   │   └─ evaluate ── insufficient? → replan → dispatch new paths → loop
   │
-  └─ Fusion ── dedup, LLM-scored relevance, return with source attribution
+  └─ Synthesis ── dedup, evidence scoring, reasoned answer with source chain
 ```
 
 Worker navigation commands:

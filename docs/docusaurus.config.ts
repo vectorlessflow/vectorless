@@ -6,7 +6,7 @@ import type * as Preset from '@docusaurus/preset-classic';
 
 const config: Config = {
   title: 'Vectorless',
-  tagline: 'Reasoning-based Document Engine',
+  tagline: 'Document Understanding Engine for AI',
   favicon: 'img/favicon.ico',
 
   future: {
