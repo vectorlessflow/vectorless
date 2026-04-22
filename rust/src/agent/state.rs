@@ -52,10 +52,6 @@ pub struct WorkerState {
 /// Maximum number of history entries to keep for prompt injection.
 const MAX_HISTORY_ENTRIES: usize = 6;
 
-/// Maximum characters for `last_feedback` before truncation.
-/// Prevents large cat/grep outputs from bloating subsequent prompts.
-const MAX_FEEDBACK_CHARS: usize = 2000;
-
 impl WorkerState {
     /// Create a new state starting at the given root node.
     pub fn new(root: NodeId, max_rounds: u32) -> Self {
@@ -83,20 +79,9 @@ impl WorkerState {
         }
     }
 
-    /// Set feedback with automatic truncation to prevent prompt bloat.
+    /// Set feedback from tool execution.
     pub fn set_feedback(&mut self, feedback: String) {
-        if feedback.len() <= MAX_FEEDBACK_CHARS {
-            self.last_feedback = feedback;
-        } else {
-            // Find a clean truncation point (line boundary if possible)
-            let truncated = &feedback[..MAX_FEEDBACK_CHARS];
-            let end = truncated.rfind('\n').unwrap_or(MAX_FEEDBACK_CHARS);
-            self.last_feedback = format!(
-                "{}...\n(truncated, {} chars total)",
-                &feedback[..end.min(MAX_FEEDBACK_CHARS)],
-                feedback.len()
-            );
-        }
+        self.last_feedback = feedback;
     }
 
     /// Navigate into a child node.

@@ -13,8 +13,12 @@ use super::super::context::FindHit;
 use super::super::state::WorkerState;
 use super::format::format_visited_titles;
 
-/// Maximum total chars for keyword + semantic sections in planning prompt.
-const PLAN_CONTEXT_BUDGET: usize = 1500;
+/// Maximum keyword/semantic hit entries in plan prompt.
+const MAX_PLAN_ENTRIES: usize = 15;
+/// Maximum section summaries in plan prompt.
+const MAX_SECTION_SUMMARIES: usize = 10;
+/// Maximum deep expansion entries.
+const MAX_EXPANSION_ENTRIES: usize = 8;
 
 /// Build the navigation planning prompt (Phase 1.5).
 pub fn build_plan_prompt(
@@ -39,6 +43,7 @@ pub fn build_plan_prompt(
     } else {
         let mut section =
             String::from("\nKeyword index matches (use these to prioritize navigation):\n");
+        let mut entry_count = 0;
         for hit in keyword_hits {
             let mut entries = hit.entries.clone();
             entries.sort_by(|a, b| {
@@ -56,18 +61,20 @@ pub fn build_plan_prompt(
                     "  - keyword '{}' → {} (depth {}, weight {:.2})\n",
                     hit.keyword, ancestor_path, entry.depth, entry.weight
                 ));
-                // Include a content snippet so the planner can judge relevance
                 if let Some(content) = ctx.cat(entry.node_id) {
-                    if let Some(snippet) = content_snippet(content, &hit.keyword, 120) {
+                    if let Some(snippet) =
+                        super::super::tools::content_snippet(content, &hit.keyword, 300)
+                    {
                         section.push_str(&format!("    \"{}\"\n", snippet));
                     }
                 }
-                if section.len() > PLAN_CONTEXT_BUDGET {
-                    section.push_str("  ... (more hits truncated)\n");
+                entry_count += 1;
+                if entry_count >= MAX_PLAN_ENTRIES {
+                    section.push_str("  ... (more hits omitted)\n");
                     break;
                 }
             }
-            if section.len() > PLAN_CONTEXT_BUDGET {
+            if entry_count >= MAX_PLAN_ENTRIES {
                 break;
             }
         }
@@ -76,9 +83,7 @@ pub fn build_plan_prompt(
 
     let deep_expansion = build_deep_expansion(keyword_hits, ctx);
     if !deep_expansion.is_empty() {
-        if keyword_section.len() + deep_expansion.len() <= PLAN_CONTEXT_BUDGET {
-            keyword_section.push_str(&deep_expansion);
-        }
+        keyword_section.push_str(&deep_expansion);
     }
 
     let semantic_section = build_semantic_hints(&query_keywords, &query_lower, ctx);
@@ -181,6 +186,7 @@ pub fn format_keyword_hints(keyword_hits: &[FindHit], ctx: &DocContext<'_>) -> S
     }
 
     let mut section = String::from("Keyword matches (use find <keyword> to jump directly):\n");
+    let mut entry_count = 0;
     for hit in keyword_hits {
         let mut entries = hit.entries.clone();
         entries.sort_by(|a, b| {
@@ -198,67 +204,21 @@ pub fn format_keyword_hints(keyword_hits: &[FindHit], ctx: &DocContext<'_>) -> S
                 "  - '{}' → {} (weight {:.2})\n",
                 hit.keyword, title, entry.weight
             ));
-            // Include a content snippet so the LLM can see what's there
             if let Some(content) = ctx.cat(entry.node_id) {
-                if let Some(snippet) = content_snippet(content, &hit.keyword, 100) {
+                if let Some(snippet) =
+                    super::super::tools::content_snippet(content, &hit.keyword, 300)
+                {
                     section.push_str(&format!("    \"{}\"\n", snippet));
                 }
             }
-            if section.len() > 800 {
-                section.push_str("  ... (more)\n");
+            entry_count += 1;
+            if entry_count >= MAX_PLAN_ENTRIES {
+                section.push_str("  ... (more omitted)\n");
                 return section;
             }
         }
     }
     section
-}
-
-/// Extract a short content snippet around the first occurrence of `keyword`.
-///
-/// Returns `None` if the content is empty. If the keyword is not found,
-/// returns the beginning of the content instead.
-fn content_snippet(content: &str, keyword: &str, max_len: usize) -> Option<String> {
-    if content.trim().is_empty() {
-        return None;
-    }
-
-    let keyword_lower = keyword.to_lowercase();
-    let content_lower = content.to_lowercase();
-
-    let start = match content_lower.find(&keyword_lower) {
-        Some(pos) => {
-            let back = (max_len / 4).min(pos);
-            pos - back
-        }
-        None => 0,
-    };
-
-    let start = content
-        .char_indices()
-        .find(|(i, _)| *i >= start)
-        .map(|(i, _)| i)
-        .unwrap_or(0);
-
-    let end = content
-        .char_indices()
-        .take_while(|(i, _)| *i <= start + max_len)
-        .last()
-        .map(|(i, c)| i + c.len_utf8())
-        .unwrap_or(content.len());
-
-    let snippet = content[start..end].trim();
-    if snippet.is_empty() {
-        return None;
-    }
-
-    let mut result = snippet.to_string();
-    if end < content.len() {
-        result.push_str("...");
-    }
-    if start > 0 {
-        result = format!("...{}", result);
-    }
-    Some(result)
 }
 
 /// Build the ancestor path string for a node (e.g., "root/Chapter 1/Section 1.2").
@@ -290,21 +250,18 @@ fn build_intent_signals(intent: QueryIntent, ctx: &DocContext<'_>) -> String {
             if !shortcut.document_summary.is_empty() {
                 section.push_str(&format!(
                     "Document summary: {}\n",
-                    &shortcut.document_summary[..shortcut.document_summary.len().min(500)]
+                    shortcut.document_summary
                 ));
             }
+            let mut summary_count = 0;
             for ss in &shortcut.section_summaries {
-                let summary_preview = if ss.summary.len() > 200 {
-                    format!("{}...", &ss.summary[..200])
-                } else {
-                    ss.summary.clone()
-                };
                 section.push_str(&format!(
                     "  - Section '{}' (depth {}): {}\n",
-                    ss.title, ss.depth, summary_preview
+                    ss.title, ss.depth, ss.summary
                 ));
-                if section.len() > PLAN_CONTEXT_BUDGET {
-                    section.push_str("  ... (more sections truncated)\n");
+                summary_count += 1;
+                if summary_count >= MAX_SECTION_SUMMARIES {
+                    section.push_str("  ... (more sections omitted)\n");
                     break;
                 }
             }
@@ -374,7 +331,7 @@ fn build_semantic_hints(
         .collect();
 
     let mut section = String::new();
-    let budget_remaining = PLAN_CONTEXT_BUDGET.saturating_sub(section.len());
+    let mut entry_count = 0;
 
     for route in routes {
         let nav = match ctx.nav_entry(route.node_id) {
@@ -436,10 +393,11 @@ fn build_semantic_hints(
             "  - Section '{}' — BM25: {:.2}{}\n",
             route.title, bm25_score, annotation_str
         );
-        if section.len() + line.len() > budget_remaining {
+        section.push_str(&line);
+        entry_count += 1;
+        if entry_count >= MAX_PLAN_ENTRIES {
             break;
         }
-        section.push_str(&line);
     }
 
     if section.is_empty() {
@@ -460,6 +418,7 @@ fn build_deep_expansion(keyword_hits: &[FindHit], ctx: &DocContext<'_>) -> Strin
 
     let mut seen_parents = HashSet::new();
     let mut expansion = String::new();
+    let mut expansion_count = 0;
 
     for hit in keyword_hits {
         for entry in &hit.entries {
@@ -494,12 +453,13 @@ fn build_deep_expansion(keyword_hits: &[FindHit], ctx: &DocContext<'_>) -> Strin
                 ));
             }
             expansion.push('\n');
-            if expansion.len() > 500 {
-                expansion.push_str("  ... (more expansions truncated)\n");
+            expansion_count += 1;
+            if expansion_count >= MAX_EXPANSION_ENTRIES {
+                expansion.push_str("  ... (more expansions omitted)\n");
                 break;
             }
         }
-        if expansion.len() > 500 {
+        if expansion_count >= MAX_EXPANSION_ENTRIES {
             break;
         }
     }

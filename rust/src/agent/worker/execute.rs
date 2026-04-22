@@ -102,7 +102,7 @@ pub async fn execute_command(
                         ));
                         if let Some(content) = ctx.cat(entry.node_id) {
                             if let Some(snippet) =
-                                content_snippet(content, keyword, 150)
+                                super::super::tools::content_snippet(content, keyword, 300)
                             {
                                 output.push_str(&format!("\n    \"{}\"", snippet));
                             }
@@ -138,7 +138,7 @@ pub async fn execute_command(
                                 title, depth
                             ));
                             if let Some(content) = ctx.cat(*node_id) {
-                                if let Some(snippet) = content_snippet(content, keyword, 150) {
+                                if let Some(snippet) = super::super::tools::content_snippet(content, keyword, 300) {
                                     output.push_str(&format!("\n    \"{}\"", snippet));
                                 }
                             }
@@ -251,57 +251,6 @@ pub async fn execute_command(
             Step::Continue
         }
     }
-}
-
-/// Extract a short content snippet around the first occurrence of `keyword`.
-///
-/// Returns `None` if the content is empty. If the keyword is not found,
-/// returns the beginning of the content instead.
-fn content_snippet(content: &str, keyword: &str, max_len: usize) -> Option<String> {
-    if content.trim().is_empty() {
-        return None;
-    }
-
-    let keyword_lower = keyword.to_lowercase();
-    let content_lower = content.to_lowercase();
-
-    // Find the keyword position to center the snippet around it
-    let start = match content_lower.find(&keyword_lower) {
-        Some(pos) => {
-            // Back up a bit for context, but don't go negative
-            let back = (max_len / 4).min(pos);
-            pos - back
-        }
-        None => 0,
-    };
-
-    // Find a char boundary near `start`
-    let start = content
-        .char_indices()
-        .find(|(i, _)| *i >= start)
-        .map(|(i, _)| i)
-        .unwrap_or(0);
-
-    let end = content
-        .char_indices()
-        .take_while(|(i, _)| *i <= start + max_len)
-        .last()
-        .map(|(i, c)| i + c.len_utf8())
-        .unwrap_or(content.len());
-
-    let snippet = content[start..end].trim();
-    if snippet.is_empty() {
-        return None;
-    }
-
-    let mut result = snippet.to_string();
-    if end < content.len() {
-        result.push_str("...");
-    }
-    if start > 0 {
-        result = format!("...{}", result);
-    }
-    Some(result)
 }
 
 /// Truncate feedback for log output — keep first 300 chars to avoid noisy logs.

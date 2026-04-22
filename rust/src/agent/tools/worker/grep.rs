@@ -42,12 +42,7 @@ pub fn grep(pattern: &str, ctx: &DocContext, state: &WorkerState) -> ToolResult 
                 break;
             }
             if re.is_match(line) {
-                let preview = if line.len() > 120 {
-                    format!("{}...", &line[..120])
-                } else {
-                    line.to_string()
-                };
-                output.push_str(&format!("[{}] {}\n", title, preview));
+                output.push_str(&format!("[{}] {}\n", title, line));
                 matches_found += 1;
             }
         }
