@@ -30,11 +30,11 @@ Cargo workspace with 2 crates + pure Python SDK:
     - `src/config/` - Configuration types and validation
     - `src/error.rs` - Unified error types
     - `src/utils/` - Utility functions (token counting, fingerprinting, validation)
-    - `examples/` - Rust examples (flow, indexing, pdf, batch, etc.)
+    - `examples/` - Rust examples (legacy, no new additions)
   - `vectorless-py/` - PyO3 bindings (compiled into Python native module)
 - `vectorless/` - Pure Python SDK (high-level wrappers, CLI, config loading, integrations)
+- `examples/` - Python examples (primary, for Python ecosystem)
 - `docs/` - Docusaurus documentation site
-- `samples/` - Sample files
 
 ### Retrieval Call Flow
 
