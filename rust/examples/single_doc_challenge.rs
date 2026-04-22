@@ -173,6 +173,7 @@ const CHALLENGE_QUESTIONS: &[&str] = &[
 #[tokio::main]
 async fn main() -> vectorless::Result<()> {
     tracing_subscriber::fmt()
+        .compact()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
                 .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),

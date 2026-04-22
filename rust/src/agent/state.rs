@@ -54,7 +54,7 @@ const MAX_HISTORY_ENTRIES: usize = 6;
 
 /// Maximum characters for `last_feedback` before truncation.
 /// Prevents large cat/grep outputs from bloating subsequent prompts.
-const MAX_FEEDBACK_CHARS: usize = 500;
+const MAX_FEEDBACK_CHARS: usize = 2000;
 
 impl WorkerState {
     /// Create a new state starting at the given root node.
@@ -167,7 +167,6 @@ impl WorkerState {
     }
 
     /// Evidence with actual content for sufficiency evaluation.
-    /// Truncates each item to 500 chars to keep the prompt manageable.
     pub fn evidence_for_check(&self) -> String {
         if self.evidence.is_empty() {
             return "(no evidence collected yet)".to_string();
@@ -175,12 +174,7 @@ impl WorkerState {
         self.evidence
             .iter()
             .map(|e| {
-                let content = if e.content.len() > 500 {
-                    format!("{}...(truncated)", &e.content[..500])
-                } else {
-                    e.content.clone()
-                };
-                format!("[{}]\n{}", e.node_title, content)
+                format!("[{}]\n{}", e.node_title, e.content)
             })
             .collect::<Vec<_>>()
             .join("\n\n")
