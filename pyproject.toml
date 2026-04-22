@@ -67,14 +67,14 @@ Repository = "https://github.com/vectorlessflow/vectorless"
 Documentation = "https://www.vectorless.dev/docs/intro"
 
 [tool.maturin]
-python-source = "python"
+python-source = "."
 module-name = "vectorless._vectorless"
-manifest-path = "python/Cargo.toml"
+manifest-path = "vectorless-core/vectorless-py/Cargo.toml"
 features = ["pyo3/extension-module"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-testpaths = ["python/tests"]
+testpaths = ["tests"]
 
 [tool.mypy]
 python_version = "3.9"

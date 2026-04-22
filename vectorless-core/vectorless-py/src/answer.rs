@@ -91,7 +91,7 @@ pub struct PyReasoningTrace {
 }
 
 /// A single step in the reasoning trace.
-#[pyclass(name = "TraceStep")]
+#[pyclass(name = "TraceStep", skip_from_py_object)]
 #[derive(Clone)]
 pub struct PyTraceStep {
     #[pyo3(get)]

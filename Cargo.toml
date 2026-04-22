@@ -1,5 +1,5 @@
 [workspace]
-members = ["rust", "python"]
+members = ["vectorless-core/vectorless", "vectorless-core/vectorless-py"]
 resolver = "2"
 
 [workspace.package]

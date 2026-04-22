@@ -1,11 +1,12 @@
 [package]
 name = "vectorless-py"
-version = "0.1.0"
+version.workspace = true
 edition.workspace = true
 authors.workspace = true
 description = "Python bindings for vectorless"
 license.workspace = true
 repository.workspace = true
+homepage.workspace = true
 
 [lib]
 name = "vectorless"
@@ -15,4 +16,7 @@ crate-type = ["cdylib"]
 pyo3 = { workspace = true }
 pyo3-async-runtimes = { workspace = true }
 tokio = { version = "1", features = ["rt-multi-thread"] }
-vectorless = { path = "../rust" }
+vectorless = { path = "../vectorless" }
+
+[lints]
+workspace = true

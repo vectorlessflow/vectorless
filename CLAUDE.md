@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Vectorless is a reasoning-native document intelligence engine written in Rust.
+Vectorless is a Document Understanding Engine for AI written in Rust.
 
 ## Principles
 
@@ -10,32 +10,36 @@ Vectorless is a reasoning-native document intelligence engine written in Rust.
 
 ## Project Structure
 
-- `rust/` - Rust core engine
-  - `src/client/` - Client API (EngineBuilder, Engine) - facade layer, no business logic
-  - `src/document/` - Document data structures (DocumentTree, NavigationIndex, ReasoningIndex)
-  - `src/index/` - Compile pipeline (8-stage, checkpointing, incremental update)
-  - `src/retrieval/` - Retrieval dispatch layer (preprocessing, dispatch, postprocessing, cache, streaming)
-  - `src/query/` - Query understanding and planning (intent classification, rewrite, decomposition)
-  - `src/agent/` - Retrieval execution (Worker: doc navigation, Orchestrator: supervisor loop + multi-doc fusion)
-  - `src/rerank/` - Result reranking and answer synthesis (dedup, scoring, fusion, synthesis)
-  - `src/scoring/` - Scoring and ranking strategies (BM25, relevance scoring, score combination)
-  - `src/llm/` - LLM client (connection pool, memo/caching, throttle/rate-limiting, fallback)
-  - `src/storage/` - Persistence (Workspace, LRU cache, backend abstraction file/memory)
-  - `src/graph/` - Cross-document relationship graph
-  - `src/metrics/` - Metrics collection and reporting
-  - `src/events/` - Event system for progress monitoring
-  - `src/config/` - Configuration types and validation
-  - `src/error.rs` - Unified error types
-  - `src/utils/` - Utility functions (token counting, fingerprinting, validation)
-  - `examples/` - Rust examples (flow, indexing, pdf, batch, etc.)
-- `python/` - Python SDK (PyO3 bindings) + CLI
+Cargo workspace with 2 crates + pure Python SDK:
+
+- `vectorless-core/` - Rust crates
+  - `vectorless/` - Core engine
+    - `src/client/` - Client API (EngineBuilder, Engine) - facade layer, no business logic
+    - `src/document/` - Document data structures (Document, DocumentTree, NavigationIndex, ReasoningIndex)
+    - `src/index/` - Compile pipeline (8-stage, checkpointing, incremental update)
+    - `src/retrieval/` - Retrieval dispatch layer (preprocessing, dispatch, postprocessing, cache, streaming)
+    - `src/query/` - Query understanding and planning (intent classification, rewrite, decomposition)
+    - `src/agent/` - Retrieval execution (Worker: doc navigation, Orchestrator: supervisor loop + multi-doc fusion)
+    - `src/rerank/` - Result reranking and answer synthesis (dedup, scoring, fusion, synthesis)
+    - `src/scoring/` - Scoring and ranking strategies (BM25, relevance scoring, score combination)
+    - `src/llm/` - LLM client (connection pool, memo/caching, throttle/rate-limiting, fallback)
+    - `src/storage/` - Persistence (Workspace, LRU cache, backend abstraction file/memory)
+    - `src/graph/` - Cross-document relationship graph
+    - `src/metrics/` - Metrics collection and reporting
+    - `src/events/` - Event system for progress monitoring
+    - `src/config/` - Configuration types and validation
+    - `src/error.rs` - Unified error types
+    - `src/utils/` - Utility functions (token counting, fingerprinting, validation)
+    - `examples/` - Rust examples (flow, indexing, pdf, batch, etc.)
+  - `vectorless-py/` - PyO3 bindings (compiled into Python native module)
+- `vectorless/` - Pure Python SDK (high-level wrappers, CLI, config loading, integrations)
 - `docs/` - Docusaurus documentation site
 - `samples/` - Sample files
 
 ### Retrieval Call Flow
 
 ```
-Engine.query()
+Engine.ask()
   → retrieval/dispatcher
     → query/understand() → QueryPlan (LLM intent + concepts + strategy)
     → Orchestrator (always, single or multi-doc)
@@ -49,16 +53,14 @@ Engine.query()
 ## Build Commands
 
 ```bash
-# Rust core
-cd rust
-cargo build          # Build
+# Build (workspace)
+cargo build          # Build all crates
 cargo test           # Run tests
 cargo clippy         # Lint
 cargo fmt            # Format code
 
 # Python SDK
-cd python
-pip install -e .     # Install in editable mode
+pip install -e .     # Install in editable mode (from project root, uses maturin)
 
 # Docs site
 cd docs
@@ -145,7 +147,8 @@ When uncertain whether an operation is safe, **default to asking user confirmati
 
 ## Common Development Workflow
 
-1. **Adding features**: Implement in appropriate `rust/src/` module, add tests
+1. **Adding features**: Implement in appropriate `crates/vectorless/src/` module, add tests
 2. **Fixing bugs**: Add failing test case first, fix and ensure tests pass
-3. **Python bindings**: Update `python/src/lib.rs` (PyO3) when Rust APIs change
-4. **Committing code**: Use semantic commit messages, format: `type(scope): description`
+3. **Python bindings**: Update `crates/vectorless-py/src/lib.rs` (PyO3) when Rust APIs change
+4. **Python SDK**: Update `python/vectorless/` when API surface changes
+5. **Committing code**: Use semantic commit messages, format: `type(scope): description`
