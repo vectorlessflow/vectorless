@@ -114,7 +114,7 @@ mod tests {
             reasoning_index: &crate::document::ReasoningIndex::default(),
             doc_name: "test",
         };
-        let state = WorkerState::new(root, 8);
+        let state = WorkerState::new(root, 15);
 
         let result = ls(&ctx, &state);
         assert!(result.success);

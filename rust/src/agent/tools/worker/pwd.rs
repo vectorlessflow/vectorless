@@ -48,7 +48,7 @@ mod tests {
             reasoning_index: &crate::document::ReasoningIndex::default(),
             doc_name: "test",
         };
-        let mut state = WorkerState::new(root, 8);
+        let mut state = WorkerState::new(root, 15);
         cd("API Reference", &ctx, &mut state);
 
         let result = pwd(&state);

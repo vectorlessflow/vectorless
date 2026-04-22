@@ -124,7 +124,7 @@ mod tests {
     fn test_grep_finds_matches() {
         let (tree, nav, root) = build_rich_tree();
         let ctx = rich_ctx!(tree, nav);
-        let state = WorkerState::new(root, 8);
+        let state = WorkerState::new(root, 15);
 
         let result = grep("revenue", &ctx, &state);
         assert!(result.success);
@@ -136,7 +136,7 @@ mod tests {
     fn test_grep_regex() {
         let (tree, nav, root) = build_rich_tree();
         let ctx = rich_ctx!(tree, nav);
-        let state = WorkerState::new(root, 8);
+        let state = WorkerState::new(root, 15);
 
         let result = grep("EBITDA|\\$\\d+", &ctx, &state);
         assert!(result.success);
@@ -148,7 +148,7 @@ mod tests {
     fn test_grep_no_matches() {
         let (tree, nav, root) = build_rich_tree();
         let ctx = rich_ctx!(tree, nav);
-        let state = WorkerState::new(root, 8);
+        let state = WorkerState::new(root, 15);
 
         let result = grep("nonexistent_term_xyz", &ctx, &state);
         assert!(result.success);
@@ -159,7 +159,7 @@ mod tests {
     fn test_grep_invalid_regex() {
         let (tree, nav, root) = build_rich_tree();
         let ctx = rich_ctx!(tree, nav);
-        let state = WorkerState::new(root, 8);
+        let state = WorkerState::new(root, 15);
 
         let result = grep("[invalid", &ctx, &state);
         assert!(!result.success);
@@ -170,7 +170,7 @@ mod tests {
     fn test_grep_subtree_only() {
         let (tree, nav, root) = build_rich_tree();
         let ctx = rich_ctx!(tree, nav);
-        let mut state = WorkerState::new(root, 8);
+        let mut state = WorkerState::new(root, 15);
 
         crate::agent::tools::worker::cd::cd("Expenses", &ctx, &mut state);
         let result = grep("revenue", &ctx, &state);

@@ -702,7 +702,7 @@ mod tests {
     #[test]
     fn test_build_replan_prompt() {
         let (tree, nav, root, _, _) = build_semantic_test_tree();
-        let mut state = WorkerState::new(root, 8);
+        let mut state = WorkerState::new(root, 15);
         state.missing_info = "Need Q2 revenue figures".to_string();
         state.add_evidence(Evidence {
             source_path: "root/Revenue".to_string(),

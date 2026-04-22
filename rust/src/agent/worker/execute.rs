@@ -100,7 +100,6 @@ pub async fn execute_command(
                             "  - {} (depth {}, weight {:.2})",
                             title, entry.depth, entry.weight
                         ));
-                        // Include a content snippet so the LLM can judge relevance
                         if let Some(content) = ctx.cat(entry.node_id) {
                             if let Some(snippet) =
                                 content_snippet(content, keyword, 150)
@@ -112,7 +111,42 @@ pub async fn execute_command(
                     }
                     output
                 }
-                None => format!("No results for '{}'", keyword),
+                None => {
+                    // Fallback: search node titles (like findtree) with content snippets
+                    let pattern_lower = keyword.to_lowercase();
+                    let all_nodes = ctx.tree.traverse();
+                    let mut results = Vec::new();
+                    for node_id in &all_nodes {
+                        if let Some(node) = ctx.tree.get(*node_id) {
+                            if node.title.to_lowercase().contains(&pattern_lower) {
+                                let depth = ctx.tree.depth(*node_id);
+                                results.push((node.title.clone(), *node_id, depth));
+                            }
+                        }
+                    }
+                    if results.is_empty() {
+                        format!("No results for '{}' in index or titles.", keyword)
+                    } else {
+                        let mut output = format!(
+                            "Results for '{}' (title match, {} found):\n",
+                            keyword,
+                            results.len()
+                        );
+                        for (title, node_id, depth) in &results {
+                            output.push_str(&format!(
+                                "  - {} (depth {})",
+                                title, depth
+                            ));
+                            if let Some(content) = ctx.cat(*node_id) {
+                                if let Some(snippet) = content_snippet(content, keyword, 150) {
+                                    output.push_str(&format!("\n    \"{}\"", snippet));
+                                }
+                            }
+                            output.push('\n');
+                        }
+                        output
+                    }
+                }
             };
             info!(doc = ctx.doc_name, keyword, feedback = %truncate_log(&feedback), "find result");
             state.set_feedback(feedback);

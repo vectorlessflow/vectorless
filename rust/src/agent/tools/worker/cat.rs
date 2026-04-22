@@ -110,7 +110,7 @@ mod tests {
             reasoning_index: &crate::document::ReasoningIndex::default(),
             doc_name: "test",
         };
-        let mut state = WorkerState::new(root, 8);
+        let mut state = WorkerState::new(root, 15);
 
         let result = cat("Getting Started", &ctx, &mut state);
         assert!(result.success);

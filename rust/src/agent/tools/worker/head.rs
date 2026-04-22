@@ -98,7 +98,7 @@ mod tests {
     fn test_head_preview() {
         let (tree, nav, root) = build_rich_tree();
         let ctx = rich_ctx!(tree, nav);
-        let state = WorkerState::new(root, 8);
+        let state = WorkerState::new(root, 15);
 
         let result = head("Revenue", 2, &ctx, &state);
         assert!(result.success);
@@ -111,7 +111,7 @@ mod tests {
     fn test_head_not_found() {
         let (tree, nav, root) = build_rich_tree();
         let ctx = rich_ctx!(tree, nav);
-        let state = WorkerState::new(root, 8);
+        let state = WorkerState::new(root, 15);
 
         let result = head("NonExistent", 10, &ctx, &state);
         assert!(!result.success);

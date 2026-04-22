@@ -171,7 +171,7 @@ mod tests {
             reasoning_index: &crate::document::ReasoningIndex::default(),
             doc_name: "test",
         };
-        let mut state = WorkerState::new(root, 8);
+        let mut state = WorkerState::new(root, 15);
 
         let result = cd("Getting Started", &ctx, &mut state);
         assert!(result.success);
@@ -188,7 +188,7 @@ mod tests {
             reasoning_index: &crate::document::ReasoningIndex::default(),
             doc_name: "test",
         };
-        let mut state = WorkerState::new(root, 8);
+        let mut state = WorkerState::new(root, 15);
 
         cd("Getting Started", &ctx, &mut state);
         let result = cd_up(&ctx, &mut state);
@@ -235,7 +235,7 @@ mod tests {
             reasoning_index: &crate::document::ReasoningIndex::default(),
             doc_name: "test",
         };
-        let mut state = WorkerState::new(root, 8);
+        let mut state = WorkerState::new(root, 15);
 
         let result = cd("Research Labs/Lab B", &ctx, &mut state);
         assert!(result.success);
@@ -253,7 +253,7 @@ mod tests {
             reasoning_index: &crate::document::ReasoningIndex::default(),
             doc_name: "test",
         };
-        let mut state = WorkerState::new(root, 8);
+        let mut state = WorkerState::new(root, 15);
 
         let result = cd("Research Labs/Nonexistent", &ctx, &mut state);
         assert!(!result.success);
