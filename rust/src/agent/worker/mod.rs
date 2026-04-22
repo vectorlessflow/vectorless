@@ -165,8 +165,8 @@ impl<'a> Agent for Worker<'a> {
         )
         .await?;
 
-        let budget_exhausted = state.remaining == 0
-            || (config.max_llm_calls > 0 && llm_calls >= config.max_llm_calls);
+        let budget_exhausted =
+            state.remaining == 0 || (config.max_llm_calls > 0 && llm_calls >= config.max_llm_calls);
 
         let output = state.into_worker_output(llm_calls, budget_exhausted, ctx.doc_name);
 
