@@ -4,9 +4,7 @@ sidebar_position: 1
 
 # Introduction
 
-**Vectorless** is a reasoning-native document intelligence engine written in Rust — **no vector database, no embeddings, no similarity search**.
-
-It transforms documents into hierarchical semantic trees and uses LLMs to navigate the structure, retrieving the most relevant content through deep contextual understanding instead of vector math.
+**Vectorless** is a document understanding engine for AI. It compiles documents into structured trees of meaning, then dispatches multiple agents to reason through headings, sections, and paragraphs — evaluating how each part relates to the whole. The problem it solves is not "where to look", but "what does this mean in context". Every answer is a reasoning act, not a retrieval result.
 
 ## How It Works
 
@@ -76,7 +74,7 @@ async fn main() -> vectorless::Result<()> {
 ## Features
 
 - **Hierarchical Semantic Trees** — Preserves document structure, not flat chunks
-- **LLM-Powered Agent Navigation** — Worker agents navigate the tree using commands (ls, cd, cat, find, grep), making every retrieval decision through LLM reasoning
+- **LLM-Powered Agent Navigation** — Worker agents navigate the tree using commands (ls, cd, cat, find, grep), making every decision through LLM reasoning
 - **Cross-Reference Resolution** — Automatically resolves "see Section 2.1", "Appendix G" references during indexing
 - **Synonym Expansion** — LLM-generated synonyms for indexed keywords improve recall for differently-worded queries
 - **Orchestrator Supervisor Loop** — Multi-document queries are coordinated by an LLM supervisor that dispatches Workers, evaluates evidence, and replans when needed
@@ -84,4 +82,4 @@ async fn main() -> vectorless::Result<()> {
 - **Incremental Indexing** — Content fingerprinting skips unchanged files
 - **DocCard Catalog** — Lightweight document metadata index enables fast multi-document analysis without loading full documents
 - **Multi-Format** — Markdown and PDF support
-- **Zero Infrastructure** — No vector DB, no embedding models, just an LLM API key
+- **Zero Infrastructure** — Just an LLM API key, nothing else to deploy

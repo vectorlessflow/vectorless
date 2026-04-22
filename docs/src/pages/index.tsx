@@ -42,7 +42,7 @@ function HomepageHeader() {
         {/* Left: Brand + Features */}
         <div className={styles.heroContent}>
           <h1 className={styles.mainTitle}>Vectorless</h1>
-          <p className={styles.subTitle}>Reasoning-native Document Engine</p>
+          <p className={styles.subTitle}>Document Understanding Engine for AI</p>
 
           <div className={styles.featureList}>
             <div className={styles.featureItem}>
@@ -119,7 +119,7 @@ export default function Home(): ReactNode {
   return (
     <Layout
       title={`${siteConfig.title}`}
-      description="Reasoning-based document engine. No embeddings, no chunking. Multiple agents navigate your documents to find exactly what's relevant.">
+      description="Document understanding engine for AI. Agents reason through your documents — navigating structure, reading passages, cross-referencing across sections.">
       <HomepageHeader />
       <main />
     </Layout>

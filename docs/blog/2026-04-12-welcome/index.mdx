@@ -2,22 +2,22 @@
 slug: welcome
 title: Welcome to Vectorless
 authors: [zTgx]
-tags: [vectorless, rag, llm, announcement]
+tags: [vectorless, document-understanding, llm, ai, announcement]
 ---
 
-Vectorless is a reasoning-native document intelligence engine written in Rust — **no vector database, no embeddings, no similarity search**.
+Vectorless is a document understanding engine for AI. It compiles documents into structured trees of meaning, then dispatches multiple agents to reason through headings, sections, and paragraphs — evaluating how each part relates to the whole. The problem it solves is not "where to look", but "what does this mean in context". Every answer is a reasoning act, not a retrieval result.
 
 {/* truncate */}
 
 ## Why Vectorless?
 
-Traditional RAG systems rely on vector embeddings and similarity search. This approach loses document structure, requires a vector database, and often returns chunks that lack context.
+Understanding a document requires more than finding keywords — it requires navigating structure, cross-referencing sections, and evaluating whether the evidence is sufficient. Vectorless agents do exactly this: they reason through documents the way a human expert would.
 
-Vectorless takes a different path:
+Key capabilities:
 
 - **Hierarchical Semantic Trees** — Documents are parsed into a tree of sections, preserving structure and relationships.
 - **LLM Agent Navigation** — Queries are resolved by agents that navigate the tree using commands (ls, cd, cat, find, grep), making every decision through LLM reasoning.
-- **Zero Infrastructure** — No vector DB, no embedding models, no similarity search. Just an LLM API key.
+- **Zero Infrastructure** — Just an LLM API key, nothing else to deploy.
 
 ## Quick Start
 

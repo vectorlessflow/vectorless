@@ -2,8 +2,8 @@
 
 <img src="https://vectorless.dev/img/with-title.png" alt="Vectorless" width="400">
 
-<h1>Reasoning-based Document Engine</h1>
-<h5>Reason, don't vector · Structure, not chunks · Agents, not embeddings</h5>
+<h1>Document Understanding Engine for AI</h1>
+<h3>Reason, don't vector · Structure, not chunks · Think, then answer</h3>
 
 [![PyPI](https://img.shields.io/pypi/v/vectorless.svg)](https://pypi.org/project/vectorless/)
 [![PyPI Downloads](https://static.pepy.tech/badge/vectorless/month)](https://pepy.tech/projects/vectorless)
@@ -14,28 +14,14 @@
 
 </div>
 
-**Vectorless** is a reasoning-native document engine written in Rust. It compiles documents into navigable trees, then dispatches **multiple agents** to find exactly what's relevant across your **PDFs, Markdown, reports, contracts**. No embeddings, no chunking, no approximate nearest neighbors. Every retrieval is a **reasoning** act.
+**Vectorless** is a document understanding engine for AI. It compiles documents into structured trees of meaning, then dispatches multiple agents to reason through headings, sections, and paragraphs — evaluating how each part relates to the whole. The problem it solves is not "where to look", but "what does this mean in context". Every answer is a reasoning act, not a retrieval result.
 
 Light up a star and shine with us! ⭐
 
 ## Three Rules
-- **Reason, don't vector.** Retrieval is a reasoning act, not a similarity computation.
+- **Reason, don't vector.** Understanding is reasoning, not similarity.
 - **Model fails, we fail.** No heuristic fallbacks, no silent degradation.
 - **No thought, no answer.** Only reasoned output counts as an answer.
-
-## Why Vectorless
-
-Traditional RAG systems split documents into chunks, embed them into vectors, and retrieve by similarity. Vectorless takes a different approach: it preserves document structure as a navigable tree and lets agents reason through it.
-
-| | Embedding-Based RAG | Vectorless |
-|---|---|---|
-| **Indexing** | Chunk → embed → vector store | Parse → compile → document tree |
-| **Retrieval** | Cosine similarity (approximate) | Multi-agent navigation (exact) |
-| **Structure** | Destroyed by chunking | Preserved as first-class tree |
-| **Query handling** | Keyword/similarity match | Intent classification + decomposition |
-| **Multi-hop reasoning** | Not supported | Orchestrator replans dynamically |
-| **Output** | Retrieved chunks | Original text passages, exact |
-| **Failure mode** | Silent degradation | Explicit — no reasoning, no answer |
 
 ## How It Works
 
@@ -60,7 +46,7 @@ DocumentTree          NavigationIndex               ReasoningIndex            Do
 
 This separation means the agent makes routing decisions from lightweight metadata, not by scanning full content.
 
-### Agent-Based Retrieval
+### Agent-Based Understanding
 
 ```
 Engine.query("What drove the revenue decline?")
@@ -74,7 +60,7 @@ Engine.query("What drove the revenue decline?")
   │   │
   │   └─ evaluate ── insufficient? → replan → dispatch new paths → loop
   │
-  └─ Fusion ── dedup, LLM-scored relevance, return with source attribution
+  └─ Synthesis ── dedup, evidence scoring, reasoned answer with source chain
 ```
 
 Worker navigation commands:
@@ -113,23 +99,6 @@ async def main():
 
 asyncio.run(main())
 ```
-
-## Key Features
-
-- **Rust Core** — The entire engine (indexing, retrieval, agent, storage) is implemented in Rust for performance and reliability. Python SDK via PyO3 bindings and a CLI are also provided.
-- **Multi-Agent Retrieval** — Every query is handled by multiple cooperating agents: an Orchestrator plans and evaluates, Workers navigate documents. Each retrieval is a reasoning act — not a similarity score, but a sequence of LLM decisions about where to look, what to read, and when to stop.
-- **Zero Vectors** — No embedding model, no vector store, no similarity search. This eliminates a class of failure modes: wrong chunk boundaries, stale embeddings, and similarity-score false positives.
-- **Tree Navigation** — Documents are compiled into hierarchical trees that preserve the original structure — headings, sections, paragraphs, lists. Workers navigate this tree the way a human would: scan the table of contents, jump to the relevant section, read the passage.
-- **Document-Exact Output** — Returns original text passages from the source document. No synthesis, no rewriting, no hallucinated content. What you get is what was written.
-- **Multi-Document Orchestration** — Query across multiple documents with a single call. The Orchestrator dispatches Workers, evaluates evidence, and fuses results. When one document is insufficient, it replans and expands the search scope.
-- **Query Understanding** — Every query passes through LLM-based intent classification, concept extraction, and strategy selection. Complex queries are decomposed into sub-queries. The system adapts its navigation strategy based on whether the query is factual, analytical, comparative, or navigational.
-- **Checkpointable Pipeline** — The 8-stage compile pipeline writes checkpoints at each stage. If indexing is interrupted (LLM rate limit, network failure), it resumes from the last completed stage — no wasted work.
-- **Incremental Updates** — Content fingerprinting detects changes at the node level. Re-indexing a modified document only recompiles the changed sections and their dependents.
-
-## Supported Documents
-
-- **PDF** — Full text extraction with page metadata
-- **Markdown** — Structure-aware parsing (headings, lists, code blocks)
 
 ## Resources
 
