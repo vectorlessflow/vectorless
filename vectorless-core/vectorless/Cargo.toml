@@ -11,7 +11,6 @@ documentation = "https://docs.rs/vectorless"
 keywords = ["rag", "document", "retrieval", "indexing", "llm"]
 categories = ["text-processing", "data-structures", "algorithms"]
 readme = "../../README.md"
-exclude = ["docs/", "examples/", ".*"]
 
 [dependencies]
 # Async runtime
