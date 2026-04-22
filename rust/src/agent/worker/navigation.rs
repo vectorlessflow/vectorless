@@ -71,13 +71,13 @@ pub async fn run_navigation_loop(
             max_rounds = config.max_rounds,
             "Navigation round: calling LLM..."
         );
-        let llm_output =
-            llm.complete(&system, &user)
-                .await
-                .map_err(|e| Error::LlmReasoning {
-                    stage: "worker/navigation".to_string(),
-                    detail: format!("Nav loop LLM call failed (round {round_num}): {e}"),
-                })?;
+        let llm_output = llm
+            .complete(&system, &user)
+            .await
+            .map_err(|e| Error::LlmReasoning {
+                stage: "worker/navigation".to_string(),
+                detail: format!("Nav loop LLM call failed (round {round_num}): {e}"),
+            })?;
         *llm_calls += 1;
 
         // Parse command
@@ -91,28 +91,11 @@ pub async fn run_navigation_loop(
         let is_check = matches!(command, Command::Check);
 
         // Execute
-        let step = execute_command(
-            &command,
-            ctx,
-            state,
-            query,
-            llm,
-            llm_calls,
-            emitter,
-        )
-        .await;
+        let step = execute_command(&command, ctx, state, query, llm, llm_calls, emitter).await;
 
         // Dynamic re-planning after insufficient check
         handle_replan(
-            is_check,
-            query,
-            task,
-            ctx,
-            llm,
-            state,
-            emitter,
-            llm_calls,
-            max_llm,
+            is_check, query, task, ctx, llm, state, emitter, llm_calls, max_llm,
         )
         .await?;
 
@@ -250,7 +233,10 @@ async fn handle_replan(
         return Ok(());
     }
 
-    if !state.missing_info.is_empty() && state.remaining >= 3 && (max_llm == 0 || *llm_calls < max_llm) {
+    if !state.missing_info.is_empty()
+        && state.remaining >= 3
+        && (max_llm == 0 || *llm_calls < max_llm)
+    {
         let missing = state.missing_info.clone();
         info!(doc = ctx.doc_name, missing = %missing, "Re-planning navigation...");
         let replan = build_replan_prompt(query, task, state, ctx);
@@ -323,7 +309,8 @@ mod tests {
         };
         let mut state = WorkerState::new(root, 10);
 
-        let (_cmd, is_failure) = handle_parse_failure("random garbage text", ctx.doc_name, &mut state);
+        let (_cmd, is_failure) =
+            handle_parse_failure("random garbage text", ctx.doc_name, &mut state);
         assert!(is_failure);
         assert!(state.last_feedback.contains("not recognized"));
         assert!(state.history.last().unwrap().contains("unrecognized"));

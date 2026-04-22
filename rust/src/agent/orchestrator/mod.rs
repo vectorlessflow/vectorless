@@ -144,8 +144,11 @@ impl<'a> Agent for Orchestrator<'a> {
         .await?;
         orch_llm_calls += outcome.llm_calls;
 
-        let confidence =
-            compute_confidence(outcome.eval_sufficient, outcome.iteration, state.all_evidence.is_empty());
+        let confidence = compute_confidence(
+            outcome.eval_sufficient,
+            outcome.iteration,
+            state.all_evidence.is_empty(),
+        );
 
         // --- Phase 3: Finalize — rerank + synthesize ---
         if state.all_evidence.is_empty() {

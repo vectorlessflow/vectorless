@@ -133,12 +133,11 @@ pub async fn execute_command(
                             results.len()
                         );
                         for (title, node_id, depth) in &results {
-                            output.push_str(&format!(
-                                "  - {} (depth {})",
-                                title, depth
-                            ));
+                            output.push_str(&format!("  - {} (depth {})", title, depth));
                             if let Some(content) = ctx.cat(*node_id) {
-                                if let Some(snippet) = super::super::tools::content_snippet(content, keyword, 300) {
+                                if let Some(snippet) =
+                                    super::super::tools::content_snippet(content, keyword, 300)
+                                {
                                     output.push_str(&format!("\n    \"{}\"", snippet));
                                 }
                             }

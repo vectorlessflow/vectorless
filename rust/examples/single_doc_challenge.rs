@@ -152,19 +152,15 @@ const CHALLENGE_QUESTIONS: &[&str] = &[
     // Requires: cross-reference Lab B's device characterization needs with
     // Lab A's FR-02 specs, then connect to the CapEx table for FR-02 cost
     "How much did the only refrigerator capable of characterizing Lab B's devices cost, and where is it located?",
-
     // Requires: trace Lab C's below-threshold result → depends on Lab A's T1
     // improvement → depends on tantalum junction transition
     "What specific materials change in another lab made Lab C's error correction milestone possible?",
-
     // Requires: find the firmware bug in Lab D section, then look at the
     // Lab A FR-01 qubit count, then compute the impact window
     "How many qubits were affected by the firmware bug, and for how many days?",
-
     // Requires: Lab B gap/target ratio (70%) × theoretical target (0.5meV)
     // → actual gap = 0.35meV, compare with 2026 goal of 0.45meV
     "What is the gap between Lab B's current topological gap achievement and the 2026 target, in meV?",
-
     // Requires: trace the dependency chain: 256-qubit goal → need FR-03 →
     // cost $9-11M → government contracts are largest revenue source at $19.8M
     "If the 2026 qubit scaling goal requires a new refrigerator, can the largest revenue source category alone cover its estimated cost?",
@@ -205,7 +201,10 @@ async fn main() -> vectorless::Result<()> {
         } else {
             println!("Indexing research report...");
             let result = engine
-                .index(IndexContext::from_content(REPORT, DocumentFormat::Markdown).with_name(doc_name))
+                .index(
+                    IndexContext::from_content(REPORT, DocumentFormat::Markdown)
+                        .with_name(doc_name),
+                )
                 .await?;
             let id = result.doc_id().unwrap().to_string();
             println!("  doc_id: {}\n", id);

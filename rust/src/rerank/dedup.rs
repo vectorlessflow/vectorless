@@ -161,7 +161,8 @@ mod tests {
             Evidence {
                 source_path: "root/section_a".to_string(),
                 node_title: "A2".to_string(),
-                content: "different content but same source path that should be deduped".to_string(),
+                content: "different content but same source path that should be deduped"
+                    .to_string(),
                 doc_name: None,
             },
         ];

@@ -158,9 +158,7 @@ impl WorkerState {
         }
         self.evidence
             .iter()
-            .map(|e| {
-                format!("[{}]\n{}", e.node_title, e.content)
-            })
+            .map(|e| format!("[{}]\n{}", e.node_title, e.content))
             .collect::<Vec<_>>()
             .join("\n\n")
     }

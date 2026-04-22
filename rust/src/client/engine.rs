@@ -367,10 +367,7 @@ impl Engine {
     ) -> (Vec<IndexItem>, Vec<FailedItem>) {
         let item = Self::build_index_item(&doc);
 
-        info!(
-            "[index] Persisting document '{}'...",
-            doc.name,
-        );
+        info!("[index] Persisting document '{}'...", doc.name,);
         let persisted = IndexerClient::to_persisted(doc, pipeline_options).await;
 
         if let Err(e) = self.workspace.save(&persisted).await {
@@ -1036,7 +1033,10 @@ impl Engine {
             match result {
                 Ok(Some(doc)) => loaded_docs.push(doc),
                 Ok(None) => {
-                    warn!(doc_id, "Document in meta index but not in backend during graph rebuild");
+                    warn!(
+                        doc_id,
+                        "Document in meta index but not in backend during graph rebuild"
+                    );
                     failed_count += 1;
                 }
                 Err(e) => {

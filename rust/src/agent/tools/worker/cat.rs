@@ -53,7 +53,10 @@ pub fn cat(target: &str, ctx: &DocContext, state: &mut WorkerState) -> ToolResul
             state.collected_nodes.insert(node_id);
             state.visited.insert(node_id);
 
-            ToolResult::ok(format!("[Evidence collected: {}]\n{}", title, content_string))
+            ToolResult::ok(format!(
+                "[Evidence collected: {}]\n{}",
+                title, content_string
+            ))
         }
         None => ToolResult::fail(format!("No content available for '{}'.", target)),
     }

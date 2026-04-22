@@ -13,10 +13,10 @@ use super::super::events::EventEmitter;
 use super::super::prompts::DispatchEntry;
 use super::super::state::OrchestratorState;
 use super::super::tools::orchestrator as orch_tools;
+use super::MAX_SUPERVISOR_ITERATIONS;
 use super::dispatch;
 use super::evaluate::evaluate;
 use super::replan::replan;
-use super::MAX_SUPERVISOR_ITERATIONS;
 
 /// Outcome of the supervisor loop.
 pub struct SupervisorOutcome {
