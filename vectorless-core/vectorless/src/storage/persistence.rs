@@ -232,6 +232,10 @@ pub struct PersistedDocument {
     /// Navigation index for Agent-based retrieval.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub navigation_index: Option<NavigationIndex>,
+
+    /// Key concepts extracted from the document.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub concepts: Vec<crate::document::Concept>,
 }
 
 impl PersistedDocument {
@@ -244,6 +248,7 @@ impl PersistedDocument {
             pages: Vec::new(),
             reasoning_index: None,
             navigation_index: None,
+            concepts: Vec::new(),
         }
     }
 

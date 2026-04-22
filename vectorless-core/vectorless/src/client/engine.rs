@@ -584,7 +584,7 @@ impl Engine {
             nav_index,
             reasoning_index,
             summary: persisted.meta.description.unwrap_or_default(),
-            concepts: Vec::new(), // Will be populated by pipeline Stage 7
+            concepts: persisted.concepts,
             page_count: persisted.meta.page_count,
             section_count,
         }

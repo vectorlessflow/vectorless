@@ -52,6 +52,9 @@ pub(crate) struct IndexedDocument {
 
     /// Pre-computed navigation index for agent-based retrieval.
     pub navigation_index: Option<crate::document::NavigationIndex>,
+
+    /// Key concepts extracted from the document.
+    pub concepts: Vec<crate::document::Concept>,
 }
 
 impl IndexedDocument {
@@ -69,6 +72,7 @@ impl IndexedDocument {
             metrics: None,
             reasoning_index: None,
             navigation_index: None,
+            concepts: Vec::new(),
         }
     }
 

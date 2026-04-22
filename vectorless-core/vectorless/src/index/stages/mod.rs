@@ -4,6 +4,7 @@
 //! Index pipeline stages.
 
 mod build;
+mod concept;
 mod enhance;
 mod enrich;
 mod navigation;
@@ -14,6 +15,7 @@ mod split;
 mod validate;
 
 pub use build::BuildStage;
+pub use concept::ConceptExtractionStage;
 pub use enhance::EnhanceStage;
 pub use enrich::EnrichStage;
 pub use navigation::NavigationIndexStage;
@@ -41,6 +43,8 @@ pub struct AccessPattern {
     pub writes_navigation_index: bool,
     /// Whether this stage writes to `description`.
     pub writes_description: bool,
+    /// Whether this stage writes to `concepts`.
+    pub writes_concepts: bool,
 }
 
 /// Index pipeline stage.

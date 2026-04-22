@@ -90,6 +90,40 @@ pub struct DocumentInfo {
 }
 
 impl Document {
+    /// Get node content by ID (Agent `cat` command).
+    pub fn cat(&self, node_id: super::node::NodeId) -> Option<&str> {
+        self.tree.get(node_id).map(|n| n.content.as_str())
+    }
+
+    /// Find nodes containing a keyword in title or content.
+    pub fn find(&self, keyword: &str) -> Vec<(super::node::NodeId, &str)> {
+        let kw = keyword.to_lowercase();
+        self.tree
+            .traverse()
+            .iter()
+            .filter_map(|&id| {
+                let node = self.tree.get(id)?;
+                if node.title.to_lowercase().contains(&kw)
+                    || node.content.to_lowercase().contains(&kw)
+                {
+                    Some((id, node.title.as_str()))
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
+    /// Get node title by ID.
+    pub fn node_title(&self, node_id: super::node::NodeId) -> Option<&str> {
+        self.tree.get(node_id).map(|n| n.title.as_str())
+    }
+
+    /// Number of sections in the tree.
+    pub fn section_count(&self) -> usize {
+        self.section_count
+    }
+
     /// Produce the public DocumentInfo view of this document.
     pub fn info(&self) -> DocumentInfo {
         let toc = super::toc::TocView::new().generate(&self.tree);

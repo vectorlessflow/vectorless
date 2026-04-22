@@ -239,6 +239,7 @@ impl IndexStage for ValidateStage {
             writes_reasoning_index: false,
             writes_navigation_index: false,
             writes_description: false,
+            writes_concepts: false,
         }
     }
 

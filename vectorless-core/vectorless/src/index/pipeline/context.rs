@@ -6,7 +6,7 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use crate::document::{DocumentTree, NavigationIndex, NodeId, ReasoningIndex};
+use crate::document::{Concept, DocumentTree, NavigationIndex, NodeId, ReasoningIndex};
 use crate::index::parse::{DocumentFormat, RawNode};
 use crate::llm::LlmClient;
 
@@ -251,6 +251,9 @@ pub struct IndexContext {
     /// Navigation index for Agent-based retrieval (built by NavigationIndexStage).
     pub navigation_index: Option<NavigationIndex>,
 
+    /// Key concepts extracted from the document (built by ConceptExtractionStage).
+    pub concepts: Vec<Concept>,
+
     /// Existing tree from previous indexing (for incremental updates).
     /// When set, the enhance and reasoning stages can reuse data from unchanged nodes.
     pub existing_tree: Option<DocumentTree>,
@@ -289,6 +292,7 @@ impl IndexContext {
             summary_cache: SummaryCache::default(),
             reasoning_index: None,
             navigation_index: None,
+            concepts: Vec::new(),
             existing_tree: None,
             stage_results: HashMap::new(),
             metrics: IndexMetrics::default(),
@@ -387,6 +391,7 @@ impl IndexContext {
             summary_cache: self.summary_cache,
             reasoning_index: self.reasoning_index,
             navigation_index: self.navigation_index,
+            concepts: self.concepts,
         }
     }
 }
@@ -429,6 +434,9 @@ pub struct PipelineResult {
 
     /// Navigation index for Agent-based retrieval.
     pub navigation_index: Option<NavigationIndex>,
+
+    /// Key concepts extracted from the document.
+    pub concepts: Vec<Concept>,
 }
 
 impl PipelineResult {

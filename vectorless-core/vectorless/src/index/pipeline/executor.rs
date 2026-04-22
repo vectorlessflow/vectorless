@@ -13,8 +13,9 @@ use crate::llm::LlmClient;
 
 use super::super::PipelineOptions;
 use super::super::stages::{
-    BuildStage, EnhanceStage, EnrichStage, IndexStage, NavigationIndexStage, OptimizeStage,
-    ParseStage, ReasoningIndexStage, SplitStage, ValidateStage,
+    BuildStage, ConceptExtractionStage, EnhanceStage, EnrichStage, IndexStage,
+    NavigationIndexStage, OptimizeStage, ParseStage, ReasoningIndexStage, SplitStage,
+    ValidateStage,
 };
 use super::context::{IndexInput, PipelineResult};
 use super::orchestrator::PipelineOrchestrator;
@@ -55,8 +56,9 @@ impl PipelineExecutor {
     /// 4. `split` - Split oversized leaf nodes (optional)
     /// 5. `enrich` - Add metadata and cross-references
     /// 6. `reasoning_index` - Build pre-computed reasoning index
-    /// 7. `navigation_index` - Build Agent navigation index
-    /// 8. `optimize` - Optimize tree structure
+    /// 7. `concept_extraction` - Extract key concepts (optional)
+    /// 8. `navigation_index` - Build Agent navigation index
+    /// 9. `optimize` - Optimize tree structure
     pub fn new() -> Self {
         let orchestrator = PipelineOrchestrator::new()
             .stage_with_priority(ParseStage::new(), 10)
@@ -65,6 +67,7 @@ impl PipelineExecutor {
             .stage_with_priority(SplitStage::new(), 25)
             .stage_with_priority(EnrichStage::new(), 40)
             .stage_with_priority(ReasoningIndexStage::new(), 45)
+            .stage_with_priority(ConceptExtractionStage::new(), 47)
             .stage_with_priority(NavigationIndexStage::new(), 50)
             .stage_with_priority(OptimizeStage::new(), 60);
 
@@ -81,8 +84,9 @@ impl PipelineExecutor {
     /// 5. `enhance` - LLM-based enhancement (summaries)
     /// 6. `enrich` - Add metadata
     /// 7. `reasoning_index` - Build pre-computed reasoning index
-    /// 8. `navigation_index` - Build Agent navigation index
-    /// 9. `optimize` - Optimize tree
+    /// 8. `concept_extraction` - Extract key concepts via LLM (optional)
+    /// 9. `navigation_index` - Build Agent navigation index
+    /// 10. `optimize` - Optimize tree
     pub fn with_llm(client: LlmClient) -> Self {
         tracing::info!(
             "PipelineExecutor::with_llm — cloning client to ParseStage + EnhanceStage + context"
@@ -93,9 +97,10 @@ impl PipelineExecutor {
             .stage_with_priority(BuildStage::new(), 20)
             .stage_with_priority(ValidateStage::new(), 22)
             .stage_with_priority(SplitStage::new(), 25)
-            .stage_with_priority(EnhanceStage::with_llm_client(client), 30)
+            .stage_with_priority(EnhanceStage::with_llm_client(client.clone()), 30)
             .stage_with_priority(EnrichStage::new(), 40)
             .stage_with_priority(ReasoningIndexStage::new(), 45)
+            .stage_with_priority(ConceptExtractionStage::with_llm_client(client), 47)
             .stage_with_priority(NavigationIndexStage::new(), 50)
             .stage_with_priority(OptimizeStage::new(), 60);
 
