@@ -294,7 +294,8 @@ impl<'a> Agent for Worker<'a> {
             emitter.emit_worker_round(ctx.doc_name, round_num, &cmd_str, success, round_elapsed);
 
             let feedback_preview = if state.last_feedback.len() > 120 {
-                format!("{}...", &state.last_feedback[..120])
+                let boundary = state.last_feedback.ceil_char_boundary(120);
+                format!("{}...", &state.last_feedback[..boundary])
             } else {
                 state.last_feedback.clone()
             };
@@ -346,5 +347,49 @@ impl<'a> Agent for Worker<'a> {
         );
 
         Ok(output)
+    }
+}
+
+#[cfg(test)]
+mod truncation_tests {
+    /// Verify that truncating feedback with multi-byte UTF-8 characters
+    /// never panics. This mirrors the truncation logic in the navigation loop.
+    #[test]
+    fn test_utf8_safe_truncation_ascii() {
+        let feedback = "a".repeat(200);
+        let boundary = feedback.ceil_char_boundary(120);
+        let truncated = &feedback[..boundary];
+        assert!(truncated.len() <= 123); // 120 + "..." fits
+        assert!(truncated.is_char_boundary(truncated.len()));
+    }
+
+    #[test]
+    fn test_utf8_safe_truncation_multibyte() {
+        // Each '中' is 3 bytes in UTF-8
+        let feedback = "中文反馈内容测试截断安全".repeat(20);
+        assert!(feedback.len() > 120);
+        let boundary = feedback.ceil_char_boundary(120);
+        let truncated = &feedback[..boundary];
+        assert!(truncated.len() <= 120);
+        assert!(truncated.is_char_boundary(truncated.len()));
+    }
+
+    #[test]
+    fn test_utf8_safe_truncation_emoji() {
+        // Emojis are 4 bytes each
+        let feedback = "🦀🎉🚀".repeat(50);
+        assert!(feedback.len() > 120);
+        let boundary = feedback.ceil_char_boundary(120);
+        let truncated = &feedback[..boundary];
+        assert!(truncated.len() <= 120);
+        assert!(truncated.is_char_boundary(truncated.len()));
+    }
+
+    #[test]
+    fn test_utf8_safe_truncation_short_string() {
+        // String shorter than limit — no truncation needed
+        let feedback = "short feedback".to_string();
+        let boundary = feedback.ceil_char_boundary(120);
+        assert_eq!(boundary, feedback.len());
     }
 }

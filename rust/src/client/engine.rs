@@ -40,7 +40,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use futures::StreamExt;
-use tracing::info;
+use tracing::{info, warn};
 
 use crate::{
     DocumentTree, Error,
@@ -1004,20 +1004,44 @@ impl Engine {
         );
         let concurrency = self.config.llm.throttle.max_concurrent_requests;
 
-        let loaded: Vec<Option<PersistedDocument>> = futures::stream::iter(doc_ids.iter().cloned())
-            .map(|doc_id| {
-                let ws = self.workspace.clone();
-                async move { ws.load(&doc_id).await.ok().flatten() }
-            })
-            .buffer_unordered(concurrency)
-            .collect()
-            .await;
+        let doc_ids_clone: Vec<String> = doc_ids.iter().cloned().collect();
+        let loaded: Vec<(String, Result<Option<PersistedDocument>>)> =
+            futures::stream::iter(doc_ids_clone.into_iter())
+                .map(|doc_id| {
+                    let ws = self.workspace.clone();
+                    async move {
+                        let result = ws.load(&doc_id).await;
+                        (doc_id, result)
+                    }
+                })
+                .buffer_unordered(concurrency)
+                .collect()
+                .await;
 
-        let loaded_count = loaded.iter().filter(|d| d.is_some()).count();
-        info!(loaded_count, "Documents loaded, building graph");
+        let mut failed_count = 0usize;
+        let mut loaded_docs: Vec<PersistedDocument> = Vec::new();
+        for (doc_id, result) in loaded {
+            match result {
+                Ok(Some(doc)) => loaded_docs.push(doc),
+                Ok(None) => {
+                    warn!(doc_id, "Document in meta index but not in backend during graph rebuild");
+                    failed_count += 1;
+                }
+                Err(e) => {
+                    warn!(doc_id, error = %e, "Failed to load document for graph rebuild");
+                    failed_count += 1;
+                }
+            }
+        }
+
+        info!(
+            loaded = loaded_docs.len(),
+            failed = failed_count,
+            "Documents loaded for graph rebuild"
+        );
 
         let mut builder = crate::graph::DocumentGraphBuilder::new(self.config.graph.clone());
-        for doc in loaded.into_iter().flatten() {
+        for doc in &loaded_docs {
             let keywords = Self::extract_keywords_from_doc(&doc);
             builder.add_document(
                 &doc.meta.id,

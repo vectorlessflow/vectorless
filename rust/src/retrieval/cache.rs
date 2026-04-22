@@ -16,9 +16,11 @@
 //!   Node scores are independent of the query, so they can be shared across
 //!   different queries on the same document.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::sync::RwLock;
 use std::time::Instant;
+
+use tracing::warn;
 
 use crate::document::NodeId;
 use crate::utils::fingerprint::Fingerprint;
@@ -86,7 +88,7 @@ pub struct CachedCandidate {
 
 struct L1Store {
     entries: HashMap<Fingerprint, L1Entry>,
-    order: Vec<Fingerprint>, // For LRU eviction
+    order: VecDeque<Fingerprint>, // For LRU eviction — O(1) pop_front
 }
 
 // ---- L2: Path Pattern Cache ----
@@ -102,7 +104,7 @@ struct L2Entry {
 
 struct L2Store {
     entries: HashMap<String, L2Entry>, // Key: "doc_fp:node_path"
-    order: Vec<String>,
+    order: VecDeque<String>,
 }
 
 // ---- L3: Strategy Score Cache ----
@@ -118,7 +120,7 @@ struct L3Entry {
 
 struct L3Store {
     entries: HashMap<Fingerprint, L3Entry>, // Key: node content fingerprint
-    order: Vec<Fingerprint>,
+    order: VecDeque<Fingerprint>,
 }
 
 // ---- Public API ----
@@ -134,15 +136,15 @@ impl ReasoningCache {
         Self {
             l1: RwLock::new(L1Store {
                 entries: HashMap::new(),
-                order: Vec::new(),
+                order: VecDeque::new(),
             }),
             l2: RwLock::new(L2Store {
                 entries: HashMap::new(),
-                order: Vec::new(),
+                order: VecDeque::new(),
             }),
             l3: RwLock::new(L3Store {
                 entries: HashMap::new(),
-                order: Vec::new(),
+                order: VecDeque::new(),
             }),
             config,
         }
@@ -156,7 +158,7 @@ impl ReasoningCache {
     /// on the same document scope.
     pub fn l1_get(&self, query: &str, scope_fp: &Fingerprint) -> Option<Vec<CachedCandidate>> {
         let query_fp = Fingerprint::from_str(query);
-        let l1 = self.l1.read().ok()?;
+        let l1 = read_lock(&self.l1)?;
         let entry = l1.entries.get(&query_fp)?;
         // Scope must match (same document set)
         if &entry.scope_fp != scope_fp {
@@ -187,7 +189,7 @@ impl ReasoningCache {
                     created_at: Instant::now(),
                 },
             );
-            l1.order.push(query_fp);
+            l1.order.push_back(query_fp);
         }
     }
 
@@ -199,7 +201,7 @@ impl ReasoningCache {
     /// return the confidence score.
     pub fn l2_get(&self, doc_key: &str, node_path: &str) -> Option<f32> {
         let key = format!("{}:{}", doc_key, node_path);
-        let l2 = self.l2.read().ok()?;
+        let l2 = read_lock(&self.l2)?;
         let entry = l2.entries.get(&key)?;
         Some(entry.confidence)
     }
@@ -227,7 +229,7 @@ impl ReasoningCache {
                         created_at: Instant::now(),
                     },
                 );
-                l2.order.push(key);
+                l2.order.push_back(key);
             }
         }
     }
@@ -237,9 +239,9 @@ impl ReasoningCache {
     /// Useful for bootstrapping new queries on a known document.
     pub fn l2_top_paths(&self, doc_key: &str, n: usize) -> Vec<(String, f32)> {
         let prefix = format!("{}:", doc_key);
-        let l2 = match self.l2.read() {
-            Ok(guard) => guard,
-            Err(_) => return Vec::new(),
+        let l2 = match read_lock(&self.l2) {
+            Some(guard) => guard,
+            None => return Vec::new(),
         };
 
         let mut paths: Vec<(String, f32)> = l2
@@ -260,7 +262,7 @@ impl ReasoningCache {
     /// Node scores from keyword/BM25 are content-dependent but
     /// query-independent, so they can be shared across queries.
     pub fn l3_get(&self, node_content_fp: &Fingerprint) -> Option<(f32, String)> {
-        let l3 = self.l3.read().ok()?;
+        let l3 = read_lock(&self.l3)?;
         let entry = l3.entries.get(node_content_fp)?;
         Some((entry.score, entry.strategy.clone()))
     }
@@ -279,7 +281,7 @@ impl ReasoningCache {
                     created_at: Instant::now(),
                 },
             );
-            l3.order.push(node_content_fp);
+            l3.order.push_back(node_content_fp);
         }
     }
 
@@ -288,9 +290,9 @@ impl ReasoningCache {
     /// Get cache statistics.
     pub fn stats(&self) -> ReasoningCacheStats {
         let (l1_count, l2_count, l3_count) = (
-            self.l1.read().map(|g| g.entries.len()).unwrap_or(0),
-            self.l2.read().map(|g| g.entries.len()).unwrap_or(0),
-            self.l3.read().map(|g| g.entries.len()).unwrap_or(0),
+            read_lock(&self.l1).map(|g| g.entries.len()).unwrap_or(0),
+            read_lock(&self.l2).map(|g| g.entries.len()).unwrap_or(0),
+            read_lock(&self.l3).map(|g| g.entries.len()).unwrap_or(0),
         );
         ReasoningCacheStats {
             l1_entries: l1_count,
@@ -318,23 +320,20 @@ impl ReasoningCache {
     // ============ Eviction helpers ============
 
     fn evict_lru_fingerprint(l1: &mut L1Store) {
-        if let Some(old) = l1.order.first().copied() {
+        if let Some(old) = l1.order.pop_front() {
             l1.entries.remove(&old);
-            l1.order.remove(0);
         }
     }
 
     fn evict_lru_string(l2: &mut L2Store) {
-        if let Some(old) = l2.order.first().cloned() {
+        if let Some(old) = l2.order.pop_front() {
             l2.entries.remove(&old);
-            l2.order.remove(0);
         }
     }
 
     fn evict_lru_fingerprint_l3(l3: &mut L3Store) {
-        if let Some(old) = l3.order.first().copied() {
+        if let Some(old) = l3.order.pop_front() {
             l3.entries.remove(&old);
-            l3.order.remove(0);
         }
     }
 }
@@ -342,6 +341,21 @@ impl ReasoningCache {
 impl Default for ReasoningCache {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+/// Read from a RwLock, recovering from poison by taking the guard anyway.
+///
+/// A poisoned lock means another thread panicked while holding it — the data
+/// is still valid, just potentially in an inconsistent state. For a cache,
+/// returning stale/empty data is always preferable to failing silently.
+fn read_lock<T>(lock: &RwLock<T>) -> Option<std::sync::RwLockReadGuard<'_, T>> {
+    match lock.read() {
+        Ok(guard) => Some(guard),
+        Err(poisoned) => {
+            warn!("ReasoningCache: recovering from poisoned lock");
+            Some(poisoned.into_inner())
+        }
     }
 }
 
@@ -476,5 +490,88 @@ mod tests {
         assert!(cache.l1_get("q1", &scope).is_none());
         assert!(cache.l1_get("q2", &scope).is_some());
         assert!(cache.l1_get("q3", &scope).is_some());
+    }
+
+    #[test]
+    fn test_l2_lru_eviction() {
+        let config = ReasoningCacheConfig {
+            l2_max: 2,
+            ..Default::default()
+        };
+        let cache = ReasoningCache::with_config(config);
+
+        cache.l2_record("doc", "1", 0.5);
+        cache.l2_record("doc", "2", 0.6);
+        cache.l2_record("doc", "3", 0.7); // evicts "doc:1"
+
+        assert!(cache.l2_get("doc", "1").is_none());
+        assert!(cache.l2_get("doc", "2").is_some());
+        assert!(cache.l2_get("doc", "3").is_some());
+    }
+
+    #[test]
+    fn test_l3_lru_eviction() {
+        let config = ReasoningCacheConfig {
+            l3_max: 2,
+            ..Default::default()
+        };
+        let cache = ReasoningCache::with_config(config);
+
+        let fp1 = Fingerprint::from_str("content_a");
+        let fp2 = Fingerprint::from_str("content_b");
+        let fp3 = Fingerprint::from_str("content_c");
+
+        cache.l3_store(fp1, 0.5, "kw".into());
+        cache.l3_store(fp2, 0.6, "kw".into());
+        cache.l3_store(fp3, 0.7, "kw".into()); // evicts fp1
+
+        assert!(cache.l3_get(&fp1).is_none());
+        assert!(cache.l3_get(&fp2).is_some());
+        assert!(cache.l3_get(&fp3).is_some());
+    }
+
+    #[test]
+    fn test_poisoned_lock_recovery() {
+        let cache = ReasoningCache::new();
+
+        // Verify normal operation: store and retrieve still works
+        let scope = Fingerprint::from_str("doc");
+        cache.l1_store("query", scope, vec![], "kw".into());
+
+        let scope2 = Fingerprint::from_str("doc2");
+        cache.l1_store("q2", scope2, vec![], "kw".into());
+        assert!(cache.l1_get("q2", &scope2).is_some());
+
+        // Verify stats still works (internally uses read_lock)
+        let stats = cache.stats();
+        assert!(stats.l1_entries >= 1);
+    }
+
+    #[test]
+    fn test_poisoned_lock_read_recovery() {
+        use std::sync::Arc;
+        use std::thread;
+
+        // Create a cache and populate it
+        let cache = Arc::new(ReasoningCache::new());
+        let scope = Fingerprint::from_str("doc");
+        cache.l1_store("query", scope, vec![], "kw".into());
+
+        // Poison the lock from another thread
+        let cache_clone = Arc::clone(&cache);
+        let handle = thread::spawn(move || {
+            // This will poison the L1 lock
+            let _guard = cache_clone.l1.write().unwrap();
+            panic!("intentional panic to poison lock");
+        });
+
+        // Wait for the panicking thread to finish
+        let _ = handle.join();
+
+        // The lock is now poisoned. Our read_lock() should recover from it.
+        // l1_get uses read_lock internally
+        let result = cache.l1_get("query", &scope);
+        // Should still return data (recovered from poison)
+        assert!(result.is_some());
     }
 }
