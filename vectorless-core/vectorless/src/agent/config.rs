@@ -84,6 +84,8 @@ pub struct Output {
     pub metrics: Metrics,
     /// Confidence score (0.0–1.0) — derived from LLM evaluate() result.
     pub confidence: f32,
+    /// Reasoning trace steps collected during agent navigation.
+    pub trace_steps: Vec<crate::document::TraceStep>,
 }
 
 impl Output {
@@ -94,6 +96,7 @@ impl Output {
             evidence: Vec::new(),
             metrics: Metrics::default(),
             confidence: 0.0,
+            trace_steps: Vec::new(),
         }
     }
 }
@@ -148,6 +151,8 @@ pub struct WorkerOutput {
     pub metrics: WorkerMetrics,
     /// Document name this Worker was assigned to.
     pub doc_name: String,
+    /// Reasoning trace steps from this Worker.
+    pub trace_steps: Vec<crate::document::TraceStep>,
 }
 
 /// Metrics specific to a single Worker's execution.
@@ -184,6 +189,7 @@ impl From<WorkerOutput> for Output {
                 evidence_chars: wo.metrics.evidence_chars,
             },
             confidence: 0.0,
+            trace_steps: wo.trace_steps,
         }
     }
 }

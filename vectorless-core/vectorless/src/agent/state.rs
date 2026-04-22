@@ -6,6 +6,7 @@
 use std::collections::HashSet;
 
 use crate::document::NodeId;
+use crate::document::TraceStep;
 
 use super::config::{Evidence, Output};
 
@@ -47,6 +48,8 @@ pub struct WorkerState {
     pub check_count: u32,
     /// Whether a navigation plan was generated in Phase 1.5.
     pub plan_generated: bool,
+    /// Reasoning trace steps collected during navigation.
+    pub trace_steps: Vec<TraceStep>,
 }
 
 /// Maximum number of history entries to keep for prompt injection.
@@ -69,6 +72,7 @@ impl WorkerState {
             plan: String::new(),
             check_count: 0,
             plan_generated: false,
+            trace_steps: Vec::new(),
         }
     }
 
@@ -184,6 +188,7 @@ impl WorkerState {
                 evidence_chars,
             },
             doc_name: doc_name.to_string(),
+            trace_steps: self.trace_steps,
         }
     }
 }
@@ -259,11 +264,13 @@ impl OrchestratorState {
                 ..Default::default()
             },
             confidence: 0.0,
+            trace_steps: self.collect_trace_steps(),
         }
     }
 
     /// Merge all sub-results into a single Output (consuming self).
     pub fn into_output(self, answer: String) -> Output {
+        let trace_steps = self.collect_trace_steps();
         Output {
             answer,
             evidence: self.all_evidence,
@@ -284,7 +291,17 @@ impl OrchestratorState {
                 ..Default::default()
             },
             confidence: 0.0,
+            trace_steps,
         }
+    }
+
+    /// Collect trace steps from all sub-results.
+    fn collect_trace_steps(&self) -> Vec<TraceStep> {
+        let mut steps = Vec::new();
+        for result in &self.sub_results {
+            steps.extend(result.trace_steps.iter().cloned());
+        }
+        steps
     }
 }
 

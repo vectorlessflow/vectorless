@@ -474,15 +474,10 @@ impl Engine {
             )));
         }
 
-        // Build DocContexts and dispatch
+        // Build DocContexts from Documents and dispatch
         let doc_contexts: Vec<crate::agent::DocContext> = documents
             .iter()
-            .map(|(tree, nav, ridx, id)| crate::agent::DocContext {
-                tree,
-                nav_index: nav,
-                reasoning_index: ridx,
-                doc_name: id.as_str(),
-            })
+            .map(|doc| doc.as_context())
             .collect();
 
         let skip_analysis = !ids.is_empty();
@@ -608,7 +603,9 @@ impl Engine {
             content: output.answer.clone(),
             evidence,
             confidence: output.confidence,
-            trace: ReasoningTrace::empty(), // TODO: wire up actual trace collection
+            trace: ReasoningTrace {
+                steps: output.trace_steps.clone(),
+            },
         }
     }
 
@@ -620,23 +617,13 @@ impl Engine {
     async fn load_documents(
         &self,
         doc_ids: &[String],
-    ) -> Result<(
-        Vec<(
-            crate::document::DocumentTree,
-            crate::document::NavigationIndex,
-            crate::document::ReasoningIndex,
-            String,
-        )>,
-        Vec<FailedItem>,
-    )> {
+    ) -> Result<(Vec<crate::document::Document>, Vec<FailedItem>)> {
         let mut documents = Vec::new();
         let mut failed = Vec::new();
         for doc_id in doc_ids {
             match self.workspace.load(doc_id).await {
                 Ok(Some(doc)) => {
-                    let nav_index = doc.navigation_index.unwrap_or_default();
-                    let reasoning_index = doc.reasoning_index.unwrap_or_default();
-                    documents.push((doc.tree, nav_index, reasoning_index, doc_id.clone()));
+                    documents.push(Self::persisted_to_understanding_document(doc));
                 }
                 Ok(None) => {
                     failed.push(FailedItem::new(doc_id, "Document not found"));

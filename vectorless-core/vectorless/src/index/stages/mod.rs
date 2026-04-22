@@ -13,6 +13,7 @@ mod parse;
 mod reasoning;
 mod split;
 mod validate;
+mod verify_ingest;
 
 pub use build::BuildStage;
 pub use concept::ConceptExtractionStage;
@@ -24,6 +25,7 @@ pub use parse::ParseStage;
 pub use reasoning::ReasoningIndexStage;
 pub use split::SplitStage;
 pub use validate::ValidateStage;
+pub use verify_ingest::VerifyStage;
 
 use super::pipeline::{FailurePolicy, IndexContext, StageResult};
 use crate::error::Result;

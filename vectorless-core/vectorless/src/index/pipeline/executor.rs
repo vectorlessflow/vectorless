@@ -15,7 +15,7 @@ use super::super::PipelineOptions;
 use super::super::stages::{
     BuildStage, ConceptExtractionStage, EnhanceStage, EnrichStage, IndexStage,
     NavigationIndexStage, OptimizeStage, ParseStage, ReasoningIndexStage, SplitStage,
-    ValidateStage,
+    ValidateStage, VerifyStage,
 };
 use super::context::{IndexInput, PipelineResult};
 use super::orchestrator::PipelineOrchestrator;
@@ -58,7 +58,8 @@ impl PipelineExecutor {
     /// 6. `reasoning_index` - Build pre-computed reasoning index
     /// 7. `concept_extraction` - Extract key concepts (optional)
     /// 8. `navigation_index` - Build Agent navigation index
-    /// 9. `optimize` - Optimize tree structure
+    /// 9. `verify` - Validate ingest output reliability
+    /// 10. `optimize` - Optimize tree structure
     pub fn new() -> Self {
         let orchestrator = PipelineOrchestrator::new()
             .stage_with_priority(ParseStage::new(), 10)
@@ -69,6 +70,7 @@ impl PipelineExecutor {
             .stage_with_priority(ReasoningIndexStage::new(), 45)
             .stage_with_priority(ConceptExtractionStage::new(), 47)
             .stage_with_priority(NavigationIndexStage::new(), 50)
+            .stage_with_priority(VerifyStage, 55)
             .stage_with_priority(OptimizeStage::new(), 60);
 
         Self { orchestrator }
@@ -86,7 +88,8 @@ impl PipelineExecutor {
     /// 7. `reasoning_index` - Build pre-computed reasoning index
     /// 8. `concept_extraction` - Extract key concepts via LLM (optional)
     /// 9. `navigation_index` - Build Agent navigation index
-    /// 10. `optimize` - Optimize tree
+    /// 10. `verify` - Validate ingest output reliability
+    /// 11. `optimize` - Optimize tree
     pub fn with_llm(client: LlmClient) -> Self {
         tracing::info!(
             "PipelineExecutor::with_llm — cloning client to ParseStage + EnhanceStage + context"
@@ -102,6 +105,7 @@ impl PipelineExecutor {
             .stage_with_priority(ReasoningIndexStage::new(), 45)
             .stage_with_priority(ConceptExtractionStage::with_llm_client(client), 47)
             .stage_with_priority(NavigationIndexStage::new(), 50)
+            .stage_with_priority(VerifyStage, 55)
             .stage_with_priority(OptimizeStage::new(), 60);
 
         Self { orchestrator }

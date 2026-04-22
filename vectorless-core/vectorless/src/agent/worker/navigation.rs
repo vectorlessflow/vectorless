@@ -203,7 +203,7 @@ fn handle_parse_failure(
     (command, is_parse_failure)
 }
 
-/// Push a round's command + feedback preview into history.
+/// Push a round's command + feedback preview into history and trace.
 fn push_round_history(state: &mut WorkerState, cmd_str: &str) {
     let feedback_preview = if state.last_feedback.len() > 120 {
         let boundary = state.last_feedback.ceil_char_boundary(120);
@@ -212,6 +212,13 @@ fn push_round_history(state: &mut WorkerState, cmd_str: &str) {
         state.last_feedback.clone()
     };
     state.push_history(format!("{} → {}", cmd_str, feedback_preview));
+
+    let round = state.max_rounds.saturating_sub(state.remaining);
+    state.trace_steps.push(crate::document::TraceStep {
+        action: cmd_str.to_string(),
+        observation: state.last_feedback.chars().take(200).collect(),
+        round,
+    });
 }
 
 /// Dynamic re-planning after an insufficient check.

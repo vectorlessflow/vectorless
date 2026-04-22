@@ -90,6 +90,18 @@ pub struct DocumentInfo {
 }
 
 impl Document {
+    /// Create a read-only agent context from this document.
+    ///
+    /// Used internally by the retrieval agent for navigation and reasoning.
+    pub fn as_context(&self) -> crate::agent::DocContext<'_> {
+        crate::agent::DocContext {
+            tree: &self.tree,
+            nav_index: &self.nav_index,
+            reasoning_index: &self.reasoning_index,
+            doc_name: &self.name,
+        }
+    }
+
     /// Get node content by ID (Agent `cat` command).
     pub fn cat(&self, node_id: super::node::NodeId) -> Option<&str> {
         self.tree.get(node_id).map(|n| n.content.as_str())
