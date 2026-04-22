@@ -34,6 +34,7 @@ pub async fn understand(
     llm: &LlmClient,
 ) -> crate::error::Result<QueryPlan> {
     let (system, user) = understand_prompt(query, keywords);
+    info!("Query understanding: calling LLM...");
     let response = llm.complete(&system, &user).await?;
 
     if response.trim().is_empty() {

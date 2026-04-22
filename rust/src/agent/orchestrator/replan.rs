@@ -59,6 +59,7 @@ pub async fn replan(
         &find_text,
     );
 
+    info!(evidence = collected_evidence.len(), "Replanning dispatch targets...");
     let response = llm
         .complete(&system, &user)
         .await

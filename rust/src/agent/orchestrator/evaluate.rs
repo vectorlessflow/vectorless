@@ -34,6 +34,10 @@ pub async fn evaluate(
     let evidence_summary = format_evidence_summary(evidence);
     let (system, user) = check_sufficiency(query, &evidence_summary);
 
+    info!(
+        evidence = evidence.len(),
+        "Evaluating evidence sufficiency..."
+    );
     let response = llm
         .complete(&system, &user)
         .await

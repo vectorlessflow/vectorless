@@ -3,7 +3,7 @@
 <img src="https://vectorless.dev/img/with-title.png" alt="Vectorless" width="400">
 
 <h1>Reasoning-based Document Engine</h1>
-<h5>Reason, don't vector · Structure, not chunks · Agents, not embeddings · Exact, not synthesized</h5>
+<h5>Reason, don't vector · Structure, not chunks · Agents, not embeddings</h5>
 
 [![PyPI](https://img.shields.io/pypi/v/vectorless.svg)](https://pypi.org/project/vectorless/)
 [![PyPI Downloads](https://static.pepy.tech/badge/vectorless/month)](https://pepy.tech/projects/vectorless)

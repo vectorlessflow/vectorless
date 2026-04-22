@@ -128,6 +128,7 @@ impl<'a> Agent for Worker<'a> {
 
         // --- Phase 1.5: Navigation planning ---
         if state.remaining > 0 && !llm_budget_exhausted!() {
+            info!(doc = ctx.doc_name, "Generating navigation plan...");
             let plan_prompt = build_plan_prompt(
                 &query,
                 task_ref,
@@ -205,6 +206,12 @@ impl<'a> Agent for Worker<'a> {
             // LLM decision
             let round_num = config.max_rounds - state.remaining + 1;
             let round_start = std::time::Instant::now();
+            info!(
+                doc = ctx.doc_name,
+                round = round_num,
+                max_rounds = config.max_rounds,
+                "Navigation round: calling LLM..."
+            );
             let llm_output =
                 llm.complete(&system, &user)
                     .await
@@ -262,6 +269,7 @@ impl<'a> Agent for Worker<'a> {
                 && !llm_budget_exhausted!()
             {
                 let missing = state.missing_info.clone();
+                info!(doc = ctx.doc_name, missing = %missing, "Re-planning navigation...");
                 let replan = build_replan_prompt(&query, task_ref, &state, ctx);
                 let new_plan =
                     llm.complete(&replan.0, &replan.1)

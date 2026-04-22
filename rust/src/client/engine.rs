@@ -366,9 +366,15 @@ impl Engine {
         old_id: Option<&str>,
     ) -> (Vec<IndexItem>, Vec<FailedItem>) {
         let item = Self::build_index_item(&doc);
+
+        info!(
+            "[index] Persisting document '{}'...",
+            doc.name,
+        );
         let persisted = IndexerClient::to_persisted(doc, pipeline_options).await;
 
         if let Err(e) = self.workspace.save(&persisted).await {
+            warn!("[index] Failed to save document: {}", e);
             return (
                 Vec::new(),
                 vec![FailedItem::new(source_label, e.to_string())],
@@ -377,11 +383,11 @@ impl Engine {
         // Clean up old document after successful save
         if let Some(old_id) = old_id {
             if let Err(e) = self.workspace.remove(old_id).await {
-                tracing::warn!("Failed to remove old document {}: {}", old_id, e);
+                warn!("Failed to remove old document {}: {}", old_id, e);
             }
         }
 
-        info!("Indexed document: {}", item.doc_id);
+        info!("[index] Document persisted: {}", item.doc_id);
         (vec![item], Vec::new())
     }
 
