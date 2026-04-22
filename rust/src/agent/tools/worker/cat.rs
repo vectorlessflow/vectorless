@@ -53,17 +53,7 @@ pub fn cat(target: &str, ctx: &DocContext, state: &mut WorkerState) -> ToolResul
             state.collected_nodes.insert(node_id);
             state.visited.insert(node_id);
 
-            let preview = if content_string.len() > 500 {
-                format!(
-                    "{}...(truncated, {} chars total)",
-                    &content_string[..500],
-                    content_string.len()
-                )
-            } else {
-                content_string
-            };
-
-            ToolResult::ok(format!("[Evidence collected: {}]\n{}", title, preview))
+            ToolResult::ok(format!("[Evidence collected: {}]\n{}", title, content_string))
         }
         None => ToolResult::fail(format!("No content available for '{}'.", target)),
     }
