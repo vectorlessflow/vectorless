@@ -3,8 +3,8 @@ members = ["vectorless-core/vectorless", "vectorless-core/vectorless-py"]
 resolver = "2"
 
 [workspace.package]
-version = "0.1.32"
-description = "Reasoning-based Document Engine"
+version = "0.1.12"
+description = "Document Understanding Engine for AI"
 edition = "2024"
 authors = ["zTgx <beautifularea@gmail.com>"]
 license = "Apache-2.0"

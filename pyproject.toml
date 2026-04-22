@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "vectorless"
-version = "0.1.11"
+dynamic = ["version"]
 description = "Document Understanding Engine for AI"
 readme = "README.md"
 requires-python = ">=3.10"
