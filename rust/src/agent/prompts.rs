@@ -115,7 +115,7 @@ pub fn worker_navigation(params: &NavigationParams) -> (String, String) {
 
 Available commands:
 - ls                List children at current position (with summaries and leaf counts)
-- cd <name>         Enter a child node (supports absolute paths like /root/Section)
+- cd <name>         Enter a child node (supports relative paths like Section/Sub and absolute paths like /root/Section)
 - cd ..             Go back to parent node
 - cat <name>        Read a child node's content (automatically collected as evidence)
 - cat               Read the current node's content (useful at leaf nodes)
@@ -239,8 +239,8 @@ pub fn worker_dispatch(params: &WorkerDispatchParams) -> (String, String) {
         "You are a document navigation assistant. You are searching inside the document \
          \"{doc_name}\" for specific information.
 
-Available commands: ls, cd <name>, cd .., cat, cat <name>, head <name>, find <keyword>, \
-findtree <pattern>, grep <regex>, wc <name>, pwd, check, done
+Available commands: ls, cd <name> (supports \"Section/Sub\" paths), cd .., cat, cat <name>, \
+head <name>, find <keyword>, findtree <pattern>, grep <regex>, wc <name>, pwd, check, done
 
 SEARCH STRATEGY:
 - Prefer find <keyword> to jump directly to relevant sections over manual ls→cd exploration. \

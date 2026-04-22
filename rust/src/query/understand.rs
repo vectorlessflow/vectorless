@@ -58,7 +58,9 @@ pub async fn understand(
     info!(
         intent = %analysis.intent,
         complexity = %analysis.complexity,
-        concepts = analysis.key_concepts.len(),
+        concepts = ?analysis.key_concepts,
+        strategy = %analysis.strategy_hint,
+        rewritten = ?analysis.rewritten,
         "Query understanding complete"
     );
     Ok(analysis.into_plan(query, keywords))

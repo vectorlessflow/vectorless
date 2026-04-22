@@ -56,6 +56,12 @@ pub fn build_plan_prompt(
                     "  - keyword '{}' → {} (depth {}, weight {:.2})\n",
                     hit.keyword, ancestor_path, entry.depth, entry.weight
                 ));
+                // Include a content snippet so the planner can judge relevance
+                if let Some(content) = ctx.cat(entry.node_id) {
+                    if let Some(snippet) = content_snippet(content, &hit.keyword, 120) {
+                        section.push_str(&format!("    \"{}\"\n", snippet));
+                    }
+                }
                 if section.len() > PLAN_CONTEXT_BUDGET {
                     section.push_str("  ... (more hits truncated)\n");
                     break;
@@ -165,7 +171,9 @@ pub fn build_replan_prompt(
 /// ```text
 /// Keyword matches (use find <keyword> to jump directly):
 ///   - 'complex' → Performance (weight 0.85)
+///     "...complexity analysis shows..."
 ///   - 'latency' → Performance (weight 0.72)
+///     "...latency benchmarks indicate..."
 /// ```
 pub fn format_keyword_hints(keyword_hits: &[FindHit], ctx: &DocContext<'_>) -> String {
     if keyword_hits.is_empty() {
@@ -190,6 +198,12 @@ pub fn format_keyword_hints(keyword_hits: &[FindHit], ctx: &DocContext<'_>) -> S
                 "  - '{}' → {} (weight {:.2})\n",
                 hit.keyword, title, entry.weight
             ));
+            // Include a content snippet so the LLM can see what's there
+            if let Some(content) = ctx.cat(entry.node_id) {
+                if let Some(snippet) = content_snippet(content, &hit.keyword, 100) {
+                    section.push_str(&format!("    \"{}\"\n", snippet));
+                }
+            }
             if section.len() > 800 {
                 section.push_str("  ... (more)\n");
                 return section;
@@ -197,6 +211,54 @@ pub fn format_keyword_hints(keyword_hits: &[FindHit], ctx: &DocContext<'_>) -> S
         }
     }
     section
+}
+
+/// Extract a short content snippet around the first occurrence of `keyword`.
+///
+/// Returns `None` if the content is empty. If the keyword is not found,
+/// returns the beginning of the content instead.
+fn content_snippet(content: &str, keyword: &str, max_len: usize) -> Option<String> {
+    if content.trim().is_empty() {
+        return None;
+    }
+
+    let keyword_lower = keyword.to_lowercase();
+    let content_lower = content.to_lowercase();
+
+    let start = match content_lower.find(&keyword_lower) {
+        Some(pos) => {
+            let back = (max_len / 4).min(pos);
+            pos - back
+        }
+        None => 0,
+    };
+
+    let start = content
+        .char_indices()
+        .find(|(i, _)| *i >= start)
+        .map(|(i, _)| i)
+        .unwrap_or(0);
+
+    let end = content
+        .char_indices()
+        .take_while(|(i, _)| *i <= start + max_len)
+        .last()
+        .map(|(i, c)| i + c.len_utf8())
+        .unwrap_or(content.len());
+
+    let snippet = content[start..end].trim();
+    if snippet.is_empty() {
+        return None;
+    }
+
+    let mut result = snippet.to_string();
+    if end < content.len() {
+        result.push_str("...");
+    }
+    if start > 0 {
+        result = format!("...{}", result);
+    }
+    Some(result)
 }
 
 /// Build the ancestor path string for a node (e.g., "root/Chapter 1/Section 1.2").
