@@ -423,8 +423,14 @@ impl Engine {
 
         self.with_timeout(timeout_secs, async move {
             let doc_ids = self.resolve_scope(&ctx.scope).await?;
+            info!(doc_count = doc_ids.len(), "Resolving documents for query");
 
             let (documents, failed) = self.load_documents(&doc_ids).await?;
+            info!(
+                loaded = documents.len(),
+                failed = failed.len(),
+                "Documents loaded"
+            );
             if documents.is_empty() {
                 return Err(Error::Config(format!(
                     "No documents available for query: {} failures",
