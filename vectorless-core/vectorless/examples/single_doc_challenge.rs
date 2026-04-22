@@ -14,7 +14,7 @@
 //!   cargo run --example single_doc_challenge
 //! ```
 
-use vectorless::{DocumentFormat, EngineBuilder, IndexContext, QueryContext};
+use vectorless::{EngineBuilder, IngestInput};
 
 /// A research report with information scattered across sections.
 /// The answers to the challenge questions require connecting dots
@@ -191,52 +191,49 @@ async fn main() -> vectorless::Result<()> {
         .await
         .map_err(|e| vectorless::Error::Config(e.to_string()))?;
 
-    // Index (skip if already indexed — we're testing retrieval, not indexing)
+    // Ingest (skip if already indexed — we're testing reasoning, not indexing)
     let doc_name = "qc_report_2025";
     let doc_id = {
-        let existing = engine.list().await?;
+        let existing = engine.list_documents().await?;
         if let Some(doc) = existing.iter().find(|d| d.name == doc_name) {
-            println!("Document already indexed, reusing: {}\n", doc.id);
-            doc.id.clone()
+            println!("Document already understood, reusing: {}\n", doc.doc_id);
+            doc.doc_id.clone()
         } else {
-            println!("Indexing research report...");
-            let result = engine
-                .index(
-                    IndexContext::from_content(REPORT, DocumentFormat::Markdown)
-                        .with_name(doc_name),
-                )
+            println!("Understanding research report...");
+            let doc = engine
+                .ingest(IngestInput::Text {
+                    name: doc_name.to_string(),
+                    content: REPORT.to_string(),
+                })
                 .await?;
-            let id = result.doc_id().unwrap().to_string();
-            println!("  doc_id: {}\n", id);
-            id
+            println!("  doc_id: {}", doc.doc_id);
+            println!("  summary: {}\n", doc.summary);
+            doc.doc_id
         }
     };
 
-    // Challenge queries
+    // Challenge questions
     for (i, question) in CHALLENGE_QUESTIONS.iter().enumerate() {
         println!("Q{}: {}", i + 1, question);
 
-        match engine
-            .query(QueryContext::new(*question).with_doc_ids(vec![doc_id.clone()]))
-            .await
-        {
-            Ok(response) => {
-                if let Some(item) = response.single() {
-                    if item.content.is_empty() {
-                        println!("   (no answer found)\n");
-                    } else {
-                        // Print first 3 lines as preview
-                        for line in item.content.lines().take(3) {
-                            println!("   {}", line);
-                        }
-                        let remaining = item.content.lines().count().saturating_sub(3);
-                        if remaining > 0 {
-                            println!("   ... ({} more lines)", remaining);
-                        }
-                        println!("   confidence: {:.2}\n", item.confidence);
-                    }
+        match engine.ask(question, &[doc_id.clone()]).await {
+            Ok(answer) => {
+                if answer.content.is_empty() {
+                    println!("   (no answer found)\n");
                 } else {
-                    println!("   (no results)\n");
+                    for line in answer.content.lines().take(3) {
+                        println!("   {}", line);
+                    }
+                    let remaining = answer.content.lines().count().saturating_sub(3);
+                    if remaining > 0 {
+                        println!("   ... ({} more lines)", remaining);
+                    }
+                    println!(
+                        "   confidence: {:.2}, evidence: {}, trace_steps: {}\n",
+                        answer.confidence,
+                        answer.evidence.len(),
+                        answer.trace.steps.len()
+                    );
                 }
             }
             Err(e) => {
@@ -245,8 +242,8 @@ async fn main() -> vectorless::Result<()> {
         }
     }
 
-    // Uncomment to remove the document after testing:
-    // engine.remove(&doc_id).await?;
+    // Uncomment to forget the document after testing:
+    // engine.forget(&doc_id).await?;
     // println!("Cleaned up.");
 
     Ok(())
