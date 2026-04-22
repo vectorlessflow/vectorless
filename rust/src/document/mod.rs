@@ -24,6 +24,7 @@ mod serde_helpers;
 mod structure;
 mod toc;
 mod tree;
+pub mod understanding;
 
 pub use navigation::{ChildRoute, DocCard, NavEntry, NavigationIndex, SectionCard};
 pub use node::{NodeId, TreeNode};
@@ -35,3 +36,6 @@ pub use reference::ReferenceExtractor;
 pub use structure::{DocumentStructure, StructureNode};
 pub use toc::{TocConfig, TocEntry, TocNode, TocView};
 pub use tree::{DocumentTree, RetrievalIndex};
+pub use understanding::{
+    Answer, Concept, Document, DocumentInfo, Evidence, IngestInput, ReasoningTrace, TraceStep,
+};

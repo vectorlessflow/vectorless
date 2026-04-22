@@ -5,16 +5,15 @@
 
 //! # Vectorless
 //!
-//! A reasoning-native document engine for AI.
+//! A Document Understanding Engine for AI.
 //!
-//! It will reason through any of your structured documents — **PDFs, Markdown,
-//! reports, contracts** — and retrieve only what's relevant. Nothing more,
-//! nothing less.
+//! It compiles documents into structured trees of meaning, then dispatches
+//! multiple agents to reason through headings, sections, and paragraphs.
 //!
 //! ## Quick Start
 //!
 //! ```rust,no_run
-//! use vectorless::{EngineBuilder, IndexContext, QueryContext};
+//! use vectorless::{EngineBuilder, IngestInput};
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -25,14 +24,13 @@
 //!         .build()
 //!         .await?;
 //!
-//!     let result = engine.index(IndexContext::from_path("./document.md")).await?;
-//!     let doc_id = result.doc_id().unwrap();
+//!     // Understand a document
+//!     let doc = engine.ingest(IngestInput::Path("./report.pdf".into())).await?;
+//!     println!("{}: {}", doc.name, doc.summary);
 //!
-//!     let result = engine.query(
-//!         QueryContext::new("What is this about?")
-//!             .with_doc_ids(vec![doc_id.to_string()]),
-//!     ).await?;
-//!     println!("{}", result.content);
+//!     // Ask a question
+//!     let answer = engine.ask("What is the total revenue?", &[doc.doc_id.clone()]).await?;
+//!     println!("{}", answer.content);
 //!
 //!     Ok(())
 //! }
@@ -61,19 +59,16 @@ mod utils;
 // ── Public API ───────────────────────────────────────────────────────────────
 
 // Client
-pub use client::{
-    BuildError, Confidence, DocumentFormat, DocumentInfo, Engine, EngineBuilder, EvidenceItem,
-    FailedItem, IndexContext, IndexItem, IndexMode, IndexOptions, IndexResult, QueryContext,
-    QueryMetrics, QueryResult, QueryResultItem,
-};
+pub use client::{BuildError, Engine, EngineBuilder};
 
 // Config
 pub use config::Config;
 
-// Documents
+// Documents (understanding types)
 pub use document::{
-    DocumentStructure, DocumentTree, NodeId, ReasoningIndexConfig, StructureNode, TocConfig,
-    TocEntry, TocNode, TocView, TreeNode,
+    Answer, Concept, Document, DocumentInfo, DocumentStructure, DocumentTree, Evidence,
+    IngestInput, NodeId, ReasoningIndexConfig, ReasoningTrace, StructureNode, TocConfig,
+    TocEntry, TocNode, TocView, TraceStep, TreeNode,
 };
 
 // Graph
@@ -84,9 +79,6 @@ pub use events::{EventEmitter, IndexEvent, QueryEvent, WorkspaceEvent};
 
 // Metrics
 pub use metrics::{IndexMetrics, LlmMetricsReport, MetricsReport, RetrievalMetricsReport};
-
-// Retrieval (streaming)
-pub use retrieval::{RetrieveEvent, SufficiencyLevel};
 
 // Errors
 pub use error::{Error, Result};

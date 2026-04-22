@@ -7,7 +7,7 @@ use pyo3::prelude::*;
 
 use ::vectorless::DocumentInfo;
 
-/// Information about an indexed document.
+/// Information about an understood document.
 #[pyclass(name = "DocumentInfo")]
 pub struct PyDocumentInfo {
     pub(crate) inner: DocumentInfo,
@@ -16,8 +16,8 @@ pub struct PyDocumentInfo {
 #[pymethods]
 impl PyDocumentInfo {
     #[getter]
-    fn id(&self) -> &str {
-        &self.inner.id
+    fn doc_id(&self) -> &str {
+        &self.inner.doc_id
     }
 
     #[getter]
@@ -31,13 +31,26 @@ impl PyDocumentInfo {
     }
 
     #[getter]
-    fn description(&self) -> Option<&str> {
-        self.inner.description.as_deref()
+    fn summary(&self) -> &str {
+        &self.inner.summary
     }
 
     #[getter]
-    fn source_path(&self) -> Option<&str> {
-        self.inner.source_path.as_deref()
+    fn concepts(&self) -> Vec<PyConcept> {
+        self.inner
+            .concepts
+            .iter()
+            .map(|c| PyConcept {
+                name: c.name.clone(),
+                summary: c.summary.clone(),
+                sections: c.sections.clone(),
+            })
+            .collect()
+    }
+
+    #[getter]
+    fn section_count(&self) -> usize {
+        self.inner.section_count
     }
 
     #[getter]
@@ -45,15 +58,21 @@ impl PyDocumentInfo {
         self.inner.page_count
     }
 
-    #[getter]
-    fn line_count(&self) -> Option<usize> {
-        self.inner.line_count
-    }
-
     fn __repr__(&self) -> String {
         format!(
-            "DocumentInfo(id='{}', name='{}', format='{}')",
-            self.inner.id, self.inner.name, self.inner.format
+            "DocumentInfo(doc_id='{}', name='{}', format='{}')",
+            self.inner.doc_id, self.inner.name, self.inner.format
         )
     }
+}
+
+/// A key concept extracted from a document.
+#[pyclass(name = "Concept")]
+pub struct PyConcept {
+    #[pyo3(get)]
+    pub name: String,
+    #[pyo3(get)]
+    pub summary: String,
+    #[pyo3(get)]
+    pub sections: Vec<String>,
 }

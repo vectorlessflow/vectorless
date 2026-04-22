@@ -95,8 +95,8 @@ pub use query_context::QueryContext;
 // ============================================================
 
 pub use types::{
-    Confidence, DocumentInfo, EvidenceItem, FailedItem, IndexItem, IndexMode, IndexOptions,
-    IndexResult, QueryMetrics, QueryResult, QueryResultItem,
+    Confidence, EvidenceItem, FailedItem, IndexItem, IndexMode, IndexOptions, IndexResult,
+    QueryMetrics, QueryResult, QueryResultItem,
 };
 
 // ============================================================

@@ -3,16 +3,17 @@
 
 //! Main Engine client - the entry point for vectorless.
 //!
-//! The Engine provides a unified API for document indexing and retrieval:
+//! The Engine provides a unified API for the Document Understanding Engine:
 //!
-//! - [`index`](Engine::index) — Index documents from files, content, or bytes
-//! - [`query`](Engine::query) — Query documents using natural language
-//! - [`query_stream`](Engine::query_stream) — Query with streaming results
+//! - [`ingest`](Engine::ingest) — Understand a document (parse, analyze, persist)
+//! - [`ask`](Engine::ask) — Ask a question (returns answer + evidence + trace)
+//! - [`forget`](Engine::forget) — Remove a document
+//! - [`list_documents`](Engine::list_documents) — List all understood documents
 //!
 //! # Example
 //!
 //! ```rust,no_run
-//! use vectorless::client::{EngineBuilder, IndexContext, QueryContext};
+//! use vectorless::{EngineBuilder, IngestInput};
 //!
 //! # #[tokio::main]
 //! # async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -23,16 +24,22 @@
 //!     .build()
 //!     .await?;
 //!
-//! // Index a document
-//! let result = engine.index(IndexContext::from_path("./document.md")).await?;
-//! let doc_id = result.doc_id().unwrap();
+//! // Understand a document
+//! let doc = engine.ingest(IngestInput::Path("./document.md".into())).await?;
+//! println!("{}: {}", doc.name, doc.summary);
 //!
-//! // Query
-//! let result = engine.query(
-//!     QueryContext::new("What is this?").with_doc_ids(vec![doc_id.to_string()])
-//! ).await?;
+//! // Ask a question
+//! let answer = engine.ask("What is this?", &[doc.doc_id.clone()]).await?;
+//! println!("{}", answer.content);
 //!
-//! println!("Found: {}", result.content);
+//! // List all understood documents
+//! let docs = engine.list_documents().await?;
+//! for d in &docs {
+//!     println!("{}: {}", d.name, d.summary);
+//! }
+//!
+//! // Forget a document
+//! engine.forget(&doc.doc_id).await?;
 //! # Ok(())
 //! # }
 //! ```
@@ -43,7 +50,8 @@ use futures::StreamExt;
 use tracing::{info, warn};
 
 use crate::{
-    DocumentTree, Error,
+    Answer, Document as UnderstandingDocument, DocumentTree, Error, Evidence, IngestInput,
+    ReasoningTrace,
     config::Config,
     error::Result,
     events::EventEmitter,
@@ -52,16 +60,14 @@ use crate::{
         incremental::{self, IndexAction},
     },
     metrics::MetricsHub,
-    retrieval::RetrieveEventReceiver,
     storage::{PersistedDocument, Workspace},
 };
 
 use super::{
     index_context::{IndexContext, IndexSource},
     indexer::IndexerClient,
-    query_context::{QueryContext, QueryScope},
     retriever::RetrieverClient,
-    types::{DocumentInfo, FailedItem, IndexItem, IndexMode, IndexResult, QueryResult},
+    types::{FailedItem, IndexItem, IndexMode, IndexResult},
     workspace::WorkspaceClient,
 };
 
@@ -132,18 +138,16 @@ impl Engine {
     }
 
     // ============================================================
-    // Document Indexing
+    // Ingest Pipeline (private — called by ingest())
     // ============================================================
 
-    /// Index one or more documents.
+    /// Run the ingest pipeline: parse, compile, persist.
     ///
-    /// Accepts an [`IndexContext`] that specifies the source (file path,
-    /// directory, content string, or bytes) and indexing options.
-    /// Multiple sources are indexed in parallel.
-    ///
+    /// Accepts an [`IndexContext`] that specifies the source and options.
+    /// Multiple sources are processed in parallel.
     /// Returns an [`IndexResult`] containing the indexed document metadata.
     #[tracing::instrument(skip_all, fields(sources = ctx.sources.len()))]
-    pub async fn index(&self, ctx: IndexContext) -> Result<IndexResult> {
+    async fn ingest_pipeline(&self, ctx: IndexContext) -> Result<IndexResult> {
         if ctx.is_empty() {
             return Err(Error::Config("No document sources provided".into()));
         }
@@ -407,391 +411,129 @@ impl Engine {
     }
 
     // ============================================================
-    // Document Querying
+    // Understanding Engine API
     // ============================================================
 
-    /// Query documents.
+    /// Understand a document — parse, analyze, and persist.
     ///
-    /// Accepts a [`QueryContext`] that specifies the query text and scope
-    /// (single document, multiple documents, or entire workspace).
-    #[tracing::instrument(skip_all, fields(query = %ctx.query))]
-    pub async fn query(&self, ctx: QueryContext) -> Result<QueryResult> {
-        let timeout_secs = ctx.timeout_secs;
-
-        self.with_timeout(timeout_secs, async move {
-            let doc_ids = self.resolve_scope(&ctx.scope).await?;
-            info!(doc_count = doc_ids.len(), "Resolving documents for query");
-
-            let (documents, failed) = self.load_documents(&doc_ids).await?;
-            info!(
-                loaded = documents.len(),
-                failed = failed.len(),
-                "Documents loaded"
-            );
-            if documents.is_empty() {
-                return Err(Error::Config(format!(
-                    "No documents available for query: {} failures",
-                    failed.len()
-                )));
+    /// Returns a [`crate::document::DocumentInfo`] with summary, structure, and concepts.
+    /// The engine builds a full understanding including tree, navigation index,
+    /// reasoning index, summary, and key concepts.
+    pub async fn ingest(&self, input: IngestInput) -> Result<crate::document::DocumentInfo> {
+        let ctx = match &input {
+            IngestInput::Path(path) => IndexContext::from_path(path),
+            IngestInput::Bytes { data, format, .. } => IndexContext::from_bytes(data.clone(), *format),
+            IngestInput::Text { content, .. } => {
+                IndexContext::from_content(content, crate::index::parse::DocumentFormat::Markdown)
             }
+        };
 
-            let skip_analysis = !ctx.force_analysis;
-            let mut result = self
-                .retriever
-                .query(&documents, &ctx.query, skip_analysis)
-                .await?;
-            result.failed.extend(failed);
-            Ok(result)
-        })
-        .await
+        let result = self.ingest_pipeline(ctx).await?;
+
+        let doc_id = result
+            .doc_id()
+            .ok_or_else(|| Error::Config("ingest produced no results".into()))?
+            .to_string();
+
+        // Load the persisted document to build DocumentInfo
+        let persisted = self
+            .workspace
+            .load(&doc_id)
+            .await?
+            .ok_or_else(|| Error::Config("Document not found after ingest".into()))?;
+
+        let doc = Self::persisted_to_understanding_document(persisted);
+        Ok(doc.info())
     }
 
-    /// Query a document with streaming results.
+    /// Ask a question — returns a reasoned answer with evidence and trace.
     ///
-    /// Returns a receiver that yields retrieval events
-    /// as the retrieval agent progresses through navigation.
+    /// - `input`: the question (required)
+    /// - `ids`: document IDs to search. Empty = search all documents.
     ///
-    /// Supports single-document and multi-document scope.
-    /// Events are translated from the agent's internal event stream
-    /// into the public `RetrieveEventReceiver` stream.
-    pub async fn query_stream(&self, ctx: QueryContext) -> Result<RetrieveEventReceiver> {
-        let doc_ids = self.resolve_scope(&ctx.scope).await?;
-        let query = ctx.query.clone();
+    /// Always returns an [`Answer`] with content, evidence, confidence, and
+    /// a mandatory reasoning trace.
+    pub async fn ask(&self, input: &str, ids: &[String]) -> Result<Answer> {
+        // Resolve doc IDs
+        let doc_ids = if ids.is_empty() {
+            let docs = self.list_documents().await?;
+            if docs.is_empty() {
+                return Err(Error::Config("Workspace is empty".into()));
+            }
+            docs.into_iter().map(|d| d.doc_id).collect::<Vec<_>>()
+        } else {
+            ids.to_vec()
+        };
 
-        // Load all requested documents (need owned PersistedDocument for spawned task)
-        let mut docs = Vec::new();
-        for doc_id in &doc_ids {
-            let doc = match self.workspace.load(doc_id).await? {
-                Some(d) => d,
-                None => return Err(Error::Config(format!("Document not found: {}", doc_id))),
-            };
-            docs.push((doc_id.clone(), doc));
+        // Load documents
+        let (documents, failed) = self.load_documents(&doc_ids).await?;
+        if documents.is_empty() {
+            return Err(Error::Config(format!(
+                "No documents available: {} failures",
+                failed.len()
+            )));
         }
 
-        // Create agent event channel
-        let (agent_tx, mut agent_rx) =
-            crate::agent::events::channel(crate::agent::events::DEFAULT_AGENT_EVENT_BOUND);
-        let (retrieve_tx, retrieve_rx) =
-            crate::retrieval::stream::channel(crate::retrieval::stream::DEFAULT_STREAM_BOUND);
+        // Build DocContexts and dispatch
+        let doc_contexts: Vec<crate::agent::DocContext> = documents
+            .iter()
+            .map(|(tree, nav, ridx, id)| crate::agent::DocContext {
+                tree,
+                nav_index: nav,
+                reasoning_index: ridx,
+                doc_name: id.as_str(),
+            })
+            .collect();
 
-        // Spawn a task that translates AgentEvents → RetrieveEvents
-        tokio::spawn(async move {
-            use crate::agent::AgentEvent;
-            use crate::retrieval::stream::RetrieveEvent;
+        let skip_analysis = !ids.is_empty();
+        let scope = if skip_analysis {
+            crate::agent::Scope::Specified(doc_contexts)
+        } else {
+            crate::agent::Scope::Workspace(crate::agent::WorkspaceContext::new(doc_contexts))
+        };
 
-            while let Some(event) = agent_rx.recv().await {
-                let translated = match event {
-                    // ── Query Understanding ──
-                    AgentEvent::QueryUnderstandingStarted { query } => RetrieveEvent::Started {
-                        query,
-                        strategy: "query_understanding".to_string(),
-                    },
-                    AgentEvent::QueryUnderstandingCompleted { query, .. } => {
-                        RetrieveEvent::StageCompleted {
-                            stage: format!("query_understanding: {}", query),
-                            elapsed_ms: 0,
-                        }
-                    }
-
-                    // ── Orchestrator ──
-                    AgentEvent::OrchestratorStarted {
-                        query,
-                        doc_count,
-                        skip_analysis,
-                    } => RetrieveEvent::Started {
-                        query,
-                        strategy: if skip_analysis {
-                            "orchestrator_skip_analysis".to_string()
-                        } else {
-                            format!("orchestrator({}_docs)", doc_count)
-                        },
-                    },
-                    AgentEvent::OrchestratorAnalyzing {
-                        doc_count,
-                        keywords,
-                    } => RetrieveEvent::StageCompleted {
-                        stage: format!(
-                            "orchestrator_analyzing_{}_docs_kw_{}",
-                            doc_count,
-                            keywords.len()
-                        ),
-                        elapsed_ms: 0,
-                    },
-                    AgentEvent::WorkerDispatched {
-                        doc_idx,
-                        doc_name,
-                        task,
-                        ..
-                    } => RetrieveEvent::StageCompleted {
-                        stage: format!("dispatch_{}_{}_{}", doc_idx, doc_name, task.len().min(30)),
-                        elapsed_ms: 0,
-                    },
-                    AgentEvent::WorkerCompleted {
-                        doc_idx,
-                        doc_name,
-                        evidence_count,
-                        rounds_used,
-                        llm_calls,
-                        success,
-                    } => RetrieveEvent::StageCompleted {
-                        stage: format!(
-                            "worker_{}_{}_done_e{}_r{}_l{}_{}",
-                            doc_idx, doc_name, evidence_count, rounds_used, llm_calls, success
-                        ),
-                        elapsed_ms: 0,
-                    },
-                    AgentEvent::OrchestratorEvaluated {
-                        sufficient,
-                        evidence_count,
-                        missing_info: _,
-                    } => RetrieveEvent::SufficiencyCheck {
-                        level: if sufficient {
-                            crate::retrieval::SufficiencyLevel::Sufficient
-                        } else {
-                            crate::retrieval::SufficiencyLevel::Insufficient
-                        },
-                        tokens: evidence_count,
-                    },
-                    AgentEvent::OrchestratorReplanning {
-                        reason,
-                        evidence_count,
-                    } => RetrieveEvent::StageCompleted {
-                        stage: format!(
-                            "orchestrator_replan_{}_e{}",
-                            &reason[..reason.len().min(30)],
-                            evidence_count
-                        ),
-                        elapsed_ms: 0,
-                    },
-                    AgentEvent::OrchestratorCompleted {
-                        evidence_count,
-                        total_llm_calls,
-                        dispatch_rounds,
-                    } => RetrieveEvent::StageCompleted {
-                        stage: format!(
-                            "orchestrator_done_e{}_l{}_r{}",
-                            evidence_count, total_llm_calls, dispatch_rounds
-                        ),
-                        elapsed_ms: 0,
-                    },
-
-                    // ── Worker ──
-                    AgentEvent::WorkerStarted {
-                        doc_name,
-                        task: _,
-                        max_rounds,
-                    } => RetrieveEvent::StageCompleted {
-                        stage: format!("worker_started_{}_r{}", doc_name, max_rounds),
-                        elapsed_ms: 0,
-                    },
-                    AgentEvent::WorkerPlanGenerated { doc_name, plan_len } => {
-                        RetrieveEvent::StageCompleted {
-                            stage: format!("plan_{}_{}chars", doc_name, plan_len),
-                            elapsed_ms: 0,
-                        }
-                    }
-                    AgentEvent::WorkerRound {
-                        doc_name,
-                        round,
-                        command,
-                        success: _,
-                        elapsed_ms,
-                    } => RetrieveEvent::StageCompleted {
-                        stage: format!("round_{}_{}_{}", doc_name, round, command),
-                        elapsed_ms,
-                    },
-                    AgentEvent::EvidenceCollected {
-                        doc_name,
-                        node_title,
-                        source_path,
-                        content_len,
-                        total_evidence: _,
-                    } => RetrieveEvent::ContentFound {
-                        node_id: source_path,
-                        title: format!("[{}] {}", doc_name, node_title),
-                        preview: String::new(),
-                        score: if content_len > 0 { 0.8 } else { 0.0 },
-                    },
-                    AgentEvent::WorkerSufficiencyCheck {
-                        doc_name: _,
-                        sufficient,
-                        evidence_count,
-                        ..
-                    } => RetrieveEvent::SufficiencyCheck {
-                        level: if sufficient {
-                            crate::retrieval::SufficiencyLevel::Sufficient
-                        } else {
-                            crate::retrieval::SufficiencyLevel::Insufficient
-                        },
-                        tokens: evidence_count,
-                    },
-                    AgentEvent::WorkerReplan {
-                        doc_name,
-                        missing_info,
-                        plan_len,
-                    } => RetrieveEvent::StageCompleted {
-                        stage: format!(
-                            "replan_{}_{}_{}chars",
-                            doc_name,
-                            &missing_info[..missing_info.len().min(30)],
-                            plan_len
-                        ),
-                        elapsed_ms: 0,
-                    },
-                    AgentEvent::WorkerBudgetWarning {
-                        doc_name,
-                        warning_type,
-                        round,
-                    } => RetrieveEvent::StageCompleted {
-                        stage: format!(
-                            "budget_warning_{}_{}_round_{}",
-                            doc_name, warning_type, round
-                        ),
-                        elapsed_ms: 0,
-                    },
-                    AgentEvent::WorkerDone {
-                        doc_name,
-                        evidence_count,
-                        rounds_used,
-                        llm_calls,
-                        budget_exhausted: _,
-                        plan_generated: _,
-                    } => RetrieveEvent::StageCompleted {
-                        stage: format!(
-                            "worker_done_{}_e{}_r{}_l{}",
-                            doc_name, evidence_count, rounds_used, llm_calls
-                        ),
-                        elapsed_ms: 0,
-                    },
-
-                    // ── Answer Pipeline ──
-                    AgentEvent::AnswerStarted {
-                        evidence_count,
-                        multi_doc,
-                    } => RetrieveEvent::StageCompleted {
-                        stage: format!(
-                            "answer_start_{}_e{}",
-                            if multi_doc { "multi" } else { "single" },
-                            evidence_count
-                        ),
-                        elapsed_ms: 0,
-                    },
-                    AgentEvent::AnswerCompleted {
-                        answer_len,
-                        confidence,
-                    } => RetrieveEvent::StageCompleted {
-                        stage: format!("synthesis_{}_{}chars", confidence, answer_len),
-                        elapsed_ms: 0,
-                    },
-
-                    // ── Terminal ──
-                    AgentEvent::Completed {
-                        evidence_count,
-                        llm_calls,
-                        answer_len,
-                    } => {
-                        let response = crate::retrieval::RetrieveResponse {
-                            results: Vec::new(),
-                            content: String::new(),
-                            confidence: if evidence_count > 0 { 0.8 } else { 0.0 },
-                            is_sufficient: true,
-                            strategy_used: format!("agent(l={},a={})", llm_calls, answer_len),
-                            reasoning_chain: crate::retrieval::ReasoningChain::default(),
-                            tokens_used: answer_len,
-                        };
-                        let _ = retrieve_tx
-                            .send(RetrieveEvent::Completed { response })
-                            .await;
-                        break; // Completed is terminal
-                    }
-                    AgentEvent::Error { stage, message } => {
-                        let _ = retrieve_tx
-                            .send(RetrieveEvent::Error {
-                                message: format!("[{}] {}", stage, message),
-                            })
-                            .await;
-                        break; // Error is terminal
-                    }
-                };
-
-                // For non-terminal events, send the translated event
-                if !matches!(
-                    translated,
-                    RetrieveEvent::Completed { .. } | RetrieveEvent::Error { .. }
-                ) {
-                    if retrieve_tx.send(translated).await.is_err() {
-                        break; // Receiver dropped
-                    }
-                }
-            }
-        });
-
-        // Run the agent in a background task
+        let emitter = crate::agent::EventEmitter::noop();
         let config = self.retriever.config().clone();
         let llm = self.retriever.llm().clone();
-        let emitter = crate::agent::EventEmitter::new(agent_tx);
-        let metrics_hub = Arc::clone(&self.metrics_hub);
-        let start = std::time::Instant::now();
+        let output =
+            crate::retrieval::dispatcher::dispatch(input, scope, &config, &llm, &emitter).await?;
 
-        tokio::spawn(async move {
-            // Prepare owned indices (fill defaults for missing)
-            let owned_docs: Vec<(
-                String,
-                crate::storage::PersistedDocument,
-                crate::document::NavigationIndex,
-                crate::document::ReasoningIndex,
-            )> = docs
-                .into_iter()
-                .map(|(id, doc)| {
-                    let nav = doc.navigation_index.clone().unwrap_or_default();
-                    let ridx = doc.reasoning_index.clone().unwrap_or_default();
-                    (id, doc, nav, ridx)
-                })
-                .collect();
-
-            // All streaming queries are user-specified docs → always use Scope::Specified
-            let doc_contexts: Vec<crate::agent::DocContext> = owned_docs
-                .iter()
-                .map(|(id, doc, nav, ridx)| crate::agent::DocContext {
-                    tree: &doc.tree,
-                    nav_index: nav,
-                    reasoning_index: ridx,
-                    doc_name: id.as_str(),
-                })
-                .collect();
-            let scope = crate::agent::Scope::Specified(doc_contexts);
-            let result =
-                crate::retrieval::dispatcher::dispatch(&query, scope, &config, &llm, &emitter)
-                    .await;
-
-            // Bridge agent metrics into global MetricsHub
-            if let Ok(output) = result {
-                let m = &output.metrics;
-                let elapsed = start.elapsed();
-                metrics_hub.record_retrieval_query(
-                    m.rounds_used as u64,
-                    m.nodes_visited as u64,
-                    elapsed.as_millis() as u64,
-                );
-            }
-        });
-
-        Ok(retrieve_rx)
-    }
-
-    // ============================================================
-    // Document Management
-    // ============================================================
-
-    /// Get a list of all indexed documents.
-    pub async fn list(&self) -> Result<Vec<DocumentInfo>> {
-        self.workspace.list().await
+        // Convert Output -> Answer
+        Ok(Self::output_to_answer(&output))
     }
 
     /// Remove a document from the workspace.
-    pub async fn remove(&self, doc_id: &str) -> Result<bool> {
-        self.workspace.remove(doc_id).await
+    pub async fn forget(&self, doc_id: &str) -> Result<()> {
+        self.workspace.remove(doc_id).await?;
+        Ok(())
     }
+
+    /// List all understood documents.
+    ///
+    /// Returns [`Vec<crate::document::DocumentInfo>`] with summary, structure, and concepts
+    /// for each document.
+    pub async fn list_documents(&self) -> Result<Vec<crate::document::DocumentInfo>> {
+        let ids = self.workspace.inner().list_documents().await;
+        let mut result = Vec::new();
+        for id in ids {
+            match self.workspace.load(&id).await {
+                Ok(Some(persisted)) => {
+                    result.push(Self::persisted_to_understanding_document(persisted).info());
+                }
+                Ok(None) => {
+                    tracing::warn!(doc_id = %id, "Document in index but not in storage");
+                }
+                Err(e) => {
+                    tracing::warn!(doc_id = %id, error = %e, "Failed to load document");
+                }
+            }
+        }
+        Ok(result)
+    }
+
+    // ============================================================
+    // Utility Methods
+    // ============================================================
 
     /// Check if a document exists in the workspace.
     pub async fn exists(&self, doc_id: &str) -> Result<bool> {
@@ -819,6 +561,55 @@ impl Engine {
     /// LLM usage and retrieval operation metrics.
     pub fn metrics_report(&self) -> crate::metrics::MetricsReport {
         self.metrics_hub.generate_report()
+    }
+
+    // ============================================================
+    // Internal: type conversions
+    // ============================================================
+
+    /// Convert a PersistedDocument to a Document (understanding type).
+    fn persisted_to_understanding_document(persisted: PersistedDocument) -> UnderstandingDocument {
+        let nav_index = persisted.navigation_index.unwrap_or_default();
+        let reasoning_index = persisted.reasoning_index.unwrap_or_default();
+        let tree = persisted.tree;
+
+        let section_count = tree.node_count();
+
+        UnderstandingDocument {
+            doc_id: persisted.meta.id,
+            name: persisted.meta.name,
+            format: persisted.meta.format,
+            source_path: persisted.meta.source_path.map(|p| p.to_string_lossy().to_string()),
+            tree,
+            nav_index,
+            reasoning_index,
+            summary: persisted.meta.description.unwrap_or_default(),
+            concepts: Vec::new(), // Will be populated by pipeline Stage 7
+            page_count: persisted.meta.page_count,
+            section_count,
+        }
+    }
+
+    /// Convert agent Output to public Answer type.
+    fn output_to_answer(output: &crate::agent::Output) -> Answer {
+        // Build evidence
+        let evidence: Vec<Evidence> = output
+            .evidence
+            .iter()
+            .map(|e| Evidence {
+                content: e.content.clone(),
+                source_path: e.source_path.clone(),
+                doc_name: e.doc_name.clone().unwrap_or_default(),
+                relevance: 0.0,
+            })
+            .collect();
+
+        Answer {
+            content: output.answer.clone(),
+            evidence,
+            confidence: output.confidence,
+            trace: ReasoningTrace::empty(), // TODO: wire up actual trace collection
+        }
     }
 
     // ============================================================
@@ -872,20 +663,6 @@ impl Engine {
                 }
             }
             None => fut.await,
-        }
-    }
-
-    /// Resolve QueryScope into a list of document IDs.
-    async fn resolve_scope(&self, scope: &QueryScope) -> Result<Vec<String>> {
-        match scope {
-            QueryScope::Documents(ids) => Ok(ids.clone()),
-            QueryScope::Workspace => {
-                let docs = self.list().await?;
-                if docs.is_empty() {
-                    return Err(Error::Config("Workspace is empty".to_string()));
-                }
-                Ok(docs.into_iter().map(|d| d.id).collect())
-            }
         }
     }
 
@@ -1074,7 +851,7 @@ impl Engine {
         Ok(())
     }
 
-    /// Extract keyword → weight map from a persisted document's ReasoningIndex.
+    /// Extract keyword -> weight map from a persisted document's ReasoningIndex.
     fn extract_keywords_from_doc(doc: &PersistedDocument) -> HashMap<String, f32> {
         let mut keywords = HashMap::new();
         if let Some(ref ri) = doc.reasoning_index {
@@ -1111,7 +888,7 @@ mod tests {
     use super::*;
     use crate::client::types::IndexMode;
 
-    // ── resolve_index_action Default mode ──────────────────────────────────
+    // -- resolve_index_action Default mode ----------------------------------------------
 
     // We can't call resolve_index_action without a workspace, but we can
     // verify IndexMode equality logic used inside.
@@ -1123,9 +900,9 @@ mod tests {
         assert_ne!(mode, IndexMode::Incremental);
     }
 
-    // ── build_index_item ──────────────────────────────────────────────────
+    // -- build_index_item ----------------------------------------------------------------
 
-    // Build_index_item only transforms data — no I/O.
+    // Build_index_item only transforms data -- no I/O.
     use crate::client::indexed_document::IndexedDocument;
 
     fn make_doc() -> IndexedDocument {
