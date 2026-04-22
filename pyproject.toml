@@ -5,19 +5,18 @@ build-backend = "maturin"
 [project]
 name = "vectorless"
 version = "0.1.11"
-description = "Reasoning-based Document Engine"
+description = "Document Understanding Engine for AI"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 license = { text = "Apache-2.0" }
 authors = [
-    { name = "vectorless developers", email = "beautifularea@gmail.com" }
+    { name = "Vectorless", email = "beautifularea@gmail.com" }
 ]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
@@ -26,12 +25,12 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
     "Topic :: Text Processing :: Linguistic",
 ]
-keywords = ["rag", "document", "retrieval", "llm", "document-intelligence"]
+keywords = ["document", "understanding", "ai", "reasoning", "document-intelligence"]
 
 dependencies = [
     "pydantic>=2.0",
     "click>=8.0",
-    "tomli>=2.0; python_version < '3.11'",
+    "tomli>=2.0; python_version < '3.11'",  # 3.10 only, 3.11+ has tomllib built-in
 ]
 
 [project.optional-dependencies]
@@ -77,13 +76,13 @@ asyncio_mode = "auto"
 testpaths = ["tests"]
 
 [tool.mypy]
-python_version = "3.9"
+python_version = "3.10"
 warn_return_any = true
 warn_unused_configs = true
 
 [tool.ruff]
 line-length = 100
-target-version = "py39"
+target-version = "py310"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "UP", "B"]
@@ -93,3 +92,12 @@ quote-style = "double"
 indent-style = "space"
 skip-magic-trailing-comma = false
 line-ending = "lf"
+
+[tool.uv]
+dev-dependencies = [
+    "pytest>=7.0",
+    "pytest-asyncio>=0.21",
+    "mypy>=1.0",
+    "ruff>=0.4",
+    "maturin>=1.5",
+]
