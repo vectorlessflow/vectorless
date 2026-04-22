@@ -147,8 +147,8 @@ When uncertain whether an operation is safe, **default to asking user confirmati
 
 ## Common Development Workflow
 
-1. **Adding features**: Implement in appropriate `crates/vectorless/src/` module, add tests
+1. **Adding features**: Implement in appropriate `vectorless-core/vectorless/src/` module, add tests
 2. **Fixing bugs**: Add failing test case first, fix and ensure tests pass
-3. **Python bindings**: Update `crates/vectorless-py/src/lib.rs` (PyO3) when Rust APIs change
-4. **Python SDK**: Update `python/vectorless/` when API surface changes
+3. **Python bindings**: Update `vectorless-core/vectorless-py/src/lib.rs` (PyO3) when Rust APIs change
+4. **Python SDK**: Update `vectorless/` when API surface changes
 5. **Committing code**: Use semantic commit messages, format: `type(scope): description`
