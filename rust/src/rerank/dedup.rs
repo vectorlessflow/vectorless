@@ -31,7 +31,8 @@ pub fn dedup(evidence: &[Evidence]) -> Vec<Evidence> {
     let source_deduped: Vec<&Evidence> = quality
         .into_iter()
         .filter(|e| {
-            let key = format!("{}:{}", e.doc_name.as_deref().unwrap_or(""), e.source_path);
+            let doc_key = e.doc_name.as_deref().unwrap_or("_unknown");
+            let key = format!("{}:{}", doc_key, e.source_path);
             seen_sources.insert(key)
         })
         .collect();
@@ -143,5 +144,72 @@ mod tests {
         let a = tokenize("aaa bbb");
         let b = tokenize("ccc ddd");
         assert!((jaccard(&a, &b)).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_source_dedup_none_doc_name() {
+        // Evidence with doc_name: None should use "_unknown" as doc key,
+        // so same source_path with None doc_name still deduplicates correctly.
+        let evidence = vec![
+            Evidence {
+                source_path: "root/section_a".to_string(),
+                node_title: "A".to_string(),
+                content: "content A with enough text to pass the quality filter threshold"
+                    .to_string(),
+                doc_name: None,
+            },
+            Evidence {
+                source_path: "root/section_a".to_string(),
+                node_title: "A2".to_string(),
+                content: "different content but same source path that should be deduped".to_string(),
+                doc_name: None,
+            },
+        ];
+        let result = dedup(&evidence);
+        assert_eq!(result.len(), 1);
+    }
+
+    #[test]
+    fn test_source_dedup_mixed_doc_name() {
+        // Same source_path but different doc_name should produce different dedup keys,
+        // so both survive source dedup. Content must be sufficiently different too.
+        let evidence = vec![
+            Evidence {
+                source_path: "root/section".to_string(),
+                node_title: "A".to_string(),
+                content: "Revenue for Q4 was twelve million dollars driven by SaaS growth in the enterprise segment".to_string(),
+                doc_name: Some("doc_a".to_string()),
+            },
+            Evidence {
+                source_path: "root/section".to_string(),
+                node_title: "B".to_string(),
+                content: "The encryption module uses AES-256 for data at rest and TLS 1.3 for all network communication".to_string(),
+                doc_name: Some("doc_b".to_string()),
+            },
+        ];
+        let result = dedup(&evidence);
+        assert_eq!(result.len(), 2);
+    }
+
+    #[test]
+    fn test_source_dedup_none_vs_some_doc_name() {
+        // None doc_name ("_unknown") and Some doc_name produce different keys,
+        // so both survive source dedup. Content must be sufficiently different too.
+        let evidence = vec![
+            Evidence {
+                source_path: "root/section".to_string(),
+                node_title: "A".to_string(),
+                content: "The database uses a log-structured merge tree with write-ahead logging for durability".to_string(),
+                doc_name: None,
+            },
+            Evidence {
+                source_path: "root/section".to_string(),
+                node_title: "B".to_string(),
+                content: "Authentication requires Bearer tokens with automatic refresh after twenty-four hours".to_string(),
+                doc_name: Some("doc_x".to_string()),
+            },
+        ];
+        let result = dedup(&evidence);
+        assert_eq!(result.len(), 2);
     }
 }

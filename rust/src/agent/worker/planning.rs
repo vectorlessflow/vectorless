@@ -13,8 +13,12 @@ use super::super::context::FindHit;
 use super::super::state::WorkerState;
 use super::format::format_visited_titles;
 
-/// Maximum total chars for keyword + semantic sections in planning prompt.
-const PLAN_CONTEXT_BUDGET: usize = 1500;
+/// Maximum keyword/semantic hit entries in plan prompt.
+const MAX_PLAN_ENTRIES: usize = 15;
+/// Maximum section summaries in plan prompt.
+const MAX_SECTION_SUMMARIES: usize = 10;
+/// Maximum deep expansion entries.
+const MAX_EXPANSION_ENTRIES: usize = 8;
 
 /// Build the navigation planning prompt (Phase 1.5).
 pub fn build_plan_prompt(
@@ -39,6 +43,7 @@ pub fn build_plan_prompt(
     } else {
         let mut section =
             String::from("\nKeyword index matches (use these to prioritize navigation):\n");
+        let mut entry_count = 0;
         for hit in keyword_hits {
             let mut entries = hit.entries.clone();
             entries.sort_by(|a, b| {
@@ -56,12 +61,20 @@ pub fn build_plan_prompt(
                     "  - keyword '{}' → {} (depth {}, weight {:.2})\n",
                     hit.keyword, ancestor_path, entry.depth, entry.weight
                 ));
-                if section.len() > PLAN_CONTEXT_BUDGET {
-                    section.push_str("  ... (more hits truncated)\n");
+                if let Some(content) = ctx.cat(entry.node_id) {
+                    if let Some(snippet) =
+                        super::super::tools::content_snippet(content, &hit.keyword, 300)
+                    {
+                        section.push_str(&format!("    \"{}\"\n", snippet));
+                    }
+                }
+                entry_count += 1;
+                if entry_count >= MAX_PLAN_ENTRIES {
+                    section.push_str("  ... (more hits omitted)\n");
                     break;
                 }
             }
-            if section.len() > PLAN_CONTEXT_BUDGET {
+            if entry_count >= MAX_PLAN_ENTRIES {
                 break;
             }
         }
@@ -70,9 +83,7 @@ pub fn build_plan_prompt(
 
     let deep_expansion = build_deep_expansion(keyword_hits, ctx);
     if !deep_expansion.is_empty() {
-        if keyword_section.len() + deep_expansion.len() <= PLAN_CONTEXT_BUDGET {
-            keyword_section.push_str(&deep_expansion);
-        }
+        keyword_section.push_str(&deep_expansion);
     }
 
     let semantic_section = build_semantic_hints(&query_keywords, &query_lower, ctx);
@@ -165,7 +176,9 @@ pub fn build_replan_prompt(
 /// ```text
 /// Keyword matches (use find <keyword> to jump directly):
 ///   - 'complex' → Performance (weight 0.85)
+///     "...complexity analysis shows..."
 ///   - 'latency' → Performance (weight 0.72)
+///     "...latency benchmarks indicate..."
 /// ```
 pub fn format_keyword_hints(keyword_hits: &[FindHit], ctx: &DocContext<'_>) -> String {
     if keyword_hits.is_empty() {
@@ -173,6 +186,7 @@ pub fn format_keyword_hints(keyword_hits: &[FindHit], ctx: &DocContext<'_>) -> S
     }
 
     let mut section = String::from("Keyword matches (use find <keyword> to jump directly):\n");
+    let mut entry_count = 0;
     for hit in keyword_hits {
         let mut entries = hit.entries.clone();
         entries.sort_by(|a, b| {
@@ -190,8 +204,16 @@ pub fn format_keyword_hints(keyword_hits: &[FindHit], ctx: &DocContext<'_>) -> S
                 "  - '{}' → {} (weight {:.2})\n",
                 hit.keyword, title, entry.weight
             ));
-            if section.len() > 800 {
-                section.push_str("  ... (more)\n");
+            if let Some(content) = ctx.cat(entry.node_id) {
+                if let Some(snippet) =
+                    super::super::tools::content_snippet(content, &hit.keyword, 300)
+                {
+                    section.push_str(&format!("    \"{}\"\n", snippet));
+                }
+            }
+            entry_count += 1;
+            if entry_count >= MAX_PLAN_ENTRIES {
+                section.push_str("  ... (more omitted)\n");
                 return section;
             }
         }
@@ -228,21 +250,18 @@ fn build_intent_signals(intent: QueryIntent, ctx: &DocContext<'_>) -> String {
             if !shortcut.document_summary.is_empty() {
                 section.push_str(&format!(
                     "Document summary: {}\n",
-                    &shortcut.document_summary[..shortcut.document_summary.len().min(500)]
+                    shortcut.document_summary
                 ));
             }
+            let mut summary_count = 0;
             for ss in &shortcut.section_summaries {
-                let summary_preview = if ss.summary.len() > 200 {
-                    format!("{}...", &ss.summary[..200])
-                } else {
-                    ss.summary.clone()
-                };
                 section.push_str(&format!(
                     "  - Section '{}' (depth {}): {}\n",
-                    ss.title, ss.depth, summary_preview
+                    ss.title, ss.depth, ss.summary
                 ));
-                if section.len() > PLAN_CONTEXT_BUDGET {
-                    section.push_str("  ... (more sections truncated)\n");
+                summary_count += 1;
+                if summary_count >= MAX_SECTION_SUMMARIES {
+                    section.push_str("  ... (more sections omitted)\n");
                     break;
                 }
             }
@@ -312,7 +331,7 @@ fn build_semantic_hints(
         .collect();
 
     let mut section = String::new();
-    let budget_remaining = PLAN_CONTEXT_BUDGET.saturating_sub(section.len());
+    let mut entry_count = 0;
 
     for route in routes {
         let nav = match ctx.nav_entry(route.node_id) {
@@ -374,10 +393,11 @@ fn build_semantic_hints(
             "  - Section '{}' — BM25: {:.2}{}\n",
             route.title, bm25_score, annotation_str
         );
-        if section.len() + line.len() > budget_remaining {
+        section.push_str(&line);
+        entry_count += 1;
+        if entry_count >= MAX_PLAN_ENTRIES {
             break;
         }
-        section.push_str(&line);
     }
 
     if section.is_empty() {
@@ -398,6 +418,7 @@ fn build_deep_expansion(keyword_hits: &[FindHit], ctx: &DocContext<'_>) -> Strin
 
     let mut seen_parents = HashSet::new();
     let mut expansion = String::new();
+    let mut expansion_count = 0;
 
     for hit in keyword_hits {
         for entry in &hit.entries {
@@ -432,12 +453,13 @@ fn build_deep_expansion(keyword_hits: &[FindHit], ctx: &DocContext<'_>) -> Strin
                 ));
             }
             expansion.push('\n');
-            if expansion.len() > 500 {
-                expansion.push_str("  ... (more expansions truncated)\n");
+            expansion_count += 1;
+            if expansion_count >= MAX_EXPANSION_ENTRIES {
+                expansion.push_str("  ... (more expansions omitted)\n");
                 break;
             }
         }
-        if expansion.len() > 500 {
+        if expansion_count >= MAX_EXPANSION_ENTRIES {
             break;
         }
     }
@@ -640,7 +662,7 @@ mod tests {
     #[test]
     fn test_build_replan_prompt() {
         let (tree, nav, root, _, _) = build_semantic_test_tree();
-        let mut state = WorkerState::new(root, 8);
+        let mut state = WorkerState::new(root, 15);
         state.missing_info = "Need Q2 revenue figures".to_string();
         state.add_evidence(Evidence {
             source_path: "root/Revenue".to_string(),

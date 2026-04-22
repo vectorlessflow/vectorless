@@ -23,8 +23,8 @@ pub struct WorkerConfig {
 impl Default for WorkerConfig {
     fn default() -> Self {
         Self {
-            max_rounds: 8,
-            max_llm_calls: 15,
+            max_rounds: 100,
+            max_llm_calls: 200,
         }
     }
 }

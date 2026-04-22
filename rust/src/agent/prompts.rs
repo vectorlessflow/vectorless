@@ -115,12 +115,12 @@ pub fn worker_navigation(params: &NavigationParams) -> (String, String) {
 
 Available commands:
 - ls                List children at current position (with summaries and leaf counts)
-- cd <name>         Enter a child node (supports absolute paths like /root/Section)
+- cd <name>         Enter a child node (supports relative paths like Section/Sub and absolute paths like /root/Section)
 - cd ..             Go back to parent node
 - cat <name>        Read a child node's content (automatically collected as evidence)
 - cat               Read the current node's content (useful at leaf nodes)
 - head <name>       Preview first 20 lines of a node (does NOT collect evidence)
-- find <keyword>    Search for a keyword in the document index
+- find <keyword>    Search for a keyword in the document index (also supports multi-word like 'Lab C')
 - findtree <pattern> Search for nodes by title pattern (case-insensitive)
 - grep <pattern>    Regex search across all content in current subtree
 - wc <name>         Show content size (lines, words, chars)
@@ -129,11 +129,20 @@ Available commands:
 - done              End navigation
 
 SEARCH STRATEGY (important — follow this priority order):
-- When keyword matches are shown below, use find with the EXACT keyword from the list (single word, \
+- When keyword matches are shown below, navigate directly to the highest-weight matched node. \
+Do NOT explore other branches first — the keyword index has already identified the most relevant location.
+- When find results include content snippets that answer the question, cd to that node and cat it immediately.
+- Use find with the EXACT keyword from the list (single word, \
 not multi-word phrases). Example: if hint shows keyword 'performance' pointing to Performance section, \
 use find performance, NOT find \"performance guide\".
-- Use ls when you have no keyword hints or need to discover the structure of an unknown section.
+- Use ls only when you have no keyword hints or need to discover the structure of an unknown section.
 - Use findtree when you know a section title pattern but not the exact name.
+
+NAVIGATION EFFICIENCY (critical — every round counts):
+- Prefer cd with absolute paths (/root/Section/Subsection) or relative paths (Section/Sub) \
+to reach target nodes in ONE command instead of multiple cd steps.
+- Do NOT ls before cd if keyword hints or find results already tell you which node to enter.
+- Do NOT cd into nodes one level at a time when you can use a multi-segment path.
 
 Rules:
 - Output exactly ONE command per response, nothing else.
@@ -239,13 +248,15 @@ pub fn worker_dispatch(params: &WorkerDispatchParams) -> (String, String) {
         "You are a document navigation assistant. You are searching inside the document \
          \"{doc_name}\" for specific information.
 
-Available commands: ls, cd <name>, cd .., cat, cat <name>, head <name>, find <keyword>, \
-findtree <pattern>, grep <regex>, wc <name>, pwd, check, done
+Available commands: ls, cd <name> (supports Section/Sub paths and /root/Section absolute paths), \
+cd .., cat, cat <name>, head <name>, find <keyword>, findtree <pattern>, grep <regex>, wc <name>, \
+pwd, check, done
 
 SEARCH STRATEGY:
-- Prefer find <keyword> to jump directly to relevant sections over manual ls→cd exploration. \
-Use single-word keywords, not multi-word phrases.
-- Use ls when you need to discover the structure of an unknown section.
+- Prefer find <keyword> to jump directly to relevant sections over manual ls→cd exploration.
+- When find results include content snippets that answer your task, cd to that node and cat it immediately.
+- Use multi-segment paths (e.g. cd Research Labs/Lab A) to reach targets in ONE command.
+- Do NOT ls before cd if find results already tell you which node to enter.
 - Use findtree when you know a section title pattern but not the exact name.
 
 Rules:
@@ -396,7 +407,7 @@ mod tests {
             missing_info: "2024 comparison",
             last_feedback: "[1] Q1 Report — Q1 data (5 leaves)\n[2] Q2 Report — Q2 data (5 leaves)",
             remaining: 5,
-            max_rounds: 8,
+            max_rounds: 15,
             history: "(no history yet)",
             visited_titles: "(none)",
             plan: "",
@@ -411,7 +422,7 @@ mod tests {
         assert!(user.contains("root/Financial Statements"));
         assert!(user.contains("200 chars"));
         assert!(user.contains("2024 comparison"));
-        assert!(user.contains("5/8"));
+        assert!(user.contains("5/15"));
         assert!(!user.contains("sub-task"));
     }
 
@@ -425,7 +436,7 @@ mod tests {
             missing_info: "",
             last_feedback: "",
             remaining: 8,
-            max_rounds: 8,
+            max_rounds: 15,
             history: "(no history yet)",
             visited_titles: "(none)",
             plan: "",
@@ -448,7 +459,7 @@ mod tests {
             missing_info: "",
             last_feedback: "",
             remaining: 8,
-            max_rounds: 8,
+            max_rounds: 15,
             history: "(no history yet)",
             visited_titles: "(none)",
             plan: "",

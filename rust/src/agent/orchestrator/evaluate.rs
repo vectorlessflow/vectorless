@@ -34,6 +34,10 @@ pub async fn evaluate(
     let evidence_summary = format_evidence_summary(evidence);
     let (system, user) = check_sufficiency(query, &evidence_summary);
 
+    info!(
+        evidence = evidence.len(),
+        "Evaluating evidence sufficiency..."
+    );
     let response = llm
         .complete(&system, &user)
         .await
@@ -74,6 +78,7 @@ pub async fn evaluate(
 }
 
 /// Format evidence summary for sufficiency check.
+/// Includes actual content so the check LLM can evaluate relevance.
 pub fn format_evidence_summary(evidence: &[Evidence]) -> String {
     if evidence.is_empty() {
         return "(no evidence)".to_string();
@@ -82,15 +87,10 @@ pub fn format_evidence_summary(evidence: &[Evidence]) -> String {
         .iter()
         .map(|e| {
             let doc = e.doc_name.as_deref().unwrap_or("unknown");
-            format!(
-                "- [{}] (from {}) {} chars",
-                e.node_title,
-                doc,
-                e.content.len()
-            )
+            format!("[{}] (from {})\n{}", e.node_title, doc, e.content)
         })
         .collect::<Vec<_>>()
-        .join("\n")
+        .join("\n\n")
 }
 
 #[cfg(test)]

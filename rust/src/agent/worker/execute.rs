@@ -96,22 +96,57 @@ pub async fn execute_command(
                             continue;
                         }
                         let title = ctx.node_title(entry.node_id).unwrap_or("unknown");
-                        let summary = ctx
-                            .nav_entry(entry.node_id)
-                            .map(|e| e.overview.as_str())
-                            .unwrap_or("");
                         output.push_str(&format!(
                             "  - {} (depth {}, weight {:.2})",
                             title, entry.depth, entry.weight
                         ));
-                        if !summary.is_empty() {
-                            output.push_str(&format!(" — {}", summary));
+                        if let Some(content) = ctx.cat(entry.node_id) {
+                            if let Some(snippet) =
+                                super::super::tools::content_snippet(content, keyword, 300)
+                            {
+                                output.push_str(&format!("\n    \"{}\"", snippet));
+                            }
                         }
                         output.push('\n');
                     }
                     output
                 }
-                None => format!("No results for '{}'", keyword),
+                None => {
+                    // Fallback: search node titles (like findtree) with content snippets
+                    let pattern_lower = keyword.to_lowercase();
+                    let all_nodes = ctx.tree.traverse();
+                    let mut results = Vec::new();
+                    for node_id in &all_nodes {
+                        if let Some(node) = ctx.tree.get(*node_id) {
+                            if node.title.to_lowercase().contains(&pattern_lower) {
+                                let depth = ctx.tree.depth(*node_id);
+                                results.push((node.title.clone(), *node_id, depth));
+                            }
+                        }
+                    }
+                    if results.is_empty() {
+                        format!("No results for '{}' in index or titles.", keyword)
+                    } else {
+                        let mut output = format!(
+                            "Results for '{}' (title match, {} found):\n",
+                            keyword,
+                            results.len()
+                        );
+                        for (title, node_id, depth) in &results {
+                            output.push_str(&format!(
+                                "  - {} (depth {})",
+                                title, depth
+                            ));
+                            if let Some(content) = ctx.cat(*node_id) {
+                                if let Some(snippet) = super::super::tools::content_snippet(content, keyword, 300) {
+                                    output.push_str(&format!("\n    \"{}\"", snippet));
+                                }
+                            }
+                            output.push('\n');
+                        }
+                        output
+                    }
+                }
             };
             info!(doc = ctx.doc_name, keyword, feedback = %truncate_log(&feedback), "find result");
             state.set_feedback(feedback);
@@ -125,9 +160,9 @@ pub async fn execute_command(
         }
 
         Command::Check => {
-            let evidence_summary = state.evidence_summary();
+            let evidence_text = state.evidence_for_check();
 
-            let (system, user) = check_sufficiency(query, &evidence_summary);
+            let (system, user) = check_sufficiency(query, &evidence_text);
 
             info!(
                 doc = ctx.doc_name,

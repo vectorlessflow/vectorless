@@ -183,8 +183,11 @@ pub fn resolve_target(
 
 /// Resolve a cd/cat target with additional context from the tree node titles.
 ///
-/// This extended resolver also checks against the actual tree node titles
-/// (in case NavEntry titles differ from TreeNode titles).
+/// Matching priority:
+/// 1. Direct children via NavigationIndex (exact, case-insensitive, substring, numeric)
+/// 2. Direct children via TreeNode titles (case-insensitive contains)
+/// 3. Deep descendant search (BFS, up to depth 4) — enables `cd "Research Labs"` from
+///    root when "Research Labs" is a grandchild behind an intermediate wrapper node.
 pub fn resolve_target_extended(
     target: &str,
     nav_index: &NavigationIndex,
@@ -197,15 +200,44 @@ pub fn resolve_target_extended(
         return Some(id);
     }
 
-    // Extended: check all children by their TreeNode titles
-    let children: Vec<NodeId> = tree.children_iter(current_node).collect();
     let target_lower = target.to_lowercase();
 
+    // Extended: check all direct children by their TreeNode titles
+    let children: Vec<NodeId> = tree.children_iter(current_node).collect();
     for child_id in &children {
         if let Some(node) = tree.get(*child_id) {
             if node.title.to_lowercase().contains(&target_lower) {
                 return Some(*child_id);
             }
+        }
+    }
+
+    // Deep search: BFS through descendants up to depth 4.
+    // Returns the shallowest match so `cd "Research Labs"` from root finds it
+    // at depth 1 even if another "Research Labs" exists deeper.
+    search_descendants(&target_lower, current_node, tree, 4)
+}
+
+/// BFS search through descendants, returning the shallowest matching NodeId.
+fn search_descendants(
+    target_lower: &str,
+    start: NodeId,
+    tree: &crate::document::DocumentTree,
+    max_depth: usize,
+) -> Option<NodeId> {
+    let mut queue: Vec<(NodeId, usize)> = vec![(start, 0)];
+
+    while let Some((node_id, depth)) = queue.pop() {
+        if depth >= max_depth {
+            continue;
+        }
+        for child_id in tree.children_iter(node_id) {
+            if let Some(node) = tree.get(child_id) {
+                if node.title.to_lowercase().contains(target_lower) {
+                    return Some(child_id);
+                }
+            }
+            queue.push((child_id, depth + 1));
         }
     }
 
@@ -468,6 +500,65 @@ mod tests {
         let nav_index = NavigationIndex::new();
         let tree = crate::document::DocumentTree::new("Root", "");
         assert!(resolve_target("anything", &nav_index, tree.root()).is_none());
+    }
+
+    #[test]
+    fn test_resolve_target_extended_deep_search() {
+        use crate::document::{ChildRoute, DocumentTree};
+
+        // root → "Wrapper" → "Research Labs" → "Lab B"
+        let mut tree = DocumentTree::new("Root", "root content");
+        let root = tree.root();
+        let wrapper = tree.add_child(root, "Quantum Computing Division", "wrapper");
+        let labs = tree.add_child(wrapper, "Research Labs", "labs content");
+        let lab_b = tree.add_child(labs, "Lab B", "lab b content");
+
+        let mut nav = NavigationIndex::new();
+        nav.add_child_routes(
+            root,
+            vec![ChildRoute {
+                node_id: wrapper,
+                title: "Quantum Computing Division".to_string(),
+                description: "Division".to_string(),
+                leaf_count: 7,
+            }],
+        );
+        nav.add_child_routes(
+            wrapper,
+            vec![ChildRoute {
+                node_id: labs,
+                title: "Research Labs".to_string(),
+                description: "Labs".to_string(),
+                leaf_count: 4,
+            }],
+        );
+        nav.add_child_routes(
+            labs,
+            vec![ChildRoute {
+                node_id: lab_b,
+                title: "Lab B".to_string(),
+                description: "Topological".to_string(),
+                leaf_count: 1,
+            }],
+        );
+
+        // "Research Labs" is a grandchild of root — deep search should find it
+        assert_eq!(
+            resolve_target_extended("Research Labs", &nav, root, &tree),
+            Some(labs)
+        );
+
+        // "Lab B" is a great-grandchild — deep search should find it
+        assert_eq!(
+            resolve_target_extended("Lab B", &nav, root, &tree),
+            Some(lab_b)
+        );
+
+        // Direct children should still work via primary resolver
+        assert_eq!(
+            resolve_target_extended("Quantum Computing Division", &nav, root, &tree),
+            Some(wrapper)
+        );
     }
 
     #[test]

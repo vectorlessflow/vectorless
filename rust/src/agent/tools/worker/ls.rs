@@ -32,13 +32,22 @@ pub fn ls(ctx: &DocContext, state: &WorkerState) -> ToolResult {
             }
 
             for (i, route) in routes.iter().enumerate() {
-                output.push_str(&format!(
-                    "[{}] {} — {} ({} leaves)",
-                    i + 1,
-                    route.title,
-                    route.description,
-                    route.leaf_count
-                ));
+                if route.title == route.description {
+                    output.push_str(&format!(
+                        "[{}] {} ({} leaves)",
+                        i + 1,
+                        route.title,
+                        route.leaf_count
+                    ));
+                } else {
+                    output.push_str(&format!(
+                        "[{}] {} — {} ({} leaves)",
+                        i + 1,
+                        route.title,
+                        route.description,
+                        route.leaf_count
+                    ));
+                }
                 if let Some(nav) = ctx.nav_entry(route.node_id) {
                     if !nav.question_hints.is_empty() {
                         output.push_str(&format!(
@@ -105,7 +114,7 @@ mod tests {
             reasoning_index: &crate::document::ReasoningIndex::default(),
             doc_name: "test",
         };
-        let state = WorkerState::new(root, 8);
+        let state = WorkerState::new(root, 15);
 
         let result = ls(&ctx, &state);
         assert!(result.success);

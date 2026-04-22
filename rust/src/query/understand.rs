@@ -34,6 +34,7 @@ pub async fn understand(
     llm: &LlmClient,
 ) -> crate::error::Result<QueryPlan> {
     let (system, user) = understand_prompt(query, keywords);
+    info!("Query understanding: calling LLM...");
     let response = llm.complete(&system, &user).await?;
 
     if response.trim().is_empty() {
@@ -46,21 +47,20 @@ pub async fn understand(
     }
 
     let analysis = parse_analysis(&response).ok_or_else(|| {
-        warn!(
-            response = &response[..response.len().min(500)],
-            "Query understanding: failed to parse LLM response as JSON"
-        );
+        let preview = &response[..response.len().min(300)];
         crate::error::Error::Config(format!(
             "Query understanding returned unparseable response ({} chars): {}",
             response.len(),
-            &response[..response.len().min(300)]
+            preview
         ))
     })?;
 
     info!(
         intent = %analysis.intent,
         complexity = %analysis.complexity,
-        concepts = analysis.key_concepts.len(),
+        concepts = ?analysis.key_concepts,
+        strategy = %analysis.strategy_hint,
+        rewritten = ?analysis.rewritten,
         "Query understanding complete"
     );
     Ok(analysis.into_plan(query, keywords))
@@ -69,18 +69,37 @@ pub async fn understand(
 /// Parse the LLM's JSON response into a QueryAnalysis.
 fn parse_analysis(response: &str) -> Option<QueryAnalysis> {
     let trimmed = response.trim();
+
     // Try to extract JSON from the response (LLM may wrap it in markdown)
     let json_str = if trimmed.starts_with("```") {
-        // Strip markdown code fences
-        let without_start = trimmed
-            .trim_start_matches(|c| c == '`' || c == 'j' || c == 's' || c == 'o' || c == 'n');
-        let without_end = without_start.trim_end_matches(|c| c == '`');
+        // Find the first newline after the opening fence (skips language tag)
+        let after_fence = if let Some(nl) = trimmed.find('\n') {
+            &trimmed[nl + 1..]
+        } else {
+            trimmed
+        };
+        // Strip the closing fence
+        let without_end = if let Some(end) = after_fence.rfind("```") {
+            &after_fence[..end]
+        } else {
+            after_fence
+        };
         without_end.trim()
     } else {
         trimmed
     };
 
-    serde_json::from_str(json_str).ok()
+    match serde_json::from_str(json_str) {
+        Ok(analysis) => Some(analysis),
+        Err(e) => {
+            warn!(
+                error = %e,
+                json_len = json_str.len(),
+                "Query understanding: JSON parse failed"
+            );
+            None
+        }
+    }
 }
 
 impl QueryAnalysis {
@@ -187,6 +206,32 @@ mod tests {
     #[test]
     fn test_parse_analysis_invalid() {
         assert!(parse_analysis("not json").is_none());
+    }
+
+    #[test]
+    fn test_parse_analysis_code_fence_no_newline() {
+        // Edge case: ```json{"intent":...}``` with no newline after language tag
+        let response = "```json\n{\"intent\":\"factual\",\"key_concepts\":[\"test\"],\"strategy_hint\":\"focused\",\"complexity\":\"simple\",\"rewritten\":null,\"sub_queries\":[]}\n```";
+        let analysis = parse_analysis(response).unwrap();
+        assert_eq!(analysis.intent, "factual");
+    }
+
+    #[test]
+    fn test_parse_analysis_code_fence_no_closing() {
+        // LLM sometimes omits the closing fence
+        let response = "```json\n{\"intent\":\"summary\",\"key_concepts\":[\"overview\"],\"strategy_hint\":\"summary\",\"complexity\":\"simple\",\"rewritten\":null,\"sub_queries\":[]}";
+        let analysis = parse_analysis(response).unwrap();
+        assert_eq!(analysis.intent, "summary");
+    }
+
+    #[test]
+    fn test_parse_analysis_keys_starting_with_fence_letters() {
+        // The old trim_start_matches(|c| 'j' | 's' | 'o' | 'n') would eat
+        // JSON keys starting with those letters. Verify this works correctly.
+        let response = r#"{"intent":"navigational","key_concepts":["journal","offset","node"],"strategy_hint":"focused","complexity":"moderate","rewritten":null,"sub_queries":[]}"#;
+        let analysis = parse_analysis(response).unwrap();
+        assert_eq!(analysis.intent, "navigational");
+        assert_eq!(analysis.key_concepts, vec!["journal", "offset", "node"]);
     }
 
     #[test]

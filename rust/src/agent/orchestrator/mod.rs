@@ -12,6 +12,7 @@ mod analyze;
 mod dispatch;
 mod evaluate;
 mod replan;
+mod supervisor;
 
 use tracing::info;
 
@@ -22,11 +23,9 @@ use super::Agent;
 use super::config::{AgentConfig, Output, WorkspaceContext};
 use super::events::EventEmitter;
 use super::state::OrchestratorState;
-use super::tools::orchestrator as orch_tools;
 
 use analyze::{AnalyzeOutcome, analyze};
-use evaluate::evaluate;
-use replan::replan;
+use supervisor::run_supervisor_loop;
 
 /// Maximum supervisor loop iterations to prevent infinite loops.
 const MAX_SUPERVISOR_ITERATIONS: u32 = 3;
@@ -131,98 +130,22 @@ impl<'a> Agent for Orchestrator<'a> {
         };
 
         // --- Phase 2: Supervisor loop ---
-        let mut current_dispatches = initial_dispatches;
-        let mut iteration: u32 = 0;
-        let mut eval_sufficient = false;
+        let outcome = run_supervisor_loop(
+            &query,
+            initial_dispatches,
+            ws,
+            &config,
+            &llm,
+            &mut state,
+            &emitter,
+            &query_plan,
+            skip_analysis,
+        )
+        .await?;
+        orch_llm_calls += outcome.llm_calls;
 
-        loop {
-            if iteration >= MAX_SUPERVISOR_ITERATIONS {
-                info!(iteration, "Supervisor loop budget exhausted");
-                break;
-            }
-
-            // Dispatch current plan
-            if !current_dispatches.is_empty() {
-                info!(
-                    docs = current_dispatches.len(),
-                    docs_list = ?current_dispatches.iter().map(|d| d.doc_idx).collect::<Vec<_>>(),
-                    iteration,
-                    "Dispatching Workers"
-                );
-                dispatch::dispatch_and_collect(
-                    &query,
-                    &current_dispatches,
-                    ws,
-                    &config,
-                    &llm,
-                    &mut state,
-                    &emitter,
-                    &query_plan,
-                )
-                .await;
-            }
-
-            // No evidence at all — nothing to evaluate
-            if state.all_evidence.is_empty() {
-                info!("No evidence collected from any Worker");
-                break;
-            }
-
-            // Skip evaluation for user-specified documents (no replan needed)
-            if skip_analysis {
-                eval_sufficient = !state.all_evidence.is_empty();
-                break;
-            }
-
-            // Evaluate sufficiency
-            let eval_result = evaluate(&query, &state.all_evidence, &llm).await?;
-            orch_llm_calls += 1;
-
-            if eval_result.sufficient {
-                eval_sufficient = true;
-                info!(
-                    evidence = state.all_evidence.len(),
-                    iteration, "Evidence sufficient — exiting supervisor loop"
-                );
-                break;
-            }
-
-            // Insufficient — replan
-            info!(
-                evidence = state.all_evidence.len(),
-                missing = eval_result.missing_info.len(),
-                iteration,
-                "Evidence insufficient — replanning"
-            );
-
-            let doc_cards_text = orch_tools::ls_docs(ws).feedback;
-            let replan_result = replan(
-                &query,
-                &eval_result.missing_info,
-                &state.all_evidence,
-                &state.dispatched,
-                ws.doc_count(),
-                &doc_cards_text,
-                &llm,
-            )
-            .await?;
-            orch_llm_calls += 1;
-
-            if replan_result.dispatches.is_empty() {
-                info!("Replan produced no new dispatches — exiting supervisor loop");
-                break;
-            }
-
-            current_dispatches = replan_result.dispatches;
-            iteration += 1;
-        }
-
-        // Derive confidence from supervisor loop outcome:
-        // - LLM evaluated sufficient on first try → high confidence
-        // - Needed replan rounds → lower confidence
-        // - No evaluation ran (skip_analysis / no evidence) → moderate
         let confidence =
-            compute_confidence(eval_sufficient, iteration, state.all_evidence.is_empty());
+            compute_confidence(outcome.eval_sufficient, outcome.iteration, state.all_evidence.is_empty());
 
         // --- Phase 3: Finalize — rerank + synthesize ---
         if state.all_evidence.is_empty() {

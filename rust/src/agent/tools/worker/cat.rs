@@ -30,7 +30,7 @@ pub fn cat(target: &str, ctx: &DocContext, state: &mut WorkerState) -> ToolResul
         }
     };
 
-    if state.visited.contains(&node_id) {
+    if state.has_evidence_for(node_id) {
         let title = ctx.node_title(node_id).unwrap_or("unknown");
         return ToolResult::ok(format!(
             "[Already collected: {}]. Use a different target or cd to another branch.",
@@ -50,19 +50,10 @@ pub fn cat(target: &str, ctx: &DocContext, state: &mut WorkerState) -> ToolResul
                 doc_name: Some(ctx.doc_name.to_string()),
             });
 
+            state.collected_nodes.insert(node_id);
             state.visited.insert(node_id);
 
-            let preview = if content_string.len() > 500 {
-                format!(
-                    "{}...(truncated, {} chars total)",
-                    &content_string[..500],
-                    content_string.len()
-                )
-            } else {
-                content_string
-            };
-
-            ToolResult::ok(format!("[Evidence collected: {}]\n{}", title, preview))
+            ToolResult::ok(format!("[Evidence collected: {}]\n{}", title, content_string))
         }
         None => ToolResult::fail(format!("No content available for '{}'.", target)),
     }
@@ -110,7 +101,7 @@ mod tests {
             reasoning_index: &crate::document::ReasoningIndex::default(),
             doc_name: "test",
         };
-        let mut state = WorkerState::new(root, 8);
+        let mut state = WorkerState::new(root, 15);
 
         let result = cat("Getting Started", &ctx, &mut state);
         assert!(result.success);

@@ -25,6 +25,9 @@ pub struct WorkerState {
     pub evidence: Vec<Evidence>,
     /// Nodes already visited (prevents redundant reads).
     pub visited: HashSet<NodeId>,
+    /// Nodes whose content has been collected via cat. Separate from visited
+    /// because cd-ing through a node ≠ reading its content.
+    pub collected_nodes: HashSet<NodeId>,
     /// Remaining navigation rounds.
     pub remaining: u32,
     /// Maximum rounds (for display in prompts).
@@ -49,10 +52,6 @@ pub struct WorkerState {
 /// Maximum number of history entries to keep for prompt injection.
 const MAX_HISTORY_ENTRIES: usize = 6;
 
-/// Maximum characters for `last_feedback` before truncation.
-/// Prevents large cat/grep outputs from bloating subsequent prompts.
-const MAX_FEEDBACK_CHARS: usize = 500;
-
 impl WorkerState {
     /// Create a new state starting at the given root node.
     pub fn new(root: NodeId, max_rounds: u32) -> Self {
@@ -61,6 +60,7 @@ impl WorkerState {
             current_node: root,
             evidence: Vec::new(),
             visited: HashSet::new(),
+            collected_nodes: HashSet::new(),
             remaining: max_rounds,
             max_rounds,
             last_feedback: String::new(),
@@ -79,20 +79,9 @@ impl WorkerState {
         }
     }
 
-    /// Set feedback with automatic truncation to prevent prompt bloat.
+    /// Set feedback from tool execution.
     pub fn set_feedback(&mut self, feedback: String) {
-        if feedback.len() <= MAX_FEEDBACK_CHARS {
-            self.last_feedback = feedback;
-        } else {
-            // Find a clean truncation point (line boundary if possible)
-            let truncated = &feedback[..MAX_FEEDBACK_CHARS];
-            let end = truncated.rfind('\n').unwrap_or(MAX_FEEDBACK_CHARS);
-            self.last_feedback = format!(
-                "{}...\n(truncated, {} chars total)",
-                &feedback[..end.min(MAX_FEEDBACK_CHARS)],
-                feedback.len()
-            );
-        }
+        self.last_feedback = feedback;
     }
 
     /// Navigate into a child node.
@@ -116,6 +105,11 @@ impl WorkerState {
     /// Add a piece of evidence.
     pub fn add_evidence(&mut self, evidence: Evidence) {
         self.evidence.push(evidence);
+    }
+
+    /// Check if evidence has already been collected for a specific node.
+    pub fn has_evidence_for(&self, node_id: crate::document::NodeId) -> bool {
+        self.collected_nodes.contains(&node_id)
     }
 
     /// Push a history entry (command + result summary).
@@ -155,6 +149,20 @@ impl WorkerState {
             .map(|e| format!("- [{}] {} chars", e.node_title, e.content.len()))
             .collect::<Vec<_>>()
             .join("\n")
+    }
+
+    /// Evidence with actual content for sufficiency evaluation.
+    pub fn evidence_for_check(&self) -> String {
+        if self.evidence.is_empty() {
+            return "(no evidence collected yet)".to_string();
+        }
+        self.evidence
+            .iter()
+            .map(|e| {
+                format!("[{}]\n{}", e.node_title, e.content)
+            })
+            .collect::<Vec<_>>()
+            .join("\n\n")
     }
 
     /// Convert this state into a WorkerOutput (consuming the state), with budget flag.

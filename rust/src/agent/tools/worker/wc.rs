@@ -87,7 +87,7 @@ mod tests {
     fn test_wc_stats() {
         let (tree, nav, root) = build_rich_tree();
         let ctx = rich_ctx!(tree, nav);
-        let state = WorkerState::new(root, 8);
+        let state = WorkerState::new(root, 15);
 
         let result = wc("Revenue", &ctx, &state);
         assert!(result.success);
@@ -101,7 +101,7 @@ mod tests {
     fn test_wc_not_found() {
         let (tree, nav, root) = build_rich_tree();
         let ctx = rich_ctx!(tree, nav);
-        let state = WorkerState::new(root, 8);
+        let state = WorkerState::new(root, 15);
 
         let result = wc("NonExistent", &ctx, &state);
         assert!(!result.success);

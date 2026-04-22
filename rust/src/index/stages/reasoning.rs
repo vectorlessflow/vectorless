@@ -68,13 +68,9 @@ impl ReasoningIndexStage {
                     Self::extract_node_keywords(&node.title, config.min_keyword_length);
                 let summary_keywords =
                     Self::extract_node_keywords(&node.summary, config.min_keyword_length);
-                let content_keywords = if node.summary.is_empty() {
-                    // Fallback: extract from content if no summary
-                    let content_sample: String = node.content.chars().take(500).collect();
-                    Self::extract_node_keywords(&content_sample, config.min_keyword_length)
-                } else {
-                    Vec::new()
-                };
+                // Always extract from content — keywords can appear anywhere
+                let content_keywords =
+                    Self::extract_node_keywords(&node.content, config.min_keyword_length);
 
                 // Title keywords get higher weight (2.0), summary (1.5), content (1.0)
                 for kw in &title_keywords {

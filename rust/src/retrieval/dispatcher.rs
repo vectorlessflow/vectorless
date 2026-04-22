@@ -58,13 +58,8 @@ pub async fn dispatch(
 
     // Step 1: Query understanding — LLM analyzes intent, concepts, complexity.
     // This is required. "Model fails, we fail." — errors propagate.
+    info!("Starting query understanding...");
     let query_plan = QueryPipeline::understand(query, llm).await?;
-    info!(
-        intent = %query_plan.intent,
-        complexity = %query_plan.complexity,
-        concepts = query_plan.key_concepts.len(),
-        "Query understanding complete"
-    );
 
     // Step 2: Dispatch to Orchestrator with the query plan.
     let orchestrator = Orchestrator::new(

@@ -68,7 +68,7 @@ pub fn ls_docs(ctx: &WorkspaceContext) -> ToolResult {
 
 /// Execute `find_cross` — search keywords across all documents.
 ///
-/// Returns formatted results showing which documents matched.
+/// Returns formatted results showing which documents matched, with content snippets.
 pub fn find_cross(keywords: &[String], ctx: &WorkspaceContext) -> ToolResult {
     let results = ctx.find_cross_all(keywords);
 
@@ -90,16 +90,15 @@ pub fn find_cross(keywords: &[String], ctx: &WorkspaceContext) -> ToolResult {
                 let title = doc
                     .and_then(|d| d.node_title(entry.node_id))
                     .unwrap_or("unknown");
-                let summary = doc
-                    .and_then(|d| d.nav_entry(entry.node_id))
-                    .map(|e| e.overview.as_str())
-                    .unwrap_or("");
                 output.push_str(&format!(
                     "  keyword '{}' → {} (depth {}, weight {:.2})",
                     hit.keyword, title, entry.depth, entry.weight
                 ));
-                if !summary.is_empty() {
-                    output.push_str(&format!(" — {}", summary));
+                // Include content snippet for cross-doc relevance judgment
+                if let Some(content) = doc.and_then(|d| d.cat(entry.node_id)) {
+                    if let Some(snippet) = super::content_snippet(content, &hit.keyword, 300) {
+                        output.push_str(&format!("\n    \"{}\"", snippet));
+                    }
                 }
                 output.push('\n');
             }
