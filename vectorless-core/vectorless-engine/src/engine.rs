@@ -574,7 +574,7 @@ impl Engine {
             doc_id: persisted.meta.id,
             name: persisted.meta.name,
             format: persisted.meta.format,
-            source_path: persisted.meta.source_path.as_ref().map(|p: &std::path::PathBuf| p.to_string_lossy().to_string()),
+            source_path: persisted.meta.source_path.as_ref().map(|p| p.to_string_lossy().to_string()),
             tree,
             nav_index,
             reasoning_index,
