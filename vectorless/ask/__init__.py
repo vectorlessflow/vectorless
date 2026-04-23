@@ -1,25 +1,54 @@
 """Ask pipeline — query understanding, multi-agent retrieval, and answer synthesis."""
 
-from vectorless.ask.evaluate import EvalResult, evaluate
-from vectorless.ask.orchestrator import DocCard, Orchestrator, OrchestratorResult
+from vectorless.ask.evaluate import evaluate
+from vectorless.ask.orchestrator import Orchestrator
 from vectorless.ask.plan import Complexity, QueryIntent, QueryPlan, SubQuery
-from vectorless.ask.types import TraceStep, WorkerEvidence, WorkerResult
+from vectorless.ask.types import (
+    DispatchEntry,
+    DocCard,
+    EvalResult,
+    Evidence,
+    Metrics,
+    OrchestratorState,
+    Output,
+    Scope,
+    Specified,
+    TraceStep,
+    WorkerMetrics,
+    WorkerOutput,
+    WorkerState,
+    Workspace,
+)
 from vectorless.ask.understand import understand
 from vectorless.ask.worker import Worker
 
 __all__ = [
+    # Core output types
+    "Output",
+    "Evidence",
+    "Metrics",
+    "TraceStep",
+    # Worker types
+    "WorkerOutput",
+    "WorkerMetrics",
+    "WorkerState",
+    # Orchestrator types
+    "Orchestrator",
+    "OrchestratorState",
+    "DispatchEntry",
     "DocCard",
     "EvalResult",
-    "Orchestrator",
-    "OrchestratorResult",
+    # Scope types
+    "Scope",
+    "Specified",
+    "Workspace",
+    # Query understanding
     "QueryIntent",
     "QueryPlan",
     "SubQuery",
     "Complexity",
-    "TraceStep",
+    # Agents
     "Worker",
-    "WorkerEvidence",
-    "WorkerResult",
     "evaluate",
     "understand",
 ]
