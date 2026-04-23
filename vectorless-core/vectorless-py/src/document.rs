@@ -10,8 +10,8 @@ use pyo3_async_runtimes::tokio::future_into_py;
 use tokio::sync::Mutex;
 
 use vectorless_primitives::{
-    CollectedEvidence, DocumentNavigator, FindResult, MatchResult, NodeInfo, SectionSummaryInfo,
-    TopicEntryInfo, WordCount,
+    CollectedEvidence, DocumentNavigator, FindResult, MatchResult, NodeInfo, NodeStats,
+    SectionSummaryInfo, SimilarResult, TocEntry, TopicEntryInfo, WordCount,
 };
 
 use super::error::VectorlessError;
@@ -459,6 +459,88 @@ impl PyDocument {
                 .collect::<Vec<_>>())
         })
     }
+
+    // ── P1: Extended tools ────────────────────────────────────────────
+
+    /// Go back to the previous position (navigation history).
+    fn back<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        let nav = Arc::clone(&self.inner);
+        future_into_py(py, async move {
+            let mut nav = nav.lock().await;
+            nav.back().await.map_err(to_py_err)
+        })
+    }
+
+    /// Return the full table of contents.
+    fn toc<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        let nav = Arc::clone(&self.inner);
+        future_into_py(py, async move {
+            let nav = nav.lock().await;
+            Ok(nav
+                .toc()
+                .await
+                .into_iter()
+                .map(PyTocEntry::from)
+                .collect::<Vec<_>>())
+        })
+    }
+
+    /// Get statistics about a node (or current node if None).
+    #[pyo3(signature = (node_id=None))]
+    fn stats<'py>(&self, py: Python<'py>, node_id: Option<String>) -> PyResult<Bound<'py, PyAny>> {
+        let nav = Arc::clone(&self.inner);
+        future_into_py(py, async move {
+            let nav = nav.lock().await;
+            nav.stats(node_id.as_deref())
+                .await
+                .map(PyNodeStats::from)
+                .map_err(to_py_err)
+        })
+    }
+
+    /// Search within a specific node's content (no cursor movement).
+    fn grep_node<'py>(
+        &self,
+        py: Python<'py>,
+        node_id: String,
+        pattern: String,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let nav = Arc::clone(&self.inner);
+        future_into_py(py, async move {
+            let nav = nav.lock().await;
+            nav.grep_node(&node_id, &pattern)
+                .await
+                .map(|r| r.into_iter().map(PyMatchResult::from).collect::<Vec<_>>())
+                .map_err(to_py_err)
+        })
+    }
+
+    /// Find semantically similar nodes.
+    fn similar<'py>(&self, py: Python<'py>, node_id: String) -> PyResult<Bound<'py, PyAny>> {
+        let nav = Arc::clone(&self.inner);
+        future_into_py(py, async move {
+            let nav = nav.lock().await;
+            Ok(nav
+                .similar(&node_id)
+                .await
+                .into_iter()
+                .map(PySimilarResult::from)
+                .collect::<Vec<_>>())
+        })
+    }
+
+    /// Get the pre-computed overview for a section.
+    fn section_overview<'py>(
+        &self,
+        py: Python<'py>,
+        node_id: String,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let nav = Arc::clone(&self.inner);
+        future_into_py(py, async move {
+            let nav = nav.lock().await;
+            nav.section_overview(&node_id).await.map_err(to_py_err)
+        })
+    }
 }
 
 // =========================================================================
@@ -639,6 +721,97 @@ impl From<SectionSummaryInfo> for PySectionSummary {
             title: v.title,
             summary: v.summary,
             depth: v.depth,
+        }
+    }
+}
+
+// =========================================================================
+// P1: New helper types
+// =========================================================================
+
+/// A single entry in the table of contents.
+#[pyclass(name = "TocEntry")]
+#[derive(Clone)]
+pub struct PyTocEntry {
+    #[pyo3(get)]
+    pub id: String,
+    #[pyo3(get)]
+    pub title: String,
+    #[pyo3(get)]
+    pub depth: usize,
+    #[pyo3(get)]
+    pub child_count: usize,
+}
+
+impl From<TocEntry> for PyTocEntry {
+    fn from(v: TocEntry) -> Self {
+        Self {
+            id: id_to_str(v.id),
+            title: v.title,
+            depth: v.depth,
+            child_count: v.child_count,
+        }
+    }
+}
+
+/// Statistics about a node.
+#[pyclass(name = "NodeStats")]
+#[derive(Clone)]
+pub struct PyNodeStats {
+    #[pyo3(get)]
+    pub id: String,
+    #[pyo3(get)]
+    pub title: String,
+    #[pyo3(get)]
+    pub depth: usize,
+    #[pyo3(get)]
+    pub child_count: usize,
+    #[pyo3(get)]
+    pub leaf_count: usize,
+    #[pyo3(get)]
+    pub char_count: usize,
+    #[pyo3(get)]
+    pub word_count: usize,
+    #[pyo3(get)]
+    pub is_leaf: bool,
+}
+
+impl From<NodeStats> for PyNodeStats {
+    fn from(v: NodeStats) -> Self {
+        Self {
+            id: id_to_str(v.id),
+            title: v.title,
+            depth: v.depth,
+            child_count: v.child_count,
+            leaf_count: v.leaf_count,
+            char_count: v.char_count,
+            word_count: v.word_count,
+            is_leaf: v.is_leaf,
+        }
+    }
+}
+
+/// A node found by semantic similarity.
+#[pyclass(name = "SimilarResult")]
+#[derive(Clone)]
+pub struct PySimilarResult {
+    #[pyo3(get)]
+    pub id: String,
+    #[pyo3(get)]
+    pub title: String,
+    #[pyo3(get)]
+    pub relevance: f32,
+    #[pyo3(get)]
+    pub shared_keywords: Vec<String>,
+}
+
+impl From<SimilarResult> for PySimilarResult {
+    fn from(v: SimilarResult) -> Self {
+        Self {
+            id: id_to_str(v.id),
+            title: v.title,
+            relevance: v.relevance,
+            shared_keywords: v.shared_keywords,
         }
     }
 }

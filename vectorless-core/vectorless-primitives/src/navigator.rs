@@ -25,6 +25,8 @@ pub struct DocumentNavigator {
     doc: Document,
     cursor: NodeId,
     breadcrumb: Vec<String>,
+    /// Navigation history stack for `back()`. Pushed on every cd/cd_by_title.
+    history: Vec<NodeId>,
     node_id_map: HashMap<u64, NodeId>,
     visited: HashSet<NodeId>,
     collected: HashSet<NodeId>,
@@ -43,6 +45,7 @@ impl DocumentNavigator {
             doc,
             cursor,
             breadcrumb: vec!["root".to_string()],
+            history: Vec::new(),
             node_id_map,
             visited: HashSet::new(),
             collected: HashSet::new(),
@@ -128,6 +131,7 @@ impl DocumentNavigator {
             .map(|n| n.title.as_str())
             .unwrap_or("unknown")
             .to_string();
+        self.history.push(self.cursor);
         self.cursor = id;
         self.breadcrumb.push(title);
         Ok(())
@@ -152,6 +156,7 @@ impl DocumentNavigator {
             .unwrap_or(title)
             .to_string();
         self.visited.insert(id);
+        self.history.push(self.cursor);
         self.cursor = id;
         self.breadcrumb.push(resolved_title);
         Ok(())
@@ -176,6 +181,17 @@ impl DocumentNavigator {
     pub async fn cd_root(&mut self) {
         self.cursor = self.doc.tree.root();
         self.breadcrumb = vec!["root".to_string()];
+    }
+
+    /// Go back to the previous position (uses navigation history stack).
+    pub async fn back(&mut self) -> Result<()> {
+        let prev = self
+            .history
+            .pop()
+            .ok_or_else(|| Error::InvalidInput("No previous position.".into()))?;
+        self.cursor = prev;
+        self._rebuild_breadcrumb();
+        Ok(())
     }
 
     /// Return the current navigation path (e.g., "root / Chapter 1 / Section 1.2").
@@ -544,5 +560,189 @@ impl DocumentNavigator {
             .iter()
             .map(|&id| self.id_to_u64(id))
             .collect()
+    }
+
+    // -----------------------------------------------------------------------
+    // P1: Extended tools
+    // -----------------------------------------------------------------------
+
+    /// Return the full table of contents as a flat list of entries.
+    pub async fn toc(&self) -> Vec<TocEntry> {
+        fn walk(
+            tree: &vectorless_document::DocumentTree,
+            node_id: NodeId,
+            depth: usize,
+            entries: &mut Vec<TocEntry>,
+        ) {
+            if depth > 0 {
+                // skip root
+                let child_count = tree.children(node_id).len();
+                let title = tree.get(node_id).map(|n| n.title.clone()).unwrap_or_default();
+                let id_u64 = usize::from(node_id.0) as u64;
+                entries.push(TocEntry {
+                    id: id_u64,
+                    title,
+                    depth,
+                    child_count,
+                });
+            }
+            for child in tree.children(node_id) {
+                walk(tree, child, depth + 1, entries);
+            }
+        }
+        let mut entries = Vec::new();
+        walk(&self.doc.tree, self.doc.tree.root(), 0, &mut entries);
+        entries
+    }
+
+    /// Get statistics about a node (or the current node if None).
+    pub async fn stats(&self, node_id: Option<&str>) -> Result<NodeStats> {
+        let id = self.resolve_optional_id(node_id)?;
+        let node = self
+            .doc
+            .tree
+            .get(id)
+            .ok_or_else(|| Error::NodeNotFound("Node not found.".into()))?;
+
+        let children = self.doc.tree.children(id);
+        let depth = self.doc.tree.depth(id);
+        let leaf_count = self
+            .doc
+            .nav_index
+            .get_entry(id)
+            .map(|e| e.leaf_count)
+            .unwrap_or(0);
+
+        Ok(NodeStats {
+            id: self.id_to_u64(id),
+            title: node.title.clone(),
+            depth,
+            child_count: children.len(),
+            leaf_count,
+            char_count: node.content.len(),
+            word_count: node.content.split_whitespace().count(),
+            is_leaf: children.is_empty(),
+        })
+    }
+
+    /// Search within a specific node's content without moving the cursor.
+    pub async fn grep_node(
+        &self,
+        node_id: &str,
+        pattern: &str,
+    ) -> Result<Vec<MatchResult>> {
+        let id = self.parse_id(node_id)?;
+        let re = regex::Regex::new(pattern)
+            .map_err(|e| Error::InvalidInput(format!("Invalid regex '{pattern}': {e}")))?;
+
+        let node = self
+            .doc
+            .tree
+            .get(id)
+            .ok_or_else(|| Error::NodeNotFound("Node not found.".into()))?;
+
+        let title = node.title.clone();
+        let content = &node.content;
+        let mut results = Vec::new();
+
+        for (i, line) in content.lines().enumerate() {
+            if results.len() >= 30 {
+                break;
+            }
+            if re.is_match(line) {
+                results.push(MatchResult {
+                    node_id: self.id_to_u64(id),
+                    title: title.clone(),
+                    snippet: line.to_string(),
+                    line_number: i + 1,
+                });
+            }
+        }
+
+        Ok(results)
+    }
+
+    /// Find semantically similar nodes using the reasoning index.
+    pub async fn similar(&self, node_id: &str) -> Vec<SimilarResult> {
+        let id = match self.parse_id(node_id) {
+            Ok(id) => id,
+            Err(_) => return Vec::new(),
+        };
+
+        // Reverse lookup: find all keywords that point to the reference node
+        let ref_id_u64 = self.id_to_u64(id);
+        let mut ref_keywords: Vec<String> = Vec::new();
+        for (kw, entries) in self.doc.reasoning_index.all_topic_entries() {
+            if entries.iter().any(|e| self.id_to_u64(e.node_id) == ref_id_u64) {
+                ref_keywords.push(kw.clone());
+            }
+        }
+
+        if ref_keywords.is_empty() {
+            return Vec::new();
+        }
+
+        // Find all nodes that share keywords with the reference
+        let mut candidates: HashMap<u64, (f32, Vec<String>)> = HashMap::new();
+        for kw in &ref_keywords {
+            if let Some(entries) = self.doc.reasoning_index.topic_entries(kw) {
+                for entry in entries {
+                    let cid = self.id_to_u64(entry.node_id);
+                    if cid == ref_id_u64 {
+                        continue;
+                    }
+                    let (weight, keywords) = candidates.entry(cid).or_insert((0.0, Vec::new()));
+                    *weight += entry.weight;
+                    keywords.push(kw.clone());
+                }
+            }
+        }
+
+        let mut results: Vec<SimilarResult> = candidates
+            .into_iter()
+            .filter_map(|(cid, (weight, shared))| {
+                let nav_id = self.node_id_map.get(&cid)?;
+                let title = self.doc.tree.get(*nav_id).map(|n| n.title.clone())?;
+                Some(SimilarResult {
+                    id: cid,
+                    title,
+                    relevance: weight,
+                    shared_keywords: shared,
+                })
+            })
+            .collect();
+
+        results.sort_by(|a, b| {
+            b.relevance
+                .partial_cmp(&a.relevance)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        results.truncate(10);
+        results
+    }
+
+    /// Get the pre-computed overview for a section from the navigation index.
+    pub async fn section_overview(&self, node_id: &str) -> Result<String> {
+        let id = self.parse_id(node_id)?;
+        let entry = self
+            .doc
+            .nav_index
+            .get_entry(id)
+            .ok_or_else(|| Error::NodeNotFound("No nav entry for this node.".into()))?;
+        Ok(entry.overview.clone())
+    }
+
+    // -----------------------------------------------------------------------
+    // Internal helpers
+    // -----------------------------------------------------------------------
+
+    /// Rebuild breadcrumb from root to current cursor.
+    fn _rebuild_breadcrumb(&mut self) {
+        let path = self.doc.tree.path_from_root(self.cursor);
+        self.breadcrumb = std::iter::once("root".to_string())
+            .chain(path.iter().skip(1).filter_map(|&id| {
+                self.doc.tree.get(id).map(|n| n.title.clone())
+            }))
+            .collect();
     }
 }

@@ -17,7 +17,8 @@ use answer::{PyAnswer, PyEvidence, PyReasoningTrace, PyTraceStep};
 use config::PyConfig;
 use document::{
     PyCollectedEvidence, PyConcept, PyDocument, PyDocumentInfo, PyFindResult, PyMatchResult,
-    PyNodeInfo, PySectionSummary, PyTopicEntry, PyWordCount,
+    PyNodeInfo, PyNodeStats, PySectionSummary, PySimilarResult, PyTocEntry, PyTopicEntry,
+    PyWordCount,
 };
 use engine::PyEngine;
 use error::VectorlessError;
@@ -48,6 +49,9 @@ fn _vectorless(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyCollectedEvidence>()?;
     m.add_class::<PyTopicEntry>()?;
     m.add_class::<PySectionSummary>()?;
+    m.add_class::<PyTocEntry>()?;
+    m.add_class::<PyNodeStats>()?;
+    m.add_class::<PySimilarResult>()?;
     m.add_class::<PyAnswer>()?;
     m.add_class::<PyEvidence>()?;
     m.add_class::<PyReasoningTrace>()?;

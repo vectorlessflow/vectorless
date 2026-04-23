@@ -95,3 +95,54 @@ pub struct SectionSummaryInfo {
     /// Depth in the tree.
     pub depth: usize,
 }
+
+// ---------------------------------------------------------------------------
+// P1: New types for extended agent tools
+// ---------------------------------------------------------------------------
+
+/// A single entry in the table of contents.
+#[derive(Debug, Clone)]
+pub struct TocEntry {
+    /// Numeric identifier (usable as `"n{id}"` in Python).
+    pub id: u64,
+    /// Section title.
+    pub title: String,
+    /// Depth in the tree (1 = top-level section, 0 = root which is skipped).
+    pub depth: usize,
+    /// Number of direct children.
+    pub child_count: usize,
+}
+
+/// Statistics about a single node.
+#[derive(Debug, Clone)]
+pub struct NodeStats {
+    /// Numeric identifier.
+    pub id: u64,
+    /// Section title.
+    pub title: String,
+    /// Depth in the tree.
+    pub depth: usize,
+    /// Number of direct children.
+    pub child_count: usize,
+    /// Number of leaf descendants.
+    pub leaf_count: usize,
+    /// Character count of the node's content.
+    pub char_count: usize,
+    /// Word count of the node's content.
+    pub word_count: usize,
+    /// Whether this node has no children.
+    pub is_leaf: bool,
+}
+
+/// A node found by semantic similarity.
+#[derive(Debug, Clone)]
+pub struct SimilarResult {
+    /// Numeric identifier.
+    pub id: u64,
+    /// Section title.
+    pub title: String,
+    /// Combined relevance score.
+    pub relevance: f32,
+    /// Keywords shared with the reference node.
+    pub shared_keywords: Vec<String>,
+}
