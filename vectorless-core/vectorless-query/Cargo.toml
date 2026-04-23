@@ -1,0 +1,22 @@
+[package]
+name = "vectorless-query"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+description.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+vectorless-error = { path = "../vectorless-error" }
+vectorless-llm = { path = "../vectorless-llm" }
+vectorless-scoring = { path = "../vectorless-scoring" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+tokio = { workspace = true }
+chrono = { workspace = true }
+
+[lints]
+workspace = true

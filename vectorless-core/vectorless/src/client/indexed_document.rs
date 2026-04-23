@@ -9,8 +9,8 @@
 
 use std::path::PathBuf;
 
+use crate::document::DocumentFormat;
 use crate::document::DocumentTree;
-use crate::index::parse::DocumentFormat;
 use crate::metrics::IndexMetrics;
 use crate::storage::PageContent;
 

@@ -7,8 +7,8 @@ use super::async_trait;
 use std::time::Instant;
 use tracing::{debug, info};
 
+use crate::document::DocumentFormat;
 use crate::error::Result;
-use crate::index::parse::DocumentFormat;
 
 use super::{IndexStage, StageResult};
 use crate::index::IndexMode;

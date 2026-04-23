@@ -5,24 +5,8 @@
 
 use serde::{Deserialize, Serialize};
 
-/// Sufficiency level for incremental retrieval.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SufficiencyLevel {
-    /// Information is sufficient, stop retrieving.
-    Sufficient,
-
-    /// Partial information, can continue if needed.
-    PartialSufficient,
-
-    /// Information is insufficient, continue retrieving.
-    Insufficient,
-}
-
-impl Default for SufficiencyLevel {
-    fn default() -> Self {
-        Self::Insufficient
-    }
-}
+/// Re-export [`SufficiencyLevel`] from the document module.
+pub use crate::document::SufficiencyLevel;
 
 /// Complete retrieval response.
 #[derive(Debug, Clone)]

@@ -1,0 +1,32 @@
+[package]
+name = "vectorless-llm"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+description.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+vectorless-config = { path = "../vectorless-config" }
+vectorless-error = { path = "../vectorless-error" }
+vectorless-metrics = { path = "../vectorless-metrics" }
+vectorless-utils = { path = "../vectorless-utils" }
+async-openai = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+thiserror = { workspace = true }
+chrono = { workspace = true }
+governor = { workspace = true }
+nonzero_ext = { workspace = true }
+lru = { workspace = true }
+parking_lot = { workspace = true }
+uuid = { workspace = true }
+rand = { workspace = true }
+base64 = { workspace = true }
+
+[lints]
+workspace = true

@@ -5,8 +5,8 @@
 
 use std::path::Path;
 
+use crate::document::DocumentFormat;
 use crate::error::{Error, Result};
-use crate::index::parse::DocumentFormat;
 
 /// Maximum file size before emitting a warning (100 MB).
 const LARGE_FILE_THRESHOLD: usize = 100 * 1024 * 1024;

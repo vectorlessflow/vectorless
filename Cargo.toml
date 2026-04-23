@@ -1,5 +1,23 @@
 [workspace]
-members = ["vectorless-core/vectorless", "vectorless-core/vectorless-py"]
+members = [
+    "vectorless-core/vectorless-error",
+    "vectorless-core/vectorless-document",
+    "vectorless-core/vectorless-config",
+    "vectorless-core/vectorless-utils",
+    "vectorless-core/vectorless-scoring",
+    "vectorless-core/vectorless-graph",
+    "vectorless-core/vectorless-events",
+    "vectorless-core/vectorless-metrics",
+    "vectorless-core/vectorless-llm",
+    "vectorless-core/vectorless-storage",
+    "vectorless-core/vectorless-query",
+    "vectorless-core/vectorless-index",
+    "vectorless-core/vectorless-agent",
+    "vectorless-core/vectorless-retrieval",
+    "vectorless-core/vectorless-rerank",
+    "vectorless-core/vectorless-engine",
+    "vectorless-core/vectorless-py",
+]
 resolver = "2"
 
 [workspace.package]

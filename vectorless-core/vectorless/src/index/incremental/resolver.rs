@@ -10,9 +10,9 @@
 
 use tracing::info;
 
+use crate::document::DocumentFormat;
 use crate::document::DocumentTree;
 use crate::index::config::PipelineOptions;
-use crate::index::parse::DocumentFormat;
 use crate::storage::PersistedDocument;
 use crate::utils::fingerprint::Fingerprint;
 

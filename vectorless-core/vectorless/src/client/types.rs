@@ -7,7 +7,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::index::parse::DocumentFormat;
+use crate::document::DocumentFormat;
 use crate::metrics::IndexMetrics;
 
 // ============================================================

@@ -268,7 +268,7 @@ pub enum IngestInput {
         /// Raw document bytes.
         data: Vec<u8>,
         /// Document format.
-        format: super::super::index::parse::DocumentFormat,
+        format: super::format::DocumentFormat,
     },
     /// Index from a text string.
     Text {

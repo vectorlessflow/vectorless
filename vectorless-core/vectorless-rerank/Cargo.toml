@@ -1,0 +1,19 @@
+[package]
+name = "vectorless-rerank"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+description.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+serde = { workspace = true }
+tracing = { workspace = true }
+vectorless-agent = { path = "../vectorless-agent" }
+vectorless-error = { path = "../vectorless-error" }
+vectorless-query = { path = "../vectorless-query" }
+
+[lints]
+workspace = true

@@ -38,7 +38,7 @@
 
 use std::path::PathBuf;
 
-use crate::index::parse::DocumentFormat;
+use crate::document::DocumentFormat;
 
 use super::types::{IndexMode, IndexOptions};
 
