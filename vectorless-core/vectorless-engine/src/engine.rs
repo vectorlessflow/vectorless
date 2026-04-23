@@ -65,7 +65,6 @@ use vectorless_storage::{PersistedDocument, Workspace};
 use super::{
     index_context::{IndexContext, IndexSource},
     indexer::IndexerClient,
-    retriever::RetrieverClient,
     types::{FailedItem, IndexItem, IndexMode, IndexResult},
     workspace::WorkspaceClient,
 };
