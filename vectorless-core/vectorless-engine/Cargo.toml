@@ -1,0 +1,37 @@
+[package]
+name = "vectorless-engine"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+description.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+vectorless-agent = { path = "../vectorless-agent" }
+vectorless-config = { path = "../vectorless-config" }
+vectorless-document = { path = "../vectorless-document" }
+vectorless-error = { path = "../vectorless-error" }
+vectorless-events = { path = "../vectorless-events" }
+vectorless-graph = { path = "../vectorless-graph" }
+vectorless-index = { path = "../vectorless-index" }
+vectorless-llm = { path = "../vectorless-llm" }
+vectorless-metrics = { path = "../vectorless-metrics" }
+vectorless-retrieval = { path = "../vectorless-retrieval" }
+vectorless-rerank = { path = "../vectorless-rerank" }
+vectorless-storage = { path = "../vectorless-storage" }
+vectorless-utils = { path = "../vectorless-utils" }
+tokio = { workspace = true }
+tracing = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+thiserror = { workspace = true }
+parking_lot = { workspace = true }
+async-trait = { workspace = true }
+futures = { workspace = true }
+
+[lints]
+workspace = true

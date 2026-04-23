@@ -1,0 +1,17 @@
+[package]
+name = "vectorless-config"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+description.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+vectorless-graph = { path = "../vectorless-graph" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[lints]
+workspace = true

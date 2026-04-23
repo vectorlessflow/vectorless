@@ -1,0 +1,19 @@
+[package]
+name = "vectorless-metrics"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+description.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+vectorless-config = { path = "../vectorless-config" }
+vectorless-error = { path = "../vectorless-error" }
+serde = { workspace = true }
+tracing = { workspace = true }
+parking_lot = { workspace = true }
+
+[lints]
+workspace = true

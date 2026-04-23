@@ -1,0 +1,29 @@
+[package]
+name = "vectorless-agent"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+description.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+vectorless-document = { path = "../vectorless-document" }
+vectorless-error = { path = "../vectorless-error" }
+vectorless-llm = { path = "../vectorless-llm" }
+vectorless-query = { path = "../vectorless-query" }
+vectorless-rerank = { path = "../vectorless-rerank" }
+vectorless-scoring = { path = "../vectorless-scoring" }
+tokio = { workspace = true }
+async-trait = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+futures = { workspace = true }
+chrono = { workspace = true }
+thiserror = { workspace = true }
+regex = { workspace = true }
+
+[lints]
+workspace = true
