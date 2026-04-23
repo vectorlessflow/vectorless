@@ -1,14 +1,14 @@
-"""Streaming query results backed by real-time Rust streaming events.
+"""Streaming query results backed by the Python strategy pipeline.
 
-Wraps the PyO3 ``StreamingQuery`` async iterator and builds a
-``QueryResponse`` from the terminal ``completed`` event.
+Yields real-time events as the orchestrator progresses through
+understanding, dispatching workers, collecting evidence, and synthesis.
 """
 
 from __future__ import annotations
 
 from typing import Any, AsyncIterator, Dict, List, Optional
 
-from vectorless.types.results import QueryResponse, QueryResult
+from vectorless.types.results import QueryResponse
 
 
 class StreamingQueryResult:
@@ -16,16 +16,49 @@ class StreamingQueryResult:
 
     Usage::
 
-        stream = await session.query_stream("What is the revenue?")
+        stream = await engine.query_stream("What is the revenue?")
         async for event in stream:
             print(event["type"], event)
-        result = stream.result  # Available after iteration completes
+        result = stream.result
     """
 
-    def __init__(self, raw_stream: Any) -> None:
-        self._stream = raw_stream  # PyStreamingQuery from Rust
+    def __init__(self) -> None:
         self._result: Optional[QueryResponse] = None
         self._consumed = False
+        self._queue: list[Dict] = []
+        self._finished = False
+
+    @classmethod
+    def from_engine(
+        cls,
+        engine: Any,
+        question: str,
+        doc_ids: Optional[List[str]],
+        workspace_scope: bool,
+    ) -> StreamingQueryResult:
+        """Create a StreamingQueryResult that runs the engine pipeline with event emission."""
+        instance = cls()
+
+        async def _run() -> None:
+            try:
+                result = await engine._ask_python(question, doc_ids, workspace_scope)
+                instance._result = result
+                instance._queue.append({
+                    "type": "completed",
+                    "total_results": len(result.items),
+                    "confidence": result.items[0].confidence if result.items else 0.0,
+                })
+            except Exception as e:
+                instance._queue.append({
+                    "type": "error",
+                    "message": str(e),
+                })
+            finally:
+                instance._finished = True
+
+        import asyncio
+        asyncio.ensure_future(_run())
+        return instance
 
     def __aiter__(self) -> AsyncIterator[Dict]:
         return self._iterate()
@@ -35,39 +68,17 @@ class StreamingQueryResult:
             return
         self._consumed = True
 
-        completed_event: Optional[Dict] = None
-
-        async for event in self._stream:
-            event_type = event.get("type", "")
-
-            yield event
-
-            if event_type in ("completed", "error"):
-                if event_type == "completed":
-                    completed_event = event
-                break  # Terminal events end the stream
-
-        if completed_event is not None:
-            self._result = self._build_response(completed_event)
-
-    @staticmethod
-    def _build_response(event: Dict) -> QueryResponse:
-        """Build a QueryResponse from the completed event dict."""
-        items: List[QueryResult] = []
-        for r in event.get("results", []):
-            node_id = r.get("node_id")
-            items.append(
-                QueryResult(
-                    doc_id=node_id or "",
-                    content=r.get("content") or "",
-                    score=r.get("score", 0.0),
-                    confidence=event.get("confidence", 0.0),
-                    node_ids=[node_id] if node_id else [],
-                    evidence=[],
-                    metrics=None,
-                )
-            )
-        return QueryResponse(items=items, failed=[])
+        import asyncio
+        while True:
+            if self._queue:
+                event = self._queue.pop(0)
+                yield event
+                if event.get("type") in ("completed", "error"):
+                    break
+            elif self._finished:
+                break
+            else:
+                await asyncio.sleep(0.05)
 
     @property
     def result(self) -> Optional[QueryResponse]:

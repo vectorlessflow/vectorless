@@ -9,7 +9,7 @@ from langchain_core.documents import Document
 from langchain_core.retrievers import BaseRetriever
 
 from vectorless._async_utils import run_async
-from vectorless.session import Session
+from vectorless.engine import Engine
 
 
 class VectorlessRetriever(BaseRetriever):
@@ -31,12 +31,12 @@ class VectorlessRetriever(BaseRetriever):
 
         docs = retriever.invoke("What is the revenue?")
 
-    Or with an existing Session (avoids re-initializing the engine)::
+    Or with an existing Engine (avoids re-initializing)::
 
-        from vectorless import Session
+        from vectorless import Engine
 
-        session = Session(api_key="sk-...", model="gpt-4o")
-        retriever = VectorlessRetriever(session=session, doc_ids=["doc-123"])
+        engine = Engine(api_key="sk-...", model="gpt-4o")
+        retriever = VectorlessRetriever(engine=engine, doc_ids=["doc-123"])
     """
 
     api_key: str = ""
@@ -45,20 +45,20 @@ class VectorlessRetriever(BaseRetriever):
     doc_ids: List[str] = []
     top_k: int = 3
     workspace_scope: bool = False
-    session: Optional[Session] = None
+    engine: Optional[Engine] = None
 
     class Config:
         arbitrary_types_allowed = True
 
-    def _get_session(self) -> Session:
-        """Get or lazily create a cached Session instance."""
-        if self.session is None:
-            self.session = Session(
+    def _get_engine(self) -> Engine:
+        """Get or lazily create a cached Engine instance."""
+        if self.engine is None:
+            self.engine = Engine(
                 api_key=self.api_key or None,
                 model=self.model or None,
                 endpoint=self.endpoint or None,
             )
-        return self.session
+        return self.engine
 
     def _get_relevant_documents(
         self,
@@ -67,9 +67,9 @@ class VectorlessRetriever(BaseRetriever):
         run_manager: Optional[CallbackManagerForRetrieverRun] = None,
     ) -> List[Document]:
         """Synchronous retrieval."""
-        session = self._get_session()
+        engine = self._get_engine()
         response = run_async(
-            session.ask(
+            engine.ask(
                 query,
                 doc_ids=self.doc_ids if self.doc_ids else None,
                 workspace_scope=self.workspace_scope,
@@ -84,8 +84,8 @@ class VectorlessRetriever(BaseRetriever):
         run_manager: Optional[CallbackManagerForRetrieverRun] = None,
     ) -> List[Document]:
         """Async retrieval."""
-        session = self._get_session()
-        response = await session.ask(
+        engine = self._get_engine()
+        response = await engine.ask(
             query,
             doc_ids=self.doc_ids if self.doc_ids else None,
             workspace_scope=self.workspace_scope,

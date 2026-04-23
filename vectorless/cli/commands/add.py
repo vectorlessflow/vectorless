@@ -11,21 +11,21 @@ from vectorless.cli.workspace import get_workspace_path
 from vectorless.cli.output import format_json
 
 
-def _create_session(workspace_dir: str):
-    """Create a Session from workspace config.
+def _create_engine(workspace_dir: str):
+    """Create an Engine from workspace config.
 
     Args:
         workspace_dir: Path to .vectorless/ directory.
 
     Returns:
-        Configured Session instance.
+        Configured Engine instance.
     """
-    from vectorless.session import Session
+    from vectorless.engine import Engine
 
     config_path = os.path.join(workspace_dir, "config.toml")
     if os.path.exists(config_path):
-        return Session.from_config_file(config_path)
-    return Session.from_env()
+        return Engine.from_config_file(config_path)
+    return Engine.from_env()
 
 
 def add_cmd(
@@ -55,9 +55,9 @@ def add_cmd(
     workspace = get_workspace_path()
 
     try:
-        session = _create_session(workspace)
+        session = _create_engine(workspace)
     except Exception as e:
-        raise click.ClickException(f"Failed to create session: {e}") from e
+        raise click.ClickException(f"Failed to create engine: {e}") from e
 
     target = Path(path).resolve()
     format_hint = fmt or "markdown"

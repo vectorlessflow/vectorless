@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any, List, Optional
 
 from vectorless._async_utils import run_async
-from vectorless.session import Session
+from vectorless.engine import Engine
 
 
 class VectorlessRetriever:
@@ -35,12 +35,12 @@ class VectorlessRetriever:
         doc_ids: Optional[List[str]] = None,
         top_k: int = 3,
         workspace_scope: bool = False,
-        session: Optional[Session] = None,
+        engine: Optional[Engine] = None,
     ) -> None:
-        if session is not None:
-            self._session = session
+        if engine is not None:
+            self._engine = engine
         else:
-            self._session = Session(
+            self._engine = Engine(
                 api_key=api_key or None,
                 model=model or None,
                 endpoint=endpoint or None,
@@ -60,7 +60,7 @@ class VectorlessRetriever:
         return self._to_nodes(response)
 
     async def _query(self, query: str) -> Any:
-        return await self._session.ask(
+        return await self._engine.ask(
             query,
             doc_ids=self._doc_ids if self._doc_ids else None,
             workspace_scope=self._workspace_scope,

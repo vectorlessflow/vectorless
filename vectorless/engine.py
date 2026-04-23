@@ -1,18 +1,21 @@
-"""High-level Vectorless Session API.
+"""High-level Vectorless Engine API.
 
-``Session`` is the single recommended entry point for all operations.
-It wraps the Rust Engine with Pythonic ergonomics: typed configuration,
-event callbacks, flexible input methods, and batch operations.
+``Engine`` is the single recommended entry point for all operations.
+It wraps the Rust compile layer with Python strategy for retrieval:
+typed configuration, event callbacks, flexible input methods, and batch operations.
 """
 
 from __future__ import annotations
 
 import asyncio
+import logging
 from pathlib import Path
 from typing import Any, List, Optional, Union
 
-from vectorless._core import Engine, IndexContext, IndexOptions, QueryContext
-from vectorless.config import EngineConfig, load_config_from_env
+from vectorless._core import Engine as RustEngine
+from vectorless._core import IndexContext, IndexOptions
+from vectorless.agent.orchestrator import DocCard, Orchestrator, OrchestratorResult
+from vectorless.config import EngineConfig, load_config, load_config_from_env, load_config_from_file
 from vectorless.events import (
     EventEmitter,
     IndexEventData,
@@ -20,32 +23,44 @@ from vectorless.events import (
     QueryEventData,
     QueryEventType,
 )
+from vectorless.llm_client import LLMClient
+from vectorless.query.plan import QueryIntent
+from vectorless.query.understand import understand
+from vectorless.rerank.synthesize import RerankOutput, process
 from vectorless.streaming import StreamingQueryResult
 from vectorless.types.graph import DocumentGraphWrapper
 from vectorless.types.results import (
+    Evidence,
+    FailedItem,
     IndexResultWrapper,
+    QueryMetrics,
     QueryResponse,
+    QueryResult,
 )
 
+logger = logging.getLogger(__name__)
 
-class Session:
-    """High-level Vectorless session.
+
+class Engine:
+    """High-level Vectorless engine.
+
+    compile (ingest) runs in Rust; ask (retrieval) runs in Python.
 
     Configuration precedence: constructor args > env vars > config file > defaults.
 
     Usage::
 
-        from vectorless import Session
+        from vectorless import Engine
 
-        session = Session(api_key="sk-...", model="gpt-4o")
-        result = await session.index(path="./report.pdf")
-        answer = await session.ask("What is the Q4 revenue?", doc_ids=[result.doc_id])
+        engine = Engine(api_key="sk-...", model="gpt-4o")
+        result = await engine.index(path="./report.pdf")
+        answer = await engine.ask("What is the Q4 revenue?", doc_ids=[result.doc_id])
         print(answer.single().content)
 
     Or from environment variables::
 
         # VECTORLESS_API_KEY, VECTORLESS_MODEL set in env
-        session = Session.from_env()
+        engine = Engine.from_env()
     """
 
     def __init__(
@@ -65,18 +80,25 @@ class Session:
         else:
             self._config = self._resolve_config(api_key, model, endpoint, config_file)
 
-        # Build Rust engine
+        # Build Rust engine (for compile / document management)
         rust_config = self._config.to_rust_config()
-        self._engine = Engine(
+        self._rust = RustEngine(
             api_key=self._config.llm.api_key,
             model=self._config.llm.model or None,
             endpoint=self._config.llm.endpoint or None,
             config=rust_config,
         )
 
+        # Build Python LLM client (for strategy layer)
+        self._llm = LLMClient(
+            api_key=self._config.llm.api_key,
+            model=self._config.llm.model,
+            endpoint=self._config.llm.endpoint or None,
+        )
+
     @classmethod
-    def from_env(cls, events: Optional[EventEmitter] = None) -> "Session":
-        """Create a Session from environment variables only."""
+    def from_env(cls, events: Optional[EventEmitter] = None) -> Engine:
+        """Create an Engine from environment variables only."""
         config = load_config_from_env()
         return cls(config=config, events=events)
 
@@ -85,10 +107,8 @@ class Session:
         cls,
         path: Union[str, Path],
         events: Optional[EventEmitter] = None,
-    ) -> "Session":
-        """Create a Session from a TOML config file."""
-        from vectorless.config import load_config_from_file
-
+    ) -> Engine:
+        """Create an Engine from a TOML config file."""
         config = load_config_from_file(Path(path))
         return cls(config=config, events=events)
 
@@ -99,8 +119,6 @@ class Session:
         endpoint: Optional[str],
         config_file: Optional[Union[str, Path]],
     ) -> EngineConfig:
-        from vectorless.config import load_config
-
         overrides: dict[str, Any] = {}
         llm_overrides: dict[str, Any] = {}
         if api_key is not None:
@@ -117,7 +135,7 @@ class Session:
             overrides=overrides if overrides else None,
         )
 
-    # ── Indexing ──────────────────────────────────────────────
+    # ── Indexing (Rust compile pipeline) ────────────────────────
 
     async def index(
         self,
@@ -172,7 +190,7 @@ class Session:
             IndexEventData(event_type=IndexEventType.STARTED, path=source_desc)
         )
 
-        result = await self._engine.index(ctx)
+        result = await self._rust.index(ctx)
 
         # Emit complete event
         self._events.emit_index(
@@ -229,7 +247,7 @@ class Session:
         results = await asyncio.gather(*tasks)
         return list(results)
 
-    # ── Querying ──────────────────────────────────────────────
+    # ── Querying (Python strategy layer) ────────────────────────
 
     async def ask(
         self,
@@ -241,6 +259,8 @@ class Session:
     ) -> QueryResponse:
         """Ask a question and get results with source attribution.
 
+        Uses the Python strategy layer: query understanding → orchestrator → workers → rerank.
+
         Args:
             question: Natural language query.
             doc_ids: Limit query to specific document IDs.
@@ -249,33 +269,31 @@ class Session:
         """
         # Emit start event
         self._events.emit_query(
-            QueryEventData(
-                event_type=QueryEventType.STARTED,
-                query=question,
-            )
+            QueryEventData(event_type=QueryEventType.STARTED, query=question)
         )
 
-        ctx = QueryContext(question)
-        if doc_ids is not None:
-            ctx = ctx.with_doc_ids(doc_ids)
-        elif workspace_scope:
-            ctx = ctx.with_workspace()
-        if timeout_secs is not None:
-            ctx = ctx.with_timeout_secs(timeout_secs)
-
-        result = await self._engine.query(ctx)
-        response = QueryResponse.from_rust(result)
+        try:
+            result = await self._ask_python(question, doc_ids, workspace_scope)
+        except Exception as e:
+            self._events.emit_query(
+                QueryEventData(
+                    event_type=QueryEventType.ERROR,
+                    query=question,
+                    message=str(e),
+                )
+            )
+            raise
 
         # Emit complete event
         self._events.emit_query(
             QueryEventData(
                 event_type=QueryEventType.COMPLETE,
                 query=question,
-                total_results=len(response.items),
+                total_results=len(result.items),
             )
         )
 
-        return response
+        return result
 
     async def query_stream(
         self,
@@ -287,63 +305,121 @@ class Session:
     ) -> StreamingQueryResult:
         """Stream query progress as an async iterator.
 
-        Yields real-time events from the retrieval pipeline.
+        Yields real-time events from the Python strategy pipeline.
         Terminal events are ``'completed'`` (with results) or ``'error'``.
 
         Usage::
 
-            stream = await session.query_stream("What is the revenue?")
+            stream = await engine.query_stream("What is the revenue?")
             async for event in stream:
                 print(event["type"], event)
             result = stream.result
         """
-        ctx = QueryContext(question)
+        return StreamingQueryResult.from_engine(self, question, doc_ids, workspace_scope)
+
+    # ── Python strategy implementation ──────────────────────────
+
+    async def _ask_python(
+        self,
+        question: str,
+        doc_ids: Optional[List[str]],
+        workspace_scope: bool,
+    ) -> QueryResponse:
+        """Run the full Python strategy: understand → orchestrator → rerank."""
+        # 1. Resolve target documents
         if doc_ids is not None:
-            ctx = ctx.with_doc_ids(doc_ids)
-        elif workspace_scope:
-            ctx = ctx.with_workspace()
-        if timeout_secs is not None:
-            ctx = ctx.with_timeout_secs(timeout_secs)
+            target_ids = doc_ids
+        else:
+            all_docs = await self._rust.list()
+            target_ids = [d.doc_id for d in all_docs]
 
-        raw_stream = await self._engine.query_stream(ctx)
-        return StreamingQueryResult(raw_stream)
+        if not target_ids:
+            return QueryResponse(items=[], failed=[])
 
-    # ── Document Management ───────────────────────────────────
+        # 2. Build DocCards for orchestrator analysis
+        all_doc_infos = await self._rust.list()
+        info_map = {d.doc_id: d for d in all_doc_infos}
+        target_infos = [info_map[did] for did in target_ids if did in info_map]
+
+        doc_cards = []
+        for info in target_infos:
+            concepts = []
+            if info.concepts:
+                concepts = [c.name for c in info.concepts]
+            doc_cards.append(DocCard(
+                doc_id=info.doc_id,
+                name=info.name,
+                summary=info.summary or "",
+                section_count=info.section_count,
+                concepts=concepts,
+            ))
+
+        # 3. Query understanding
+        query_plan = await understand(question, self._llm)
+
+        # 4. Orchestrator
+        orchestrator = Orchestrator(
+            query=question,
+            doc_cards=doc_cards,
+            doc_loader=self._load_document,
+            llm_client=self._llm,
+            skip_analysis=not workspace_scope and len(doc_cards) <= 1,
+            intent_context=query_plan.intent_context(),
+        )
+        orch_result = await orchestrator.run()
+
+        # 5. Rerank + synthesize
+        reranked = process(
+            evidence=orch_result.evidence,
+            intent=query_plan.intent,
+            confidence=orch_result.confidence,
+        )
+
+        # 6. Convert to QueryResponse
+        return _orchestrator_to_response(
+            reranked, orch_result, target_ids, query_plan.intent,
+        )
+
+    async def _load_document(self, doc_id: str):
+        """Load a navigable Document from the Rust engine."""
+        return await self._rust.load_document(doc_id)
+
+    # ── Document Management (Rust) ──────────────────────────────
 
     async def list_documents(self) -> list:
         """List all indexed documents."""
-        return await self._engine.list()
+        return await self._rust.list()
 
     async def remove_document(self, doc_id: str) -> bool:
         """Remove a document by ID."""
-        return await self._engine.remove(doc_id)
+        return await self._rust.remove(doc_id)
 
     async def document_exists(self, doc_id: str) -> bool:
         """Check if a document exists."""
-        return await self._engine.exists(doc_id)
+        return await self._rust.exists(doc_id)
 
     async def clear_all(self) -> int:
         """Remove all indexed documents. Returns count removed."""
-        return await self._engine.clear()
+        return await self._rust.clear()
 
-    # ── Graph ─────────────────────────────────────────────────
+    # ── Graph (Rust) ────────────────────────────────────────────
 
     async def get_graph(self) -> Optional[DocumentGraphWrapper]:
         """Get the cross-document relationship graph."""
-        graph = await self._engine.get_graph()
+        graph = await self._rust.get_graph()
         if graph is None:
             return None
         return DocumentGraphWrapper.from_rust(graph)
 
-    # ── Metrics ───────────────────────────────────────────────
+    # ── Metrics (Rust) ──────────────────────────────────────────
 
     def metrics_report(self) -> Any:
         """Get a comprehensive metrics report."""
-        return self._engine.metrics_report()
+        return self._rust.metrics_report()
 
-    # ── Context Manager ───────────────────────────────────────
+    # ── Context Manager ─────────────────────────────────────────
 
-    async def __aenter__(self) -> "Session":
+    async def __aenter__(self) -> Engine:
         return self
 
     async def __aexit__(self, *args: Any) -> None:
@@ -351,4 +427,49 @@ class Session:
 
     def __repr__(self) -> str:
         model = self._config.llm.model or "unknown"
-        return f"Session(model={model!r})"
+        return f"Engine(model={model!r})"
+
+
+# ---------------------------------------------------------------------------
+# Conversion helpers
+# ---------------------------------------------------------------------------
+
+def _orchestrator_to_response(
+    reranked: RerankOutput,
+    orch_result: OrchestratorResult,
+    target_ids: list[str],
+    intent: QueryIntent,
+) -> QueryResponse:
+    """Convert Python strategy output to QueryResponse."""
+    if not reranked.evidence:
+        return QueryResponse(items=[], failed=[])
+
+    # Build a single QueryResult from all evidence
+    evidence_list = [
+        Evidence(
+            title=e.title,
+            path=e.source_path,
+            content=e.content,
+        )
+        for e in reranked.evidence
+    ]
+
+    metrics = QueryMetrics(
+        llm_calls=orch_result.llm_calls,
+        rounds_used=orch_result.rounds_used,
+        nodes_visited=orch_result.nodes_visited,
+        evidence_count=len(reranked.evidence),
+        evidence_chars=sum(len(e.content) for e in reranked.evidence),
+    )
+
+    item = QueryResult(
+        doc_id=target_ids[0] if len(target_ids) == 1 else "",
+        content=reranked.answer,
+        score=reranked.confidence,
+        confidence=reranked.confidence,
+        node_ids=[e.node_id for e in reranked.evidence],
+        evidence=evidence_list,
+        metrics=metrics,
+    )
+
+    return QueryResponse(items=[item], failed=[])
