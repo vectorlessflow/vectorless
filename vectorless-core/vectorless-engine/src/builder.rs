@@ -196,7 +196,7 @@ impl EngineBuilder {
         let pool = vectorless_llm::LlmPool::from_config(&config.llm, Some(metrics_hub.clone()));
 
         // Indexer uses pool.index()
-        let indexer = crate::client::indexer::IndexerClient::with_llm(pool.index().clone());
+        let indexer = super::indexer::IndexerClient::with_llm(pool.index().clone());
 
         // Retriever uses pool.retrieval() via agent system
         let retriever = RetrieverClient::new(pool.retrieval().clone());

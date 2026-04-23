@@ -49,19 +49,19 @@ use std::{collections::HashMap, sync::Arc};
 use futures::StreamExt;
 use tracing::{info, warn};
 
-use crate::{
-    Answer, Document as UnderstandingDocument, DocumentTree, Error, Evidence, IngestInput,
+use vectorless_config::Config;
+use vectorless_document::{
+    Answer, Document as UnderstandingDocument, DocumentTree, Evidence, IngestInput,
     ReasoningTrace,
-    config::Config,
-    error::Result,
-    events::EventEmitter,
-    index::{
-        PipelineOptions,
-        incremental::{self, IndexAction},
-    },
-    metrics::MetricsHub,
-    storage::{PersistedDocument, Workspace},
 };
+use vectorless_error::{Error, Result};
+use vectorless_events::EventEmitter;
+use vectorless_index::{
+    PipelineOptions,
+    incremental::{self, IndexAction},
+};
+use vectorless_metrics::MetricsHub;
+use vectorless_storage::{PersistedDocument, Workspace};
 
 use super::{
     index_context::{IndexContext, IndexSource},
@@ -574,7 +574,7 @@ impl Engine {
             doc_id: persisted.meta.id,
             name: persisted.meta.name,
             format: persisted.meta.format,
-            source_path: persisted.meta.source_path.map(|p| p.to_string_lossy().to_string()),
+            source_path: persisted.meta.source_path.as_ref().map(|p: &std::path::PathBuf| p.to_string_lossy().to_string()),
             tree,
             nav_index,
             reasoning_index,
