@@ -5,7 +5,7 @@
 
 use pyo3::prelude::*;
 
-use ::vectorless::DocumentInfo;
+use ::vectorless_engine::DocumentInfo;
 
 /// Information about an understood document.
 #[pyclass(name = "DocumentInfo")]

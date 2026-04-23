@@ -24,7 +24,7 @@ use pyo3::prelude::*;
 /// ```
 #[pyclass(name = "Config")]
 pub struct PyConfig {
-    pub(crate) inner: vectorless::Config,
+    pub(crate) inner: vectorless_engine::Config,
 }
 
 #[pymethods]
@@ -33,7 +33,7 @@ impl PyConfig {
     #[new]
     fn new() -> Self {
         Self {
-            inner: vectorless::Config::default(),
+            inner: vectorless_engine::Config::default(),
         }
     }
 

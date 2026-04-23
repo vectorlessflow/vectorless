@@ -477,8 +477,15 @@ impl Engine {
         }
 
         // Build DocContexts from Documents and dispatch
-        let doc_contexts: Vec<vectorless_agent::DocContext> =
-            documents.iter().map(|doc| doc.as_context()).collect();
+        let doc_contexts: Vec<vectorless_agent::DocContext> = documents
+            .iter()
+            .map(|doc| vectorless_agent::DocContext {
+                tree: &doc.tree,
+                nav_index: &doc.nav_index,
+                reasoning_index: &doc.reasoning_index,
+                doc_name: &doc.name,
+            })
+            .collect();
 
         let skip_analysis = !ids.is_empty();
         let scope = if skip_analysis {
@@ -698,7 +705,7 @@ impl Engine {
                 enable_synonym_expansion: options.enable_synonym_expansion,
                 ..ReasoningIndexConfig::default()
             },
-            concurrency: self.config.llm.throttle.to_runtime_config(),
+            concurrency: vectorless_llm::throttle::ConcurrencyConfig::from(&self.config.llm.throttle),
             ..Default::default()
         }
     }

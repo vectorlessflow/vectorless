@@ -8,7 +8,7 @@ use pyo3_async_runtimes::tokio::future_into_py;
 use std::sync::Arc;
 use tokio::runtime::Runtime;
 
-use ::vectorless::{Engine, EngineBuilder, IngestInput};
+use ::vectorless_engine::{Engine, EngineBuilder, IngestInput};
 
 use super::answer::PyAnswer;
 use super::document::PyDocumentInfo;
