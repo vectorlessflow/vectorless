@@ -1,5 +1,6 @@
 """Ask pipeline — query understanding, multi-agent retrieval, and answer synthesis."""
 
+from vectorless.ask.dispatcher import dispatch
 from vectorless.ask.evaluate import evaluate
 from vectorless.ask.orchestrator import Orchestrator
 from vectorless.ask.plan import Complexity, QueryIntent, QueryPlan, SubQuery
@@ -49,6 +50,7 @@ __all__ = [
     "Complexity",
     # Agents
     "Worker",
+    "dispatch",
     "evaluate",
     "understand",
 ]

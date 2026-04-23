@@ -13,7 +13,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any
 
-from vectorless.ask.types import TraceStep, WorkerEvidence, WorkerResult
+from vectorless.ask.types import TraceStep, Evidence, WorkerOutput, WorkerMetrics
 from vectorless.llm_client import LLMClient
 from vectorless.ask.tools import compare_nodes, summarize_section, trace_reasoning
 from vectorless.ask.prompts import (
@@ -195,7 +195,7 @@ class Step:
 class _WorkerState:
     """Mutable state for a single Worker run."""
     breadcrumb: list[str] = field(default_factory=lambda: ["root"])
-    evidence: list[WorkerEvidence] = field(default_factory=list)
+    evidence: list[Evidence] = field(default_factory=list)
     visited: set[str] = field(default_factory=set)
     collected_nodes: set[str] = field(default_factory=set)
     remaining: int = 15
@@ -216,14 +216,14 @@ class _WorkerState:
         if not self.evidence:
             return "(none)"
         return "\n".join(
-            f"- [{e.title}] {len(e.content)} chars" for e in self.evidence
+            f"- [{e.node_title}] {len(e.content)} chars" for e in self.evidence
         )
 
     def evidence_for_check(self) -> str:
         if not self.evidence:
             return "(no evidence collected yet)"
         return "\n\n".join(
-            f"[{e.title}]\n{e.content}" for e in self.evidence
+            f"[{e.node_title}]\n{e.content}" for e in self.evidence
         )
 
     def history_text(self) -> str:
@@ -396,11 +396,10 @@ async def _execute_command(
             title = await doc.node_title(node_id)
             pwd = await doc.pwd()
 
-            evidence = WorkerEvidence(
-                node_id=node_id,
-                title=title,
-                content=content,
+            evidence = Evidence(
                 source_path=pwd,
+                node_title=title,
+                content=content,
             )
             state.evidence.append(evidence)
             state.collected_nodes.add(node_id)
@@ -669,14 +668,14 @@ async def _execute_command(
             title_b = await doc.node_title(node_b)
             if node_a not in state.collected_nodes:
                 pwd_a = await doc.pwd()
-                state.evidence.append(WorkerEvidence(
-                    node_id=node_a, title=title_a, content=content_a, source_path=pwd_a,
+                state.evidence.append(Evidence(
+                    source_path=pwd_a, node_title=title_a, content=content_a,
                 ))
                 state.collected_nodes.add(node_a)
             if node_b not in state.collected_nodes:
                 pwd_b = await doc.pwd()
-                state.evidence.append(WorkerEvidence(
-                    node_id=node_b, title=title_b, content=content_b, source_path=pwd_b,
+                state.evidence.append(Evidence(
+                    source_path=pwd_b, node_title=title_b, content=content_b,
                 ))
                 state.collected_nodes.add(node_b)
             result = await compare_nodes(title_a, content_a, title_b, content_b, llm, query=query)
@@ -696,8 +695,8 @@ async def _execute_command(
             title = await doc.node_title(node_id)
             if node_id not in state.collected_nodes:
                 pwd = await doc.pwd()
-                state.evidence.append(WorkerEvidence(
-                    node_id=node_id, title=title, content=content, source_path=pwd,
+                state.evidence.append(Evidence(
+                    source_path=pwd, node_title=title, content=content,
                 ))
                 state.collected_nodes.add(node_id)
             related_context = ""
@@ -725,8 +724,8 @@ async def _execute_command(
             title = await doc.node_title(node_id)
             if node_id not in state.collected_nodes:
                 pwd = await doc.pwd()
-                state.evidence.append(WorkerEvidence(
-                    node_id=node_id, title=title, content=content, source_path=pwd,
+                state.evidence.append(Evidence(
+                    source_path=pwd, node_title=title, content=content,
                 ))
                 state.collected_nodes.add(node_id)
             result = await summarize_section(title, content, llm, query=query)
@@ -905,7 +904,7 @@ class Worker:
         self._task = task
         self._intent_context = intent_context
 
-    async def run(self) -> WorkerResult:
+    async def run(self) -> WorkerOutput:
         """Execute the Worker navigation loop and return collected evidence."""
         doc = self._doc
         query = self._query
@@ -1045,14 +1044,27 @@ class Worker:
 
         budget_exhausted = state.remaining == 0
         rounds_used = max_rounds - state.remaining
+        evidence_chars = sum(len(e.content) for e in state.evidence)
 
-        return WorkerResult(
-            evidence=state.evidence,
-            trace=state.trace_steps,
-            rounds_used=rounds_used,
-            llm_calls=state.llm_calls,
-            nodes_visited=len(state.visited),
-            budget_exhausted=budget_exhausted,
+        doc_name = ""
+        try:
+            doc_name = await doc.doc_name()
+        except Exception:
+            pass
+
+        return WorkerOutput(
+            evidence=list(state.evidence),
+            metrics=WorkerMetrics(
+                rounds_used=rounds_used,
+                llm_calls=state.llm_calls,
+                nodes_visited=len(state.visited),
+                budget_exhausted=budget_exhausted,
+                plan_generated=state.plan_generated,
+                check_count=state.check_count,
+                evidence_chars=evidence_chars,
+            ),
+            doc_name=doc_name,
+            trace_steps=list(state.trace_steps),
         )
 
     async def _build_keyword_hints(self, doc: Any, query: str) -> str:

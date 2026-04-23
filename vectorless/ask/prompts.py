@@ -18,6 +18,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from vectorless.ask.types import DispatchEntry
+
 
 # ---------------------------------------------------------------------------
 # 1. Worker Navigation (used every round in the nav loop)
@@ -434,15 +436,6 @@ def orchestrator_replan_prompt(
 # ---------------------------------------------------------------------------
 # Parsing utilities
 # ---------------------------------------------------------------------------
-
-@dataclass
-class DispatchEntry:
-    """A single dispatch entry parsed from orchestrator analysis."""
-
-    doc_idx: int
-    reason: str
-    task: str
-
 
 def parse_dispatch_plan(llm_output: str, total_docs: int) -> list[DispatchEntry] | None:
     """Parse the LLM output from orchestrator analysis into dispatch entries.

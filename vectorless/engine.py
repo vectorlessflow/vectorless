@@ -13,7 +13,8 @@ from pathlib import Path
 from typing import Any, Callable, List, Optional, Union
 
 from vectorless._internal._core import Engine as RustEngine
-from vectorless.ask.orchestrator import DocCard, Orchestrator, OrchestratorResult
+from vectorless.ask.dispatcher import dispatch
+from vectorless.ask.types import DocCard, Output, Specified, Workspace
 from vectorless.config import EngineConfig, load_config, load_config_from_env, load_config_from_file
 from vectorless.events import (
     EventEmitter,
@@ -23,9 +24,6 @@ from vectorless.events import (
     QueryEventType,
 )
 from vectorless.llm_client import LLMClient
-from vectorless.ask.plan import QueryIntent
-from vectorless.ask.understand import understand
-from vectorless.rerank.synthesize import RerankOutput, process
 from vectorless.streaming import StreamingQueryResult
 from vectorless.types.graph import DocumentGraphWrapper
 from vectorless.types.results import (
@@ -339,11 +337,10 @@ class Engine:
         workspace_scope: bool,
         event_queue: Optional[asyncio.Queue] = None,
     ) -> QueryResponse:
-        """Run the full Python strategy: understand → orchestrator → rerank.
+        """Run the full Python strategy: dispatch → Output.
 
-        Args:
-            event_queue: If provided, progress events are put into this queue
-                         for streaming consumers.
+        Uses dispatcher as the unified entry point. The dispatcher handles
+        query understanding, orchestrator execution, and rerank internally.
         """
         emit = event_queue.put if event_queue else lambda _: asyncio.ensure_future(asyncio.sleep(0))
 
@@ -380,56 +377,23 @@ class Engine:
                 concepts=concepts,
             ))
 
-        # 3. Query understanding
-        await emit({"type": "understanding_started", "query": question})
-        query_plan = await understand(question, self._llm)
-        await emit({
-            "type": "understanding_done",
-            "intent": query_plan.intent.value,
-            "keywords": query_plan.keywords,
-            "strategy_hint": query_plan.strategy_hint,
-        })
+        # 3. Determine scope
+        if workspace_scope or doc_ids is None:
+            scope = Workspace(docs=doc_cards)
+        else:
+            scope = Specified(docs=doc_cards)
 
-        # 4. Orchestrator
-        orchestrator = Orchestrator(
+        # 4. Dispatch (understand + orchestrator + rerank)
+        output = await dispatch(
             query=question,
-            doc_cards=doc_cards,
+            scope=scope,
+            llm=self._llm,
             doc_loader=self._load_document,
-            llm_client=self._llm,
-            skip_analysis=not workspace_scope and len(doc_cards) <= 1,
-            intent_context=query_plan.intent_context(),
             event_callback=emit if event_queue else None,
         )
 
-        await emit({
-            "type": "orchestrator_started",
-            "doc_count": len(doc_cards),
-            "docs": [c.name for c in doc_cards],
-        })
-        orch_result = await orchestrator.run()
-        await emit({
-            "type": "orchestrator_done",
-            "evidence_count": len(orch_result.evidence),
-            "confidence": orch_result.confidence,
-            "rounds_used": orch_result.rounds_used,
-        })
-
-        # 5. Rerank + synthesize
-        await emit({"type": "rerank_started"})
-        reranked = process(
-            evidence=orch_result.evidence,
-            intent=query_plan.intent,
-            confidence=orch_result.confidence,
-        )
-        await emit({
-            "type": "rerank_done",
-            "evidence_count": len(reranked.evidence),
-        })
-
-        # 6. Convert to QueryResponse
-        return _orchestrator_to_response(
-            reranked, orch_result, target_ids, query_plan.intent,
-        )
+        # 5. Convert to QueryResponse
+        return _output_to_response(output, target_ids)
 
     async def _load_document(self, doc_id: str):
         """Load a navigable Document from the Rust engine."""
@@ -499,39 +463,37 @@ class EmptyWorkspaceError(Exception):
 # Conversion helpers
 # ---------------------------------------------------------------------------
 
-def _orchestrator_to_response(
-    reranked: RerankOutput,
-    orch_result: OrchestratorResult,
+def _output_to_response(
+    output: Output,
     target_ids: list[str],
-    intent: QueryIntent,
 ) -> QueryResponse:
-    """Convert Python strategy output to QueryResponse."""
-    if not reranked.evidence:
+    """Convert agent Output to API-level QueryResponse."""
+    if not output.evidence:
         return QueryResponse(items=[], failed=[])
 
     evidence_list = [
         Evidence(
-            title=e.title,
+            title=e.node_title,
             path=e.source_path,
             content=e.content,
+            doc_name=e.doc_name,
         )
-        for e in reranked.evidence
+        for e in output.evidence
     ]
 
     metrics = QueryMetrics(
-        llm_calls=orch_result.llm_calls,
-        rounds_used=orch_result.rounds_used,
-        nodes_visited=orch_result.nodes_visited,
-        evidence_count=len(reranked.evidence),
-        evidence_chars=sum(len(e.content) for e in reranked.evidence),
+        llm_calls=output.metrics.llm_calls,
+        rounds_used=output.metrics.rounds_used,
+        nodes_visited=output.metrics.nodes_visited,
+        evidence_count=len(output.evidence),
+        evidence_chars=output.metrics.evidence_chars,
     )
 
     item = QueryResult(
         doc_id=target_ids[0] if len(target_ids) == 1 else "",
-        content=reranked.answer,
-        score=reranked.confidence,
-        confidence=reranked.confidence,
-        node_ids=[e.node_id for e in reranked.evidence],
+        content=output.answer,
+        score=output.confidence,
+        confidence=output.confidence,
         evidence=evidence_list,
         metrics=metrics,
     )
