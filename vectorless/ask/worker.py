@@ -10,10 +10,10 @@ from __future__ import annotations
 
 import re
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
-from vectorless.ask.types import TraceStep, Evidence, WorkerOutput, WorkerMetrics
+from vectorless.ask.types import TraceStep, Evidence, WorkerOutput, WorkerState
 from vectorless.llm_client import LLMClient
 from vectorless.ask.tools import compare_nodes, summarize_section, trace_reasoning
 from vectorless.ask.prompts import (
@@ -188,81 +188,23 @@ class Step:
 
 
 # ---------------------------------------------------------------------------
-# Worker state
+# Worker helpers
 # ---------------------------------------------------------------------------
 
-@dataclass
-class _WorkerState:
-    """Mutable state for a single Worker run."""
-    breadcrumb: list[str] = field(default_factory=lambda: ["root"])
-    evidence: list[Evidence] = field(default_factory=list)
-    visited: set[str] = field(default_factory=set)
-    collected_nodes: set[str] = field(default_factory=set)
-    remaining: int = 15
-    max_rounds: int = 15
-    last_feedback: str = ""
-    missing_info: str = ""
-    history: list[str] = field(default_factory=list)
-    plan: str = ""
-    check_count: int = 0
-    plan_generated: bool = False
-    trace_steps: list[TraceStep] = field(default_factory=list)
-    llm_calls: int = 0
-
-    def path_str(self) -> str:
-        return "/".join(self.breadcrumb)
-
-    def evidence_summary(self) -> str:
-        if not self.evidence:
-            return "(none)"
-        return "\n".join(
-            f"- [{e.node_title}] {len(e.content)} chars" for e in self.evidence
-        )
-
-    def evidence_for_check(self) -> str:
-        if not self.evidence:
-            return "(no evidence collected yet)"
-        return "\n\n".join(
-            f"[{e.node_title}]\n{e.content}" for e in self.evidence
-        )
-
-    def history_text(self) -> str:
-        if not self.history:
-            return "(no history yet)"
-        return "\n".join(
-            f"{i + 1}. {h}" for i, h in enumerate(self.history)
-        )
-
-    def push_history(self, entry: str) -> None:
-        if len(self.history) >= MAX_HISTORY_ENTRIES:
-            self.history.pop(0)
-        self.history.append(entry)
-
-    def visited_titles(self, doc: Any) -> str:
-        titles = []
-        for node_id in self.visited:
-            try:
-                title = _node_title_sync(doc, node_id)
-                if title:
-                    titles.append(title)
-            except Exception:
-                pass
-        return ", ".join(titles) if titles else "(none)"
+async def _visited_titles(state: WorkerState, doc: Any) -> str:
+    """Format visited node titles for prompt context."""
+    titles = []
+    for node_id in state.visited:
+        try:
+            title = await doc.node_title(node_id)
+            if title:
+                titles.append(title)
+        except Exception:
+            pass
+    return ", ".join(titles) if titles else "(none)"
 
 
-def _node_title_sync(doc: Any, node_id: str) -> str:
-    """Get node title (for visited titles formatting). Returns empty string on error."""
-    try:
-        import asyncio
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            return ""
-        return loop.run_until_complete(doc.node_title(node_id))
-    except Exception:
-        return ""
-
-
-async def _resolve_target(doc: Any, target: str, state: _WorkerState) -> str | None:
+async def _resolve_target(doc: Any, target: str, state: WorkerState) -> str | None:
     """Resolve a command target (node ID, child title, or empty for current) to a node ID."""
     if not target or target == ".":
         return await doc.current_id()
@@ -285,7 +227,7 @@ async def _resolve_target(doc: Any, target: str, state: _WorkerState) -> str | N
 async def _execute_command(
     command: Command,
     doc: Any,
-    state: _WorkerState,
+    state: WorkerState,
     query: str,
     llm: LLMClient,
 ) -> Step:
@@ -914,7 +856,7 @@ class Worker:
         max_llm = self._max_llm_calls
         intent_context = self._intent_context
 
-        state = _WorkerState(remaining=max_rounds, max_rounds=max_rounds)
+        state = WorkerState(remaining=max_rounds, max_rounds=max_rounds)
 
         # Phase 0: initial ls to observe environment
         root_id = await doc.root_id()
@@ -962,7 +904,7 @@ class Worker:
                     breadcrumb=state.path_str(),
                 ))
             else:
-                visited_titles = state.visited_titles(doc)
+                visited_titles = await _visited_titles(state, doc)
                 system, user = worker_navigation(NavigationParams(
                     query=query,
                     task=task,
@@ -1042,30 +984,13 @@ class Worker:
                 if not is_check:
                     state.remaining -= 1
 
-        budget_exhausted = state.remaining == 0
-        rounds_used = max_rounds - state.remaining
-        evidence_chars = sum(len(e.content) for e in state.evidence)
-
         doc_name = ""
         try:
             doc_name = await doc.doc_name()
         except Exception:
             pass
 
-        return WorkerOutput(
-            evidence=list(state.evidence),
-            metrics=WorkerMetrics(
-                rounds_used=rounds_used,
-                llm_calls=state.llm_calls,
-                nodes_visited=len(state.visited),
-                budget_exhausted=budget_exhausted,
-                plan_generated=state.plan_generated,
-                check_count=state.check_count,
-                evidence_chars=evidence_chars,
-            ),
-            doc_name=doc_name,
-            trace_steps=list(state.trace_steps),
-        )
+        return state.into_worker_output(doc_name)
 
     async def _build_keyword_hints(self, doc: Any, query: str) -> str:
         """Build keyword hints from the document's reasoning index."""
@@ -1103,7 +1028,7 @@ class Worker:
         doc: Any,
         query: str,
         task: str | None,
-        state: _WorkerState,
+        state: WorkerState,
         keyword_hints: str,
         llm: LLMClient,
     ) -> None:
@@ -1134,7 +1059,7 @@ class Worker:
         query: str,
         task: str | None,
         doc: Any,
-        state: _WorkerState,
+        state: WorkerState,
         llm: LLMClient,
         max_llm: int,
     ) -> None:
@@ -1170,7 +1095,7 @@ class Worker:
             path_str=state.path_str(),
             evidence_summary=state.evidence_summary(),
             missing_info=state.missing_info,
-            visited_titles=state.visited_titles(doc),
+            visited_titles=await _visited_titles(state, doc),
             current_children=current_children,
             sibling_hints=sibling_hints,
             remaining=state.remaining,

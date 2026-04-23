@@ -27,11 +27,7 @@ from vectorless.llm_client import LLMClient
 from vectorless.streaming import StreamingQueryResult
 from vectorless.types.graph import DocumentGraphWrapper
 from vectorless.types.results import (
-    Evidence,
     IndexResultWrapper,
-    QueryMetrics,
-    QueryResponse,
-    QueryResult,
 )
 
 logger = logging.getLogger(__name__)
@@ -51,7 +47,7 @@ class Engine:
         engine = Engine(api_key="sk-...", model="gpt-4o")
         result = await engine.compile(path="./report.pdf")
         answer = await engine.ask("What is the Q4 revenue?", doc_ids=[result.doc_id])
-        print(answer.single().content)
+        print(answer.answer)
 
     Or from environment variables::
 
@@ -267,17 +263,15 @@ class Engine:
         question: str,
         *,
         doc_ids: Optional[List[str]] = None,
-        workspace_scope: bool = False,
         timeout_secs: Optional[int] = None,
-    ) -> QueryResponse:
+    ) -> Output:
         """Ask a question and get results with source attribution.
 
         Uses the Python strategy layer: query understanding → orchestrator → workers → rerank.
 
         Args:
             question: Natural language query.
-            doc_ids: Limit query to specific document IDs.
-            workspace_scope: Query across all indexed documents.
+            doc_ids: Limit query to specific document IDs. If None, queries all documents.
             timeout_secs: Per-operation timeout.
         """
         self._events.emit_query(
@@ -285,7 +279,7 @@ class Engine:
         )
 
         try:
-            result = await self._ask_python(question, doc_ids, workspace_scope)
+            result = await self._ask_python(question, doc_ids)
         except Exception as e:
             self._events.emit_query(
                 QueryEventData(
@@ -300,7 +294,7 @@ class Engine:
             QueryEventData(
                 event_type=QueryEventType.COMPLETE,
                 query=question,
-                total_results=len(result.items),
+                total_results=len(result.evidence),
             )
         )
 
@@ -311,7 +305,6 @@ class Engine:
         question: str,
         *,
         doc_ids: Optional[List[str]] = None,
-        workspace_scope: bool = False,
         timeout_secs: Optional[int] = None,
     ) -> StreamingQueryResult:
         """Stream query progress as an async iterator.
@@ -326,7 +319,7 @@ class Engine:
                 print(event["type"], event)
             result = stream.result
         """
-        return StreamingQueryResult.from_engine(self, question, doc_ids, workspace_scope)
+        return StreamingQueryResult.from_engine(self, question, doc_ids)
 
     # ── Python strategy implementation ──────────────────────────
 
@@ -334,9 +327,8 @@ class Engine:
         self,
         question: str,
         doc_ids: Optional[List[str]],
-        workspace_scope: bool,
         event_queue: Optional[asyncio.Queue] = None,
-    ) -> QueryResponse:
+    ) -> Output:
         """Run the full Python strategy: dispatch → Output.
 
         Uses dispatcher as the unified entry point. The dispatcher handles
@@ -353,7 +345,7 @@ class Engine:
             target_ids = [d.doc_id for d in all_doc_infos]
 
         if not target_ids:
-            return QueryResponse(items=[], failed=[])
+            return Output(answer="")
 
         # 2. Build DocCards for orchestrator analysis
         info_map = {d.doc_id: d for d in all_doc_infos}
@@ -377,23 +369,20 @@ class Engine:
                 concepts=concepts,
             ))
 
-        # 3. Determine scope
-        if workspace_scope or doc_ids is None:
-            scope = Workspace(docs=doc_cards)
-        else:
+        # 3. Determine scope: doc_ids specified → Specified, else → Workspace
+        if doc_ids is not None:
             scope = Specified(docs=doc_cards)
+        else:
+            scope = Workspace(docs=doc_cards)
 
         # 4. Dispatch (understand + orchestrator + rerank)
-        output = await dispatch(
+        return await dispatch(
             query=question,
             scope=scope,
             llm=self._llm,
             doc_loader=self._load_document,
             event_callback=emit if event_queue else None,
         )
-
-        # 5. Convert to QueryResponse
-        return _output_to_response(output, target_ids)
 
     async def _load_document(self, doc_id: str):
         """Load a navigable Document from the Rust engine."""
@@ -457,45 +446,3 @@ class DocumentNotFoundError(Exception):
 
 class EmptyWorkspaceError(Exception):
     """Raised when no documents are indexed in the workspace."""
-
-
-# ---------------------------------------------------------------------------
-# Conversion helpers
-# ---------------------------------------------------------------------------
-
-def _output_to_response(
-    output: Output,
-    target_ids: list[str],
-) -> QueryResponse:
-    """Convert agent Output to API-level QueryResponse."""
-    if not output.evidence:
-        return QueryResponse(items=[], failed=[])
-
-    evidence_list = [
-        Evidence(
-            title=e.node_title,
-            path=e.source_path,
-            content=e.content,
-            doc_name=e.doc_name,
-        )
-        for e in output.evidence
-    ]
-
-    metrics = QueryMetrics(
-        llm_calls=output.metrics.llm_calls,
-        rounds_used=output.metrics.rounds_used,
-        nodes_visited=output.metrics.nodes_visited,
-        evidence_count=len(output.evidence),
-        evidence_chars=output.metrics.evidence_chars,
-    )
-
-    item = QueryResult(
-        doc_id=target_ids[0] if len(target_ids) == 1 else "",
-        content=output.answer,
-        score=output.confidence,
-        confidence=output.confidence,
-        evidence=evidence_list,
-        metrics=metrics,
-    )
-
-    return QueryResponse(items=[item], failed=[])

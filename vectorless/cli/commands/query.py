@@ -7,7 +7,7 @@ from typing import Optional
 import click
 
 from vectorless.cli.workspace import get_workspace_path
-from vectorless.cli.output import OutputFormat, format_query_result, format_json
+from vectorless.cli.output import OutputFormat, format_query_result
 
 
 def _create_engine(workspace_dir: str):
@@ -24,7 +24,6 @@ def query_cmd(
     question: str,
     *,
     doc_ids: tuple[str, ...] = (),
-    workspace_scope: bool = False,
     fmt: str = "text",
     verbose: bool = False,
     timeout_secs: Optional[int] = None,
@@ -34,16 +33,9 @@ def query_cmd(
     Args:
         question: Natural-language question.
         doc_ids: Limit to specific document IDs.
-        workspace_scope: Query across all documents.
         fmt: Output format — "text" or "json".
         verbose: Show Agent navigation steps.
         timeout_secs: Per-operation timeout in seconds.
-
-    Uses:
-        Engine.query(QueryContext(question)
-            .with_doc_ids([...])  or  .with_workspace()
-            .with_timeout_secs(n))
-        -> QueryResult
     """
     workspace = get_workspace_path()
 
@@ -56,7 +48,6 @@ def query_cmd(
         return await session.ask(
             question,
             doc_ids=list(doc_ids) if doc_ids else None,
-            workspace_scope=workspace_scope,
             timeout_secs=timeout_secs,
         )
 
@@ -71,13 +62,11 @@ def query_cmd(
 
     # Show metrics in verbose mode
     if verbose:
-        for item in result.items:
-            if item.metrics:
-                m = item.metrics
-                click.echo(
-                    f"\nMetrics ({item.doc_id}): "
-                    f"LLM calls={m.llm_calls}, "
-                    f"rounds={m.rounds_used}, "
-                    f"nodes_visited={m.nodes_visited}, "
-                    f"evidence={m.evidence_count}"
-                )
+        m = result.metrics
+        click.echo(
+            f"\nMetrics: "
+            f"LLM calls={m.llm_calls}, "
+            f"rounds={m.rounds_used}, "
+            f"nodes_visited={m.nodes_visited}, "
+            f"evidence_chars={m.evidence_chars}"
+        )

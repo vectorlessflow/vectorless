@@ -296,7 +296,11 @@ impl PyDocument {
     // ── Reasoning Index ─────────────────────────────────────────────────
 
     /// Look up topic entries for a keyword.
-    fn keyword_entries<'py>(&self, py: Python<'py>, keyword: String) -> PyResult<Bound<'py, PyAny>> {
+    fn keyword_entries<'py>(
+        &self,
+        py: Python<'py>,
+        keyword: String,
+    ) -> PyResult<Bound<'py, PyAny>> {
         let nav = Arc::clone(&self.inner);
         future_into_py(py, async move {
             let nav = nav.lock().await;
@@ -402,11 +406,7 @@ impl PyDocument {
     }
 
     /// List children of an arbitrary node.
-    fn children_of<'py>(
-        &self,
-        py: Python<'py>,
-        node_id: String,
-    ) -> PyResult<Bound<'py, PyAny>> {
+    fn children_of<'py>(&self, py: Python<'py>, node_id: String) -> PyResult<Bound<'py, PyAny>> {
         let nav = Arc::clone(&self.inner);
         future_into_py(py, async move {
             let nav = nav.lock().await;
@@ -599,11 +599,7 @@ impl PyDocument {
     }
 
     /// Find a section by exact title (case-insensitive).
-    fn find_section<'py>(
-        &self,
-        py: Python<'py>,
-        title: String,
-    ) -> PyResult<Bound<'py, PyAny>> {
+    fn find_section<'py>(&self, py: Python<'py>, title: String) -> PyResult<Bound<'py, PyAny>> {
         let nav = Arc::clone(&self.inner);
         future_into_py(py, async move {
             let nav = nav.lock().await;
@@ -932,11 +928,7 @@ impl From<DocCardInfo> for PyDocCard {
             overview: v.overview,
             question_hints: v.question_hints,
             topic_tags: v.topic_tags,
-            sections: v
-                .sections
-                .into_iter()
-                .map(PySectionCard::from)
-                .collect(),
+            sections: v.sections.into_iter().map(PySectionCard::from).collect(),
             total_leaves: v.total_leaves,
         }
     }

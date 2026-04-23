@@ -101,13 +101,7 @@ impl DocumentNavigator {
                         .doc
                         .nav_index
                         .get_entry(route.node_id)
-                        .map(|e| {
-                            (
-                                e.question_hints.clone(),
-                                e.topic_tags.clone(),
-                                e.leaf_count,
-                            )
-                        })
+                        .map(|e| (e.question_hints.clone(), e.topic_tags.clone(), e.leaf_count))
                         .unwrap_or_default();
                     let depth = self.doc.tree.depth(route.node_id);
                     NodeInfo {
@@ -144,14 +138,11 @@ impl DocumentNavigator {
 
     /// Navigate to a child by title (fuzzy matching via resolve_target_extended).
     pub async fn cd_by_title(&mut self, title: &str) -> Result<()> {
-        let id = resolve_target_extended(
-            title,
-            &self.doc.nav_index,
-            self.cursor,
-            &self.doc.tree,
-        )
-        .ok_or_else(|| {
-            Error::NodeNotFound(format!("Target '{title}' not found. Use ls to see children."))
+        let id = resolve_target_extended(title, &self.doc.nav_index, self.cursor, &self.doc.tree)
+            .ok_or_else(|| {
+            Error::NodeNotFound(format!(
+                "Target '{title}' not found. Use ls to see children."
+            ))
         })?;
         let resolved_title = self
             .doc
@@ -377,13 +368,7 @@ impl DocumentNavigator {
                         .doc
                         .nav_index
                         .get_entry(route.node_id)
-                        .map(|e| {
-                            (
-                                e.question_hints.clone(),
-                                e.topic_tags.clone(),
-                                e.leaf_count,
-                            )
-                        })
+                        .map(|e| (e.question_hints.clone(), e.topic_tags.clone(), e.leaf_count))
                         .unwrap_or_default();
                     let depth = self.doc.tree.depth(route.node_id);
                     NodeInfo {
@@ -442,9 +427,11 @@ impl DocumentNavigator {
     fn _rebuild_breadcrumb(&mut self) {
         let path = self.doc.tree.path_from_root(self.cursor);
         self.breadcrumb = std::iter::once("root".to_string())
-            .chain(path.iter().skip(1).filter_map(|&id| {
-                self.doc.tree.get(id).map(|n| n.title.clone())
-            }))
+            .chain(
+                path.iter()
+                    .skip(1)
+                    .filter_map(|&id| self.doc.tree.get(id).map(|n| n.title.clone())),
+            )
             .collect();
     }
 }

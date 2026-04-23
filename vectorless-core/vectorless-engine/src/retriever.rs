@@ -18,6 +18,8 @@ pub(crate) struct RetrieverClient;
 impl RetrieverClient {
     /// Not available — retrieval is handled by Python.
     pub async fn query(&self, _question: &str) -> Result<()> {
-        todo!("Document retrieval is now handled by the Python strategy layer. This method should not be called.")
+        todo!(
+            "Document retrieval is now handled by the Python strategy layer. This method should not be called."
+        )
     }
 }

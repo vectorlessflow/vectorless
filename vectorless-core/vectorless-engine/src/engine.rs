@@ -490,7 +490,10 @@ impl Engine {
     }
 
     /// Load a full Document by ID (for navigation via primitives).
-    pub async fn load_document(&self, doc_id: &str) -> Result<Option<vectorless_document::Document>> {
+    pub async fn load_document(
+        &self,
+        doc_id: &str,
+    ) -> Result<Option<vectorless_document::Document>> {
         match self.workspace.load(doc_id).await? {
             Some(persisted) => Ok(Some(Self::persisted_to_understanding_document(persisted))),
             None => Ok(None),

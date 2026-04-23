@@ -184,10 +184,7 @@ mod tests {
             }],
         );
 
-        assert_eq!(
-            resolve_target("getting started", &nav, root),
-            Some(c1)
-        );
+        assert_eq!(resolve_target("getting started", &nav, root), Some(c1));
     }
 
     #[test]

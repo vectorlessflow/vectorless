@@ -104,48 +104,45 @@ def format_query_result(
     """Format query results for output.
 
     Args:
-        result: QueryResponse or similar with items and failed.
+        result: Output from Engine.ask().
         fmt: Output format.
         verbose: Show evidence details.
     """
     if fmt == OutputFormat.JSON:
-        if hasattr(result, "to_dict"):
-            return format_json(result.to_dict())
-        return format_json(result)
+        data = {
+            "answer": result.answer,
+            "confidence": result.confidence,
+            "evidence": [
+                {
+                    "title": e.node_title,
+                    "path": e.source_path,
+                    "content": e.content,
+                    "doc_name": e.doc_name,
+                }
+                for e in result.evidence
+            ],
+            "metrics": {
+                "llm_calls": result.metrics.llm_calls,
+                "rounds_used": result.metrics.rounds_used,
+                "nodes_visited": result.metrics.nodes_visited,
+                "evidence_chars": result.metrics.evidence_chars,
+            },
+        }
+        return format_json(data)
 
     lines = []
-    items = result.items if hasattr(result, "items") else result.get("items", [])
+    lines.append(f"(confidence: {result.confidence:.2f})")
+    lines.append(f"  {result.answer}")
 
-    for item in items:
-        content = item.content if hasattr(item, "content") else item.get("content", "")
-        doc_id = item.doc_id if hasattr(item, "doc_id") else item.get("doc_id", "")
-        confidence = (
-            item.confidence if hasattr(item, "confidence") else item.get("confidence", 0)
-        )
+    if verbose:
+        evidence = result.evidence
+        if evidence:
+            lines.append("  Evidence:")
+            for ev in evidence:
+                doc_label = f" [{ev.doc_name}]" if ev.doc_name else ""
+                lines.append(f"    - {ev.node_title} ({ev.source_path}){doc_label}")
 
-        lines.append(f"[{doc_id}] (confidence: {confidence:.2f})")
-        lines.append(f"  {content}")
-
-        if verbose:
-            evidence = (
-                item.evidence if hasattr(item, "evidence") else item.get("evidence", [])
-            )
-            if evidence:
-                lines.append("  Evidence:")
-                for ev in evidence:
-                    title = ev.title if hasattr(ev, "title") else ev.get("title", "")
-                    path = ev.path if hasattr(ev, "path") else ev.get("path", "")
-                    lines.append(f"    - {title} ({path})")
-
-        lines.append("")
-
-    failed = result.failed if hasattr(result, "failed") else result.get("failed", [])
-    if failed:
-        lines.append("Failures:")
-        for f in failed:
-            source = f.source if hasattr(f, "source") else f.get("source", "")
-            error = f.error if hasattr(f, "error") else f.get("error", "")
-            lines.append(f"  {source}: {error}")
+    lines.append("")
 
     return "\n".join(lines)
 

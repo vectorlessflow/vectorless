@@ -12,7 +12,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any, AsyncIterator, Dict, List, Optional
 
-from vectorless.types.results import QueryResponse
+from vectorless.ask.types import Output
 
 
 class StreamingQueryResult:
@@ -28,7 +28,7 @@ class StreamingQueryResult:
 
     def __init__(self, queue: asyncio.Queue[Optional[Dict]]) -> None:
         self._queue = queue
-        self._result: Optional[QueryResponse] = None
+        self._result: Optional[Output] = None
         self._consumed = False
 
     @classmethod
@@ -37,7 +37,6 @@ class StreamingQueryResult:
         engine: Any,
         question: str,
         doc_ids: Optional[List[str]],
-        workspace_scope: bool,
     ) -> StreamingQueryResult:
         """Create a StreamingQueryResult that runs the engine pipeline in background."""
         queue: asyncio.Queue[Optional[Dict]] = asyncio.Queue()
@@ -46,14 +45,14 @@ class StreamingQueryResult:
         async def _run() -> None:
             try:
                 result = await engine._ask_python(
-                    question, doc_ids, workspace_scope,
+                    question, doc_ids,
                     event_queue=queue,
                 )
                 instance._result = result
                 await queue.put({
                     "type": "completed",
-                    "total_results": len(result.items),
-                    "confidence": result.items[0].confidence if result.items else 0.0,
+                    "total_results": len(result.evidence),
+                    "confidence": result.confidence,
                 })
             except Exception as e:
                 await queue.put({
@@ -84,6 +83,6 @@ class StreamingQueryResult:
                 break
 
     @property
-    def result(self) -> Optional[QueryResponse]:
+    def result(self) -> Optional[Output]:
         """Final result, available after iteration completes."""
         return self._result if self._consumed else None

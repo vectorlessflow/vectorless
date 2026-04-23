@@ -185,9 +185,7 @@ def ask_cmd(*, doc_id: Optional[str] = None, verbose: bool = False) -> None:
             response = asyncio.run(_run())
 
             # Accumulate metrics
-            for item in response.items:
-                if item.metrics:
-                    _total_llm_calls += item.metrics.llm_calls
+            _total_llm_calls += response.metrics.llm_calls
 
             output = format_query_result(
                 response, fmt=OutputFormat.TEXT, verbose=_verbose

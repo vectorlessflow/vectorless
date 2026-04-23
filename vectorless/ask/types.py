@@ -230,6 +230,7 @@ class WorkerState:
     check_count: int = 0
     plan_generated: bool = False
     trace_steps: list[TraceStep] = field(default_factory=list)
+    llm_calls: int = 0
 
     def dec_round(self) -> None:
         if self.remaining > 0:
@@ -273,12 +274,7 @@ class WorkerState:
             f"{i + 1}. {h}" for i, h in enumerate(self.history)
         )
 
-    def into_worker_output(
-        self,
-        llm_calls: int,
-        budget_exhausted: bool,
-        doc_name: str,
-    ) -> WorkerOutput:
+    def into_worker_output(self, doc_name: str) -> WorkerOutput:
         """Convert this state into a WorkerOutput (consuming the evidence).
 
         Worker returns evidence only — no answer synthesis.
@@ -288,9 +284,9 @@ class WorkerState:
             evidence=list(self.evidence),
             metrics=WorkerMetrics(
                 rounds_used=self.max_rounds - self.remaining,
-                llm_calls=llm_calls,
+                llm_calls=self.llm_calls,
                 nodes_visited=len(self.visited),
-                budget_exhausted=budget_exhausted,
+                budget_exhausted=self.remaining == 0,
                 plan_generated=self.plan_generated,
                 check_count=self.check_count,
                 evidence_chars=evidence_chars,
@@ -326,6 +322,9 @@ class OrchestratorState:
 
     def collect_result(self, doc_idx: int, result: WorkerOutput) -> None:
         """Collect a Worker result, including its LLM call count."""
+        for e in result.evidence:
+            if e.doc_name is None:
+                e.doc_name = result.doc_name
         self.total_llm_calls += result.metrics.llm_calls
         self.all_evidence.extend(result.evidence)
         self.sub_results.append(result)

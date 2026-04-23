@@ -127,7 +127,6 @@ class Orchestrator:
         cards = self._doc_cards
         llm = self._llm
         state = OrchestratorState()
-        orch_llm_calls: int = 0
 
         intent_context = ""
         if self._query_plan:
@@ -147,14 +146,14 @@ class Orchestrator:
             # No results or already answered
             return state.into_output("")
 
-        orch_llm_calls += analyze_result.llm_calls
+        state.total_llm_calls += analyze_result.llm_calls
         initial_dispatches = analyze_result.dispatches
 
         # --- Phase 2: Supervisor loop ---
         outcome = await self._supervisor_loop(
             query, initial_dispatches, cards, llm, state,
         )
-        orch_llm_calls += outcome.llm_calls
+        state.total_llm_calls += outcome.llm_calls
 
         confidence = _compute_confidence(
             eval_sufficient=outcome.eval_sufficient,
@@ -164,9 +163,8 @@ class Orchestrator:
 
         # --- Phase 3: Finalize — rerank + assemble Output ---
         if state.all_evidence:
-            multi_doc = len(cards) > 1
             return await self._finalize_output(
-                query, state, orch_llm_calls, multi_doc,
+                state,
                 self._query_plan.intent if self._query_plan else None,
                 confidence,
             )
@@ -451,10 +449,7 @@ class Orchestrator:
 
     async def _finalize_output(
         self,
-        query: str,
         state: OrchestratorState,
-        orch_llm_calls: int,
-        multi_doc: bool,
         intent: Any,  # QueryIntent or None
         confidence: float,
     ) -> Output:
@@ -469,11 +464,10 @@ class Orchestrator:
             confidence=confidence,
         )
 
-        total_llm_calls = orch_llm_calls + reranked.llm_calls
+        state.total_llm_calls += reranked.llm_calls
 
         output = state.into_output(reranked.answer)
         output.confidence = reranked.confidence
-        output.metrics.llm_calls += total_llm_calls
 
         logger.info(
             "Orchestrator complete (evidence=%d, llm_calls=%d, confidence=%.2f)",
