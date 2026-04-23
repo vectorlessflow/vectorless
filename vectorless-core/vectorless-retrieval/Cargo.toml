@@ -1,0 +1,30 @@
+[package]
+name = "vectorless-retrieval"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+description.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+vectorless-agent = { path = "../vectorless-agent" }
+vectorless-document = { path = "../vectorless-document" }
+vectorless-error = { path = "../vectorless-error" }
+vectorless-llm = { path = "../vectorless-llm" }
+vectorless-query = { path = "../vectorless-query" }
+vectorless-storage = { path = "../vectorless-storage" }
+vectorless-utils = { path = "../vectorless-utils" }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+futures = { workspace = true }
+parking_lot = { workspace = true }
+
+[dev-dependencies]
+indextree = { workspace = true }
+
+[lints]
+workspace = true

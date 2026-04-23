@@ -1,0 +1,25 @@
+[package]
+name = "vectorless-utils"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+description.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+vectorless-error = { path = "../vectorless-error" }
+vectorless-document = { path = "../vectorless-document" }
+serde = { workspace = true }
+sha2 = { workspace = true }
+blake2 = { workspace = true }
+tiktoken-rs = { workspace = true }
+base64 = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }
+
+[lints]
+workspace = true

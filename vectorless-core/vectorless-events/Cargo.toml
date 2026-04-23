@@ -1,0 +1,17 @@
+[package]
+name = "vectorless-events"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+description.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+parking_lot = { workspace = true }
+vectorless-error = { path = "../vectorless-error" }
+vectorless-document = { path = "../vectorless-document" }
+
+[lints]
+workspace = true
