@@ -10,7 +10,7 @@ import logging
 import re
 
 from vectorless.llm_client import LLMClient
-from vectorless.query.plan import Complexity, QueryIntent, QueryPlan, SubQuery
+from vectorless.ask.plan import Complexity, QueryIntent, QueryPlan, SubQuery
 
 logger = logging.getLogger(__name__)
 

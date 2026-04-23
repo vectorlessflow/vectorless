@@ -13,9 +13,9 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any
 
-from vectorless._types import TraceStep, WorkerEvidence, WorkerResult
+from vectorless.ask.types import TraceStep, WorkerEvidence, WorkerResult
 from vectorless.llm_client import LLMClient
-from vectorless.prompts.agent import (
+from vectorless.ask.prompts import (
     NavigationParams,
     WorkerDispatchParams,
     build_plan_prompt,

@@ -11,8 +11,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from vectorless._types import WorkerEvidence
-from vectorless.query.plan import QueryIntent
+from vectorless.ask.types import WorkerEvidence
+from vectorless.ask.plan import QueryIntent
 
 
 # ---------------------------------------------------------------------------

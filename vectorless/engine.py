@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any, Callable, List, Optional, Union
 
 from vectorless._core import Engine as RustEngine
-from vectorless.agent.orchestrator import DocCard, Orchestrator, OrchestratorResult
+from vectorless.ask.orchestrator import DocCard, Orchestrator, OrchestratorResult
 from vectorless.config import EngineConfig, load_config, load_config_from_env, load_config_from_file
 from vectorless.events import (
     EventEmitter,
@@ -23,8 +23,8 @@ from vectorless.events import (
     QueryEventType,
 )
 from vectorless.llm_client import LLMClient
-from vectorless.query.plan import QueryIntent
-from vectorless.query.understand import understand
+from vectorless.ask.plan import QueryIntent
+from vectorless.ask.understand import understand
 from vectorless.rerank.synthesize import RerankOutput, process
 from vectorless.streaming import StreamingQueryResult
 from vectorless.types.graph import DocumentGraphWrapper

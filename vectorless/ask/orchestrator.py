@@ -16,11 +16,11 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
-from vectorless._types import TraceStep, WorkerEvidence, WorkerResult
-from vectorless.agent.evaluate import EvalResult, evaluate
-from vectorless.agent.worker import Worker
+from vectorless.ask.types import TraceStep, WorkerEvidence, WorkerResult
+from vectorless.ask.evaluate import EvalResult, evaluate
+from vectorless.ask.worker import Worker
 from vectorless.llm_client import LLMClient
-from vectorless.prompts.agent import (
+from vectorless.ask.prompts import (
     DispatchEntry,
     OrchestratorAnalysisParams,
     orchestrator_analysis,

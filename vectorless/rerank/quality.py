@@ -10,9 +10,9 @@ import json
 import logging
 from typing import Optional
 
-from vectorless._types import WorkerEvidence
+from vectorless.ask.types import WorkerEvidence
 from vectorless.llm_client import LLMClient
-from vectorless.query.plan import QueryIntent
+from vectorless.ask.plan import QueryIntent
 
 logger = logging.getLogger(__name__)
 
