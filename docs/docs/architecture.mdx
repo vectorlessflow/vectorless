@@ -67,7 +67,7 @@ The retrieval pipeline is a supervisor loop driven entirely by LLM reasoning. Ev
 ### Flow
 
 ```text
-Engine.query()
+Engine.ask()
   → Dispatcher
     → Query Understanding (LLM) → QueryPlan (intent, concepts, strategy)
     → Orchestrator (always — single or multi-doc)

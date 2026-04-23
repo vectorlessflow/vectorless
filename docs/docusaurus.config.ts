@@ -73,10 +73,7 @@ const config: Config = {
         target: '_self' // This makes the logo click follow the link in the same window
       },
       items: [
-        {to: '/docs/sdk/python', label: 'Python', position: 'left'},
-        {to: '/docs/sdk/rust', label: 'Rust', position: 'left'},
-        {to: '/docs/intro', label: 'Documentation', position: 'left'},
-        // {to: '/blog', label: 'Blog', position: 'left'},
+        {to: '/docs/getting-started', label: 'Documentation', position: 'left'},
       ],
     },
     prism: {

@@ -8,7 +8,7 @@
 
 ## Installation
 
-Install using `pip install -U vectorless`. For more details, see the [Installation](https://vectorless.dev) section in the documentation.
+Install using `pip install -U vectorless`. For more details, see the [Installation](https://vectorless.dev/docs/installation) section in the documentation.
 
 ## A Simple Example
 
@@ -32,7 +32,7 @@ asyncio.run(main())
 
 ## Help
 
-See [documentation](https://www.vectorless.dev/docs/intro) for more details.
+See [documentation](https://vectorless.dev/docs/getting-started) for more details.
 
 
 ## Contributing
