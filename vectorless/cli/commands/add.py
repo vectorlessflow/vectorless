@@ -1,4 +1,4 @@
-"""add command — index documents (maps to engine.index)."""
+"""add command — compile documents (maps to engine.compile)."""
 
 import asyncio
 import os
@@ -11,21 +11,21 @@ from vectorless.cli.workspace import get_workspace_path
 from vectorless.cli.output import format_json
 
 
-def _create_session(workspace_dir: str):
-    """Create a Session from workspace config.
+def _create_engine(workspace_dir: str):
+    """Create an Engine from workspace config.
 
     Args:
         workspace_dir: Path to .vectorless/ directory.
 
     Returns:
-        Configured Session instance.
+        Configured Engine instance.
     """
-    from vectorless.session import Session
+    from vectorless.engine import Engine
 
     config_path = os.path.join(workspace_dir, "config.toml")
     if os.path.exists(config_path):
-        return Session.from_config_file(config_path)
-    return Session.from_env()
+        return Engine.from_config_file(config_path)
+    return Engine.from_env()
 
 
 def add_cmd(
@@ -37,27 +37,22 @@ def add_cmd(
     jobs: int = 1,
     verbose: bool = False,
 ) -> None:
-    """Index a document or directory.
+    """Compile a document or directory.
 
     Args:
         path: File or directory path.
-        recursive: Index directory recursively.
+        recursive: Compile directory recursively.
         fmt: Force format ("markdown" | "pdf" | None for auto-detect).
-        force: Force re-index existing documents.
-        jobs: Number of parallel indexing jobs.
+        force: Force re-compile existing documents.
+        jobs: Number of parallel compile jobs.
         verbose: Show detailed progress.
-
-    Uses:
-        Engine.index(IndexContext)
-        IndexContext.from_path / from_paths / from_dir
-        IndexOptions(mode="force" if force else "default")
     """
     workspace = get_workspace_path()
 
     try:
-        session = _create_session(workspace)
+        session = _create_engine(workspace)
     except Exception as e:
-        raise click.ClickException(f"Failed to create session: {e}") from e
+        raise click.ClickException(f"Failed to create engine: {e}") from e
 
     target = Path(path).resolve()
     format_hint = fmt or "markdown"
@@ -86,16 +81,16 @@ def add_cmd(
                 )
 
             if verbose:
-                click.echo(f"Found {len(file_paths)} document(s) to index")
+                click.echo(f"Found {len(file_paths)} document(s) to compile")
 
-            results = await session.index_batch(
+            results = await session.compile_batch(
                 file_paths, mode="force" if force else "default", jobs=jobs
             )
 
             succeeded = [r for r in results if not r.has_failures()]
             failed = [r for r in results if r.has_failures()]
 
-            click.echo(f"Indexed {len(succeeded)}/{len(results)} document(s) successfully")
+            click.echo(f"Compiled {len(succeeded)}/{len(results)} document(s) successfully")
             if failed:
                 click.echo(f"Failed: {len(failed)} document(s)")
                 for f_result in failed:
@@ -107,18 +102,18 @@ def add_cmd(
                     for item in r.items:
                         click.echo(f"  {item.name} ({item.doc_id})")
         else:
-            result = await session.index(
+            result = await session.compile(
                 path=str(target),
                 format=format_hint,
                 mode="force" if force else "default",
             )
 
             if result.doc_id:
-                click.echo(f"Indexed: {result.doc_id}")
+                click.echo(f"Compiled: {result.doc_id}")
             else:
                 # Batch result from single file
                 for item in result.items:
-                    click.echo(f"Indexed: {item.name} ({item.doc_id})")
+                    click.echo(f"Compiled: {item.name} ({item.doc_id})")
 
             if result.has_failures():
                 for item in result.failed:
@@ -140,4 +135,4 @@ def add_cmd(
     except click.ClickException:
         raise
     except Exception as e:
-        raise click.ClickException(f"Indexing failed: {e}") from e
+        raise click.ClickException(f"Compile failed: {e}") from e

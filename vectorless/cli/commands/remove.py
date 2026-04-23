@@ -8,14 +8,14 @@ import click
 from vectorless.cli.workspace import get_workspace_path
 
 
-def _create_session(workspace_dir: str):
-    """Create a Session from workspace config."""
-    from vectorless.session import Session
+def _create_engine(workspace_dir: str):
+    """Create an Engine from workspace config."""
+    from vectorless.engine import Engine
 
     config_path = os.path.join(workspace_dir, "config.toml")
     if os.path.exists(config_path):
-        return Session.from_config_file(config_path)
-    return Session.from_env()
+        return Engine.from_config_file(config_path)
+    return Engine.from_env()
 
 
 def remove_cmd(doc_id: str) -> None:
@@ -30,9 +30,9 @@ def remove_cmd(doc_id: str) -> None:
     workspace = get_workspace_path()
 
     try:
-        session = _create_session(workspace)
+        session = _create_engine(workspace)
     except Exception as e:
-        raise click.ClickException(f"Failed to create session: {e}") from e
+        raise click.ClickException(f"Failed to create engine: {e}") from e
 
     async def _run():
         return await session.remove_document(doc_id)

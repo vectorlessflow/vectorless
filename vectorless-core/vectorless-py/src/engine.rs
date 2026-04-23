@@ -11,7 +11,7 @@ use tokio::runtime::Runtime;
 use ::vectorless_engine::{Engine, EngineBuilder, IngestInput};
 
 use super::answer::PyAnswer;
-use super::document::PyDocumentInfo;
+use super::document::{PyDocument, PyDocumentInfo};
 use super::error::VectorlessError;
 use super::error::to_py_err;
 use super::graph::PyDocumentGraph;
@@ -53,6 +53,24 @@ async fn run_exists(engine: Arc<Engine>, doc_id: String) -> PyResult<bool> {
 
 async fn run_clear(engine: Arc<Engine>) -> PyResult<usize> {
     engine.clear().await.map_err(to_py_err)
+}
+
+async fn run_load_document(engine: Arc<Engine>, doc_id: String) -> PyResult<PyDocument> {
+    let doc = engine.load_document(&doc_id).await.map_err(to_py_err)?;
+    match doc {
+        Some(d) => {
+            let navigator = vectorless_primitives::DocumentNavigator::new(d);
+            Ok(PyDocument::from_navigator(navigator))
+        }
+        None => Err(PyErr::from(VectorlessError::new(
+            format!("Document not found: {doc_id}"),
+            "navigation",
+        ))),
+    }
+}
+
+async fn run_list_document_ids(engine: Arc<Engine>) -> PyResult<Vec<String>> {
+    engine.list_document_ids().await.map_err(to_py_err)
 }
 
 async fn run_get_graph(engine: Arc<Engine>) -> PyResult<Option<PyDocumentGraph>> {
@@ -224,6 +242,23 @@ impl PyEngine {
     fn exists<'py>(&self, py: Python<'py>, doc_id: String) -> PyResult<Bound<'py, PyAny>> {
         let engine = Arc::clone(&self.inner);
         future_into_py(py, run_exists(engine, doc_id))
+    }
+
+    /// Load a full navigable Document by ID.
+    ///
+    /// Returns a Document with navigation methods (ls, cd, cat, grep, find, etc.).
+    ///
+    /// Raises:
+    ///     VectorlessError: If the document is not found or loading fails.
+    fn load_document<'py>(&self, py: Python<'py>, doc_id: String) -> PyResult<Bound<'py, PyAny>> {
+        let engine = Arc::clone(&self.inner);
+        future_into_py(py, run_load_document(engine, doc_id))
+    }
+
+    /// List all document IDs in the workspace.
+    fn list_document_ids<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        let engine = Arc::clone(&self.inner);
+        future_into_py(py, run_list_document_ids(engine))
     }
 
     /// Remove all documents.

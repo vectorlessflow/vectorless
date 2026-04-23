@@ -218,6 +218,37 @@ class IndexResultWrapper:
     failed: List[FailedItem] = field(default_factory=list)
 
     @classmethod
+    def from_doc_info(cls, doc_info: object) -> IndexResultWrapper:
+        """Create from a single Rust PyDocumentInfo (returned by ingest)."""
+        item = IndexItemWrapper(
+            doc_id=doc_info.doc_id,
+            name=doc_info.name,
+            format=doc_info.format,
+            description=getattr(doc_info, "description", None),
+            source_path=getattr(doc_info, "source_path", None),
+            page_count=getattr(doc_info, "page_count", None),
+        )
+        return cls(doc_id=doc_info.doc_id, items=[item])
+
+    @classmethod
+    def from_doc_infos(cls, doc_infos: list) -> IndexResultWrapper:
+        """Create from a list of Rust PyDocumentInfo objects."""
+        items = []
+        first_doc_id = None
+        for info in doc_infos:
+            if first_doc_id is None:
+                first_doc_id = info.doc_id
+            items.append(IndexItemWrapper(
+                doc_id=info.doc_id,
+                name=info.name,
+                format=info.format,
+                description=getattr(info, "description", None),
+                source_path=getattr(info, "source_path", None),
+                page_count=getattr(info, "page_count", None),
+            ))
+        return cls(doc_id=first_doc_id, items=items)
+
+    @classmethod
     def from_rust(cls, result: object) -> IndexResultWrapper:
         items = [IndexItemWrapper.from_rust(i) for i in result.items]
         failed = [FailedItem.from_rust(f) for f in result.failed]

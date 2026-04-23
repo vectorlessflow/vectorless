@@ -5,35 +5,47 @@ Quick Start:
     from vectorless import Engine
 
     engine = Engine(api_key="sk-...", model="gpt-4o")
-    doc = await engine.ingest("./report.pdf")
-    answer = await engine.ask("What is the revenue?", doc_ids=[doc.doc_id])
-    print(answer.content)
+    doc = await engine.compile("./report.pdf")
+    result = await engine.ask("What is the revenue?", doc_ids=[doc.doc_id])
+    print(result.answer)
 """
 
-# Core Engine and types from Rust
-from vectorless._vectorless import (
-    Answer,
-    Concept,
-    Config,
-    DocumentGraph,
-    DocumentInfo,
-    EdgeEvidence,
-    Engine,
-    Evidence,
-    GraphEdge,
-    MetricsReport,
-    ReasoningTrace,
-    TraceStep,
-    VectorlessError,
-    WeightedKeyword,
-    __version__,
-)
+# Primary API — Python Engine wrapping Rust compile + Python strategy
+from vectorless.engine import Engine
 
 # Configuration utilities
 from vectorless.config import EngineConfig, load_config, load_config_from_env, load_config_from_file
 
 # Events
 from vectorless.events import EventEmitter
+
+# Rust types re-exported for convenience
+from vectorless._vectorless import (
+    Answer,
+    CollectedEvidence,
+    Concept,
+    Config,
+    DocumentGraph,
+    DocumentGraphNode,
+    DocumentInfo,
+    EdgeEvidence,
+    Evidence,
+    FindResult,
+    GraphEdge,
+    LlmMetricsReport,
+    MatchResult,
+    MetricsReport,
+    NodeInfo,
+    ReasoningTrace,
+    RetrievalMetricsReport,
+    SectionSummary,
+    TraceStep,
+    TopicEntry,
+    VectorlessError,
+    WeightedKeyword,
+    WordCount,
+    __version__,
+)
 
 __all__ = [
     # Primary API
@@ -49,6 +61,13 @@ __all__ = [
     # Document types
     "DocumentInfo",
     "Concept",
+    "NodeInfo",
+    "MatchResult",
+    "FindResult",
+    "WordCount",
+    "CollectedEvidence",
+    "TopicEntry",
+    "SectionSummary",
     # Answer types
     "Answer",
     "Evidence",
@@ -56,10 +75,13 @@ __all__ = [
     "TraceStep",
     # Graph types
     "DocumentGraph",
+    "DocumentGraphNode",
     "GraphEdge",
     "EdgeEvidence",
     "WeightedKeyword",
     # Metrics
+    "LlmMetricsReport",
+    "RetrievalMetricsReport",
     "MetricsReport",
     # Error and version
     "VectorlessError",

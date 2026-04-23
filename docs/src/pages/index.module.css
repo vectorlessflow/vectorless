@@ -1,22 +1,24 @@
 /**
  * Homepage styles for Vectorless.
- * Uses rose color scheme tokens from custom.css.
  */
 
 /* ===== Hero Banner ===== */
 .heroBanner {
   margin: 0;
   padding: 0;
-  height: calc(100vh - 68px);
+  min-height: calc(100vh - 68px);
   overflow: hidden;
   position: relative;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 48px;
   background-color: var(--bg);
   font-family: 'Space Grotesk', sans-serif;
   color: var(--text);
   line-height: 1.5;
+  padding: 40px 24px;
 }
 
 /* ===== Stats widget (top-right corner) ===== */
@@ -29,237 +31,195 @@
 
 /* ===== Hero Container ===== */
 .hero {
-  max-width: 1280px;
-  width: 90%;
+  max-width: 1120px;
+  width: 100%;
   margin: 0 auto;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 36px;
-  padding: 32px 28px;
-  background: radial-gradient(circle at 20% 30%, var(--primary-soft), transparent 70%);
-  border-radius: 48px;
+  gap: 48px;
 }
 
-/* ===== Left: Brand + Features ===== */
+/* ===== Left: Brand + CTA ===== */
 .heroContent {
-  flex: 1.2;
-  min-width: 280px;
+  flex: 1.1;
+  min-width: 300px;
 }
 
 .mainTitle {
-  font-size: 3.8rem;
+  font-size: 4rem;
   font-weight: 800;
-  letter-spacing: -0.03em;
+  letter-spacing: -0.04em;
   background: linear-gradient(135deg, var(--text) 0%, var(--text-light) 80%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
-  margin-bottom: 8px;
-  line-height: 1.1;
+  margin-bottom: 12px;
+  line-height: 1.05;
+}
+
+.tagline {
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: var(--primary);
+  margin-bottom: 16px;
+  font-style: italic;
 }
 
 .subTitle {
-  font-size: 1.4rem;
-  font-weight: 500;
-  color: var(--primary);
-  margin-bottom: 24px;
-  letter-spacing: -0.2px;
-  border-left: 3px solid var(--primary);
-  padding-left: 16px;
-}
-
-/* ===== Feature Pills ===== */
-.featureList {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  margin-bottom: 24px;
-}
-
-.featureItem {
-  display: flex;
-  align-items: center;
-  gap: 14px;
   font-size: 1rem;
-  font-weight: 500;
-  background: var(--primary-soft);
-  padding: 10px 16px;
-  border-radius: 60px;
-  width: fit-content;
-  backdrop-filter: blur(4px);
+  font-weight: 400;
+  color: var(--text-light);
+  margin-bottom: 32px;
+  line-height: 1.6;
+  max-width: 480px;
 }
 
-.featureIcon {
-  width: 32px;
-  height: 32px;
-  background: var(--primary-soft);
-  border-radius: 50%;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--primary);
-  font-size: 1rem;
-}
-
-/* ===== GitHub Star Button ===== */
+/* ===== Buttons ===== */
 .heroActions {
   display: flex;
-  gap: 1rem;
-  justify-content: flex-start;
+  gap: 12px;
   align-items: center;
   flex-wrap: wrap;
 }
 
-.githubStarButton {
+.primaryButton {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.9rem 2rem;
-  font-size: 1rem;
+  padding: 0.85rem 2rem;
+  font-size: 0.95rem;
   font-weight: 600;
   border-radius: 999px;
-  background-color: var(--text);
-  color: var(--bg);
+  background-color: var(--primary);
+  color: #fff;
   text-decoration: none;
   transition: transform 0.15s, box-shadow 0.15s;
   font-family: 'Space Grotesk', sans-serif;
 }
 
-.githubStarButton:hover {
-  color: var(--bg);
+.primaryButton:hover {
+  color: #fff;
   text-decoration: none;
   transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 8px 24px rgba(175, 120, 139, 0.35);
 }
 
-.starIcon {
-  margin-left: 0.4rem;
-}
-
-/* ===== Right: Principles Card ===== */
-.heroPrinciples {
-  flex: 0.9;
-  min-width: 280px;
-  background: var(--bg-offset);
-  backdrop-filter: blur(12px);
-  border: 1px solid var(--border);
-  border-radius: 40px;
-  padding: 24px 22px;
-  box-shadow: 0 20px 35px -12px rgba(0,0,0,0.2);
-  transition: transform 0.2s ease, border-color 0.2s ease;
-}
-
-.heroPrinciples:hover {
-  border-color: var(--primary);
-  transform: translateY(-4px);
-}
-
-.principlesTitle {
-  font-size: 1rem;
-  text-transform: uppercase;
-  letter-spacing: 2px;
-  color: var(--primary);
-  margin-bottom: 18px;
-  display: flex;
+.secondaryButton {
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
-}
-
-.principle {
-  margin-bottom: 18px;
-  padding-bottom: 14px;
-  border-bottom: 1px solid var(--border);
-}
-
-.principle:last-of-type {
-  border-bottom: none;
-  margin-bottom: 0;
-  padding-bottom: 0;
-}
-
-.principleHead {
-  font-weight: 700;
-  font-size: 1rem;
-  margin-bottom: 6px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  gap: 0.5rem;
+  padding: 0.85rem 1.8rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  border-radius: 999px;
+  background-color: transparent;
   color: var(--text);
+  border: 1px solid var(--border);
+  text-decoration: none;
+  transition: transform 0.15s, border-color 0.15s;
+  font-family: 'Space Grotesk', sans-serif;
 }
 
-.principleDesc {
-  font-size: 0.8rem;
-  color: var(--text-light);
-  line-height: 1.4;
+.secondaryButton:hover {
+  color: var(--text);
+  text-decoration: none;
+  border-color: var(--primary);
+  transform: translateY(-2px);
 }
 
-.badgeRust {
-  background: var(--primary-soft);
-  color: var(--primary);
-  border-radius: 30px;
-  padding: 2px 8px;
-  font-size: 0.7rem;
-  font-weight: 500;
-  margin-left: 8px;
+/* ===== Right: Code Card ===== */
+.codeCard {
+  flex: 0.9;
+  min-width: 340px;
+  background: #0D1117 !important;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid #30363D;
+  box-shadow: 0 16px 48px -8px rgba(0, 0, 0, 0.4);
 }
 
-.principlesFooter {
-  margin-top: 14px;
-  font-size: 0.7rem;
-  text-align: right;
-  opacity: 0.6;
-  border-top: 1px solid var(--border);
-  padding-top: 10px;
+.codeHeader {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  gap: 6px;
-  color: var(--text-light);
+  gap: 8px;
+  padding: 12px 16px;
+  background: #161B22;
+  border-bottom: 1px solid #30363D;
 }
+
+.codeDot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+
+.codeTitle {
+  margin-left: 8px;
+  font-size: 0.78rem;
+  color: #8B949E;
+  font-family: 'Space Grotesk', sans-serif;
+}
+
+.codeBlock {
+  margin: 0;
+  padding: 20px;
+  font-size: 0.82rem;
+  line-height: 1.75;
+  color: #E6EDF3 !important;
+  background: transparent !important;
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  overflow-x: auto;
+  white-space: pre;
+}
+
 
 /* ===== Responsive ===== */
-@media (max-width: 880px) {
+@media (max-width: 960px) {
   .hero {
     flex-direction: column;
-    padding: 40px 20px;
+    align-items: center;
   }
 
-  .mainTitle {
-    font-size: 2.8rem;
+  .heroContent {
+    text-align: center;
   }
 
   .subTitle {
-    font-size: 1.2rem;
+    max-width: 100%;
   }
 
-  .featureItem {
+  .heroActions {
+    justify-content: center;
+  }
+
+  .mainTitle {
+    font-size: 3rem;
+  }
+
+  .codeCard {
+    min-width: 0;
     width: 100%;
   }
 }
 
-@media (max-width: 480px) {
-  .heroBanner {
-    align-items: flex-start;
-    padding-top: 80px;
+@media (max-width: 640px) {
+  .principles {
+    flex-direction: column;
+    align-items: center;
+    gap: 24px;
   }
 
   .mainTitle {
-    font-size: 2.2rem;
+    font-size: 2.4rem;
   }
 
-  .subTitle {
+  .tagline {
     font-size: 1.05rem;
-    padding-left: 12px;
   }
 
-  .featureItem {
-    font-size: 0.9rem;
-    padding: 8px 12px;
-  }
-
-  .heroPrinciples {
-    border-radius: 24px;
-    padding: 20px 16px;
+  .heroBanner {
+    padding: 32px 16px;
+    gap: 32px;
   }
 }

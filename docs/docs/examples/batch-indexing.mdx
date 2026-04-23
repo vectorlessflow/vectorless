@@ -2,15 +2,13 @@
 sidebar_position: 3
 ---
 
-# Batch Indexing
+# Batch Compiling
 
-Index multiple documents efficiently with progress tracking and error handling.
-
-## Python
+Compile multiple documents efficiently with progress tracking and error handling.
 
 ```python
 import asyncio
-from vectorless import Engine, IndexContext, IndexOptions
+from vectorless import Engine
 
 async def main():
     engine = Engine(
@@ -18,12 +16,10 @@ async def main():
         model="gpt-4o",
     )
 
-    # Index a directory of documents
-    result = await engine.index(
-        IndexContext.from_dir("./documents/")
-    )
+    # Compile a directory of documents
+    result = await engine.compile(directory="./documents/")
 
-    print(f"Indexed {len(result.items)} documents")
+    print(f"Compiled {len(result.items)} documents")
     print(f"Failures: {len(result.failed)}")
 
     for item in result.items:
@@ -37,50 +33,19 @@ async def main():
     for fail in result.failed:
         print(f"  ✗ {fail.source}: {fail.error}")
 
-    # List all indexed documents
-    docs = await engine.list()
-    print(f"\nTotal indexed: {len(docs)} documents")
+    # List all compiled documents
+    docs = await engine.list_documents()
+    print(f"\nTotal compiled: {len(docs)} documents")
 
 asyncio.run(main())
 ```
 
-## Rust
-
-```rust
-use vectorless::{Engine, EngineBuilder, IndexContext};
-
-#[tokio::main]
-async fn main() -> vectorless::Result<()> {
-    let engine = EngineBuilder::new()
-        .with_key("sk-...")
-        .with_model("gpt-4o")
-        .build()
-        .await?;
-
-    // Index a directory
-    let result = engine.index(IndexContext::from_dir("./documents/")).await?;
-
-    println!("Indexed {} documents", result.items.len());
-    println!("Failures: {}", result.failed.len());
-
-    for item in &result.items {
-        println!("  ✓ {} ({:?}) → {}", item.name, item.format, item.doc_id);
-    }
-
-    // List all documents
-    let docs = engine.list().await?;
-    println!("Total indexed: {} documents", docs.len());
-
-    Ok(())
-}
-```
-
 ## Error Handling
 
-Each item in the result is either successful or failed. Failures don't prevent other documents from being indexed:
+Each item in the result is either successful or failed. Failures don't prevent other documents from being compiled:
 
 ```python
-result = await engine.index(IndexContext.from_paths(mixed_paths))
+result = await engine.compile(paths=mixed_paths)
 
 # Successful items
 for item in result.items:

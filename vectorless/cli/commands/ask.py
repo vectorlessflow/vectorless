@@ -10,14 +10,14 @@ from vectorless.cli.workspace import get_workspace_path
 from vectorless.cli.output import OutputFormat, format_query_result
 
 
-def _create_session(workspace_dir: str):
-    """Create a Session from workspace config."""
-    from vectorless.session import Session
+def _create_engine(workspace_dir: str):
+    """Create an Engine from workspace config."""
+    from vectorless.engine import Engine
 
     config_path = os.path.join(workspace_dir, "config.toml")
     if os.path.exists(config_path):
-        return Session.from_config_file(config_path)
-    return Session.from_env()
+        return Engine.from_config_file(config_path)
+    return Engine.from_env()
 
 
 # Module-level mutable state for the REPL
@@ -53,7 +53,7 @@ def _handle_repl_command(
 
     Args:
         line: Raw input line.
-        session: Session instance.
+        session: Engine instance.
         workspace: Workspace path.
 
     Returns:
@@ -88,7 +88,7 @@ def _handle_repl_command(
                 click.echo("No document target set (querying all documents)")
         return True
     elif cmd == ".stats":
-        click.echo(f"Session statistics:")
+        click.echo("Engine statistics:")
         click.echo(f"  Queries: {_total_queries}")
         click.echo(f"  LLM calls (from query metrics): {_total_llm_calls}")
 
@@ -145,9 +145,9 @@ def ask_cmd(*, doc_id: Optional[str] = None, verbose: bool = False) -> None:
     workspace = get_workspace_path()
 
     try:
-        session = _create_session(workspace)
+        session = _create_engine(workspace)
     except Exception as e:
-        raise click.ClickException(f"Failed to create session: {e}") from e
+        raise click.ClickException(f"Failed to create engine: {e}") from e
 
     _print_welcome()
 
@@ -185,9 +185,7 @@ def ask_cmd(*, doc_id: Optional[str] = None, verbose: bool = False) -> None:
             response = asyncio.run(_run())
 
             # Accumulate metrics
-            for item in response.items:
-                if item.metrics:
-                    _total_llm_calls += item.metrics.llm_calls
+            _total_llm_calls += response.metrics.llm_calls
 
             output = format_query_result(
                 response, fmt=OutputFormat.TEXT, verbose=_verbose
