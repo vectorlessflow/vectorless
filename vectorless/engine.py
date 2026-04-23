@@ -13,7 +13,6 @@ from pathlib import Path
 from typing import Any, List, Optional, Union
 
 from vectorless._core import Engine as RustEngine
-from vectorless._core import IndexContext, IndexOptions
 from vectorless.agent.orchestrator import DocCard, Orchestrator, OrchestratorResult
 from vectorless.config import EngineConfig, load_config, load_config_from_env, load_config_from_file
 from vectorless.events import (
@@ -31,7 +30,6 @@ from vectorless.streaming import StreamingQueryResult
 from vectorless.types.graph import DocumentGraphWrapper
 from vectorless.types.results import (
     Evidence,
-    FailedItem,
     IndexResultWrapper,
     QueryMetrics,
     QueryResponse,
@@ -162,46 +160,68 @@ class Engine:
                 "Provide exactly one source: path, paths, directory, content, or bytes_data"
             )
 
-        if force:
-            mode = "force"
-
-        # Build IndexContext
+        # For single file, delegate to Rust ingest
         if path is not None:
-            ctx = IndexContext.from_path(str(path))
-        elif paths is not None:
-            ctx = IndexContext.from_paths([str(p) for p in paths])
-        elif directory is not None:
-            ctx = IndexContext.from_dir(str(directory), recursive=True)
-        elif content is not None:
-            ctx = IndexContext.from_content(content, format)
-        elif bytes_data is not None:
-            ctx = IndexContext.from_bytes(list(bytes_data), format)
-        else:
-            raise ValueError("No source provided")
-
-        if name is not None:
-            ctx = ctx.with_name(name)
-        if mode != "default":
-            ctx = ctx.with_mode(mode)
-
-        # Emit start event
-        source_desc = str(path or paths or directory or "<content>" or "<bytes>")
-        self._events.emit_index(
-            IndexEventData(event_type=IndexEventType.STARTED, path=source_desc)
-        )
-
-        result = await self._rust.index(ctx)
-
-        # Emit complete event
-        self._events.emit_index(
-            IndexEventData(
-                event_type=IndexEventType.COMPLETE,
-                doc_id=result.doc_id,
-                message=f"Indexed {result.doc_id or 'documents'}",
+            source_desc = str(path)
+            self._events.emit_index(
+                IndexEventData(event_type=IndexEventType.STARTED, path=source_desc)
             )
-        )
+            doc_info = await self._rust.ingest(str(path))
+            self._events.emit_index(
+                IndexEventData(
+                    event_type=IndexEventType.COMPLETE,
+                    doc_id=doc_info.doc_id,
+                    message=f"Indexed {doc_info.doc_id}",
+                )
+            )
+            return IndexResultWrapper.from_doc_info(doc_info)
 
-        return IndexResultWrapper.from_rust(result)
+        # For multiple files, index them sequentially
+        if paths is not None:
+            return await self.index_batch(
+                paths, mode="force" if force else mode,
+            )
+
+        if directory is not None:
+            # Scan directory for supported files
+            dir_path = Path(directory)
+            extensions = {".md", ".pdf", ".markdown"}
+            file_paths = [
+                str(f) for f in dir_path.rglob("*")
+                if f.suffix.lower() in extensions and f.is_file()
+            ]
+            if not file_paths:
+                raise ValueError(f"No supported documents found in {directory}")
+            return await self.index_batch(file_paths, mode="force" if force else mode)
+
+        if content is not None:
+            # Write content to a temp file and ingest
+            import tempfile
+            suffix = ".md" if format == "markdown" else f".{format}"
+            with tempfile.NamedTemporaryFile(mode="w", suffix=suffix, delete=False) as f:
+                f.write(content)
+                tmp_path = f.name
+            try:
+                doc_info = await self._rust.ingest(tmp_path)
+                return IndexResultWrapper.from_doc_info(doc_info)
+            finally:
+                import os
+                os.unlink(tmp_path)
+
+        if bytes_data is not None:
+            import tempfile
+            suffix = ".md" if format == "markdown" else f".{format}"
+            with tempfile.NamedTemporaryFile(mode="wb", suffix=suffix, delete=False) as f:
+                f.write(bytes_data)
+                tmp_path = f.name
+            try:
+                doc_info = await self._rust.ingest(tmp_path)
+                return IndexResultWrapper.from_doc_info(doc_info)
+            finally:
+                import os
+                os.unlink(tmp_path)
+
+        raise ValueError("No source provided")
 
     async def index_batch(
         self,
@@ -211,7 +231,7 @@ class Engine:
         jobs: int = 1,
         force: bool = False,
         progress: bool = True,
-    ) -> List[IndexResultWrapper]:
+    ) -> IndexResultWrapper:
         """Index multiple files with optional concurrency.
 
         Args:
@@ -222,30 +242,25 @@ class Engine:
             progress: Emit progress events.
         """
         semaphore = asyncio.Semaphore(jobs)
-        results: List[IndexResultWrapper] = []
 
-        async def _index_one(p: Union[str, Path]) -> IndexResultWrapper:
+        async def _index_one(p: Union[str, Path]) -> object:
             async with semaphore:
                 self._events.emit_index(
-                    IndexEventData(
-                        event_type=IndexEventType.STARTED,
-                        path=str(p),
-                    )
+                    IndexEventData(event_type=IndexEventType.STARTED, path=str(p))
                 )
-                result = await self.index(path=p, mode=mode, force=force)
+                doc_info = await self._rust.ingest(str(p))
                 if progress:
                     self._events.emit_index(
                         IndexEventData(
                             event_type=IndexEventType.COMPLETE,
                             path=str(p),
-                            doc_id=result.doc_id,
+                            doc_id=doc_info.doc_id,
                         )
                     )
-                return result
+                return doc_info
 
-        tasks = [_index_one(p) for p in paths]
-        results = await asyncio.gather(*tasks)
-        return list(results)
+        results = await asyncio.gather(*[_index_one(p) for p in paths])
+        return IndexResultWrapper.from_doc_infos(list(results))
 
     # ── Querying (Python strategy layer) ────────────────────────
 
@@ -267,7 +282,6 @@ class Engine:
             workspace_scope: Query across all indexed documents.
             timeout_secs: Per-operation timeout.
         """
-        # Emit start event
         self._events.emit_query(
             QueryEventData(event_type=QueryEventType.STARTED, query=question)
         )
@@ -284,7 +298,6 @@ class Engine:
             )
             raise
 
-        # Emit complete event
         self._events.emit_query(
             QueryEventData(
                 event_type=QueryEventType.COMPLETE,
@@ -327,17 +340,17 @@ class Engine:
     ) -> QueryResponse:
         """Run the full Python strategy: understand → orchestrator → rerank."""
         # 1. Resolve target documents
+        all_doc_infos = await self._rust.list_documents()
+
         if doc_ids is not None:
             target_ids = doc_ids
         else:
-            all_docs = await self._rust.list()
-            target_ids = [d.doc_id for d in all_docs]
+            target_ids = [d.doc_id for d in all_doc_infos]
 
         if not target_ids:
             return QueryResponse(items=[], failed=[])
 
         # 2. Build DocCards for orchestrator analysis
-        all_doc_infos = await self._rust.list()
         info_map = {d.doc_id: d for d in all_doc_infos}
         target_infos = [info_map[did] for did in target_ids if did in info_map]
 
@@ -388,11 +401,12 @@ class Engine:
 
     async def list_documents(self) -> list:
         """List all indexed documents."""
-        return await self._rust.list()
+        return await self._rust.list_documents()
 
     async def remove_document(self, doc_id: str) -> bool:
         """Remove a document by ID."""
-        return await self._rust.remove(doc_id)
+        await self._rust.forget(doc_id)
+        return True
 
     async def document_exists(self, doc_id: str) -> bool:
         """Check if a document exists."""
@@ -444,7 +458,6 @@ def _orchestrator_to_response(
     if not reranked.evidence:
         return QueryResponse(items=[], failed=[])
 
-    # Build a single QueryResult from all evidence
     evidence_list = [
         Evidence(
             title=e.title,

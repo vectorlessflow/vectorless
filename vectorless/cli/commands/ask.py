@@ -53,7 +53,7 @@ def _handle_repl_command(
 
     Args:
         line: Raw input line.
-        session: Session instance.
+        session: Engine instance.
         workspace: Workspace path.
 
     Returns:
@@ -88,7 +88,7 @@ def _handle_repl_command(
                 click.echo("No document target set (querying all documents)")
         return True
     elif cmd == ".stats":
-        click.echo(f"Session statistics:")
+        click.echo("Engine statistics:")
         click.echo(f"  Queries: {_total_queries}")
         click.echo(f"  LLM calls (from query metrics): {_total_llm_calls}")
 
