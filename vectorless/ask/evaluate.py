@@ -1,39 +1,95 @@
-"""Evidence sufficiency evaluation via LLM.
+"""Evaluate cross-document evidence sufficiency via LLM.
 
-Provides structured evaluation with coverage, quality, and specific missing aspects.
+Mirrors vectorless-agent/src/orchestrator/evaluate.rs.
+
+Two evaluation modes:
+1. Cross-doc evaluation (Orchestrator level) — simple SUFFICIENT/INSUFFICIENT text parse
+2. Structured evaluation (Worker level) — JSON with coverage/quality/missing_aspects
+
+Both use the same Evidence type from types.py.
 """
 
 from __future__ import annotations
 
 import json
 import logging
-from dataclasses import dataclass, field
+import re
 
-from vectorless.ask.types import WorkerEvidence
+from vectorless.ask.types import EvalResult, Evidence
 from vectorless.llm_client import LLMClient
 
 logger = logging.getLogger(__name__)
 
 
-@dataclass
-class EvalResult:
-    """Structured result of evidence sufficiency evaluation."""
+# ---------------------------------------------------------------------------
+# Cross-doc evaluation prompt — mirrors Rust orchestrator/evaluate.rs
+# ---------------------------------------------------------------------------
 
-    sufficient: bool
-    missing_info: str
-    coverage: float          # 0.0-1.0, how much of the query the evidence covers
-    quality_score: float     # 0.0-1.0, average relevance of evidence
-    missing_aspects: list[str] = field(default_factory=list)
-    relevant_evidence_ids: list[str] = field(default_factory=list)
+def _build_cross_eval_prompt(query: str, evidence: list[Evidence]) -> tuple[str, str]:
+    """Build (system, user) prompt for cross-document sufficiency evaluation.
 
-    @property
-    def needs_replan(self) -> bool:
-        """Whether the orchestrator should replan and dispatch more workers."""
-        return not self.sufficient and bool(self.missing_aspects)
+    Uses the same SUFFICIENT/INSUFFICIENT text format as Rust — simple and robust.
+    """
+    evidence_summary = _format_evidence_summary(evidence)
+    system = (
+        "You evaluate whether collected evidence contains information that can answer or "
+        "relate to the user's question. The evidence is raw document text — it does not need to be "
+        "a complete or perfect answer. If the evidence mentions or addresses the key concepts from "
+        "the question, it is sufficient.\n"
+        "\n"
+        "Respond with ONLY 'SUFFICIENT' or 'INSUFFICIENT' followed by a one-line reason.\n"
+        "\n"
+        "Guidelines:\n"
+        "- If the evidence text contains any information directly related to the question's key terms, "
+        "respond SUFFICIENT.\n"
+        "- If the evidence is completely unrelated or empty, respond INSUFFICIENT.\n"
+        "- Default to SUFFICIENT unless the evidence is clearly irrelevant."
+    )
+    user = (
+        f"Question: {query}\n\n"
+        f"Collected evidence:\n"
+        f"{evidence_summary}\n\n"
+        f"Is this sufficient?"
+    )
+    return system, user
+
+
+def _format_evidence_summary(evidence: list[Evidence]) -> str:
+    """Format evidence with source attribution for evaluation.
+
+    Mirrors Rust format_evidence_summary — includes doc_name for cross-doc context.
+    """
+    if not evidence:
+        return "(no evidence)"
+    return "\n\n".join(
+        f"[{e.node_title}] (from {e.doc_name or 'unknown'})\n{e.content}"
+        for e in evidence
+    )
 
 
 # ---------------------------------------------------------------------------
-# Prompt
+# Parse cross-doc evaluation response — mirrors Rust parse_sufficiency_response
+# ---------------------------------------------------------------------------
+
+def _parse_sufficiency_response(response: str) -> bool:
+    """Parse the sufficiency check response. Returns True if SUFFICIENT."""
+    upper = response.strip().upper()
+    return upper.startswith("SUFFICIENT") and not upper.startswith("INSUFFICIENT")
+
+
+def _extract_missing_info(response: str) -> str:
+    """Extract missing info description from an INSUFFICIENT response."""
+    reason = response.strip()
+    for prefix in ("INSUFFICIENT", "Insufficient"):
+        if reason.startswith(prefix):
+            reason = reason[len(prefix):]
+            break
+    reason = reason.lstrip("-: ")
+    return reason if reason else "Evidence does not fully address the query."
+
+
+# ---------------------------------------------------------------------------
+# Structured evaluation prompt (for detailed analysis)
 # ---------------------------------------------------------------------------
 
 _EVAL_SYSTEM = """\
@@ -45,7 +101,7 @@ Analyze the evidence and respond with a JSON object:
   "coverage": 0.0-1.0,
   "quality": 0.0-1.0,
   "missing_aspects": ["aspect 1", "aspect 2"],
-  "relevant_ids": ["node_id_1", "node_id_2"]
+  "relevant_ids": ["node_title_1", "node_title_2"]
 }
 
 Guidelines:
@@ -53,16 +109,16 @@ Guidelines:
 - "coverage": fraction of the question's key aspects that the evidence addresses
 - "quality": average relevance of the evidence items (1.0 = all directly relevant, 0.0 = all irrelevant)
 - "missing_aspects": specific topics/angles the question asks about but evidence does not cover
-- "relevant_ids": node_ids of evidence items that are actually relevant (not tangential)
+- "relevant_ids": node_titles of evidence items that are actually relevant (not tangential)
 
 Be strict: if any major aspect of the question is unaddressed, mark sufficient=false.
 Be generous on coverage: if evidence partially addresses an aspect, count it as 0.5 coverage for that aspect.
 """
 
 
-def _build_eval_prompt(query: str, evidence: list[WorkerEvidence]) -> tuple[str, str]:
+def _build_structured_eval_prompt(query: str, evidence: list[Evidence]) -> tuple[str, str]:
     """Build (system, user) prompt for structured evaluation."""
-    evidence_text = _format_evidence_for_eval(evidence)
+    evidence_text = _format_evidence_summary(evidence)
     user = (
         f"Question: {query}\n\n"
         f"Evidence items:\n{evidence_text}\n\n"
@@ -71,33 +127,17 @@ def _build_eval_prompt(query: str, evidence: list[WorkerEvidence]) -> tuple[str,
     return _EVAL_SYSTEM, user
 
 
-def _format_evidence_for_eval(evidence: list[WorkerEvidence]) -> str:
-    """Format evidence with node_id, title, and content for evaluation."""
-    if not evidence:
-        return "(no evidence collected)"
-    return "\n\n".join(
-        f"[{e.node_id}] {e.title} (from {e.source_path})\n{e.content}"
-        for e in evidence
-    )
-
-
-# ---------------------------------------------------------------------------
-# Parse
-# ---------------------------------------------------------------------------
-
-def _parse_eval_response(response: str, evidence: list[WorkerEvidence]) -> EvalResult:
+def _parse_structured_response(response: str) -> EvalResult:
     """Parse LLM JSON response into EvalResult."""
     try:
         data = json.loads(response)
     except json.JSONDecodeError:
-        # Try to extract JSON from response
-        import re
         match = re.search(r"\{.*\}", response, re.DOTALL)
         if match:
             data = json.loads(match.group())
         else:
-            logger.warning("Failed to parse eval response as JSON, falling back to text analysis")
-            return _parse_text_fallback(response, evidence)
+            logger.warning("Failed to parse eval response as JSON, falling back to text")
+            return _parse_text_fallback(response)
 
     sufficient = bool(data.get("sufficient", False))
     coverage = float(data.get("coverage", 0.5))
@@ -105,7 +145,6 @@ def _parse_eval_response(response: str, evidence: list[WorkerEvidence]) -> EvalR
     missing = [str(a) for a in data.get("missing_aspects", [])]
     relevant_ids = [str(i) for i in data.get("relevant_ids", [])]
 
-    # Clamp values
     coverage = max(0.0, min(1.0, coverage))
     quality = max(0.0, min(1.0, quality))
 
@@ -121,22 +160,15 @@ def _parse_eval_response(response: str, evidence: list[WorkerEvidence]) -> EvalR
     )
 
 
-def _parse_text_fallback(response: str, evidence: list[WorkerEvidence]) -> EvalResult:
+def _parse_text_fallback(response: str) -> EvalResult:
     """Fallback parsing when JSON parsing fails."""
     text = response.strip().upper()
     sufficient = text.startswith("SUFFICIENT")
 
     missing_info = ""
-    missing_aspects = []
+    missing_aspects: list[str] = []
     if not sufficient:
-        # Extract reason after INSUFFICIENT marker
-        reason = response.strip()
-        for prefix in ("INSUFFICIENT", "Insufficient"):
-            if reason.startswith(prefix):
-                reason = reason[len(prefix):]
-                break
-        reason = reason.lstrip("-: ")
-        missing_info = reason if reason else "Evidence does not fully address the query."
+        missing_info = _extract_missing_info(response)
         missing_aspects = [missing_info] if missing_info else []
 
     return EvalResult(
@@ -155,35 +187,34 @@ def _parse_text_fallback(response: str, evidence: list[WorkerEvidence]) -> EvalR
 async def evaluate(
     llm: LLMClient,
     query: str,
-    evidence: list[WorkerEvidence],
+    evidence: list[Evidence],
+    *,
+    structured: bool = False,
 ) -> EvalResult:
     """Evaluate whether collected evidence is sufficient to answer the query.
 
-    Returns a structured EvalResult with coverage, quality, and specific missing aspects.
+    Two modes:
+    - structured=False (default): cross-doc SUFFICIENT/INSUFFICIENT — mirrors Rust
+    - structured=True: JSON with coverage/quality scores
+
     Propagates LLM errors — no fallback.
     """
-    system, user = _build_eval_prompt(query, evidence)
+    if structured:
+        system, user = _build_structured_eval_prompt(query, evidence)
+        response = await llm.complete(system, user)
+        return _parse_structured_response(response)
+
+    # Cross-doc evaluation (mirrors Rust orchestrator/evaluate.rs)
+    system, user = _build_cross_eval_prompt(query, evidence)
     response = await llm.complete(system, user)
-    return _parse_eval_response(response, evidence)
 
+    sufficient = _parse_sufficiency_response(response)
+    missing_info = "" if sufficient else _extract_missing_info(response)
 
-# ---------------------------------------------------------------------------
-# Formatting helpers (used by orchestrator prompts)
-# ---------------------------------------------------------------------------
-
-def format_evidence_brief(evidence: list[WorkerEvidence]) -> str:
-    """Format evidence as a brief summary (title + char count) for prompts."""
-    if not evidence:
-        return "(none)"
-    return "\n".join(
-        f"- [{e.title}] {len(e.content)} chars" for e in evidence
-    )
-
-
-def format_evidence_for_check(evidence: list[WorkerEvidence]) -> str:
-    """Format evidence with full content for sufficiency check."""
-    if not evidence:
-        return "(no evidence collected yet)"
-    return "\n\n".join(
-        f"[{e.title}]\n{e.content}" for e in evidence
+    return EvalResult(
+        sufficient=sufficient,
+        missing_info=missing_info,
+        coverage=0.7 if sufficient else 0.3,
+        quality_score=0.7 if sufficient else 0.3,
+        missing_aspects=[missing_info] if missing_info else [],
     )
