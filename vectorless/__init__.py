@@ -22,18 +22,28 @@ from vectorless.events import EventEmitter
 # Rust types re-exported for convenience
 from vectorless._vectorless import (
     Answer,
+    CollectedEvidence,
     Concept,
     Config,
     DocumentGraph,
+    DocumentGraphNode,
     DocumentInfo,
     EdgeEvidence,
     Evidence,
+    FindResult,
     GraphEdge,
+    LlmMetricsReport,
+    MatchResult,
     MetricsReport,
+    NodeInfo,
     ReasoningTrace,
+    RetrievalMetricsReport,
+    SectionSummary,
     TraceStep,
+    TopicEntry,
     VectorlessError,
     WeightedKeyword,
+    WordCount,
     __version__,
 )
 
@@ -51,6 +61,13 @@ __all__ = [
     # Document types
     "DocumentInfo",
     "Concept",
+    "NodeInfo",
+    "MatchResult",
+    "FindResult",
+    "WordCount",
+    "CollectedEvidence",
+    "TopicEntry",
+    "SectionSummary",
     # Answer types
     "Answer",
     "Evidence",
@@ -58,10 +75,13 @@ __all__ = [
     "TraceStep",
     # Graph types
     "DocumentGraph",
+    "DocumentGraphNode",
     "GraphEdge",
     "EdgeEvidence",
     "WeightedKeyword",
     # Metrics
+    "LlmMetricsReport",
+    "RetrievalMetricsReport",
     "MetricsReport",
     # Error and version
     "VectorlessError",
