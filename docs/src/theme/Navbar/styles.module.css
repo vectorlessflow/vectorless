@@ -4,6 +4,7 @@
   height: 100%;
   display: flex;
   align-items: center;
+  justify-content: space-between;
 }
 
 .navbarBrand {
@@ -44,10 +45,12 @@
 .navbarCenter {
   position: absolute;
   left: 50%;
-  transform: translateX(-50%);
+  top: 50%;
+  transform: translate(-50%, -50%);
   display: flex;
   align-items: center;
   gap: 2rem;
+  height: 100%;
 }
 
 .navbarCenter :global(.navbar__link) {
@@ -57,6 +60,9 @@
   padding: 0;
   text-decoration: none;
   transition: opacity 0.15s ease;
+  display: flex;
+  align-items: center;
+  height: 100%;
 }
 
 .navbarCenter :global(.navbar__link:hover) {
@@ -73,13 +79,12 @@
   opacity: 1;
 }
 
-/* Right: theme toggle */
+/* Right: theme toggle + GitHub star */
 .navbarRight {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 12px;
   flex-shrink: 0;
-  margin-left: auto;
   padding-right: 24px;
 }
 
@@ -88,9 +93,9 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
   border: 1px solid var(--border);
   background: transparent;
   color: var(--text-light);
