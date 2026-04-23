@@ -117,6 +117,7 @@ class Orchestrator:
         max_llm_calls: int = 0,
         skip_analysis: bool = False,
         intent_context: str = "",
+        event_callback: Any = None,  # async callable: (dict) -> None
     ) -> None:
         self._query = query
         self._doc_cards = doc_cards
@@ -126,6 +127,7 @@ class Orchestrator:
         self._max_llm_calls = max_llm_calls
         self._skip_analysis = skip_analysis
         self._intent_context = intent_context
+        self._emit = event_callback or (lambda _: asyncio.ensure_future(asyncio.sleep(0)))
 
     async def run(self) -> OrchestratorResult:
         """Execute the Orchestrator: analyze → dispatch → evaluate → replan."""
@@ -339,10 +341,22 @@ class Orchestrator:
 
             card = cards[idx]
 
+            await self._emit({
+                "type": "worker_started",
+                "doc_id": card.doc_id,
+                "doc_name": card.name,
+                "task": dispatch.task,
+            })
+
             try:
                 doc = await self._doc_loader(card.doc_id)
             except Exception as e:
                 logger.warning("Failed to load document %s: %s", card.doc_id, e)
+                await self._emit({
+                    "type": "worker_error",
+                    "doc_id": card.doc_id,
+                    "error": str(e),
+                })
                 return (idx, WorkerResult())
 
             worker = Worker(
@@ -360,6 +374,15 @@ class Orchestrator:
                 "Worker completed for doc %d (%s): evidence=%d, rounds=%d",
                 idx, card.name, len(result.evidence), result.rounds_used,
             )
+
+            await self._emit({
+                "type": "worker_done",
+                "doc_id": card.doc_id,
+                "doc_name": card.name,
+                "evidence_count": len(result.evidence),
+                "rounds_used": result.rounds_used,
+            })
+
             return (idx, result)
 
         tasks = [run_worker(d) for d in dispatches]

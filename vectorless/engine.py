@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from pathlib import Path
-from typing import Any, List, Optional, Union
+from typing import Any, Callable, List, Optional, Union
 
 from vectorless._core import Engine as RustEngine
 from vectorless.agent.orchestrator import DocCard, Orchestrator, OrchestratorResult
@@ -337,8 +337,16 @@ class Engine:
         question: str,
         doc_ids: Optional[List[str]],
         workspace_scope: bool,
+        event_queue: Optional[asyncio.Queue] = None,
     ) -> QueryResponse:
-        """Run the full Python strategy: understand → orchestrator → rerank."""
+        """Run the full Python strategy: understand → orchestrator → rerank.
+
+        Args:
+            event_queue: If provided, progress events are put into this queue
+                         for streaming consumers.
+        """
+        emit = event_queue.put if event_queue else lambda _: asyncio.ensure_future(asyncio.sleep(0))
+
         # 1. Resolve target documents
         all_doc_infos = await self._rust.list_documents()
 
@@ -354,6 +362,11 @@ class Engine:
         info_map = {d.doc_id: d for d in all_doc_infos}
         target_infos = [info_map[did] for did in target_ids if did in info_map]
 
+        if not target_infos:
+            raise DocumentNotFoundError(
+                f"None of the requested doc_ids found: {doc_ids}"
+            )
+
         doc_cards = []
         for info in target_infos:
             concepts = []
@@ -368,7 +381,14 @@ class Engine:
             ))
 
         # 3. Query understanding
+        await emit({"type": "understanding_started", "query": question})
         query_plan = await understand(question, self._llm)
+        await emit({
+            "type": "understanding_done",
+            "intent": query_plan.intent.value,
+            "keywords": query_plan.keywords,
+            "strategy_hint": query_plan.strategy_hint,
+        })
 
         # 4. Orchestrator
         orchestrator = Orchestrator(
@@ -378,15 +398,33 @@ class Engine:
             llm_client=self._llm,
             skip_analysis=not workspace_scope and len(doc_cards) <= 1,
             intent_context=query_plan.intent_context(),
+            event_callback=emit if event_queue else None,
         )
+
+        await emit({
+            "type": "orchestrator_started",
+            "doc_count": len(doc_cards),
+            "docs": [c.name for c in doc_cards],
+        })
         orch_result = await orchestrator.run()
+        await emit({
+            "type": "orchestrator_done",
+            "evidence_count": len(orch_result.evidence),
+            "confidence": orch_result.confidence,
+            "rounds_used": orch_result.rounds_used,
+        })
 
         # 5. Rerank + synthesize
+        await emit({"type": "rerank_started"})
         reranked = process(
             evidence=orch_result.evidence,
             intent=query_plan.intent,
             confidence=orch_result.confidence,
         )
+        await emit({
+            "type": "rerank_done",
+            "evidence_count": len(reranked.evidence),
+        })
 
         # 6. Convert to QueryResponse
         return _orchestrator_to_response(
@@ -442,6 +480,19 @@ class Engine:
     def __repr__(self) -> str:
         model = self._config.llm.model or "unknown"
         return f"Engine(model={model!r})"
+
+
+# ---------------------------------------------------------------------------
+# Exceptions
+# ---------------------------------------------------------------------------
+
+
+class DocumentNotFoundError(Exception):
+    """Raised when a requested document ID is not found in the workspace."""
+
+
+class EmptyWorkspaceError(Exception):
+    """Raised when no documents are indexed in the workspace."""
 
 
 # ---------------------------------------------------------------------------

@@ -1,11 +1,15 @@
-"""Streaming query results backed by the Python strategy pipeline.
+"""Streaming query results with real-time progress events.
 
-Yields real-time events as the orchestrator progresses through
-understanding, dispatching workers, collecting evidence, and synthesis.
+Uses asyncio.Queue for producer-consumer pattern.
+Events are emitted at each stage of the Python strategy pipeline:
+  understanding_done → workers_dispatched → worker_step → evaluation_done → synthesis_done → completed
+
+Terminal events are ``'completed'`` (with results) or ``'error'``.
 """
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any, AsyncIterator, Dict, List, Optional
 
 from vectorless.types.results import QueryResponse
@@ -22,11 +26,10 @@ class StreamingQueryResult:
         result = stream.result
     """
 
-    def __init__(self) -> None:
+    def __init__(self, queue: asyncio.Queue[Optional[Dict]]) -> None:
+        self._queue = queue
         self._result: Optional[QueryResponse] = None
         self._consumed = False
-        self._queue: list[Dict] = []
-        self._finished = False
 
     @classmethod
     def from_engine(
@@ -36,27 +39,30 @@ class StreamingQueryResult:
         doc_ids: Optional[List[str]],
         workspace_scope: bool,
     ) -> StreamingQueryResult:
-        """Create a StreamingQueryResult that runs the engine pipeline with event emission."""
-        instance = cls()
+        """Create a StreamingQueryResult that runs the engine pipeline in background."""
+        queue: asyncio.Queue[Optional[Dict]] = asyncio.Queue()
+        instance = cls(queue)
 
         async def _run() -> None:
             try:
-                result = await engine._ask_python(question, doc_ids, workspace_scope)
+                result = await engine._ask_python(
+                    question, doc_ids, workspace_scope,
+                    event_queue=queue,
+                )
                 instance._result = result
-                instance._queue.append({
+                await queue.put({
                     "type": "completed",
                     "total_results": len(result.items),
                     "confidence": result.items[0].confidence if result.items else 0.0,
                 })
             except Exception as e:
-                instance._queue.append({
+                await queue.put({
                     "type": "error",
                     "message": str(e),
                 })
-            finally:
-                instance._finished = True
+            # Sentinel: None signals end of stream
+            await queue.put(None)
 
-        import asyncio
         asyncio.ensure_future(_run())
         return instance
 
@@ -68,17 +74,14 @@ class StreamingQueryResult:
             return
         self._consumed = True
 
-        import asyncio
         while True:
-            if self._queue:
-                event = self._queue.pop(0)
-                yield event
-                if event.get("type") in ("completed", "error"):
-                    break
-            elif self._finished:
+            event = await self._queue.get()
+            if event is None:
+                # Sentinel — producer is done
                 break
-            else:
-                await asyncio.sleep(0.05)
+            yield event
+            if event.get("type") in ("completed", "error"):
+                break
 
     @property
     def result(self) -> Optional[QueryResponse]:
