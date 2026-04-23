@@ -19,8 +19,8 @@ from vectorless import Engine
 async def main():
     engine = Engine(api_key="sk-...", model="gpt-4o", endpoint="https://api.openai.com/v1")
 
-    # Index a document
-    result = await engine.index(path="./report.pdf")
+    # Compile a document
+    result = await engine.compile(path="./report.pdf")
     doc_id = result.doc_id
 
     # Ask a question
@@ -30,12 +30,10 @@ async def main():
 asyncio.run(main())
 ```
 
-## Resources
+## Help
 
-- [Documentation](https://vectorless.dev) — Guides, architecture, API reference
-- [PyPI](https://pypi.org/project/vectorless/) — Python package
-- [Crates.io](https://crates.io/crates/vectorless) — Rust crate
-- [Examples](examples/) — Complete usage patterns
+See [documentation](https://www.vectorless.dev/docs/intro) for more details.
+
 
 ## Contributing
 

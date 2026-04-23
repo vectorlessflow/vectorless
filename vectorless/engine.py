@@ -49,7 +49,7 @@ class Engine:
         from vectorless import Engine
 
         engine = Engine(api_key="sk-...", model="gpt-4o")
-        result = await engine.index(path="./report.pdf")
+        result = await engine.compile(path="./report.pdf")
         answer = await engine.ask("What is the Q4 revenue?", doc_ids=[result.doc_id])
         print(answer.single().content)
 
@@ -131,9 +131,9 @@ class Engine:
             overrides=overrides if overrides else None,
         )
 
-    # ── Indexing (Rust compile pipeline) ────────────────────────
+    # ── Compiling (Rust compile pipeline) ───────────────────────
 
-    async def index(
+    async def compile(
         self,
         path: Optional[Union[str, Path]] = None,
         paths: Optional[List[Union[str, Path]]] = None,
@@ -145,7 +145,7 @@ class Engine:
         mode: str = "default",
         force: bool = False,
     ) -> IndexResultWrapper:
-        """Index a document from various sources.
+        """Compile a document from various sources.
 
         Exactly one source must be provided: path, paths, directory,
         content, or bytes_data.
@@ -176,7 +176,7 @@ class Engine:
 
         # For multiple files, index them sequentially
         if paths is not None:
-            return await self.index_batch(
+            return await self.compile_batch(
                 paths, mode="force" if force else mode,
             )
 
@@ -190,7 +190,7 @@ class Engine:
             ]
             if not file_paths:
                 raise ValueError(f"No supported documents found in {directory}")
-            return await self.index_batch(file_paths, mode="force" if force else mode)
+            return await self.compile_batch(file_paths, mode="force" if force else mode)
 
         if content is not None:
             # Write content to a temp file and ingest
@@ -221,7 +221,7 @@ class Engine:
 
         raise ValueError("No source provided")
 
-    async def index_batch(
+    async def compile_batch(
         self,
         paths: List[Union[str, Path]],
         *,
@@ -230,7 +230,7 @@ class Engine:
         force: bool = False,
         progress: bool = True,
     ) -> IndexResultWrapper:
-        """Index multiple files with optional concurrency.
+        """Compile multiple files with optional concurrency.
 
         Args:
             paths: List of file paths to index.

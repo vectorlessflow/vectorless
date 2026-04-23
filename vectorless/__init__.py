@@ -5,7 +5,7 @@ Quick Start:
     from vectorless import Engine
 
     engine = Engine(api_key="sk-...", model="gpt-4o")
-    doc = await engine.index("./report.pdf")
+    doc = await engine.compile("./report.pdf")
     answer = await engine.ask("What is the revenue?", doc_ids=[doc.doc_id])
     print(answer.single().content)
 """
