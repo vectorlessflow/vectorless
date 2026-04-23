@@ -15,8 +15,8 @@ use std::fs::File;
 use std::io::{BufReader, BufWriter, Write};
 use std::path::{Path, PathBuf};
 
-use vectorless_error::Error;
 use vectorless_document::{DocumentTree, NavigationIndex, ReasoningIndex};
+use vectorless_error::Error;
 use vectorless_error::Result;
 
 /// Current format version for persisted documents.
@@ -139,7 +139,10 @@ impl DocumentMeta {
     }
 
     /// Set the logic fingerprint.
-    pub fn with_logic_fingerprint(mut self, fp: vectorless_utils::fingerprint::Fingerprint) -> Self {
+    pub fn with_logic_fingerprint(
+        mut self,
+        fp: vectorless_utils::fingerprint::Fingerprint,
+    ) -> Self {
         self.logic_fingerprint = fp;
         self
     }

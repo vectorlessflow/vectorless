@@ -195,7 +195,8 @@ pub async fn finalize_output(
     confidence: f32,
 ) -> vectorless_error::Result<Output> {
     let rerank_result =
-        vectorless_rerank::process(query, &state.all_evidence, multi_doc, intent, confidence).await?;
+        vectorless_rerank::process(query, &state.all_evidence, multi_doc, intent, confidence)
+            .await?;
 
     let total_llm_calls = orch_llm_calls + rerank_result.llm_calls;
     if !rerank_result.answer.is_empty() {

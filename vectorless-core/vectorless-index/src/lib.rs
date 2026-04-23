@@ -66,8 +66,8 @@ pub mod summary;
 pub use pipeline::{IndexInput, IndexMetrics, PipelineExecutor, PipelineResult};
 
 // Re-export config types
-pub use vectorless_document::ReasoningIndexConfig;
 pub use config::{IndexMode, PipelineOptions, ThinningConfig};
+pub use vectorless_document::ReasoningIndexConfig;
 
 // Re-export summary
 pub use summary::SummaryStrategy;

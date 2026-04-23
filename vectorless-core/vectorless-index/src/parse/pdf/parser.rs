@@ -12,9 +12,9 @@ use std::path::Path;
 use lopdf::Document as LopdfDocument;
 use tracing::{info, warn};
 
+use crate::parse::toc::TocProcessor;
 use vectorless_error::Error;
 use vectorless_error::Result;
-use crate::parse::toc::TocProcessor;
 use vectorless_llm::LlmClient;
 
 use super::types::{PdfMetadata, PdfPage, PdfParseResult};

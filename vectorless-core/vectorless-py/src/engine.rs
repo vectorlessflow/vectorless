@@ -26,7 +26,11 @@ async fn run_ingest(engine: Arc<Engine>, input: IngestInput) -> PyResult<PyDocum
     Ok(PyDocumentInfo { inner: doc })
 }
 
-async fn run_ask(engine: Arc<Engine>, question: String, doc_ids: Vec<String>) -> PyResult<PyAnswer> {
+async fn run_ask(
+    engine: Arc<Engine>,
+    question: String,
+    doc_ids: Vec<String>,
+) -> PyResult<PyAnswer> {
     let answer = engine.ask(&question, &doc_ids).await.map_err(to_py_err)?;
     Ok(PyAnswer { inner: answer })
 }

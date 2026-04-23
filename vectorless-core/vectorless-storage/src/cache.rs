@@ -267,8 +267,8 @@ pub struct CacheStats {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use vectorless_document::DocumentTree;
     use crate::{DocumentMeta, PersistedDocument};
+    use vectorless_document::DocumentTree;
 
     fn create_test_doc(id: &str) -> PersistedDocument {
         let meta = DocumentMeta::new(id, "Test Doc", "md");

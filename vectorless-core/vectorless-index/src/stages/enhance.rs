@@ -9,9 +9,9 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tracing::{debug, info, warn};
 
+use crate::incremental;
 use vectorless_document::NodeId;
 use vectorless_error::Result;
-use crate::incremental;
 use vectorless_llm::LlmClient;
 use vectorless_llm::memo::{MemoKey, MemoStore};
 use vectorless_utils::fingerprint::Fingerprint;

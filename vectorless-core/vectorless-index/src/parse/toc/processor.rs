@@ -10,8 +10,8 @@
 use futures::stream::{self, StreamExt};
 use tracing::{debug, info, warn};
 
-use vectorless_error::Result;
 use crate::parse::pdf::PdfPage;
+use vectorless_error::Result;
 use vectorless_llm::LlmClient;
 
 use super::assigner::{PageAssigner, PageAssignerConfig};

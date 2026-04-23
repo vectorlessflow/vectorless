@@ -39,8 +39,9 @@ impl ParseStage {
             IndexMode::Auto => match &ctx.input {
                 IndexInput::File(path) => {
                     let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
-                    DocumentFormat::from_extension(ext)
-                        .ok_or_else(|| vectorless_error::Error::Parse(format!("Unknown format: {}", ext)))
+                    DocumentFormat::from_extension(ext).ok_or_else(|| {
+                        vectorless_error::Error::Parse(format!("Unknown format: {}", ext))
+                    })
                 }
                 IndexInput::Content { format, .. } => Ok(*format),
                 IndexInput::Bytes { format, .. } => Ok(*format),
@@ -112,8 +113,7 @@ impl IndexStage for ParseStage {
                 debug!("[parse] Parsing inline content ({} chars)", content.len());
 
                 // Parse content directly
-                crate::parse::parse_content(content, *format, self.llm_client.clone())
-                    .await?
+                crate::parse::parse_content(content, *format, self.llm_client.clone()).await?
             }
             IndexInput::Bytes { data, name, format } => {
                 // Set name

@@ -18,10 +18,10 @@ mod detector;
 mod resolver;
 mod updater;
 
-use vectorless_document::DocumentTree;
 pub use detector::ChangeDetector;
 pub use resolver::{IndexAction, SkipInfo, resolve_action};
 use std::collections::HashMap;
+use vectorless_document::DocumentTree;
 
 /// Reuse summaries from old tree for unchanged nodes in the new tree.
 ///

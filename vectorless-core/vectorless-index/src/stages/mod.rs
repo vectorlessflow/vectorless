@@ -28,8 +28,8 @@ pub use validate::ValidateStage;
 pub use verify_ingest::VerifyStage;
 
 use super::pipeline::{FailurePolicy, IndexContext, StageResult};
-use vectorless_error::Result;
 pub use async_trait::async_trait;
+use vectorless_error::Result;
 
 /// Declares which context fields a stage reads/writes.
 /// Used by the orchestrator to determine safe parallel execution.

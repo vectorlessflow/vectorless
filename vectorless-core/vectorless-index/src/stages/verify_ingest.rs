@@ -5,10 +5,10 @@
 
 use tracing::{info, warn};
 
-use super::{AccessPattern, IndexStage};
-use vectorless_error::{Error, Result};
-use crate::pipeline::{IndexContext, StageResult};
 use super::async_trait;
+use super::{AccessPattern, IndexStage};
+use crate::pipeline::{IndexContext, StageResult};
+use vectorless_error::{Error, Result};
 
 /// Verification stage — ensures ingest produced reliable output.
 ///
@@ -43,14 +43,13 @@ impl IndexStage for VerifyStage {
 
     async fn execute(&mut self, ctx: &mut IndexContext) -> Result<StageResult> {
         // Tree must exist and have nodes
-        let tree = ctx.tree.as_ref().ok_or_else(|| {
-            Error::InvalidStructure("document tree is empty".into())
-        })?;
+        let tree = ctx
+            .tree
+            .as_ref()
+            .ok_or_else(|| Error::InvalidStructure("document tree is empty".into()))?;
         let node_count = tree.node_count();
         if node_count == 0 {
-            return Err(Error::InvalidStructure(
-                "tree has no nodes".into(),
-            ));
+            return Err(Error::InvalidStructure("tree has no nodes".into()));
         }
 
         // Summary must be non-empty

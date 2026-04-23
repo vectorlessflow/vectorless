@@ -13,8 +13,8 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use tracing::{info, warn};
 
-use vectorless_document::DocumentTree;
 use crate::parse::RawNode;
+use vectorless_document::DocumentTree;
 
 use super::metrics::IndexMetrics;
 

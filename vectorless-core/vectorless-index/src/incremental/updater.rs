@@ -5,9 +5,9 @@
 
 use tracing::info;
 
+use crate::parse::RawNode;
 use vectorless_document::{DocumentTree, NodeId};
 use vectorless_error::Result;
-use crate::parse::RawNode;
 
 use super::detector::ChangeDetector;
 

@@ -7,8 +7,8 @@ use futures::stream::{self, StreamExt};
 use rand::seq::SliceRandom;
 use tracing::{debug, info};
 
-use vectorless_error::Result;
 use crate::parse::pdf::PdfPage;
+use vectorless_error::Result;
 use vectorless_llm::config::LlmConfig;
 
 use super::types::{ErrorType, TocEntry, VerificationError, VerificationReport};

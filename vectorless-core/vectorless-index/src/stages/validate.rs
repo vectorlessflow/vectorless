@@ -100,7 +100,10 @@ impl ValidateStage {
     }
 
     /// Check for leaf nodes with empty titles.
-    fn check_empty_titles(tree: &vectorless_document::DocumentTree, issues: &mut Vec<ValidationIssue>) {
+    fn check_empty_titles(
+        tree: &vectorless_document::DocumentTree,
+        issues: &mut Vec<ValidationIssue>,
+    ) {
         let leaves = tree.leaves();
         let mut empty_count = 0;
 

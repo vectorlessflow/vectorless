@@ -8,8 +8,11 @@
 
 use tracing::info;
 
-use vectorless_agent::{self, config::AgentConfig, config::DocContext, config::Scope, config::WorkspaceContext, events::EventEmitter as AgentEventEmitter};
 use super::types::QueryResult;
+use vectorless_agent::{
+    self, config::AgentConfig, config::DocContext, config::Scope, config::WorkspaceContext,
+    events::EventEmitter as AgentEventEmitter,
+};
 use vectorless_document::{DocumentTree, NavigationIndex, ReasoningIndex};
 use vectorless_error::Result;
 use vectorless_events::{EventEmitter, QueryEvent};

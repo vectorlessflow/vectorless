@@ -133,7 +133,10 @@ async fn extract_with_llm(ctx: &mut IndexContext, client: &LlmClient) -> Vec<Con
             })
             .collect(),
         Err(e) => {
-            warn!("[concept_extraction] LLM extraction failed: {}, using fallback", e);
+            warn!(
+                "[concept_extraction] LLM extraction failed: {}, using fallback",
+                e
+            );
             extract_from_topics(ctx)
         }
     }

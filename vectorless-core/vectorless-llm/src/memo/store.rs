@@ -388,14 +388,15 @@ impl MemoStore {
             stats,
         };
 
-        let parent = path
-            .parent()
-            .ok_or_else(|| vectorless_error::Error::Parse("Invalid path for memo store".to_string()))?;
+        let parent = path.parent().ok_or_else(|| {
+            vectorless_error::Error::Parse("Invalid path for memo store".to_string())
+        })?;
         tokio::fs::create_dir_all(parent).await?;
 
         let temp_path = path.with_extension("tmp");
-        let json = serde_json::to_vec_pretty(&data)
-            .map_err(|e| vectorless_error::Error::Parse(format!("Failed to serialize memo store: {}", e)))?;
+        let json = serde_json::to_vec_pretty(&data).map_err(|e| {
+            vectorless_error::Error::Parse(format!("Failed to serialize memo store: {}", e))
+        })?;
         tokio::fs::write(&temp_path, &json).await?;
         tokio::fs::rename(&temp_path, path).await?;
 
@@ -414,8 +415,9 @@ impl MemoStore {
         }
 
         let bytes = tokio::fs::read(path).await?;
-        let data: MemoStoreData = serde_json::from_slice(&bytes)
-            .map_err(|e| vectorless_error::Error::Parse(format!("Failed to deserialize memo store: {}", e)))?;
+        let data: MemoStoreData = serde_json::from_slice(&bytes).map_err(|e| {
+            vectorless_error::Error::Parse(format!("Failed to deserialize memo store: {}", e))
+        })?;
 
         let mut cache = self.cache.write();
 

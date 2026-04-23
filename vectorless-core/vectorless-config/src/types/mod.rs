@@ -12,6 +12,7 @@ mod storage;
 
 use serde::{Deserialize, Serialize};
 
+pub use graph::DocumentGraphConfig;
 pub use indexer::IndexerConfig;
 pub use llm_pool::{
     FallbackBehavior, FallbackConfig, LlmConfig, OnAllFailedBehavior, RetryConfig, SlotConfig,
@@ -20,7 +21,6 @@ pub use llm_pool::{
 pub use metrics::{LlmMetricsConfig, MetricsConfig, RetrievalMetricsConfig};
 pub use retrieval::RetrievalConfig;
 pub use storage::{CompressionAlgorithm, StorageConfig};
-pub use graph::DocumentGraphConfig;
 
 /// Main configuration for vectorless.
 ///
@@ -216,7 +216,11 @@ pub struct ConfigValidationError {
 
 impl std::fmt::Display for ConfigValidationError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Configuration validation failed with {} error(s)", self.errors.len())
+        write!(
+            f,
+            "Configuration validation failed with {} error(s)",
+            self.errors.len()
+        )
     }
 }
 

@@ -7,9 +7,9 @@ use super::{AccessPattern, async_trait};
 use std::time::Instant;
 use tracing::{debug, info};
 
+use crate::pipeline::IndexContext;
 use vectorless_document::NodeId;
 use vectorless_error::Result;
-use crate::pipeline::IndexContext;
 
 use super::{IndexStage, StageResult};
 
@@ -242,10 +242,10 @@ impl IndexStage for OptimizeStage {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use vectorless_document::DocumentTree;
     use crate::PipelineOptions;
     use crate::pipeline::IndexContext;
     use crate::pipeline::IndexInput;
+    use vectorless_document::DocumentTree;
 
     /// Create a tree with small leaf children under root for merge tests.
     ///

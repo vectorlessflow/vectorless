@@ -16,8 +16,8 @@ pub use types::{DocumentFormat, DocumentMeta, ParseResult, RawNode};
 
 use std::path::Path;
 
-use vectorless_error::Result;
 use crate::parse::markdown::MarkdownParser;
+use vectorless_error::Result;
 use vectorless_llm::LlmClient;
 
 /// Parse a string content document.
@@ -66,8 +66,9 @@ pub async fn parse_bytes(
 ) -> Result<ParseResult> {
     match format {
         DocumentFormat::Markdown => {
-            let content = std::str::from_utf8(bytes)
-                .map_err(|e| vectorless_error::Error::Parse(format!("Invalid UTF-8 content: {}", e)))?;
+            let content = std::str::from_utf8(bytes).map_err(|e| {
+                vectorless_error::Error::Parse(format!("Invalid UTF-8 content: {}", e))
+            })?;
             let parser = MarkdownParser::new();
             parser.parse(content).await
         }

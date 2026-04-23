@@ -3,8 +3,8 @@
 
 //! PDF document types.
 
-use vectorless_utils::estimate_tokens;
 use serde::{Deserialize, Serialize};
+use vectorless_utils::estimate_tokens;
 
 /// A single page from a PDF document.
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -7,9 +7,9 @@ use super::async_trait;
 use std::time::Instant;
 use tracing::{debug, info};
 
+use crate::parse::RawNode;
 use vectorless_document::{DocumentTree, NodeId};
 use vectorless_error::Result;
-use crate::parse::RawNode;
 use vectorless_utils::estimate_tokens;
 
 use super::{IndexStage, StageResult};

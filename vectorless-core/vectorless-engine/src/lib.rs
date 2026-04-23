@@ -72,7 +72,6 @@ mod indexed_document;
 mod indexer;
 mod query_context;
 mod retriever;
-pub(crate) mod test_support;
 mod types;
 mod workspace;
 

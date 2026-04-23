@@ -51,8 +51,7 @@ use tracing::{info, warn};
 
 use vectorless_config::Config;
 use vectorless_document::{
-    Answer, Document as UnderstandingDocument, DocumentTree, Evidence, IngestInput,
-    ReasoningTrace,
+    Answer, Document as UnderstandingDocument, DocumentTree, Evidence, IngestInput, ReasoningTrace,
 };
 use vectorless_error::{Error, Result};
 use vectorless_events::EventEmitter;
@@ -422,10 +421,13 @@ impl Engine {
     pub async fn ingest(&self, input: IngestInput) -> Result<vectorless_document::DocumentInfo> {
         let ctx = match &input {
             IngestInput::Path(path) => IndexContext::from_path(path),
-            IngestInput::Bytes { data, format, .. } => IndexContext::from_bytes(data.clone(), *format),
-            IngestInput::Text { content, .. } => {
-                IndexContext::from_content(content, vectorless_index::parse::DocumentFormat::Markdown)
+            IngestInput::Bytes { data, format, .. } => {
+                IndexContext::from_bytes(data.clone(), *format)
             }
+            IngestInput::Text { content, .. } => IndexContext::from_content(
+                content,
+                vectorless_index::parse::DocumentFormat::Markdown,
+            ),
         };
 
         let result = self.ingest_pipeline(ctx).await?;
@@ -475,23 +477,24 @@ impl Engine {
         }
 
         // Build DocContexts from Documents and dispatch
-        let doc_contexts: Vec<vectorless_agent::DocContext> = documents
-            .iter()
-            .map(|doc| doc.as_context())
-            .collect();
+        let doc_contexts: Vec<vectorless_agent::DocContext> =
+            documents.iter().map(|doc| doc.as_context()).collect();
 
         let skip_analysis = !ids.is_empty();
         let scope = if skip_analysis {
             vectorless_agent::Scope::Specified(doc_contexts)
         } else {
-            vectorless_agent::Scope::Workspace(vectorless_agent::WorkspaceContext::new(doc_contexts))
+            vectorless_agent::Scope::Workspace(vectorless_agent::WorkspaceContext::new(
+                doc_contexts,
+            ))
         };
 
         let emitter = vectorless_agent::EventEmitter::noop();
         let config = self.retriever.config().clone();
         let llm = self.retriever.llm().clone();
         let output =
-            vectorless_retrieval::dispatcher::dispatch(input, scope, &config, &llm, &emitter).await?;
+            vectorless_retrieval::dispatcher::dispatch(input, scope, &config, &llm, &emitter)
+                .await?;
 
         // Convert Output -> Answer
         Ok(Self::output_to_answer(&output))
@@ -574,7 +577,11 @@ impl Engine {
             doc_id: persisted.meta.id,
             name: persisted.meta.name,
             format: persisted.meta.format,
-            source_path: persisted.meta.source_path.as_ref().map(|p| p.to_string_lossy().to_string()),
+            source_path: persisted
+                .meta
+                .source_path
+                .as_ref()
+                .map(|p| p.to_string_lossy().to_string()),
             tree,
             nav_index,
             reasoning_index,
@@ -749,8 +756,9 @@ impl Engine {
             None => return Ok(IndexAction::FullIndex { existing_id: None }),
         };
 
-        let format = vectorless_index::parse::DocumentFormat::from_extension(&stored_doc.meta.format)
-            .unwrap_or(vectorless_index::parse::DocumentFormat::Markdown);
+        let format =
+            vectorless_index::parse::DocumentFormat::from_extension(&stored_doc.meta.format)
+                .unwrap_or(vectorless_index::parse::DocumentFormat::Markdown);
         let pipeline_options = self.build_pipeline_options(options, source);
 
         // If logic fingerprint changed, remove old doc before full reprocess
@@ -873,7 +881,7 @@ impl std::fmt::Debug for Engine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::client::types::IndexMode;
+    use crate::types::IndexMode;
 
     // -- resolve_index_action Default mode ----------------------------------------------
 
@@ -890,7 +898,7 @@ mod tests {
     // -- build_index_item ----------------------------------------------------------------
 
     // Build_index_item only transforms data -- no I/O.
-    use crate::client::indexed_document::IndexedDocument;
+    use crate::indexed_document::IndexedDocument;
 
     fn make_doc() -> IndexedDocument {
         IndexedDocument::new("test-id", vectorless_index::parse::DocumentFormat::Markdown)
@@ -906,7 +914,10 @@ mod tests {
 
         assert_eq!(item.doc_id, "test-id");
         assert_eq!(item.name, "test.md");
-        assert_eq!(item.format, vectorless_index::parse::DocumentFormat::Markdown);
+        assert_eq!(
+            item.format,
+            vectorless_index::parse::DocumentFormat::Markdown
+        );
         assert_eq!(item.description, Some("test doc".to_string()));
         assert_eq!(item.source_path, Some("/tmp/test.md".to_string()));
         assert!(item.metrics.is_none());

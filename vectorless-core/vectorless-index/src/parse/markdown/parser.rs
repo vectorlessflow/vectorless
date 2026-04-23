@@ -6,8 +6,8 @@
 use pulldown_cmark::Options;
 use std::path::Path;
 
-use vectorless_error::Result;
 use crate::parse::{DocumentFormat, DocumentMeta, ParseResult, RawNode};
+use vectorless_error::Result;
 use vectorless_utils::estimate_tokens;
 
 use super::config::MarkdownConfig;

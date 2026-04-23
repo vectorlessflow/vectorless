@@ -9,8 +9,8 @@
 
 use std::collections::BTreeMap;
 
-use vectorless_agent::config::{Evidence, Metrics, Output};
 use crate::types::{Confidence, EvidenceItem, QueryMetrics, QueryResultItem};
+use vectorless_agent::config::{Evidence, Metrics, Output};
 
 /// Convert agent output to query result items, split by document.
 ///

@@ -21,8 +21,8 @@ pub mod types;
 
 use tracing::info;
 
-use vectorless_query::QueryIntent;
 use types::{Evidence, RerankOutput};
+use vectorless_query::QueryIntent;
 
 /// Process agent output through the rerank pipeline.
 ///

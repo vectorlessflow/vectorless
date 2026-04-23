@@ -10,9 +10,9 @@
 
 use tracing::info;
 
+use crate::config::PipelineOptions;
 use vectorless_document::DocumentFormat;
 use vectorless_document::DocumentTree;
-use crate::config::PipelineOptions;
 use vectorless_storage::PersistedDocument;
 use vectorless_utils::fingerprint::Fingerprint;
 

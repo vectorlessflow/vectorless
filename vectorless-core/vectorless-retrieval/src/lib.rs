@@ -25,4 +25,7 @@ pub mod stream;
 mod types;
 
 pub use stream::{RetrieveEvent, RetrieveEventReceiver};
-pub use types::{Confidence, EvidenceItem, QueryMetrics, QueryResultItem, ReasoningChain, RetrieveResponse, SufficiencyLevel};
+pub use types::{
+    Confidence, EvidenceItem, QueryMetrics, QueryResultItem, ReasoningChain, RetrieveResponse,
+    SufficiencyLevel,
+};

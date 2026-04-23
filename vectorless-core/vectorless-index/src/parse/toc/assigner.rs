@@ -7,8 +7,8 @@ use futures::stream::{self, StreamExt};
 use std::collections::HashMap;
 use tracing::{debug, info};
 
-use vectorless_error::Result;
 use crate::parse::pdf::PdfPage;
+use vectorless_error::Result;
 use vectorless_llm::config::LlmConfig;
 
 use super::types::{PageOffset, TocEntry};
