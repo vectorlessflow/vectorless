@@ -9,8 +9,7 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-tracing = { workspace = true }
-tokio = { workspace = true }
+vectorless-graph = { path = "../vectorless-graph" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 

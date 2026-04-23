@@ -3,7 +3,6 @@
 
 //! Configuration type definitions.
 
-mod graph;
 mod indexer;
 mod llm_pool;
 mod metrics;
@@ -12,7 +11,7 @@ mod storage;
 
 use serde::{Deserialize, Serialize};
 
-pub use graph::DocumentGraphConfig;
+pub use vectorless_graph::DocumentGraphConfig;
 pub use indexer::IndexerConfig;
 pub use llm_pool::{
     FallbackBehavior, FallbackConfig, LlmConfig, OnAllFailedBehavior, RetryConfig, SlotConfig,

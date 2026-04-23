@@ -9,7 +9,6 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-vectorless-config = { path = "../vectorless-config" }
 vectorless-document = { path = "../vectorless-document" }
 tracing = { workspace = true }
 serde = { workspace = true }
