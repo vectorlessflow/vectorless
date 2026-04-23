@@ -1,0 +1,18 @@
+[package]
+name = "vectorless-primitives"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+description = "Document navigation primitives for AI agents"
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+vectorless-document = { path = "../vectorless-document" }
+vectorless-error = { path = "../vectorless-error" }
+regex = { workspace = true }
+tokio = { workspace = true, features = ["sync"] }
+
+[lints]
+workspace = true

@@ -545,6 +545,19 @@ impl Engine {
         self.workspace.exists(doc_id).await
     }
 
+    /// Load a full Document by ID (for navigation via primitives).
+    pub async fn load_document(&self, doc_id: &str) -> Result<Option<vectorless_document::Document>> {
+        match self.workspace.load(doc_id).await? {
+            Some(persisted) => Ok(Some(Self::persisted_to_understanding_document(persisted))),
+            None => Ok(None),
+        }
+    }
+
+    /// List all document IDs in the workspace.
+    pub async fn list_document_ids(&self) -> Result<Vec<String>> {
+        Ok(self.workspace.inner().list_documents().await)
+    }
+
     /// Remove all documents from the workspace.
     ///
     /// Returns the number of documents removed.
