@@ -234,7 +234,7 @@ pub struct SectionCard {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::document::DocumentTree;
+    use crate::tree::DocumentTree;
 
     fn build_small_tree() -> DocumentTree {
         // Root -> [Child1 (leaf), Child2 -> [Grandchild (leaf)]]

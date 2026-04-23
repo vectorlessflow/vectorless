@@ -825,7 +825,7 @@ impl Default for DocumentTree {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::document::reference::{NodeReference, RefType};
+    use crate::reference::{NodeReference, RefType};
 
     #[test]
     fn test_children_with_refs_no_references() {

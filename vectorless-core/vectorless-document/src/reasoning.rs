@@ -339,7 +339,7 @@ mod tests {
     #[test]
     fn test_builder_basic() {
         // Create a simple tree to get valid NodeIds
-        let mut tree = crate::document::DocumentTree::new("Root", "root content");
+        let mut tree = crate::tree::DocumentTree::new("Root", "root content");
         let child1 = tree.add_child(tree.root(), "Introduction", "intro content");
         let child2 = tree.add_child(tree.root(), "Methods", "methods content");
 
@@ -370,7 +370,7 @@ mod tests {
 
     #[test]
     fn test_serialization_roundtrip_empty() {
-        let mut tree = crate::document::DocumentTree::new("Root", "content");
+        let mut tree = crate::tree::DocumentTree::new("Root", "content");
         let child = tree.add_child(tree.root(), "Section 1", "s1 content");
 
         let mut builder = ReasoningIndexBuilder::new();
@@ -395,7 +395,7 @@ mod tests {
 
     #[test]
     fn test_serialization_roundtrip_with_hot_nodes() {
-        let mut tree = crate::document::DocumentTree::new("Root", "");
+        let mut tree = crate::tree::DocumentTree::new("Root", "");
         let root = tree.root();
         let c1 = tree.add_child(root, "S1", "content 1");
         let c2 = tree.add_child(root, "S2", "content 2");
@@ -426,7 +426,7 @@ mod tests {
     #[test]
     fn test_backward_compat_hot_nodes_empty_object() {
         // Simulate old JSON where hot_nodes was serialized as {} by derive.
-        let mut tree = crate::document::DocumentTree::new("Root", "");
+        let mut tree = crate::tree::DocumentTree::new("Root", "");
         let child = tree.add_child(tree.root(), "S1", "c");
 
         let mut builder = ReasoningIndexBuilder::new();

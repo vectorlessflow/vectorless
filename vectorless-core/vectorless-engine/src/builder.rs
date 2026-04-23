@@ -6,10 +6,13 @@
 //! This module provides [`EngineBuilder`] for configuring and building
 //! [`Engine`] instances with sensible defaults.
 
-use crate::{
-    client::engine::Engine, client::retriever::RetrieverClient, config::Config,
-    events::EventEmitter, metrics::MetricsHub, storage::Workspace,
-};
+use vectorless_config::Config;
+use vectorless_events::EventEmitter;
+use vectorless_metrics::MetricsHub;
+use vectorless_storage::Workspace;
+
+use super::engine::Engine;
+use super::retriever::RetrieverClient;
 
 /// Builder for creating a [`Engine`] client.
 ///

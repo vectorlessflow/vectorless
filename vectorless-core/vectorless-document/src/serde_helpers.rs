@@ -93,7 +93,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::document::DocumentTree;
+    use crate::tree::DocumentTree;
 
     /// Wrapper struct to test `#[serde(with)]` through serde_json round-trip.
     #[derive(Serialize, Deserialize, Debug)]
