@@ -5,7 +5,7 @@ from __future__ import annotations
 import html as html_module
 from typing import Any, List, Optional
 
-from vectorless.types.results import QueryResponse, QueryResult, Evidence
+from vectorless.ask.types import Output
 
 
 class QueryResultDisplay:
@@ -15,63 +15,60 @@ class QueryResultDisplay:
     for automatic rendering.
     """
 
-    def __init__(self, result: QueryResponse) -> None:
+    def __init__(self, result: Output) -> None:
         self._result = result
 
     def _repr_html_(self) -> str:
-        rows = []
-        for item in self._result.items:
-            escaped_content = html_module.escape(item.content[:500])
-            confidence_bar = _confidence_bar(item.confidence)
-            evidence_html = _evidence_list_html(item.evidence)
-            rows.append(
-                f"<div style='margin-bottom:16px; padding:12px; "
-                f"border:1px solid #e0e0e0; border-radius:4px;'>"
-                f"<div style='display:flex; justify-content:space-between; "
-                f"align-items:center; margin-bottom:8px;'>"
-                f"<code>{html_module.escape(item.doc_id)}</code>"
-                f"{confidence_bar}"
-                f"</div>"
-                f"<p style='margin:0;'>{escaped_content}</p>"
-                f"{evidence_html}"
-                f"</div>"
-            )
-
-        failed_html = ""
-        if self._result.has_failures():
-            failed_items = []
-            for f in self._result.failed:
-                failed_items.append(
-                    f"<li>{html_module.escape(f.source)}: "
-                    f"{html_module.escape(f.error)}</li>"
-                )
-            failed_html = (
-                f"<div style='color:red; margin-top:8px;'>"
-                f"<strong>Failures:</strong><ul>{''.join(failed_items)}</ul></div>"
-            )
+        result = self._result
+        escaped_answer = html_module.escape(result.answer[:500])
+        confidence_bar = _confidence_bar(result.confidence)
+        evidence_html = _evidence_list_html(result.evidence)
 
         return (
             f"<div style='font-family:sans-serif;'>"
-            f"<h4>Results ({len(self._result.items)})</h4>"
-            f"{''.join(rows)}"
-            f"{failed_html}"
+            f"<div style='display:flex; justify-content:space-between; "
+            f"align-items:center; margin-bottom:8px;'>"
+            f"<h4>Result</h4>{confidence_bar}</div>"
+            f"<p style='margin:0;'>{escaped_answer}</p>"
+            f"{evidence_html}"
             f"</div>"
         )
 
     def _repr_markdown_(self) -> str:
-        lines = [f"## Results ({len(self._result.items)})\n"]
-        for item in self._result.items:
-            lines.append(f"### {item.doc_id} (confidence: {item.confidence:.2f})\n")
-            lines.append(f"{item.content}\n")
-            if item.evidence:
-                lines.append("**Evidence:**\n")
-                for ev in item.evidence:
-                    lines.append(f"- **{ev.title}** ({ev.path})")
+        result = self._result
+        lines = [
+            f"## Result (confidence: {result.confidence:.2f})\n",
+            f"{result.answer}\n",
+        ]
+        if result.evidence:
+            lines.append("**Evidence:**\n")
+            for ev in result.evidence:
+                doc_label = f" [{ev.doc_name}]" if ev.doc_name else ""
+                lines.append(f"- **{ev.node_title}** ({ev.source_path}){doc_label}")
             lines.append("")
         return "\n".join(lines)
 
     def _repr_json_(self) -> dict:
-        return self._result.to_dict()
+        result = self._result
+        return {
+            "answer": result.answer,
+            "confidence": result.confidence,
+            "evidence": [
+                {
+                    "title": e.node_title,
+                    "path": e.source_path,
+                    "content": e.content,
+                    "doc_name": e.doc_name,
+                }
+                for e in result.evidence
+            ],
+            "metrics": {
+                "llm_calls": result.metrics.llm_calls,
+                "rounds_used": result.metrics.rounds_used,
+                "nodes_visited": result.metrics.nodes_visited,
+                "evidence_chars": result.metrics.evidence_chars,
+            },
+        }
 
 
 class DocumentGraphDisplay:
@@ -126,15 +123,15 @@ def _confidence_bar(confidence: float) -> str:
     )
 
 
-def _evidence_list_html(evidence: List[Evidence]) -> str:
+def _evidence_list_html(evidence: list) -> str:
     """Generate HTML for evidence items."""
     if not evidence:
         return ""
     items = []
     for ev in evidence[:5]:
         items.append(
-            f"<li><strong>{html_module.escape(ev.title)}</strong> "
-            f"<code>{html_module.escape(ev.path)}</code></li>"
+            f"<li><strong>{html_module.escape(ev.node_title)}</strong> "
+            f"<code>{html_module.escape(ev.source_path)}</code></li>"
         )
     extra = f" <em>(+{len(evidence) - 5} more)</em>" if len(evidence) > 5 else ""
     return f"<ul style='margin:8px 0 0 0; font-size:0.9em;'>{''.join(items)}{extra}</ul>"

@@ -4,13 +4,11 @@ sidebar_position: 1
 
 # Quick Query Example
 
-This example demonstrates the basic index-and-query workflow with both Python and Rust.
-
-## Python
+This example demonstrates the basic compile-and-ask workflow.
 
 ```python
 import asyncio
-from vectorless import Engine, IndexContext, QueryContext
+from vectorless import Engine
 
 async def main():
     # 1. Create engine
@@ -19,66 +17,25 @@ async def main():
         model="gpt-4o",
     )
 
-    # 2. Index a document
-    result = await engine.index(IndexContext.from_path("./report.pdf"))
+    # 2. Compile a document
+    result = await engine.compile(path="./report.pdf")
     doc_id = result.doc_id
-    print(f"Indexed document: {doc_id}")
+    print(f"Compiled document: {doc_id}")
 
     # 3. Simple keyword query
-    answer = await engine.query(
-        QueryContext("revenue")
-        .with_doc_ids([doc_id])
-    )
-    print(f"Keyword result: {answer.single().content[:200]}")
+    response = await engine.ask("revenue", doc_ids=[doc_id])
+    print(f"Result: {response.single().content[:200]}")
 
     # 4. Complex reasoning query
-    answer = await engine.query(
-        QueryContext("What are the main factors affecting performance?")
-        .with_doc_ids([doc_id])
+    response = await engine.ask(
+        "What are the main factors affecting performance?",
+        doc_ids=[doc_id],
     )
-    print(f"Score: {answer.single().score:.2f}")
-    print(f"Hybrid result: {answer.single().content[:200]}")
+    print(f"Confidence: {response.single().confidence:.2f}")
+    print(f"Result: {response.single().content[:200]}")
 
     # 5. Cleanup
-    await engine.remove(doc_id)
+    await engine.remove_document(doc_id)
 
 asyncio.run(main())
-```
-
-## Rust
-
-```rust
-use vectorless::{Engine, EngineBuilder, IndexContext, QueryContext};
-use vectorless::StrategyPreference;
-
-#[tokio::main]
-async fn main() -> vectorless::Result<()> {
-    // 1. Create engine
-    let engine = EngineBuilder::new()
-        .with_key("sk-...")
-        .with_model("gpt-4o")
-        .build()
-        .await?;
-
-    // 2. Index a document
-    let result = engine.index(IndexContext::from_path("./report.pdf")).await?;
-    let doc_id = result.doc_id().unwrap().to_string();
-    println!("Indexed document: {}", doc_id);
-
-    // 3. Query with hybrid strategy
-    let answer = engine.query(
-        QueryContext::new("What are the main factors affecting performance?")
-            .with_doc_ids(vec![doc_id.clone()])
-    ).await?;
-
-    if let Some(item) = answer.single() {
-        println!("Score: {:.2}", item.score);
-        println!("{}", item.content);
-    }
-
-    // 4. Cleanup
-    engine.remove(&doc_id).await?;
-
-    Ok(())
-}
 ```

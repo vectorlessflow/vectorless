@@ -71,7 +71,7 @@ class EventEmitter:
 
     Usage::
 
-        from vectorless import Session, EventEmitter
+        from vectorless import Engine, EventEmitter
 
         events = EventEmitter()
 
@@ -79,7 +79,7 @@ class EventEmitter:
         def on_query(event):
             print(f"Query: {event.query}")
 
-        session = Session(api_key="sk-...", model="gpt-4o", events=events)
+        engine = Engine(api_key="sk-...", model="gpt-4o", events=events)
     """
 
     def __init__(self) -> None:

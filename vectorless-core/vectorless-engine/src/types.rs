@@ -253,10 +253,67 @@ impl IndexItem {
 }
 
 // ============================================================
-// Query Types — re-exported from retrieval crate
+// Query Types — defined locally (strategy layer moved to Python)
 // ============================================================
 
-pub use vectorless_retrieval::{Confidence, EvidenceItem, QueryMetrics, QueryResultItem};
+/// Confidence level of a query result.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Confidence(pub f64);
+
+impl Confidence {
+    /// Create a new confidence value (0.0 - 1.0).
+    pub fn new(value: f64) -> Self {
+        Self(value.clamp(0.0, 1.0))
+    }
+
+    /// Get the raw value.
+    pub fn value(&self) -> f64 {
+        self.0
+    }
+}
+
+/// A piece of evidence supporting a query result.
+#[derive(Debug, Clone)]
+pub struct EvidenceItem {
+    /// Title of the source section.
+    pub title: String,
+    /// Path within the document.
+    pub path: String,
+    /// Content of the evidence.
+    pub content: String,
+}
+
+/// Metrics for a single query result.
+#[derive(Debug, Clone, Default)]
+pub struct QueryMetrics {
+    /// Number of LLM calls made.
+    pub llm_calls: usize,
+    /// Number of navigation rounds used.
+    pub rounds_used: usize,
+    /// Number of document nodes visited.
+    pub nodes_visited: usize,
+    /// Number of evidence items collected.
+    pub evidence_count: usize,
+    /// Total characters in evidence.
+    pub evidence_chars: usize,
+}
+
+/// A single query result item.
+#[derive(Debug, Clone)]
+pub struct QueryResultItem {
+    /// Document ID.
+    pub doc_id: String,
+    /// Node IDs that contributed evidence.
+    pub node_ids: Vec<String>,
+    /// Result content.
+    pub content: String,
+    /// Supporting evidence.
+    pub evidence: Vec<EvidenceItem>,
+    /// Optional metrics.
+    pub metrics: Option<QueryMetrics>,
+    /// Confidence score.
+    pub confidence: f64,
+}
 
 /// Result of a document query.
 ///

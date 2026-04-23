@@ -65,7 +65,6 @@ use vectorless_storage::{PersistedDocument, Workspace};
 use super::{
     index_context::{IndexContext, IndexSource},
     indexer::IndexerClient,
-    retriever::RetrieverClient,
     types::{FailedItem, IndexItem, IndexMode, IndexResult},
     workspace::WorkspaceClient,
 };
@@ -90,9 +89,6 @@ pub struct Engine {
     /// Indexer client for document indexing.
     indexer: IndexerClient,
 
-    /// Retriever client for queries.
-    retriever: RetrieverClient,
-
     /// Workspace client for persistence.
     workspace: WorkspaceClient,
 
@@ -109,7 +105,6 @@ impl Engine {
     pub(crate) async fn with_components(
         config: Config,
         workspace: Workspace,
-        retriever: RetrieverClient,
         indexer: IndexerClient,
         events: EventEmitter,
         metrics_hub: Arc<MetricsHub>,
@@ -119,9 +114,6 @@ impl Engine {
         // Attach event emitter to indexer
         let indexer = indexer.with_events(events.clone());
 
-        // Attach event emitter to retriever
-        let retriever = retriever.with_events(events.clone());
-
         // Create workspace client
         let workspace_client = WorkspaceClient::new(workspace)
             .await
@@ -130,7 +122,6 @@ impl Engine {
         Ok(Self {
             config,
             indexer,
-            retriever,
             workspace: workspace_client,
             metrics_hub,
         })
@@ -450,61 +441,14 @@ impl Engine {
 
     /// Ask a question — returns a reasoned answer with evidence and trace.
     ///
-    /// - `input`: the question (required)
-    /// - `ids`: document IDs to search. Empty = search all documents.
+    /// Ask a question about the indexed documents.
     ///
-    /// Always returns an [`Answer`] with content, evidence, confidence, and
-    /// a mandatory reasoning trace.
-    pub async fn ask(&self, input: &str, ids: &[String]) -> Result<Answer> {
-        // Resolve doc IDs
-        let doc_ids = if ids.is_empty() {
-            let docs = self.list_documents().await?;
-            if docs.is_empty() {
-                return Err(Error::Config("Workspace is empty".into()));
-            }
-            docs.into_iter().map(|d| d.doc_id).collect::<Vec<_>>()
-        } else {
-            ids.to_vec()
-        };
-
-        // Load documents
-        let (documents, failed) = self.load_documents(&doc_ids).await?;
-        if documents.is_empty() {
-            return Err(Error::Config(format!(
-                "No documents available: {} failures",
-                failed.len()
-            )));
-        }
-
-        // Build DocContexts from Documents and dispatch
-        let doc_contexts: Vec<vectorless_agent::DocContext> = documents
-            .iter()
-            .map(|doc| vectorless_agent::DocContext {
-                tree: &doc.tree,
-                nav_index: &doc.nav_index,
-                reasoning_index: &doc.reasoning_index,
-                doc_name: &doc.name,
-            })
-            .collect();
-
-        let skip_analysis = !ids.is_empty();
-        let scope = if skip_analysis {
-            vectorless_agent::Scope::Specified(doc_contexts)
-        } else {
-            vectorless_agent::Scope::Workspace(vectorless_agent::WorkspaceContext::new(
-                doc_contexts,
-            ))
-        };
-
-        let emitter = vectorless_agent::EventEmitter::noop();
-        let config = self.retriever.config().clone();
-        let llm = self.retriever.llm().clone();
-        let output =
-            vectorless_retrieval::dispatcher::dispatch(input, scope, &config, &llm, &emitter)
-                .await?;
-
-        // Convert Output -> Answer
-        Ok(Self::output_to_answer(&output))
+    /// **Note**: Retrieval is now handled by the Python strategy layer.
+    /// This method returns an error — use Engine.ask() from the Python SDK.
+    pub async fn ask(&self, _input: &str, _ids: &[String]) -> Result<Answer> {
+        Err(Error::Config(
+            "Retrieval has been migrated to Python. Use Engine.ask() from the Python SDK.".into(),
+        ))
     }
 
     /// Remove a document from the workspace.
@@ -543,6 +487,22 @@ impl Engine {
     /// Check if a document exists in the workspace.
     pub async fn exists(&self, doc_id: &str) -> Result<bool> {
         self.workspace.exists(doc_id).await
+    }
+
+    /// Load a full Document by ID (for navigation via primitives).
+    pub async fn load_document(
+        &self,
+        doc_id: &str,
+    ) -> Result<Option<vectorless_document::Document>> {
+        match self.workspace.load(doc_id).await? {
+            Some(persisted) => Ok(Some(Self::persisted_to_understanding_document(persisted))),
+            None => Ok(None),
+        }
+    }
+
+    /// List all document IDs in the workspace.
+    pub async fn list_document_ids(&self) -> Result<Vec<String>> {
+        Ok(self.workspace.inner().list_documents().await)
     }
 
     /// Remove all documents from the workspace.
@@ -596,30 +556,6 @@ impl Engine {
             concepts: persisted.concepts,
             page_count: persisted.meta.page_count,
             section_count,
-        }
-    }
-
-    /// Convert agent Output to public Answer type.
-    fn output_to_answer(output: &vectorless_agent::Output) -> Answer {
-        // Build evidence
-        let evidence: Vec<Evidence> = output
-            .evidence
-            .iter()
-            .map(|e| Evidence {
-                content: e.content.clone(),
-                source_path: e.source_path.clone(),
-                doc_name: e.doc_name.clone().unwrap_or_default(),
-                relevance: 0.0,
-            })
-            .collect();
-
-        Answer {
-            content: output.answer.clone(),
-            evidence,
-            confidence: output.confidence,
-            trace: ReasoningTrace {
-                steps: output.trace_steps.clone(),
-            },
         }
     }
 
@@ -874,7 +810,6 @@ impl Clone for Engine {
         Self {
             config: Arc::clone(&self.config),
             indexer: self.indexer.clone(),
-            retriever: self.retriever.clone(),
             workspace: self.workspace.clone(),
             metrics_hub: Arc::clone(&self.metrics_hub),
         }

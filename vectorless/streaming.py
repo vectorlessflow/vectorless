@@ -1,14 +1,18 @@
-"""Streaming query results backed by real-time Rust streaming events.
+"""Streaming query results with real-time progress events.
 
-Wraps the PyO3 ``StreamingQuery`` async iterator and builds a
-``QueryResponse`` from the terminal ``completed`` event.
+Uses asyncio.Queue for producer-consumer pattern.
+Events are emitted at each stage of the Python strategy pipeline:
+  understanding_done → workers_dispatched → worker_step → evaluation_done → synthesis_done → completed
+
+Terminal events are ``'completed'`` (with results) or ``'error'``.
 """
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any, AsyncIterator, Dict, List, Optional
 
-from vectorless.types.results import QueryResponse, QueryResult
+from vectorless.ask.types import Output
 
 
 class StreamingQueryResult:
@@ -16,16 +20,50 @@ class StreamingQueryResult:
 
     Usage::
 
-        stream = await session.query_stream("What is the revenue?")
+        stream = await engine.query_stream("What is the revenue?")
         async for event in stream:
             print(event["type"], event)
-        result = stream.result  # Available after iteration completes
+        result = stream.result
     """
 
-    def __init__(self, raw_stream: Any) -> None:
-        self._stream = raw_stream  # PyStreamingQuery from Rust
-        self._result: Optional[QueryResponse] = None
+    def __init__(self, queue: asyncio.Queue[Optional[Dict]]) -> None:
+        self._queue = queue
+        self._result: Optional[Output] = None
         self._consumed = False
+
+    @classmethod
+    def from_engine(
+        cls,
+        engine: Any,
+        question: str,
+        doc_ids: Optional[List[str]],
+    ) -> StreamingQueryResult:
+        """Create a StreamingQueryResult that runs the engine pipeline in background."""
+        queue: asyncio.Queue[Optional[Dict]] = asyncio.Queue()
+        instance = cls(queue)
+
+        async def _run() -> None:
+            try:
+                result = await engine._ask_python(
+                    question, doc_ids,
+                    event_queue=queue,
+                )
+                instance._result = result
+                await queue.put({
+                    "type": "completed",
+                    "total_results": len(result.evidence),
+                    "confidence": result.confidence,
+                })
+            except Exception as e:
+                await queue.put({
+                    "type": "error",
+                    "message": str(e),
+                })
+            # Sentinel: None signals end of stream
+            await queue.put(None)
+
+        asyncio.ensure_future(_run())
+        return instance
 
     def __aiter__(self) -> AsyncIterator[Dict]:
         return self._iterate()
@@ -35,41 +73,16 @@ class StreamingQueryResult:
             return
         self._consumed = True
 
-        completed_event: Optional[Dict] = None
-
-        async for event in self._stream:
-            event_type = event.get("type", "")
-
+        while True:
+            event = await self._queue.get()
+            if event is None:
+                # Sentinel — producer is done
+                break
             yield event
-
-            if event_type in ("completed", "error"):
-                if event_type == "completed":
-                    completed_event = event
-                break  # Terminal events end the stream
-
-        if completed_event is not None:
-            self._result = self._build_response(completed_event)
-
-    @staticmethod
-    def _build_response(event: Dict) -> QueryResponse:
-        """Build a QueryResponse from the completed event dict."""
-        items: List[QueryResult] = []
-        for r in event.get("results", []):
-            node_id = r.get("node_id")
-            items.append(
-                QueryResult(
-                    doc_id=node_id or "",
-                    content=r.get("content") or "",
-                    score=r.get("score", 0.0),
-                    confidence=event.get("confidence", 0.0),
-                    node_ids=[node_id] if node_id else [],
-                    evidence=[],
-                    metrics=None,
-                )
-            )
-        return QueryResponse(items=items, failed=[])
+            if event.get("type") in ("completed", "error"):
+                break
 
     @property
-    def result(self) -> Optional[QueryResponse]:
+    def result(self) -> Optional[Output]:
         """Final result, available after iteration completes."""
         return self._result if self._consumed else None

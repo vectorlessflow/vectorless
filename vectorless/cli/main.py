@@ -94,14 +94,12 @@ def remove(doc_id: str) -> None:
 @app.command()
 @click.argument("question")
 @click.option("--doc", "-d", multiple=True, help="Limit query to specific document IDs.")
-@click.option("--workspace-scope", is_flag=True, help="Query across all documents.")
 @click.option("--format", "fmt", type=click.Choice(["text", "json"]), default="text")
 @click.option("--verbose", "-v", is_flag=True, help="Show Agent navigation steps.")
 @click.option("--max-tokens", type=int, help="Max result tokens.")
 def query(
     question: str,
     doc: tuple[str, ...],
-    workspace_scope: bool,
     fmt: str,
     verbose: bool,
     max_tokens: Optional[int],
@@ -113,7 +111,6 @@ def query(
     query_cmd(
         question,
         doc_ids=doc,
-        workspace_scope=workspace_scope,
         fmt=fmt,
         verbose=verbose,
         timeout_secs=max_tokens,

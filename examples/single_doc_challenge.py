@@ -203,10 +203,10 @@ async def main() -> None:
 
         try:
             answer = await engine.ask(question, doc_ids=[doc_id])
-            if not answer.content:
+            if not answer.answer:
                 print("   (no answer found)\n")
             else:
-                lines = answer.content.split("\n")
+                lines = answer.answer.split("\n")
                 for line in lines[:3]:
                     print(f"   {line}")
                 remaining = len(lines) - 3

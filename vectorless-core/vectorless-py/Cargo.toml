@@ -15,8 +15,9 @@ crate-type = ["cdylib"]
 [dependencies]
 pyo3 = { workspace = true }
 pyo3-async-runtimes = { workspace = true }
-tokio = { version = "1", features = ["rt-multi-thread"] }
+tokio = { version = "1", features = ["rt-multi-thread", "sync"] }
 vectorless-engine = { path = "../vectorless-engine" }
+vectorless-primitives = { path = "../vectorless-primitives" }
 
 [lints]
 workspace = true

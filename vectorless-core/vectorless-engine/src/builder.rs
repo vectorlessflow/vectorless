@@ -12,7 +12,6 @@ use vectorless_metrics::MetricsHub;
 use vectorless_storage::Workspace;
 
 use super::engine::Engine;
-use super::retriever::RetrieverClient;
 
 /// Builder for creating a [`Engine`] client.
 ///
@@ -198,12 +197,9 @@ impl EngineBuilder {
         // Indexer uses pool.index()
         let indexer = super::indexer::IndexerClient::with_llm(pool.index().clone());
 
-        // Retriever uses pool.retrieval() via agent system
-        let retriever = RetrieverClient::new(pool.retrieval().clone());
-
-        // Build engine
+        // Build engine (retrieval handled by Python strategy layer)
         let events = self.events.unwrap_or_default();
-        Engine::with_components(config, workspace, retriever, indexer, events, metrics_hub)
+        Engine::with_components(config, workspace, indexer, events, metrics_hub)
             .await
             .map_err(|e| BuildError::Other(e.to_string()))
     }
