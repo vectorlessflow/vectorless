@@ -48,12 +48,21 @@ Available commands:
 - ls                List children at current position (with summaries and leaf counts)
 - cd <name>         Enter a child node (supports relative paths like Section/Sub and absolute paths like /root/Section)
 - cd ..             Go back to parent node
+- back              Go back to previously visited position
 - cat <name>        Read a child node's content (automatically collected as evidence)
 - cat               Read the current node's content (useful at leaf nodes)
 - head <name>       Preview first 20 lines of a node (does NOT collect evidence)
 - find <keyword>    Search for a keyword in the document index (also supports multi-word like 'Lab C')
 - findtree <pattern> Search for nodes by title pattern (case-insensitive)
 - grep <pattern>    Regex search across all content in current subtree
+- toc [depth]       Show table of contents (optional max depth filter)
+- stats <name>      Show node statistics (size, depth, children, leaf status)
+- grep_node <node> <pattern>  Regex search within a specific node
+- similar <name>    Find similar nodes by keyword overlap
+- overview <name>   Show pre-computed section overview/summary
+- compare <a> <b>   Compare two nodes using LLM analysis (use node IDs)
+- trace <name>      Trace reasoning chain from a node using LLM
+- summarize <name>  Generate dynamic LLM summary of a node
 - wc <name>         Show content size (lines, words, chars)
 - pwd               Show current navigation path
 - check             Evaluate if collected evidence is sufficient
@@ -180,8 +189,10 @@ def worker_dispatch(params: WorkerDispatchParams) -> tuple[str, str]:
         f'"{doc_name}" for specific information.\n'
         f"\n"
         f"Available commands: ls, cd <name> (supports Section/Sub paths and /root/Section absolute paths), "
-        f"cd .., cat, cat <name>, head <name>, find <keyword>, findtree <pattern>, grep <regex>, wc <name>, "
-        f"pwd, check, done\n"
+        f"cd .., back, cat, cat <name>, head <name>, find <keyword>, findtree <pattern>, grep <regex>, "
+        f"toc [depth], stats <name>, grep_node <node> <pattern>, similar <name>, overview <name>, "
+        f"compare <a> <b>, trace <name>, summarize <name>, "
+        f"wc <name>, pwd, check, done\n"
         f"\n"
         f"SEARCH STRATEGY:\n"
         f"- Prefer find <keyword> to jump directly to relevant sections over manual ls→cd exploration.\n"

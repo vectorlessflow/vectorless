@@ -15,6 +15,7 @@ from typing import Any
 
 from vectorless.ask.types import TraceStep, WorkerEvidence, WorkerResult
 from vectorless.llm_client import LLMClient
+from vectorless.ask.tools import compare_nodes, summarize_section, trace_reasoning
 from vectorless.ask.prompts import (
     NavigationParams,
     WorkerDispatchParams,
@@ -38,8 +39,9 @@ MAX_HISTORY_ENTRIES = 6
 @dataclass
 class Command:
     """Parsed command from LLM output."""
-    kind: str  # ls, cd, cd_up, cat, find, findtree, grep, head, wc, pwd, check, done
+    kind: str  # ls, cd, cd_up, cat, find, findtree, grep, head, wc, pwd, check, done, ...
     target: str = ""
+    target_b: str = ""  # second target for compare, pattern for grep_node
     lines: int = 20
 
 
@@ -113,6 +115,44 @@ def parse_command(llm_output: str) -> Command:
         return Command(kind="check")
     elif cmd == "done":
         return Command(kind="done")
+    elif cmd == "back":
+        return Command(kind="back")
+    elif cmd == "toc":
+        if len(parts) > 1:
+            try:
+                return Command(kind="toc", lines=int(parts[1]))
+            except ValueError:
+                pass
+        return Command(kind="toc", lines=0)  # 0 = no depth limit
+    elif cmd == "stats":
+        target = _strip_quotes(" ".join(parts[1:])) if len(parts) > 1 else ""
+        return Command(kind="stats", target=target)
+    elif cmd == "grep_node":
+        # grep_node <target> <pattern>
+        if len(parts) >= 3:
+            return Command(kind="grep_node", target=parts[1], target_b=_strip_quotes(" ".join(parts[2:])))
+        elif len(parts) == 2:
+            return Command(kind="grep_node", target=parts[1])
+        return Command(kind="grep_node")
+    elif cmd == "similar":
+        target = _strip_quotes(" ".join(parts[1:])) if len(parts) > 1 else ""
+        return Command(kind="similar", target=target)
+    elif cmd in ("section_overview", "overview"):
+        target = _strip_quotes(" ".join(parts[1:])) if len(parts) > 1 else ""
+        return Command(kind="section_overview", target=target)
+    elif cmd == "compare":
+        # compare <node_a> <node_b> — use node IDs for reliability
+        if len(parts) >= 3:
+            return Command(kind="compare", target=parts[1], target_b=parts[2])
+        elif len(parts) == 2:
+            return Command(kind="compare", target=parts[1])
+        return Command(kind="compare")
+    elif cmd == "trace":
+        target = _strip_quotes(" ".join(parts[1:])) if len(parts) > 1 else ""
+        return Command(kind="trace", target=target)
+    elif cmd == "summarize":
+        target = _strip_quotes(" ".join(parts[1:])) if len(parts) > 1 else ""
+        return Command(kind="summarize", target=target)
     else:
         return Command(kind="ls")  # fallback: re-observe
 
@@ -207,6 +247,22 @@ def _node_title_sync(doc: Any, node_id: str) -> str:
         return loop.run_until_complete(doc.node_title(node_id))
     except Exception:
         return ""
+
+
+async def _resolve_target(doc: Any, target: str, state: _WorkerState) -> str | None:
+    """Resolve a command target (node ID, child title, or empty for current) to a node ID."""
+    if not target or target == ".":
+        return await doc.current_id()
+    if re.match(r"^n\d+$", target):
+        return target
+    children = await doc.ls()
+    for child in children:
+        if child.title.lower() == target.lower():
+            return child.id
+    for child in children:
+        if target.lower() in child.title.lower():
+            return child.id
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -480,6 +536,193 @@ async def _execute_command(
             state.last_feedback = f"pwd error: {e}"
         return Step(kind="continue")
 
+    elif kind == "back":
+        try:
+            await doc.back()
+            pwd = await doc.pwd()
+            state.breadcrumb = [p for p in pwd.split("/") if p]
+            state.last_feedback = f"Current position: /{state.path_str()}"
+        except Exception as e:
+            state.last_feedback = f"Cannot go back: {e}"
+        return Step(kind="continue")
+
+    elif kind == "toc":
+        try:
+            if command.lines > 0:
+                entries = await doc.toc(command.lines)
+            else:
+                entries = await doc.toc()
+            if not entries:
+                state.last_feedback = "(empty table of contents)"
+            else:
+                lines = ["Table of contents:"]
+                for entry in entries:
+                    indent = "  " * entry.depth
+                    children = f" ({entry.child_count} children)" if entry.child_count > 0 else ""
+                    lines.append(f"{indent}- {entry.title}{children}")
+                state.last_feedback = "\n".join(lines)
+        except Exception as e:
+            state.last_feedback = f"toc error: {e}"
+        return Step(kind="continue")
+
+    elif kind == "stats":
+        node_id = await _resolve_target(doc, command.target, state)
+        if node_id is None:
+            state.last_feedback = f"Node '{command.target}' not found."
+            return Step(kind="continue")
+        try:
+            s = await doc.stats(node_id)
+            leaf = " (leaf)" if s.is_leaf else ""
+            state.last_feedback = (
+                f"[{s.title}] depth={s.depth}, children={s.child_count}, "
+                f"leaves={s.leaf_count}, chars={s.char_count}, words={s.word_count}{leaf}"
+            )
+        except Exception as e:
+            state.last_feedback = f"stats error: {e}"
+        return Step(kind="continue")
+
+    elif kind == "grep_node":
+        target = command.target
+        pattern = command.target_b
+        if not target or not pattern:
+            state.last_feedback = "Usage: grep_node <node> <pattern>"
+            return Step(kind="continue")
+        node_id = await _resolve_target(doc, target, state)
+        if node_id is None:
+            state.last_feedback = f"Node '{target}' not found."
+            return Step(kind="continue")
+        try:
+            matches = await doc.grep_node(node_id, pattern)
+            if not matches:
+                state.last_feedback = f"No matches for /{pattern}/ in this node."
+            else:
+                lines = [f"Matches for /{pattern}/:"]
+                for m in matches[:15]:
+                    lines.append(f"  - line {m.line_number}: {m.snippet[:100]}")
+                state.last_feedback = "\n".join(lines)
+        except Exception as e:
+            state.last_feedback = f"grep_node error: {e}"
+        return Step(kind="continue")
+
+    elif kind == "similar":
+        node_id = await _resolve_target(doc, command.target, state)
+        if node_id is None:
+            state.last_feedback = f"Node '{command.target}' not found."
+            return Step(kind="continue")
+        try:
+            results = await doc.similar(node_id)
+            if not results:
+                state.last_feedback = "No similar nodes found."
+            else:
+                lines = ["Similar nodes:"]
+                for r in results[:10]:
+                    kw = ", ".join(r.shared_keywords[:3])
+                    lines.append(f"  - {r.title} (relevance: {r.relevance:.2f}, shared: {kw})")
+                state.last_feedback = "\n".join(lines)
+        except Exception as e:
+            state.last_feedback = f"similar error: {e}"
+        return Step(kind="continue")
+
+    elif kind == "section_overview":
+        node_id = await _resolve_target(doc, command.target, state)
+        if node_id is None:
+            state.last_feedback = f"Node '{command.target}' not found."
+            return Step(kind="continue")
+        try:
+            overview = await doc.section_overview(node_id)
+            state.last_feedback = overview if overview else "(no overview available)"
+        except Exception as e:
+            state.last_feedback = f"overview error: {e}"
+        return Step(kind="continue")
+
+    elif kind == "compare":
+        target_a = command.target
+        target_b = command.target_b
+        if not target_a or not target_b:
+            state.last_feedback = "Usage: compare <node_a> <node_b>"
+            return Step(kind="continue")
+        node_a = await _resolve_target(doc, target_a, state)
+        node_b = await _resolve_target(doc, target_b, state)
+        if node_a is None:
+            state.last_feedback = f"Node '{target_a}' not found."
+            return Step(kind="continue")
+        if node_b is None:
+            state.last_feedback = f"Node '{target_b}' not found."
+            return Step(kind="continue")
+        try:
+            content_a = await doc.cat(node_a)
+            title_a = await doc.node_title(node_a)
+            content_b = await doc.cat(node_b)
+            title_b = await doc.node_title(node_b)
+            if node_a not in state.collected_nodes:
+                pwd_a = await doc.pwd()
+                state.evidence.append(WorkerEvidence(
+                    node_id=node_a, title=title_a, content=content_a, source_path=pwd_a,
+                ))
+                state.collected_nodes.add(node_a)
+            if node_b not in state.collected_nodes:
+                pwd_b = await doc.pwd()
+                state.evidence.append(WorkerEvidence(
+                    node_id=node_b, title=title_b, content=content_b, source_path=pwd_b,
+                ))
+                state.collected_nodes.add(node_b)
+            result = await compare_nodes(title_a, content_a, title_b, content_b, llm, query=query)
+            state.llm_calls += 1
+            state.last_feedback = f"Comparison of [{title_a}] vs [{title_b}]:\n{result}"
+        except Exception as e:
+            state.last_feedback = f"compare error: {e}"
+        return Step(kind="continue")
+
+    elif kind == "trace":
+        node_id = await _resolve_target(doc, command.target, state)
+        if node_id is None:
+            state.last_feedback = f"Node '{command.target}' not found."
+            return Step(kind="continue")
+        try:
+            content = await doc.cat(node_id)
+            title = await doc.node_title(node_id)
+            if node_id not in state.collected_nodes:
+                pwd = await doc.pwd()
+                state.evidence.append(WorkerEvidence(
+                    node_id=node_id, title=title, content=content, source_path=pwd,
+                ))
+                state.collected_nodes.add(node_id)
+            related_context = ""
+            try:
+                similar = await doc.similar(node_id)
+                if similar:
+                    related_lines = [f"  - {s.title} (relevance: {s.relevance:.2f})" for s in similar[:5]]
+                    related_context = "\nRelated sections:\n" + "\n".join(related_lines)
+            except Exception:
+                pass
+            result = await trace_reasoning(title, content, related_context, llm, query=query)
+            state.llm_calls += 1
+            state.last_feedback = f"Reasoning trace for [{title}]:\n{result}"
+        except Exception as e:
+            state.last_feedback = f"trace error: {e}"
+        return Step(kind="continue")
+
+    elif kind == "summarize":
+        node_id = await _resolve_target(doc, command.target, state)
+        if node_id is None:
+            state.last_feedback = f"Node '{command.target}' not found."
+            return Step(kind="continue")
+        try:
+            content = await doc.cat(node_id)
+            title = await doc.node_title(node_id)
+            if node_id not in state.collected_nodes:
+                pwd = await doc.pwd()
+                state.evidence.append(WorkerEvidence(
+                    node_id=node_id, title=title, content=content, source_path=pwd,
+                ))
+                state.collected_nodes.add(node_id)
+            result = await summarize_section(title, content, llm, query=query)
+            state.llm_calls += 1
+            state.last_feedback = f"Summary of [{title}]:\n{result}"
+        except Exception as e:
+            state.last_feedback = f"summarize error: {e}"
+        return Step(kind="continue")
+
     elif kind == "check":
         evidence_text = state.evidence_for_check()
         system, user = check_sufficiency(query, evidence_text)
@@ -648,7 +891,8 @@ class Worker:
                     f"Your output was not recognized as a valid command:\n"
                     f'"{raw_preview}"\n\n'
                     f"Please output exactly one command "
-                    f"(ls, cd, cat, head, find, findtree, grep, wc, pwd, check, or done)."
+                    f"(ls, cd, cat, head, find, grep, toc, stats, similar, overview, "
+                    f"compare, trace, summarize, wc, pwd, check, or done)."
                 )
                 state.push_history("(unrecognized) → parse failure")
                 continue
