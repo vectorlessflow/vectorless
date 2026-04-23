@@ -9,7 +9,6 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-vectorless-agent = { path = "../vectorless-agent" }
 vectorless-config = { path = "../vectorless-config" }
 vectorless-document = { path = "../vectorless-document" }
 vectorless-error = { path = "../vectorless-error" }
@@ -18,7 +17,6 @@ vectorless-graph = { path = "../vectorless-graph" }
 vectorless-index = { path = "../vectorless-index" }
 vectorless-llm = { path = "../vectorless-llm" }
 vectorless-metrics = { path = "../vectorless-metrics" }
-vectorless-retrieval = { path = "../vectorless-retrieval" }
 vectorless-rerank = { path = "../vectorless-rerank" }
 vectorless-storage = { path = "../vectorless-storage" }
 vectorless-utils = { path = "../vectorless-utils" }
