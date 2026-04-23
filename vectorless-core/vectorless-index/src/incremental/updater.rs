@@ -7,7 +7,7 @@ use tracing::info;
 
 use vectorless_document::{DocumentTree, NodeId};
 use vectorless_error::Result;
-use crate::index::parse::RawNode;
+use crate::parse::RawNode;
 
 use super::detector::ChangeDetector;
 

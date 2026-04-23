@@ -10,7 +10,7 @@ use vectorless_error::Result;
 use vectorless_llm::config::LlmConfig;
 
 use super::types::TocDetection;
-use crate::index::parse::pdf::PdfPage;
+use crate::parse::pdf::PdfPage;
 use vectorless_llm::LlmClient;
 
 /// TOC detector configuration.

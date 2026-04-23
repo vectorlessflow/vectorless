@@ -3,9 +3,9 @@
 
 //! `cat` — read node content and collect as evidence.
 
-use crate::agent::command;
-use crate::agent::config::{DocContext, Evidence};
-use crate::agent::state::WorkerState;
+use crate::command;
+use crate::config::{DocContext, Evidence};
+use crate::state::WorkerState;
 
 use super::super::ToolResult;
 

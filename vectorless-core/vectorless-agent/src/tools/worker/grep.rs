@@ -3,8 +3,8 @@
 
 //! `grep` — regex search across all node content in the current subtree.
 
-use crate::agent::config::DocContext;
-use crate::agent::state::WorkerState;
+use crate::config::DocContext;
+use crate::state::WorkerState;
 
 use super::super::ToolResult;
 use super::collect_subtree;
@@ -61,8 +61,8 @@ pub fn grep(pattern: &str, ctx: &DocContext, state: &WorkerState) -> ToolResult 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::agent::config::DocContext;
-    use crate::agent::state::WorkerState;
+    use crate::config::DocContext;
+    use crate::state::WorkerState;
     use vectorless_document::{ChildRoute, DocumentTree, NavigationIndex, NodeId};
 
     fn build_rich_tree() -> (DocumentTree, NavigationIndex, NodeId) {
@@ -167,7 +167,7 @@ mod tests {
         let ctx = rich_ctx!(tree, nav);
         let mut state = WorkerState::new(root, 15);
 
-        crate::agent::tools::worker::cd::cd("Expenses", &ctx, &mut state);
+        crate::tools::worker::cd::cd("Expenses", &ctx, &mut state);
         let result = grep("revenue", &ctx, &state);
         assert!(result.success);
         assert!(result.feedback.contains("No matches"));

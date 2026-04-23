@@ -10,7 +10,7 @@ use tracing::{debug, info, warn};
 use vectorless_error::Result;
 
 use super::{AccessPattern, IndexStage, StageResult, async_trait};
-use crate::index::pipeline::IndexContext;
+use crate::pipeline::IndexContext;
 
 /// Maximum allowed tree depth.
 const MAX_DEPTH: usize = 20;
@@ -299,8 +299,8 @@ mod tests {
     use vectorless_document::DocumentTree;
 
     fn make_context_with_tree(tree: DocumentTree) -> IndexContext {
-        let input = crate::index::IndexInput::content("test");
-        let options = crate::index::config::PipelineOptions::default();
+        let input = crate::IndexInput::content("test");
+        let options = crate::config::PipelineOptions::default();
         let mut ctx = IndexContext::new(input, options);
         ctx.tree = Some(tree);
         ctx
@@ -352,8 +352,8 @@ mod tests {
 
     #[test]
     fn test_validate_no_tree_error() {
-        let input = crate::index::IndexInput::content("test");
-        let options = crate::index::config::PipelineOptions::default();
+        let input = crate::IndexInput::content("test");
+        let options = crate::config::PipelineOptions::default();
         let ctx = IndexContext::new(input, options);
 
         let stage = ValidateStage::new();

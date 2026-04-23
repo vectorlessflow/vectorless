@@ -43,7 +43,7 @@ pub async fn analyze(
     query: &str,
     ws: &WorkspaceContext<'_>,
     state: &mut OrchestratorState,
-    emitter: &crate::agent::EventEmitter,
+    emitter: &crate::EventEmitter,
     skip_analysis: bool,
     query_plan: &QueryPlan,
     llm: &LlmClient,

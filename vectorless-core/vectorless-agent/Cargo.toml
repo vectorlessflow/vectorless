@@ -13,6 +13,7 @@ vectorless-document = { path = "../vectorless-document" }
 vectorless-error = { path = "../vectorless-error" }
 vectorless-llm = { path = "../vectorless-llm" }
 vectorless-query = { path = "../vectorless-query" }
+vectorless-rerank = { path = "../vectorless-rerank" }
 vectorless-scoring = { path = "../vectorless-scoring" }
 tokio = { workspace = true }
 async-trait = { workspace = true }
@@ -22,6 +23,7 @@ tracing = { workspace = true }
 futures = { workspace = true }
 chrono = { workspace = true }
 thiserror = { workspace = true }
+regex = { workspace = true }
 
 [lints]
 workspace = true

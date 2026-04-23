@@ -3,7 +3,7 @@
 
 //! `find_tree` — search for nodes by title pattern across the entire tree.
 
-use crate::agent::config::DocContext;
+use crate::config::DocContext;
 
 use super::super::ToolResult;
 
@@ -43,7 +43,7 @@ pub fn find_tree(pattern: &str, ctx: &DocContext) -> ToolResult {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::agent::config::DocContext;
+    use crate::config::DocContext;
     use vectorless_document::{ChildRoute, DocumentTree, NavigationIndex, NodeId};
 
     fn build_rich_tree() -> (DocumentTree, NavigationIndex, NodeId) {

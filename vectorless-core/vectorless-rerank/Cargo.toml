@@ -10,8 +10,8 @@ homepage.workspace = true
 
 [dependencies]
 serde = { workspace = true }
+serde_json = { workspace = true }
 tracing = { workspace = true }
-vectorless-agent = { path = "../vectorless-agent" }
 vectorless-error = { path = "../vectorless-error" }
 vectorless-query = { path = "../vectorless-query" }
 

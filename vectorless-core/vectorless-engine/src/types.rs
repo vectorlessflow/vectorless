@@ -253,64 +253,10 @@ impl IndexItem {
 }
 
 // ============================================================
-// Query Types
+// Query Types — re-exported from retrieval crate
 // ============================================================
 
-/// A single piece of evidence with source attribution.
-#[derive(Debug, Clone)]
-pub struct EvidenceItem {
-    /// Section title where this evidence was found.
-    pub title: String,
-    /// Navigation path (e.g., "Root/Chapter 1/Section 1.2").
-    pub path: String,
-    /// Raw evidence content.
-    pub content: String,
-    /// Source document name (set in multi-doc scenarios).
-    pub doc_name: Option<String>,
-}
-
-/// Query execution metrics.
-#[derive(Debug, Clone, Default)]
-pub struct QueryMetrics {
-    /// Number of LLM calls made.
-    pub llm_calls: u32,
-    /// Number of navigation rounds used.
-    pub rounds_used: u32,
-    /// Number of distinct nodes visited.
-    pub nodes_visited: usize,
-    /// Number of evidence items collected.
-    pub evidence_count: usize,
-    /// Total characters of collected evidence.
-    pub evidence_chars: usize,
-}
-
-/// Confidence score of the query result (0.0–1.0).
-///
-/// Derived from LLM evaluate() — whether evidence was deemed sufficient
-/// and how many replan rounds were needed.
-pub type Confidence = f32;
-
-/// A single document's query result.
-#[derive(Debug, Clone)]
-pub struct QueryResultItem {
-    /// The document ID.
-    pub doc_id: String,
-
-    /// Matching node IDs (navigation paths).
-    pub node_ids: Vec<String>,
-
-    /// Synthesized answer or raw evidence content.
-    pub content: String,
-
-    /// Evidence items that contributed to this result, with source attribution.
-    pub evidence: Vec<EvidenceItem>,
-
-    /// Execution metrics for this query.
-    pub metrics: Option<QueryMetrics>,
-
-    /// Confidence score (0.0–1.0) — derived from LLM evaluation.
-    pub confidence: Confidence,
-}
+pub use vectorless_retrieval::{Confidence, EvidenceItem, QueryMetrics, QueryResultItem};
 
 /// Result of a document query.
 ///

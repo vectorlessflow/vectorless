@@ -29,13 +29,13 @@
 //! ```
 
 mod client;
-pub(crate) mod config;
+pub mod config;
 mod error;
 mod executor;
 mod fallback;
-pub(crate) mod memo;
+pub mod memo;
 mod pool;
-pub(crate) mod throttle;
+pub mod throttle;
 
 pub use client::LlmClient;
 pub use error::LlmResult;

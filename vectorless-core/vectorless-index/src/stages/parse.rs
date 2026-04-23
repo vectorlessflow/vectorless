@@ -11,8 +11,8 @@ use vectorless_document::DocumentFormat;
 use vectorless_error::Result;
 
 use super::{IndexStage, StageResult};
-use crate::index::IndexMode;
-use crate::index::pipeline::{IndexContext, IndexInput};
+use crate::IndexMode;
+use crate::pipeline::{IndexContext, IndexInput};
 
 /// Parse stage - extracts raw nodes from documents.
 pub struct ParseStage {
@@ -99,7 +99,7 @@ impl IndexStage for ParseStage {
                 debug!("[parse] Reading file: {:?}", ctx.source_path);
 
                 // Parse directly
-                crate::index::parse::parse_file(&path, format, self.llm_client.clone()).await?
+                crate::parse::parse_file(&path, format, self.llm_client.clone()).await?
             }
             IndexInput::Content {
                 content,
@@ -112,7 +112,7 @@ impl IndexStage for ParseStage {
                 debug!("[parse] Parsing inline content ({} chars)", content.len());
 
                 // Parse content directly
-                crate::index::parse::parse_content(content, *format, self.llm_client.clone())
+                crate::parse::parse_content(content, *format, self.llm_client.clone())
                     .await?
             }
             IndexInput::Bytes { data, name, format } => {
@@ -122,7 +122,7 @@ impl IndexStage for ParseStage {
                 debug!("[parse] Parsing bytes ({} bytes)", data.len());
 
                 // Parse bytes
-                crate::index::parse::parse_bytes(data, *format, self.llm_client.clone()).await?
+                crate::parse::parse_bytes(data, *format, self.llm_client.clone()).await?
             }
         };
 

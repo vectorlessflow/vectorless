@@ -4,7 +4,7 @@
 //! Orchestrator tools: ls_docs, find_cross, dispatch.
 
 use super::ToolResult;
-use crate::agent::config::WorkspaceContext;
+use crate::config::WorkspaceContext;
 
 /// Execute `ls_docs` — list all document cards.
 ///
@@ -160,13 +160,13 @@ mod tests {
     fn test_ls_docs_shows_cards() {
         let (trees, navs, ridxs) = build_workspace();
         let docs = vec![
-            crate::agent::config::DocContext {
+            crate::config::DocContext {
                 tree: &trees[0],
                 nav_index: &navs[0],
                 reasoning_index: &ridxs[0],
                 doc_name: "2024",
             },
-            crate::agent::config::DocContext {
+            crate::config::DocContext {
                 tree: &trees[1],
                 nav_index: &navs[1],
                 reasoning_index: &ridxs[1],
@@ -188,7 +188,7 @@ mod tests {
         let tree = vectorless_document::DocumentTree::new("Empty", "");
         let nav = NavigationIndex::new();
         let ridx = ReasoningIndex::default();
-        let docs = vec![crate::agent::config::DocContext {
+        let docs = vec![crate::config::DocContext {
             tree: &tree,
             nav_index: &nav,
             reasoning_index: &ridx,

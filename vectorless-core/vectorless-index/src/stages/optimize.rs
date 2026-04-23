@@ -9,7 +9,7 @@ use tracing::{debug, info};
 
 use vectorless_document::NodeId;
 use vectorless_error::Result;
-use crate::index::pipeline::IndexContext;
+use crate::pipeline::IndexContext;
 
 use super::{IndexStage, StageResult};
 
@@ -30,7 +30,7 @@ impl OptimizeStage {
     fn merge_small_leaves(
         tree: &mut vectorless_document::DocumentTree,
         min_tokens: usize,
-        metrics: &mut crate::index::IndexMetrics,
+        metrics: &mut crate::IndexMetrics,
     ) -> usize {
         let mut merged_count = 0;
 
@@ -243,9 +243,9 @@ impl IndexStage for OptimizeStage {
 mod tests {
     use super::*;
     use vectorless_document::DocumentTree;
-    use crate::index::PipelineOptions;
-    use crate::index::pipeline::IndexContext;
-    use crate::index::pipeline::IndexInput;
+    use crate::PipelineOptions;
+    use crate::pipeline::IndexContext;
+    use crate::pipeline::IndexInput;
 
     /// Create a tree with small leaf children under root for merge tests.
     ///
@@ -286,7 +286,7 @@ mod tests {
     fn test_merge_small_leaves_merges_adjacent_pair() {
         let mut tree = make_merge_test_tree();
         let root = tree.root();
-        let mut metrics = crate::index::pipeline::IndexMetrics::new();
+        let mut metrics = crate::pipeline::IndexMetrics::new();
 
         // Threshold 100: Leaf A (50) and Leaf B (30) should merge
         let merged = OptimizeStage::merge_small_leaves(&mut tree, 100, &mut metrics);
@@ -307,7 +307,7 @@ mod tests {
     #[test]
     fn test_merge_small_leaves_nothing_above_threshold() {
         let mut tree = make_merge_test_tree();
-        let mut metrics = crate::index::pipeline::IndexMetrics::new();
+        let mut metrics = crate::pipeline::IndexMetrics::new();
 
         // Threshold 10: all leaves are above this, nothing merges
         let merged = OptimizeStage::merge_small_leaves(&mut tree, 10, &mut metrics);
@@ -327,7 +327,7 @@ mod tests {
             n.token_count = Some(5);
         }
 
-        let mut metrics = crate::index::pipeline::IndexMetrics::new();
+        let mut metrics = crate::pipeline::IndexMetrics::new();
         let _ = OptimizeStage::merge_small_leaves(&mut tree, 100, &mut metrics);
 
         // Leaf A should now contain both contents with heading prefix
@@ -355,7 +355,7 @@ mod tests {
             n.token_count = Some(5);
         }
 
-        let mut metrics = crate::index::pipeline::IndexMetrics::new();
+        let mut metrics = crate::pipeline::IndexMetrics::new();
         let merged = OptimizeStage::merge_small_leaves(&mut tree, 100, &mut metrics);
 
         // Section is non-leaf, only Leaf is a leaf — no adjacent pair of leaves
@@ -447,7 +447,7 @@ mod tests {
     #[test]
     fn test_merge_small_leaves_empty_tree() {
         let mut tree = DocumentTree::new("Root", "");
-        let mut metrics = crate::index::pipeline::IndexMetrics::new();
+        let mut metrics = crate::pipeline::IndexMetrics::new();
 
         let merged = OptimizeStage::merge_small_leaves(&mut tree, 100, &mut metrics);
         assert_eq!(merged, 0, "Root with no children should merge nothing");

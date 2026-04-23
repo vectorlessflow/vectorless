@@ -5,7 +5,7 @@
 
 use std::collections::HashSet;
 
-use vectorless_agent::Evidence;
+use crate::types::Evidence;
 
 /// Minimum characters for an evidence item to be considered meaningful.
 const MIN_EVIDENCE_CHARS: usize = 50;

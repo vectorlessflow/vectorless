@@ -869,7 +869,7 @@ struct ParallelEntry {
     /// Failure policy (captured before swap).
     policy: FailurePolicy,
     /// Access pattern (captured before swap).
-    access: crate::index::stages::AccessPattern,
+    access: crate::stages::AccessPattern,
 }
 
 /// Builder for creating custom stage configurations.

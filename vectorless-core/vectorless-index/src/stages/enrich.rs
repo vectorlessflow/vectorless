@@ -11,7 +11,7 @@ use vectorless_document::{DocumentTree, NodeId, ReferenceExtractor, TocView};
 use vectorless_error::Result;
 
 use super::{AccessPattern, IndexStage, StageResult};
-use crate::index::pipeline::IndexContext;
+use crate::pipeline::IndexContext;
 
 /// Enrich stage - adds metadata to the tree.
 pub struct EnrichStage;

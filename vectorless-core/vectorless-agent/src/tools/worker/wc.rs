@@ -3,9 +3,9 @@
 
 //! `wc` — show node content statistics.
 
-use crate::agent::command;
-use crate::agent::config::DocContext;
-use crate::agent::state::WorkerState;
+use crate::command;
+use crate::config::DocContext;
+use crate::state::WorkerState;
 
 use super::super::ToolResult;
 
@@ -42,8 +42,8 @@ pub fn wc(target: &str, ctx: &DocContext, state: &WorkerState) -> ToolResult {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::agent::config::DocContext;
-    use crate::agent::state::WorkerState;
+    use crate::config::DocContext;
+    use crate::state::WorkerState;
     use vectorless_document::{ChildRoute, DocumentTree, NavigationIndex, NodeId};
 
     fn build_rich_tree() -> (DocumentTree, NavigationIndex, NodeId) {

@@ -11,14 +11,14 @@ use tracing::{debug, info, warn};
 
 use vectorless_document::NodeId;
 use vectorless_error::Result;
-use crate::index::incremental;
+use crate::incremental;
 use vectorless_llm::LlmClient;
 use vectorless_llm::memo::{MemoKey, MemoStore};
 use vectorless_utils::fingerprint::Fingerprint;
 
 use super::{IndexStage, StageResult};
-use crate::index::pipeline::{FailurePolicy, IndexContext, StageRetryConfig};
-use crate::index::summary::{LlmSummaryGenerator, SummaryGenerator, SummaryStrategy};
+use crate::pipeline::{FailurePolicy, IndexContext, StageRetryConfig};
+use crate::summary::{LlmSummaryGenerator, SummaryGenerator, SummaryStrategy};
 
 /// A node that needs LLM summary generation.
 struct PendingNode {

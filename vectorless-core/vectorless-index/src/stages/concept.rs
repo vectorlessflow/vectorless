@@ -14,7 +14,7 @@ use vectorless_llm::LlmClient;
 
 use super::async_trait;
 use super::{AccessPattern, IndexStage, StageResult};
-use crate::index::pipeline::IndexContext;
+use crate::pipeline::IndexContext;
 
 /// Maximum number of top keywords to send to the LLM for concept extraction.
 const MAX_TOPICS: usize = 20;

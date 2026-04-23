@@ -3,7 +3,7 @@
 
 //! `pwd` — show current navigation path.
 
-use crate::agent::state::WorkerState;
+use crate::state::WorkerState;
 
 use super::super::ToolResult;
 
@@ -15,8 +15,8 @@ pub fn pwd(state: &WorkerState) -> ToolResult {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::agent::config::DocContext;
-    use crate::agent::tools::worker::cd::cd;
+    use crate::config::DocContext;
+    use crate::tools::worker::cd::cd;
     use vectorless_document::{ChildRoute, DocumentTree, NavigationIndex};
 
     fn build_test_tree() -> (DocumentTree, NavigationIndex) {

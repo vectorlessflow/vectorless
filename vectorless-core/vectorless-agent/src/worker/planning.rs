@@ -517,9 +517,9 @@ fn build_sibling_hints(state: &WorkerState, ctx: &DocContext<'_>) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::agent::config::DocContext;
-    use crate::agent::config::Evidence;
-    use crate::agent::state::WorkerState;
+    use crate::config::DocContext;
+    use crate::config::Evidence;
+    use crate::state::WorkerState;
     use vectorless_document::{ChildRoute, NavEntry, NodeId};
     use vectorless_scoring::bm25::extract_keywords;
 

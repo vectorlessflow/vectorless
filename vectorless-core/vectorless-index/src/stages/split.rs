@@ -11,8 +11,8 @@ use vectorless_error::Result;
 use vectorless_utils::estimate_tokens;
 
 use super::{AccessPattern, IndexStage, StageResult, async_trait};
-use crate::index::config::SplitConfig;
-use crate::index::pipeline::IndexContext;
+use crate::config::SplitConfig;
+use crate::pipeline::IndexContext;
 
 /// Split stage — breaks oversized leaf nodes into smaller children.
 ///

@@ -22,7 +22,7 @@ use vectorless_error::Result;
 
 use super::async_trait;
 use super::{AccessPattern, IndexStage, StageResult};
-use crate::index::pipeline::IndexContext;
+use crate::pipeline::IndexContext;
 
 /// Navigation Index Stage — builds the Agent navigation index.
 ///
@@ -392,8 +392,8 @@ mod tests {
 
         // Build context with the tree
         let mut ctx = IndexContext::new(
-            crate::index::pipeline::IndexInput::content("test"),
-            crate::index::config::PipelineOptions::default(),
+            crate::pipeline::IndexInput::content("test"),
+            crate::config::PipelineOptions::default(),
         );
         ctx.tree = Some(tree);
 
@@ -440,8 +440,8 @@ mod tests {
         let tree = DocumentTree::new("Root", "content");
 
         let mut ctx = IndexContext::new(
-            crate::index::pipeline::IndexInput::content("test"),
-            crate::index::config::PipelineOptions::default(),
+            crate::pipeline::IndexInput::content("test"),
+            crate::config::PipelineOptions::default(),
         );
         ctx.tree = Some(tree);
 
@@ -459,8 +459,8 @@ mod tests {
     #[tokio::test]
     async fn test_execute_no_tree() {
         let ctx = IndexContext::new(
-            crate::index::pipeline::IndexInput::content("test"),
-            crate::index::config::PipelineOptions::default(),
+            crate::pipeline::IndexInput::content("test"),
+            crate::config::PipelineOptions::default(),
         );
         // ctx.tree is None
 

@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 use vectorless_document::{Concept, DocumentTree, NavigationIndex, NodeId, ReasoningIndex};
-use crate::index::parse::{DocumentFormat, RawNode};
+use crate::parse::{DocumentFormat, RawNode};
 use vectorless_llm::LlmClient;
 
 use super::super::{PipelineOptions, SummaryStrategy};

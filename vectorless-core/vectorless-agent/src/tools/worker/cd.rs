@@ -3,9 +3,9 @@
 
 //! `cd`, `cd_absolute`, `cd_up` — navigation commands.
 
-use crate::agent::command;
-use crate::agent::config::DocContext;
-use crate::agent::state::WorkerState;
+use crate::command;
+use crate::config::DocContext;
+use crate::state::WorkerState;
 
 use super::super::ToolResult;
 

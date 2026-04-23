@@ -7,7 +7,7 @@ use tracing::{info, warn};
 
 use super::{AccessPattern, IndexStage};
 use vectorless_error::{Error, Result};
-use crate::index::pipeline::{IndexContext, StageResult};
+use crate::pipeline::{IndexContext, StageResult};
 use super::async_trait;
 
 /// Verification stage — ensures ingest produced reliable output.

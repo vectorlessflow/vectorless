@@ -3,9 +3,9 @@
 
 //! `head` — preview first N lines of a node without collecting evidence.
 
-use crate::agent::command;
-use crate::agent::config::DocContext;
-use crate::agent::state::WorkerState;
+use crate::command;
+use crate::config::DocContext;
+use crate::state::WorkerState;
 
 use super::super::ToolResult;
 
@@ -53,8 +53,8 @@ pub fn head(target: &str, lines: usize, ctx: &DocContext, state: &WorkerState) -
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::agent::config::DocContext;
-    use crate::agent::state::WorkerState;
+    use crate::config::DocContext;
+    use crate::state::WorkerState;
     use vectorless_document::{ChildRoute, DocumentTree, NavigationIndex, NodeId};
 
     fn build_rich_tree() -> (DocumentTree, NavigationIndex, NodeId) {

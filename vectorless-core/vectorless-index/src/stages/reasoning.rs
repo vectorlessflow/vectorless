@@ -21,7 +21,7 @@ use vectorless_scoring::extract_keywords;
 
 use super::async_trait;
 use super::{AccessPattern, IndexStage, StageResult};
-use crate::index::pipeline::IndexContext;
+use crate::pipeline::IndexContext;
 
 /// Reasoning Index Stage - builds a pre-computed reasoning index from the document tree.
 ///

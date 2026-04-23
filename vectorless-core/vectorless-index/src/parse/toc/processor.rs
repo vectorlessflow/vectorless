@@ -11,7 +11,7 @@ use futures::stream::{self, StreamExt};
 use tracing::{debug, info, warn};
 
 use vectorless_error::Result;
-use crate::index::parse::pdf::PdfPage;
+use crate::parse::pdf::PdfPage;
 use vectorless_llm::LlmClient;
 
 use super::assigner::{PageAssigner, PageAssignerConfig};

@@ -9,12 +9,12 @@ use tracing::{debug, info};
 
 use vectorless_document::{DocumentTree, NodeId};
 use vectorless_error::Result;
-use crate::index::parse::RawNode;
+use crate::parse::RawNode;
 use vectorless_utils::estimate_tokens;
 
 use super::{IndexStage, StageResult};
-use crate::index::ThinningConfig;
-use crate::index::pipeline::IndexContext;
+use crate::ThinningConfig;
+use crate::pipeline::IndexContext;
 
 /// Build stage - constructs a tree from raw nodes.
 pub struct BuildStage;

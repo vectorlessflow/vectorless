@@ -3,8 +3,8 @@
 
 //! `ls` — list children of the current node.
 
-use crate::agent::config::DocContext;
-use crate::agent::state::WorkerState;
+use crate::config::DocContext;
+use crate::state::WorkerState;
 
 use super::super::ToolResult;
 

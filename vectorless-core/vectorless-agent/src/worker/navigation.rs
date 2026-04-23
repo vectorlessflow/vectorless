@@ -277,8 +277,8 @@ async fn handle_replan(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::agent::config::DocContext;
-    use crate::agent::state::WorkerState;
+    use crate::config::DocContext;
+    use crate::state::WorkerState;
     use vectorless_document::{DocumentTree, NodeId};
 
     fn test_ctx() -> (DocumentTree, NodeId) {

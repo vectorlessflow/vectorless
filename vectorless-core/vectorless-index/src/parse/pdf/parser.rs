@@ -14,11 +14,11 @@ use tracing::{info, warn};
 
 use vectorless_error::Error;
 use vectorless_error::Result;
-use crate::index::parse::toc::TocProcessor;
+use crate::parse::toc::TocProcessor;
 use vectorless_llm::LlmClient;
 
 use super::types::{PdfMetadata, PdfPage, PdfParseResult};
-use crate::index::parse::{DocumentFormat, DocumentMeta, ParseResult, RawNode};
+use crate::parse::{DocumentFormat, DocumentMeta, ParseResult, RawNode};
 
 /// PDF document parser.
 pub struct PdfParser {
@@ -192,7 +192,7 @@ impl PdfParser {
     /// Convert TOC entries to RawNodes.
     fn toc_entries_to_raw_nodes(
         &self,
-        entries: &[crate::index::parse::toc::TocEntry],
+        entries: &[crate::parse::toc::TocEntry],
         pages: &[PdfPage],
     ) -> Vec<RawNode> {
         let mut nodes = Vec::new();
@@ -217,7 +217,7 @@ impl PdfParser {
     /// Get content for a TOC entry from pages.
     fn get_content_for_entry(
         &self,
-        entry: &crate::index::parse::toc::TocEntry,
+        entry: &crate::parse::toc::TocEntry,
         pages: &[PdfPage],
     ) -> String {
         let start_page = entry.physical_page.unwrap_or(1);

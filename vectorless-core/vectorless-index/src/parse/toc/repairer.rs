@@ -7,7 +7,7 @@ use futures::stream::{self, StreamExt};
 use tracing::{debug, info};
 
 use vectorless_error::Result;
-use crate::index::parse::pdf::PdfPage;
+use crate::parse::pdf::PdfPage;
 use vectorless_llm::config::LlmConfig;
 
 use super::types::{TocEntry, VerificationError, VerificationReport};
