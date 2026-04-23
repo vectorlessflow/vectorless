@@ -109,6 +109,7 @@ pub use vectorless_document::DocumentFormat;
 // ============================================================
 
 pub use vectorless_config::Config;
+pub use vectorless_document::DocumentTree;
 pub use vectorless_document::{
     Answer, Concept, DocumentInfo, Evidence, IngestInput, ReasoningTrace, TraceStep,
 };
@@ -118,4 +119,3 @@ pub use vectorless_graph::{
     DocumentGraph, DocumentGraphNode, EdgeEvidence, GraphEdge, WeightedKeyword,
 };
 pub use vectorless_metrics::{LlmMetricsReport, MetricsReport, RetrievalMetricsReport};
-pub use vectorless_document::DocumentTree;

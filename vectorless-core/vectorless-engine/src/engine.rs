@@ -705,7 +705,9 @@ impl Engine {
                 enable_synonym_expansion: options.enable_synonym_expansion,
                 ..ReasoningIndexConfig::default()
             },
-            concurrency: vectorless_llm::throttle::ConcurrencyConfig::from(&self.config.llm.throttle),
+            concurrency: vectorless_llm::throttle::ConcurrencyConfig::from(
+                &self.config.llm.throttle,
+            ),
             ..Default::default()
         }
     }

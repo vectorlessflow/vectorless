@@ -11,7 +11,6 @@ mod storage;
 
 use serde::{Deserialize, Serialize};
 
-pub use vectorless_graph::DocumentGraphConfig;
 pub use indexer::IndexerConfig;
 pub use llm_pool::{
     FallbackBehavior, FallbackConfig, LlmConfig, OnAllFailedBehavior, RetryConfig, SlotConfig,
@@ -20,6 +19,7 @@ pub use llm_pool::{
 pub use metrics::{LlmMetricsConfig, MetricsConfig, RetrievalMetricsConfig};
 pub use retrieval::RetrievalConfig;
 pub use storage::{CompressionAlgorithm, StorageConfig};
+pub use vectorless_graph::DocumentGraphConfig;
 
 /// Main configuration for vectorless.
 ///
