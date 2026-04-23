@@ -10,7 +10,7 @@ import json
 import logging
 from typing import Optional
 
-from vectorless.ask.types import WorkerEvidence
+from vectorless.ask.types import Evidence
 from vectorless.llm_client import LLMClient
 from vectorless.ask.plan import QueryIntent
 
@@ -21,14 +21,14 @@ MIN_KEEP_COUNT = 1
 
 
 async def filter_by_quality(
-    evidence: list[WorkerEvidence],
+    evidence: list[Evidence],
     query: str,
     intent: QueryIntent,
     llm: LLMClient,
     *,
     confidence: float = 0.0,
     min_relevance: float = 0.4,
-) -> list[WorkerEvidence]:
+) -> list[Evidence]:
     """Filter evidence by LLM-judged relevance to the query.
 
     For small evidence sets (≤3), skip LLM evaluation — all evidence is kept.
@@ -94,9 +94,8 @@ def _quality_system_prompt(intent: QueryIntent) -> str:
     intent_desc = {
         QueryIntent.FACTUAL: "a factual question seeking specific information",
         QueryIntent.ANALYTICAL: "an analytical question requiring reasoning across multiple sections",
-        QueryIntent.COMPARATIVE: "a comparative question requiring contrast between items",
-        QueryIntent.PROCEDURAL: "a procedural question about how to do something",
-        QueryIntent.EXPLORATORY: "an exploratory question seeking overview or context",
+        QueryIntent.NAVIGATIONAL: "a navigational question seeking where to find information",
+        QueryIntent.SUMMARY: "a summary question seeking a broad overview",
     }.get(intent, "a question")
 
     return f"""You are an evidence quality evaluator. The user asked {intent_desc}.
@@ -113,14 +112,14 @@ Respond with a JSON object: {{"scores": [0.8, 0.3, ...]}}
 One score per evidence item, in order. Scores array length must match evidence count."""
 
 
-def _quality_user_prompt(query: str, evidence: list[WorkerEvidence]) -> str:
+def _quality_user_prompt(query: str, evidence: list[Evidence]) -> str:
     items = []
     for i, ev in enumerate(evidence):
         # Truncate long evidence for the prompt
         content = ev.content
         if len(content) > 300:
             content = content[:300] + "..."
-        items.append(f"[{i}] {ev.title}\n{content}")
+        items.append(f"[{i}] {ev.node_title}\n{content}")
 
     return f"""Question: {query}
 
