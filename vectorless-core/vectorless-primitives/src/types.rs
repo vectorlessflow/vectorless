@@ -146,3 +146,42 @@ pub struct SimilarResult {
     /// Keywords shared with the reference node.
     pub shared_keywords: Vec<String>,
 }
+
+/// One top-level section in a [`DocCardInfo`].
+#[derive(Debug, Clone)]
+pub struct SectionCardInfo {
+    /// Section title.
+    pub title: String,
+    /// One-sentence description of this section.
+    pub description: String,
+    /// Number of leaf nodes in this section's subtree.
+    pub leaf_count: usize,
+}
+
+/// Document-level overview card.
+#[derive(Debug, Clone)]
+pub struct DocCardInfo {
+    /// Document title.
+    pub title: String,
+    /// Document overview summary.
+    pub overview: String,
+    /// Questions this document can answer.
+    pub question_hints: Vec<String>,
+    /// Topic keywords.
+    pub topic_tags: Vec<String>,
+    /// Top-level section summaries.
+    pub sections: Vec<SectionCardInfo>,
+    /// Total leaf nodes in the document.
+    pub total_leaves: usize,
+}
+
+/// A key concept extracted from the document.
+#[derive(Debug, Clone)]
+pub struct ConceptInfo {
+    /// Concept name (e.g., "capacitor derating").
+    pub name: String,
+    /// One-sentence explanation.
+    pub summary: String,
+    /// Which sections this concept appears in.
+    pub sections: Vec<String>,
+}

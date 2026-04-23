@@ -153,6 +153,19 @@ def parse_command(llm_output: str) -> Command:
     elif cmd == "summarize":
         target = _strip_quotes(" ".join(parts[1:])) if len(parts) > 1 else ""
         return Command(kind="summarize", target=target)
+    elif cmd == "siblings":
+        target = _strip_quotes(" ".join(parts[1:])) if len(parts) > 1 else ""
+        return Command(kind="siblings", target=target)
+    elif cmd == "ancestors":
+        target = _strip_quotes(" ".join(parts[1:])) if len(parts) > 1 else ""
+        return Command(kind="ancestors", target=target)
+    elif cmd in ("doc_card", "card"):
+        return Command(kind="doc_card")
+    elif cmd == "concepts":
+        return Command(kind="concepts")
+    elif cmd == "find_section":
+        target = _strip_quotes(" ".join(parts[1:])) if len(parts) > 1 else ""
+        return Command(kind="find_section", target=target)
     else:
         return Command(kind="ls")  # fallback: re-observe
 
@@ -723,6 +736,103 @@ async def _execute_command(
             state.last_feedback = f"summarize error: {e}"
         return Step(kind="continue")
 
+    elif kind == "siblings":
+        node_id = await _resolve_target(doc, command.target, state)
+        if node_id is None:
+            state.last_feedback = f"Node '{command.target}' not found."
+            return Step(kind="continue")
+        try:
+            siblings = await doc.siblings(node_id)
+            if not siblings:
+                state.last_feedback = "(no sibling nodes)"
+            else:
+                lines = ["Sibling nodes:"]
+                for s in siblings:
+                    lines.append(
+                        f"  - {s.title} (depth {s.depth}, {s.leaf_count} leaves)"
+                    )
+                state.last_feedback = "\n".join(lines)
+        except Exception as e:
+            state.last_feedback = f"siblings error: {e}"
+        return Step(kind="continue")
+
+    elif kind == "ancestors":
+        node_id = await _resolve_target(doc, command.target, state)
+        if node_id is None:
+            state.last_feedback = f"Node '{command.target}' not found."
+            return Step(kind="continue")
+        try:
+            ancestors = await doc.ancestors(node_id)
+            if not ancestors:
+                state.last_feedback = "(at root, no ancestors)"
+            else:
+                lines = ["Path from root:"]
+                for a in ancestors:
+                    lines.append(
+                        f"  {'  ' * a.depth}→ {a.title} (depth {a.depth}, {a.child_count} children)"
+                    )
+                state.last_feedback = "\n".join(lines)
+        except Exception as e:
+            state.last_feedback = f"ancestors error: {e}"
+        return Step(kind="continue")
+
+    elif kind == "doc_card":
+        try:
+            card = await doc.doc_card()
+            if card is None:
+                state.last_feedback = "(no document card available)"
+            else:
+                lines = [
+                    f"Document: {card.title}",
+                    f"Overview: {card.overview}",
+                    f"Total leaves: {card.total_leaves}",
+                ]
+                if card.question_hints:
+                    lines.append(f"Can answer: {', '.join(card.question_hints[:5])}")
+                if card.topic_tags:
+                    lines.append(f"Topics: {', '.join(card.topic_tags[:5])}")
+                if card.sections:
+                    lines.append("Top-level sections:")
+                    for s in card.sections:
+                        lines.append(f"  - {s.title}: {s.description} ({s.leaf_count} leaves)")
+                state.last_feedback = "\n".join(lines)
+        except Exception as e:
+            state.last_feedback = f"doc_card error: {e}"
+        return Step(kind="continue")
+
+    elif kind == "concepts":
+        try:
+            concepts = await doc.concepts()
+            if not concepts:
+                state.last_feedback = "(no concepts extracted)"
+            else:
+                lines = ["Key concepts:"]
+                for c in concepts:
+                    sections = ", ".join(c.sections[:3])
+                    lines.append(f"  - {c.name}: {c.summary} (in: {sections})")
+                state.last_feedback = "\n".join(lines)
+        except Exception as e:
+            state.last_feedback = f"concepts error: {e}"
+        return Step(kind="continue")
+
+    elif kind == "find_section":
+        title = command.target
+        if not title:
+            state.last_feedback = "Usage: find_section <title>"
+            return Step(kind="continue")
+        try:
+            result = await doc.find_section(title)
+            if result is None:
+                state.last_feedback = f"No section with title '{title}'."
+            else:
+                state.last_feedback = (
+                    f"Found: {result.title} (id={result.node_id}, "
+                    f"depth {result.depth}, {result.leaf_count} leaves)"
+                )
+        except Exception as e:
+            state.last_feedback = f"find_section error: {e}"
+        return Step(kind="continue")
+
     elif kind == "check":
         evidence_text = state.evidence_for_check()
         system, user = check_sufficiency(query, evidence_text)
@@ -892,6 +1002,7 @@ class Worker:
                     f'"{raw_preview}"\n\n'
                     f"Please output exactly one command "
                     f"(ls, cd, cat, head, find, grep, toc, stats, similar, overview, "
+                    f"siblings, ancestors, doc_card, concepts, find_section, "
                     f"compare, trace, summarize, wc, pwd, check, or done)."
                 )
                 state.push_history("(unrecognized) → parse failure")

@@ -12,7 +12,7 @@ import logging
 from pathlib import Path
 from typing import Any, Callable, List, Optional, Union
 
-from vectorless._core import Engine as RustEngine
+from vectorless._internal._core import Engine as RustEngine
 from vectorless.ask.orchestrator import DocCard, Orchestrator, OrchestratorResult
 from vectorless.config import EngineConfig, load_config, load_config_from_env, load_config_from_file
 from vectorless.events import (

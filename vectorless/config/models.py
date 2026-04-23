@@ -6,7 +6,7 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 
-from vectorless._core import Config as RustConfig
+from vectorless._internal._core import Config as RustConfig
 
 
 class ThrottleConfig(BaseModel):

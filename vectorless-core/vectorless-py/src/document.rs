@@ -10,8 +10,9 @@ use pyo3_async_runtimes::tokio::future_into_py;
 use tokio::sync::Mutex;
 
 use vectorless_primitives::{
-    CollectedEvidence, DocumentNavigator, FindResult, MatchResult, NodeInfo, NodeStats,
-    SectionSummaryInfo, SimilarResult, TocEntry, TopicEntryInfo, WordCount,
+    CollectedEvidence, ConceptInfo, DocCardInfo, DocumentNavigator, FindResult, MatchResult,
+    NodeInfo, NodeStats, SectionCardInfo, SectionSummaryInfo, SimilarResult, TocEntry,
+    TopicEntryInfo, WordCount,
 };
 
 use super::error::VectorlessError;
@@ -541,6 +542,74 @@ impl PyDocument {
             nav.section_overview(&node_id).await.map_err(to_py_err)
         })
     }
+
+    /// List sibling nodes at the same level as a given node.
+    fn siblings<'py>(
+        &self,
+        py: Python<'py>,
+        node_id: Option<String>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let nav = Arc::clone(&self.inner);
+        future_into_py(py, async move {
+            let nav = nav.lock().await;
+            nav.siblings(node_id.as_deref())
+                .await
+                .map(|v| v.into_iter().map(PyNodeInfo::from).collect::<Vec<_>>())
+                .map_err(to_py_err)
+        })
+    }
+
+    /// List ancestors from root to a given node, inclusive.
+    fn ancestors<'py>(
+        &self,
+        py: Python<'py>,
+        node_id: Option<String>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let nav = Arc::clone(&self.inner);
+        future_into_py(py, async move {
+            let nav = nav.lock().await;
+            nav.ancestors(node_id.as_deref())
+                .await
+                .map(|v| v.into_iter().map(PyNodeInfo::from).collect::<Vec<_>>())
+                .map_err(to_py_err)
+        })
+    }
+
+    /// Document-level overview card.
+    fn doc_card<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        let nav = Arc::clone(&self.inner);
+        future_into_py(py, async move {
+            let nav = nav.lock().await;
+            Ok(nav.doc_card().await.map(PyDocCard::from))
+        })
+    }
+
+    /// Key concepts extracted from the document.
+    fn concepts<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        let nav = Arc::clone(&self.inner);
+        future_into_py(py, async move {
+            let nav = nav.lock().await;
+            Ok(nav
+                .concepts()
+                .await
+                .into_iter()
+                .map(PyConceptInfo::from)
+                .collect::<Vec<_>>())
+        })
+    }
+
+    /// Find a section by exact title (case-insensitive).
+    fn find_section<'py>(
+        &self,
+        py: Python<'py>,
+        title: String,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let nav = Arc::clone(&self.inner);
+        future_into_py(py, async move {
+            let nav = nav.lock().await;
+            Ok(nav.find_section(&title).await.map(PyFindResult::from))
+        })
+    }
 }
 
 // =========================================================================
@@ -812,6 +881,85 @@ impl From<SimilarResult> for PySimilarResult {
             title: v.title,
             relevance: v.relevance,
             shared_keywords: v.shared_keywords,
+        }
+    }
+}
+
+/// A top-level section in a document card.
+#[pyclass(name = "SectionCard")]
+#[derive(Clone)]
+pub struct PySectionCard {
+    #[pyo3(get)]
+    pub title: String,
+    #[pyo3(get)]
+    pub description: String,
+    #[pyo3(get)]
+    pub leaf_count: usize,
+}
+
+impl From<SectionCardInfo> for PySectionCard {
+    fn from(v: SectionCardInfo) -> Self {
+        Self {
+            title: v.title,
+            description: v.description,
+            leaf_count: v.leaf_count,
+        }
+    }
+}
+
+/// Document-level overview card.
+#[pyclass(name = "DocCard")]
+#[derive(Clone)]
+pub struct PyDocCard {
+    #[pyo3(get)]
+    pub title: String,
+    #[pyo3(get)]
+    pub overview: String,
+    #[pyo3(get)]
+    pub question_hints: Vec<String>,
+    #[pyo3(get)]
+    pub topic_tags: Vec<String>,
+    #[pyo3(get)]
+    pub sections: Vec<PySectionCard>,
+    #[pyo3(get)]
+    pub total_leaves: usize,
+}
+
+impl From<DocCardInfo> for PyDocCard {
+    fn from(v: DocCardInfo) -> Self {
+        Self {
+            title: v.title,
+            overview: v.overview,
+            question_hints: v.question_hints,
+            topic_tags: v.topic_tags,
+            sections: v
+                .sections
+                .into_iter()
+                .map(PySectionCard::from)
+                .collect(),
+            total_leaves: v.total_leaves,
+        }
+    }
+}
+
+/// A key concept extracted from the document.
+#[pyclass(name = "ConceptInfo")]
+#[derive(Clone)]
+pub struct PyConceptInfo {
+    #[pyo3(get)]
+    pub name: String,
+    #[pyo3(get)]
+    pub summary: String,
+    #[pyo3(get)]
+    pub sections: Vec<String>,
+}
+
+impl From<ConceptInfo> for PyConceptInfo {
+    fn from(v: ConceptInfo) -> Self {
+        Self {
+            name: v.name,
+            summary: v.summary,
+            sections: v.sections,
         }
     }
 }

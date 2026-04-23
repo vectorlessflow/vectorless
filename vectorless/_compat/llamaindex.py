@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, List, Optional
 
-from vectorless._async_utils import run_async
+from vectorless._internal._async_utils import run_async
 from vectorless.engine import Engine
 
 

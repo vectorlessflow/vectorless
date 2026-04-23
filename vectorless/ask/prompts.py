@@ -60,6 +60,11 @@ Available commands:
 - grep_node <node> <pattern>  Regex search within a specific node
 - similar <name>    Find similar nodes by keyword overlap
 - overview <name>   Show pre-computed section overview/summary
+- siblings <name>   List sibling nodes at the same level
+- ancestors <name>  Show path from root to the given node
+- doc_card          Show document-level overview (title, summary, sections)
+- concepts          List key concepts extracted from the document
+- find_section <title>  Find a section by exact title (case-insensitive)
 - compare <a> <b>   Compare two nodes using LLM analysis (use node IDs)
 - trace <name>      Trace reasoning chain from a node using LLM
 - summarize <name>  Generate dynamic LLM summary of a node
@@ -191,6 +196,7 @@ def worker_dispatch(params: WorkerDispatchParams) -> tuple[str, str]:
         f"Available commands: ls, cd <name> (supports Section/Sub paths and /root/Section absolute paths), "
         f"cd .., back, cat, cat <name>, head <name>, find <keyword>, findtree <pattern>, grep <regex>, "
         f"toc [depth], stats <name>, grep_node <node> <pattern>, similar <name>, overview <name>, "
+        f"siblings <name>, ancestors <name>, doc_card, concepts, find_section <title>, "
         f"compare <a> <b>, trace <name>, summarize <name>, "
         f"wc <name>, pwd, check, done\n"
         f"\n"

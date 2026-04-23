@@ -8,7 +8,7 @@ from langchain_core.callbacks import CallbackManagerForRetrieverRun
 from langchain_core.documents import Document
 from langchain_core.retrievers import BaseRetriever
 
-from vectorless._async_utils import run_async
+from vectorless._internal._async_utils import run_async
 from vectorless.engine import Engine
 
 

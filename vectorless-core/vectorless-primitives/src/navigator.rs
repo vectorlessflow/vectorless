@@ -6,6 +6,11 @@
 //! `DocumentNavigator` holds an owned `Document` plus mutable navigation state
 //! (cursor, breadcrumb, visited set, collected evidence). All methods are
 //! `async` so they integrate naturally with the PyO3 async bridge.
+//!
+//! Implementation is split across files:
+//! - `navigator.rs` (this file) — struct definition, core navigation, content, evidence
+//! - `navigator_inspection.rs` — P1 inspection tools (toc, stats, siblings, etc.)
+//! - `navigator_search.rs` — search tools (grep, find, similar, etc.)
 
 use std::collections::{HashMap, HashSet};
 
@@ -231,81 +236,6 @@ impl DocumentNavigator {
         Ok(content)
     }
 
-    /// Regex search across all node content in the current subtree.
-    /// Returns up to 30 matches.
-    pub async fn grep(&self, pattern: &str) -> Result<Vec<MatchResult>> {
-        let re = regex::Regex::new(pattern)
-            .map_err(|e| Error::InvalidInput(format!("Invalid regex '{pattern}': {e}")))?;
-
-        let subtree = collect_subtree(self.cursor, &self.doc.tree);
-        let mut results = Vec::new();
-        let max_matches = 30;
-
-        for node_id in &subtree {
-            if results.len() >= max_matches {
-                break;
-            }
-            let content = match self.doc.tree.get(*node_id).map(|n| n.content.as_str()) {
-                Some(c) if !c.is_empty() => c,
-                _ => continue,
-            };
-            let title = self
-                .doc
-                .tree
-                .get(*node_id)
-                .map(|n| n.title.as_str())
-                .unwrap_or("?");
-
-            for (i, line) in content.lines().enumerate() {
-                if results.len() >= max_matches {
-                    break;
-                }
-                if re.is_match(line) {
-                    results.push(MatchResult {
-                        node_id: self.id_to_u64(*node_id),
-                        title: title.to_string(),
-                        snippet: line.to_string(),
-                        line_number: i + 1,
-                    });
-                }
-            }
-        }
-
-        Ok(results)
-    }
-
-    /// Search for nodes by keyword in title or content (case-insensitive).
-    pub async fn find(&self, keyword: &str) -> Vec<FindResult> {
-        let kw = keyword.to_lowercase();
-        self.doc
-            .tree
-            .traverse()
-            .iter()
-            .filter_map(|&id| {
-                let node = self.doc.tree.get(id)?;
-                if node.title.to_lowercase().contains(&kw)
-                    || node.content.to_lowercase().contains(&kw)
-                {
-                    let depth = self.doc.tree.depth(id);
-                    let leaf_count = self
-                        .doc
-                        .nav_index
-                        .get_entry(id)
-                        .map(|e| e.leaf_count)
-                        .unwrap_or(0);
-                    Some(FindResult {
-                        node_id: self.id_to_u64(id),
-                        title: node.title.clone(),
-                        depth,
-                        leaf_count,
-                    })
-                } else {
-                    None
-                }
-            })
-            .collect()
-    }
-
     /// Preview the first N lines of a node without collecting evidence.
     pub async fn head(&self, node_id: Option<&str>, n: usize) -> Result<String> {
         let id = self.resolve_optional_id(node_id)?;
@@ -375,64 +305,6 @@ impl DocumentNavigator {
     /// Document name.
     pub async fn doc_name(&self) -> &str {
         &self.doc.name
-    }
-
-    // -----------------------------------------------------------------------
-    // Reasoning Index
-    // -----------------------------------------------------------------------
-
-    /// Look up topic entries for a keyword in the reasoning index.
-    pub async fn keyword_entries(&self, keyword: &str) -> Vec<TopicEntryInfo> {
-        self.doc
-            .reasoning_index
-            .topic_entries(keyword)
-            .map(|entries| {
-                entries
-                    .iter()
-                    .map(|e| TopicEntryInfo {
-                        node_id: self.id_to_u64(e.node_id),
-                        weight: e.weight,
-                        depth: e.depth,
-                    })
-                    .collect()
-            })
-            .unwrap_or_default()
-    }
-
-    /// Section summaries from the reasoning index.
-    pub async fn topic_summary(&self) -> Vec<SectionSummaryInfo> {
-        self.doc
-            .reasoning_index
-            .summary_shortcut()
-            .map(|sc| {
-                sc.section_summaries
-                    .iter()
-                    .map(|s| SectionSummaryInfo {
-                        node_id: self.id_to_u64(s.node_id),
-                        title: s.title.clone(),
-                        summary: s.summary.clone(),
-                        depth: s.depth,
-                    })
-                    .collect()
-            })
-            .unwrap_or_default()
-    }
-
-    /// Find sections related to any of the given keywords.
-    pub async fn related_sections(&self, keywords: &[String]) -> Vec<u64> {
-        let mut seen = HashSet::new();
-        let mut result = Vec::new();
-        for kw in keywords {
-            if let Some(entries) = self.doc.reasoning_index.topic_entries(kw) {
-                for entry in entries {
-                    let id = self.id_to_u64(entry.node_id);
-                    if seen.insert(id) {
-                        result.push(id);
-                    }
-                }
-            }
-        }
-        result
     }
 
     // -----------------------------------------------------------------------
@@ -563,176 +435,6 @@ impl DocumentNavigator {
     }
 
     // -----------------------------------------------------------------------
-    // P1: Extended tools
-    // -----------------------------------------------------------------------
-
-    /// Return the full table of contents as a flat list of entries.
-    pub async fn toc(&self) -> Vec<TocEntry> {
-        fn walk(
-            tree: &vectorless_document::DocumentTree,
-            node_id: NodeId,
-            depth: usize,
-            entries: &mut Vec<TocEntry>,
-        ) {
-            if depth > 0 {
-                // skip root
-                let child_count = tree.children(node_id).len();
-                let title = tree.get(node_id).map(|n| n.title.clone()).unwrap_or_default();
-                let id_u64 = usize::from(node_id.0) as u64;
-                entries.push(TocEntry {
-                    id: id_u64,
-                    title,
-                    depth,
-                    child_count,
-                });
-            }
-            for child in tree.children(node_id) {
-                walk(tree, child, depth + 1, entries);
-            }
-        }
-        let mut entries = Vec::new();
-        walk(&self.doc.tree, self.doc.tree.root(), 0, &mut entries);
-        entries
-    }
-
-    /// Get statistics about a node (or the current node if None).
-    pub async fn stats(&self, node_id: Option<&str>) -> Result<NodeStats> {
-        let id = self.resolve_optional_id(node_id)?;
-        let node = self
-            .doc
-            .tree
-            .get(id)
-            .ok_or_else(|| Error::NodeNotFound("Node not found.".into()))?;
-
-        let children = self.doc.tree.children(id);
-        let depth = self.doc.tree.depth(id);
-        let leaf_count = self
-            .doc
-            .nav_index
-            .get_entry(id)
-            .map(|e| e.leaf_count)
-            .unwrap_or(0);
-
-        Ok(NodeStats {
-            id: self.id_to_u64(id),
-            title: node.title.clone(),
-            depth,
-            child_count: children.len(),
-            leaf_count,
-            char_count: node.content.len(),
-            word_count: node.content.split_whitespace().count(),
-            is_leaf: children.is_empty(),
-        })
-    }
-
-    /// Search within a specific node's content without moving the cursor.
-    pub async fn grep_node(
-        &self,
-        node_id: &str,
-        pattern: &str,
-    ) -> Result<Vec<MatchResult>> {
-        let id = self.parse_id(node_id)?;
-        let re = regex::Regex::new(pattern)
-            .map_err(|e| Error::InvalidInput(format!("Invalid regex '{pattern}': {e}")))?;
-
-        let node = self
-            .doc
-            .tree
-            .get(id)
-            .ok_or_else(|| Error::NodeNotFound("Node not found.".into()))?;
-
-        let title = node.title.clone();
-        let content = &node.content;
-        let mut results = Vec::new();
-
-        for (i, line) in content.lines().enumerate() {
-            if results.len() >= 30 {
-                break;
-            }
-            if re.is_match(line) {
-                results.push(MatchResult {
-                    node_id: self.id_to_u64(id),
-                    title: title.clone(),
-                    snippet: line.to_string(),
-                    line_number: i + 1,
-                });
-            }
-        }
-
-        Ok(results)
-    }
-
-    /// Find semantically similar nodes using the reasoning index.
-    pub async fn similar(&self, node_id: &str) -> Vec<SimilarResult> {
-        let id = match self.parse_id(node_id) {
-            Ok(id) => id,
-            Err(_) => return Vec::new(),
-        };
-
-        // Reverse lookup: find all keywords that point to the reference node
-        let ref_id_u64 = self.id_to_u64(id);
-        let mut ref_keywords: Vec<String> = Vec::new();
-        for (kw, entries) in self.doc.reasoning_index.all_topic_entries() {
-            if entries.iter().any(|e| self.id_to_u64(e.node_id) == ref_id_u64) {
-                ref_keywords.push(kw.clone());
-            }
-        }
-
-        if ref_keywords.is_empty() {
-            return Vec::new();
-        }
-
-        // Find all nodes that share keywords with the reference
-        let mut candidates: HashMap<u64, (f32, Vec<String>)> = HashMap::new();
-        for kw in &ref_keywords {
-            if let Some(entries) = self.doc.reasoning_index.topic_entries(kw) {
-                for entry in entries {
-                    let cid = self.id_to_u64(entry.node_id);
-                    if cid == ref_id_u64 {
-                        continue;
-                    }
-                    let (weight, keywords) = candidates.entry(cid).or_insert((0.0, Vec::new()));
-                    *weight += entry.weight;
-                    keywords.push(kw.clone());
-                }
-            }
-        }
-
-        let mut results: Vec<SimilarResult> = candidates
-            .into_iter()
-            .filter_map(|(cid, (weight, shared))| {
-                let nav_id = self.node_id_map.get(&cid)?;
-                let title = self.doc.tree.get(*nav_id).map(|n| n.title.clone())?;
-                Some(SimilarResult {
-                    id: cid,
-                    title,
-                    relevance: weight,
-                    shared_keywords: shared,
-                })
-            })
-            .collect();
-
-        results.sort_by(|a, b| {
-            b.relevance
-                .partial_cmp(&a.relevance)
-                .unwrap_or(std::cmp::Ordering::Equal)
-        });
-        results.truncate(10);
-        results
-    }
-
-    /// Get the pre-computed overview for a section from the navigation index.
-    pub async fn section_overview(&self, node_id: &str) -> Result<String> {
-        let id = self.parse_id(node_id)?;
-        let entry = self
-            .doc
-            .nav_index
-            .get_entry(id)
-            .ok_or_else(|| Error::NodeNotFound("No nav entry for this node.".into()))?;
-        Ok(entry.overview.clone())
-    }
-
-    // -----------------------------------------------------------------------
     // Internal helpers
     // -----------------------------------------------------------------------
 
@@ -746,3 +448,10 @@ impl DocumentNavigator {
             .collect();
     }
 }
+
+// ---------------------------------------------------------------------------
+// Split implementation files
+// ---------------------------------------------------------------------------
+
+include!("navigator_inspection.rs");
+include!("navigator_search.rs");
