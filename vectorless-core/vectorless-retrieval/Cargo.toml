@@ -23,5 +23,8 @@ tracing = { workspace = true }
 futures = { workspace = true }
 parking_lot = { workspace = true }
 
+[dev-dependencies]
+indextree = { workspace = true }
+
 [lints]
 workspace = true

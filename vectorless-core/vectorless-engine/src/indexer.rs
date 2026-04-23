@@ -95,7 +95,7 @@ impl IndexerClient {
         source: &IndexSource,
         name: Option<&str>,
         mut pipeline_options: PipelineOptions,
-        existing_tree: Option<&crate::DocumentTree>,
+        existing_tree: Option<&vectorless_document::DocumentTree>,
     ) -> Result<IndexedDocument> {
         pipeline_options.existing_tree = existing_tree.cloned();
         match source {

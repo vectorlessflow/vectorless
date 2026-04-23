@@ -8,8 +8,8 @@
 
 use tracing::info;
 
-use vectorless_agent::{self, config::AgentConfig, events::EventEmitter as AgentEventEmitter};
-use crate::client::types::QueryResult;
+use vectorless_agent::{self, config::AgentConfig, config::DocContext, config::Scope, config::WorkspaceContext, events::EventEmitter as AgentEventEmitter};
+use super::types::QueryResult;
 use vectorless_document::{DocumentTree, NavigationIndex, ReasoningIndex};
 use vectorless_error::Result;
 use vectorless_events::{EventEmitter, QueryEvent};
@@ -82,9 +82,9 @@ impl RetrieverClient {
             skip_analysis, "Querying: {:?}", question
         );
 
-        let doc_contexts: Vec<agent::DocContext> = documents
+        let doc_contexts: Vec<DocContext> = documents
             .iter()
-            .map(|(tree, nav, ridx, id)| agent::DocContext {
+            .map(|(tree, nav, ridx, id)| DocContext {
                 tree,
                 nav_index: nav,
                 reasoning_index: ridx,
@@ -93,9 +93,9 @@ impl RetrieverClient {
             .collect();
 
         let scope = if skip_analysis {
-            agent::Scope::Specified(doc_contexts)
+            Scope::Specified(doc_contexts)
         } else {
-            agent::Scope::Workspace(agent::WorkspaceContext::new(doc_contexts))
+            Scope::Workspace(WorkspaceContext::new(doc_contexts))
         };
 
         let emitter = AgentEventEmitter::noop();

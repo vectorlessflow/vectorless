@@ -8,9 +8,9 @@
 
 use std::sync::Arc;
 
-use crate::client::engine::Engine;
-use crate::client::indexer::IndexerClient;
-use crate::client::retriever::RetrieverClient;
+use crate::engine::Engine;
+use crate::indexer::IndexerClient;
+use crate::retriever::RetrieverClient;
 use vectorless_config::Config;
 use vectorless_events::EventEmitter;
 use vectorless_index::PipelineExecutor;
