@@ -1,6 +1,8 @@
 """Internal re-exports from the Rust PyO3 module.
 
-This module is NOT part of the public API. Use ``vectorless.Engine`` instead.
+This module is NOT part of the public API.
+The public Engine is ``vectorless.engine.Engine`` (Python strategy layer).
+Here ``Engine`` refers to the raw Rust engine used internally for compile/document management.
 """
 
 from vectorless._vectorless import (
