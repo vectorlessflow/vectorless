@@ -6,39 +6,44 @@
 //! This module provides a modular document compilation pipeline that transforms
 //! documents (Markdown, PDF) into agent-friendly intermediate artifacts.
 //!
-//!
 //! ```text
-//! Priority  10: ┌──────────┐
+//! Frontend  10: ┌──────────┐
 //!               │  Parse    │  Parse document into raw nodes
 //!               └────┬─────┘
-//! Priority  20: ┌────▼─────┐
-//!               │  Build   │  Construct tree + thinning (with content merge)
+//! Frontend  20: ┌────▼─────┐
+//!               │  Build   │  Construct tree + thinning
 //!               └────┬─────┘
-//! Priority  22: ┌────▼─────┐
+//! Analysis  22: ┌────▼─────┐
 //!               │ Validate │  Tree integrity checks (optional)
 //!               └────┬─────┘
-//! Priority  25: ┌────▼─────┐
+//! Transform 25: ┌────▼─────┐
 //!               │  Split   │  Split oversized leaf nodes (optional)
 //!               └────┬─────┘
-//! Priority  30: ┌────▼─────┐
-//!               │ Enhance  │  LLM summaries (when client available)
+//! Analysis  30: ┌────▼─────┐
+//!               │ Enhance  │  LLM summaries
 //!               └────┬─────┘
-//! Priority  40: ┌────▼─────┐
+//! Transform 40: ┌────▼─────┐
 //!               │  Enrich  │  Metadata + cross-references
 //!               └────┬─────┘
-//! Priority  45: ┌────▼──────────┐
-//!               │ Reasoning Idx │  Pre-computed reasoning index
+//! Backend   45: ┌────▼──────────┐
+//!               │ Reasoning Idx │  Symbol table (keyword→path mapping)
 //!               └────┬──────────┘
-//! Priority  50: ┌────▼──────────┐
-//!               │ Navigation Idx│  Agent navigation index
+//! Backend   47: ┌────▼──────────┐
+//!               │ Concept       │  Concept extraction
 //!               └────┬──────────┘
-//! Priority  60: ┌────▼──────┐
+//! Backend   50: ┌────▼──────────┐
+//!               │ Navigation Idx│  Debug info for runtime navigation
+//!               └────┬──────────┘
+//! Backend   55: ┌────▼──────┐
+//!               │  Verify   │  Output validation
+//!               └────┬──────┘
+//! Backend   60: ┌────▼──────┐
 //!               │ Optimize  │  Final tree optimization
 //!               └───────────┘
 //! ```
 //!
 //! Checkpointing is available when `PipelineOptions::checkpoint_dir` is set.
-//! State is saved after each stage group and resumed on restart.
+//! State is saved after each pass group and resumed on restart.
 
 pub mod config;
 pub mod incremental;
