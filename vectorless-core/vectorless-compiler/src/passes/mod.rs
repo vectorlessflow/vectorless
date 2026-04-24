@@ -40,6 +40,14 @@ pub struct AccessPattern {
     pub writes_description: bool,
     /// Whether this pass writes to `concepts`.
     pub writes_concepts: bool,
+    /// Whether this pass writes to `query_routes`.
+    pub writes_query_routes: bool,
+    /// Whether this pass writes to `chain_index`.
+    pub writes_chain_index: bool,
+    /// Whether this pass writes to `content_overlap`.
+    pub writes_content_overlap: bool,
+    /// Whether this pass writes to `evidence_scores`.
+    pub writes_evidence_scores: bool,
 }
 
 /// Compiler pass trait.

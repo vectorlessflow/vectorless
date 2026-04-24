@@ -1,0 +1,163 @@
+---
+sidebar_position: 4
+---
+
+# Configuration
+
+`PipelineOptions` controls every aspect of the compilation pipeline. All fields have sensible defaults and can be overridden using the builder pattern.
+
+## PipelineOptions
+
+```rust
+let options = PipelineOptions::default()
+    .with_mode(SourceFormat::Pdf)
+    .with_generate_ids(true)
+    .with_summary_strategy(SummaryStrategy::full())
+    .with_thinning(ThinningConfig::enabled(300))
+    .with_optimization(OptimizationConfig::new())
+    .with_split(SplitConfig::with_max_tokens(2000))
+    .with_generate_description(true)
+    .with_checkpoint_dir("./checkpoints");
+```
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `mode` | `SourceFormat` | `Auto` | Document format |
+| `generate_ids` | `bool` | `true` | Assign unique IDs to tree nodes |
+| `summary_strategy` | `SummaryStrategy` | `Full` | How to generate LLM summaries |
+| `thinning` | `ThinningConfig` | disabled | Merge small nodes into parents |
+| `optimization` | `OptimizationConfig` | enabled | Final tree optimization |
+| `split` | `SplitConfig` | enabled (4000 tokens) | Split oversized leaf nodes |
+| `generate_description` | `bool` | `true` | Generate a document-level description |
+| `concurrency` | `ConcurrencyConfig` | from LLM config | Max concurrent LLM requests |
+| `reasoning_index` | `ReasoningIndexConfig` | default | Symbol table configuration |
+| `existing_tree` | `Option<DocumentTree>` | `None` | Previous tree for incremental updates |
+| `processing_version` | `u32` | `1` | Algorithm version (forces reprocessing on change) |
+| `checkpoint_dir` | `Option<PathBuf>` | `None` | Directory for pipeline checkpoints |
+
+## SourceFormat
+
+```rust
+pub enum SourceFormat {
+    Auto,       // Detect from file extension
+    Markdown,   // Force Markdown parsing
+    Pdf,        // Force PDF parsing
+}
+```
+
+When set to `Auto`, the engine detects format from the file extension before calling the compiler. The compiler itself always receives a concrete format.
+
+## SummaryStrategy
+
+Controls how the EnhancePass generates LLM summaries:
+
+### None
+
+Skip summary generation entirely. Nodes retain their raw content only.
+
+```rust
+SummaryStrategy::none()
+```
+
+### Full (default)
+
+Generate summaries for every node in the tree.
+
+```rust
+SummaryStrategy::full()
+// With custom config:
+SummaryStrategy::full_with_config(SummaryStrategyConfig {
+    max_tokens: 200,
+    shortcut_threshold: 50,
+    ..Default::default()
+})
+```
+
+- Non-leaf nodes: structured output (`OVERVIEW`, `QUESTIONS`, `TAGS`)
+- Leaf nodes: concise content summaries
+- Nodes below `shortcut_threshold` tokens use original content (saves LLM cost)
+
+### Selective
+
+Generate summaries only for qualifying nodes.
+
+```rust
+SummaryStrategy::selective(500, true)  // min 500 tokens, branch nodes only
+```
+
+Parameters:
+- `min_tokens`: Only generate summaries for nodes with at least this many tokens
+- `branch_only`: If `true`, skip leaf nodes entirely
+
+### Lazy
+
+Generate summaries on-demand at query time instead of during compilation.
+
+```rust
+SummaryStrategy::lazy(true)  // persist generated summaries
+```
+
+Summaries are cached in a `SummaryCache` and optionally persisted. This is useful when many documents are compiled but only a fraction will be queried.
+
+## ThinningConfig
+
+Controls how small nodes are merged into their parents during the BuildPass:
+
+```rust
+// Disabled (default)
+ThinningConfig::disabled()
+
+// Enabled with 500-token threshold
+ThinningConfig::enabled(500)
+    .with_merge_content(true)
+```
+
+| Field | Default | Description |
+|---|---|---|
+| `enabled` | `false` | Whether thinning is active |
+| `threshold` | `500` | Nodes below this token count are candidates for merging |
+| `merge_content` | `true` | Whether to merge child content into the parent |
+
+Thinning reduces tree depth by absorbing small sections (e.g., single-paragraph subsections) into their parent node. Each parent keeps at least one child.
+
+## SplitConfig
+
+Controls how oversized leaf nodes are split:
+
+```rust
+SplitConfig::default()                          // enabled, 4000 tokens, pattern split on
+SplitConfig::disabled()                         // no splitting
+SplitConfig::with_max_tokens(2000)              // custom threshold
+    .with_pattern_split(true)
+```
+
+| Field | Default | Description |
+|---|---|---|
+| `enabled` | `true` | Whether splitting is active |
+| `max_tokens_per_node` | `4000` | Nodes exceeding this are split |
+| `pattern_split` | `true` | Use natural break points (headings, paragraphs) |
+
+## OptimizationConfig
+
+Controls final tree optimization in the OptimizePass:
+
+```rust
+OptimizationConfig::new()
+    .with_max_depth(15)
+    .with_max_children(20)
+```
+
+| Field | Default | Description |
+|---|---|---|
+| `enabled` | `true` | Whether optimization is active |
+| `max_depth` | `None` | Flatten tree if depth exceeds this |
+| `max_children` | `None` | Group children if count exceeds this |
+| `merge_leaf_threshold` | `0` | Merge adjacent leaf siblings below this token count |
+
+## Logic Fingerprint
+
+`PipelineOptions::logic_fingerprint()` computes a hash of the entire configuration. This is used for:
+
+- **Incremental compilation**: detect when pipeline configuration has changed
+- **Checkpoint validation**: reject stale checkpoints after config changes
+- **Content fingerprinting**: stored alongside documents for change detection

@@ -7,7 +7,10 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 use crate::parse::{DocumentFormat, RawNode};
-use vectorless_document::{Concept, DocumentTree, NavigationIndex, NodeId, ReasoningIndex};
+use vectorless_document::{
+    Concept, DocumentTree, NavigationIndex, NodeId, ReasoningIndex,
+    QueryRoutingTable, ChainIndex, ContentOverlapMap, EvidenceScoreMap,
+};
 use vectorless_llm::LlmClient;
 
 use super::super::{PipelineOptions, SummaryStrategy};
@@ -258,6 +261,20 @@ pub struct CompileContext {
     /// Key concepts extracted from the document (built by ConceptExtractionStage).
     pub concepts: Vec<Concept>,
 
+    // ── Agent acceleration data (built by backend passes) ──
+
+    /// Pre-computed query routing table (built by RoutePass).
+    pub query_routes: Option<QueryRoutingTable>,
+
+    /// Reasoning chain index (built by ChainPass).
+    pub chain_index: Option<ChainIndex>,
+
+    /// Content overlap map (built by OverlapPass).
+    pub content_overlap: Option<ContentOverlapMap>,
+
+    /// Per-node evidence quality scores (built by ScorePass).
+    pub evidence_scores: Option<EvidenceScoreMap>,
+
     /// Existing tree from previous indexing (for incremental updates).
     /// When set, the enhance and reasoning stages can reuse data from unchanged nodes.
     pub existing_tree: Option<DocumentTree>,
@@ -297,6 +314,10 @@ impl CompileContext {
             reasoning_index: None,
             navigation_index: None,
             concepts: Vec::new(),
+            query_routes: None,
+            chain_index: None,
+            content_overlap: None,
+            evidence_scores: None,
             existing_tree: None,
             stage_results: HashMap::new(),
             metrics: IndexMetrics::default(),
@@ -396,6 +417,10 @@ impl CompileContext {
             reasoning_index: self.reasoning_index,
             navigation_index: self.navigation_index,
             concepts: self.concepts,
+            query_routes: self.query_routes,
+            chain_index: self.chain_index,
+            content_overlap: self.content_overlap,
+            evidence_scores: self.evidence_scores,
         }
     }
 }
@@ -441,6 +466,18 @@ pub struct CompileResult {
 
     /// Key concepts extracted from the document.
     pub concepts: Vec<Concept>,
+
+    /// Pre-computed query routing table for Agent acceleration.
+    pub query_routes: Option<QueryRoutingTable>,
+
+    /// Reasoning chain index for cross-section navigation.
+    pub chain_index: Option<ChainIndex>,
+
+    /// Content overlap map to prevent duplicate visits.
+    pub content_overlap: Option<ContentOverlapMap>,
+
+    /// Per-node evidence quality scores.
+    pub evidence_scores: Option<EvidenceScoreMap>,
 }
 
 impl CompileResult {

@@ -1,0 +1,218 @@
+---
+sidebar_position: 3
+---
+
+# Compilation Passes
+
+The pipeline consists of 11 passes organized into four phases. Each pass is a self-contained unit with clear inputs, outputs, and dependencies.
+
+## Pass Overview
+
+| Phase | Pass | Priority | Required | Dependencies |
+|---|---|---|---|---|
+| Frontend | ParsePass | 10 | Yes | — |
+| Frontend | BuildPass | 20 | Yes | `parse` |
+| Analysis | ValidatePass | 22 | No | `build` |
+| Transform | SplitPass | 25 | No | `build` |
+| Analysis | EnhancePass | 30 | No | `build` |
+| Transform | EnrichPass | 40 | Yes | `build` |
+| Backend | ReasoningPass | 45 | No | `enrich` |
+| Backend | ConceptPass | 47 | No | `reasoning_index` |
+| Backend | NavigationPass | 50 | No | `enrich` |
+| Backend | VerifyPass | 55 | Yes | `concept_extraction` |
+| Backend | OptimizePass | 60 | No | `enrich`, `navigation_index` |
+
+## Frontend Phase
+
+Frontend passes transform raw document bytes into a structured tree — analogous to lexing and parsing in a traditional compiler.
+
+### ParsePass (Priority 10)
+
+Parses the source document into a flat list of `RawNode` values.
+
+- **Input**: `CompilerInput` (file path, content string, or bytes)
+- **Output**: `ctx.raw_nodes: Vec<RawNode>`, `ctx.format`, `ctx.page_count`
+- **No dependencies**
+- Supports Markdown and PDF formats
+- PDF parsing can optionally use an LLM client for better structure extraction
+- Each `RawNode` contains: title, content, hierarchy level, line range, page number, token count
+
+```text
+Source bytes → ParsePass → [RawNode, RawNode, RawNode, ...]
+```
+
+### BuildPass (Priority 20)
+
+Constructs a hierarchical `DocumentTree` from the flat raw nodes.
+
+- **Input**: `ctx.raw_nodes`
+- **Output**: `ctx.tree: DocumentTree`
+- **Depends on**: `parse`
+- Applies thinning (merges nodes below token threshold into parents)
+- Calculates recursive total token counts
+- Assigns unique node IDs if `generate_ids` is enabled
+
+```text
+[RawNode, ...] → BuildPass → DocumentTree (arena-based hierarchical structure)
+```
+
+## Analysis Phase
+
+Analysis passes validate and enrich the tree's semantic content.
+
+### ValidatePass (Priority 22)
+
+Checks tree integrity and reports warnings.
+
+- **Reads**: `ctx.tree`
+- **Checks**:
+  - Maximum tree depth (20 levels)
+  - Empty titles on leaf nodes
+  - Token count consistency (parent ≥ sum of children)
+  - Content duplication detection
+- **Optional** — failures are skipped, not fatal
+
+### EnhancePass (Priority 30)
+
+Generates LLM summaries for tree nodes. Only runs when an LLM client is available.
+
+- **Reads**: `ctx.tree`
+- **Writes**: `ctx.tree` (summaries added to nodes)
+- **Depends on**: `build`
+- **Failure policy**: Retry with backoff
+- Non-leaf nodes get structured summaries: `OVERVIEW`, `QUESTIONS`, `TAGS`
+- Leaf nodes get content summaries
+- Short nodes below the shortcut threshold use original content as summary (saves LLM cost)
+- Uses memoization cache to avoid regenerating summaries for unchanged content
+
+## Transform Phase
+
+Transform passes restructure the tree at the IR level.
+
+### SplitPass (Priority 25)
+
+Splits oversized leaf nodes into smaller children.
+
+- **Reads/writes**: `ctx.tree`
+- **Depends on**: `build`
+- **Optional** — controlled by `SplitConfig`
+- Default max tokens per node: 4000
+- Uses natural split points (headings, paragraphs)
+- Pattern-based splitting enabled by default
+
+### EnrichPass (Priority 40)
+
+Adds metadata and resolves cross-references.
+
+- **Reads/writes**: `ctx.tree`, `ctx.description`
+- **Depends on**: `build`
+- **Required**
+- Calculates page ranges (propagated from children up)
+- Generates Table of Contents view
+- Extracts and resolves in-document references (`"see Section 2.1"` → `NodeId`)
+- Generates document description from root summary
+
+## Backend Phase
+
+Backend passes generate the final indexes — analogous to code generation in a traditional compiler.
+
+### ReasoningPass (Priority 45)
+
+Builds the symbol table: keyword → node path mappings.
+
+- **Reads**: `ctx.tree`
+- **Writes**: `ctx.reasoning_index`
+- **Depends on**: `enrich`
+- **Optional**
+- Extracts keywords with weight normalization: title (2.0×), summary (1.5×), content (1.0×)
+- Builds section map for fast ToC lookup (depth-1 nodes)
+- Creates summary shortcut for overview queries
+- Optional LLM synonym expansion
+
+### ConceptPass (Priority 47)
+
+Extracts key concepts from topics and summaries.
+
+- **Reads**: `ctx.tree`, `ctx.reasoning_index`
+- **Writes**: `ctx.concepts`
+- **Depends on**: `reasoning_index`
+- **Optional**
+- Uses LLM for structured concept extraction (max 15 concepts)
+- Falls back to keyword-based extraction without LLM
+
+### NavigationPass (Priority 50)
+
+Builds the runtime navigation index for agent-based traversal.
+
+- **Reads**: `ctx.tree`
+- **Writes**: `ctx.navigation_index`
+- **Depends on**: `enrich`
+- **Optional**
+- Creates `NavEntry` for each non-leaf node (overview, hints, tags, leaf count)
+- Creates `ChildRoute` entries for children (title, description, leaf count)
+- Builds `DocCard` for document-level overview
+
+### VerifyPass (Priority 55)
+
+Validates the final output.
+
+- **Reads**: `ctx.tree`
+- **Depends on**: `concept_extraction`
+- **Required**
+- Checks that tree exists and has nodes
+- Verifies document summary is non-empty
+- Warns if no concepts were extracted
+
+### OptimizePass (Priority 60)
+
+Performs final tree structure optimization.
+
+- **Reads/writes**: `ctx.tree`
+- **Depends on**: `enrich`, `navigation_index`
+- **Optional**
+- Merges adjacent small leaf nodes that are siblings
+- Removes empty intermediate nodes
+
+## Data Flow
+
+The following diagram shows how data flows through the passes and which `CompileContext` fields each pass reads and writes:
+
+```text
+                  ┌────────────┐
+                  │ CompilerInput │
+                  └──────┬─────┘
+                         │
+              ┌──────────▼──────────┐
+              │     ParsePass       │ writes: raw_nodes, format, page_count
+              └──────────┬──────────┘
+                         │
+              ┌──────────▼──────────┐
+              │     BuildPass       │ reads: raw_nodes → writes: tree
+              └──────────┬──────────┘
+                         │
+          ┌──────────────┼──────────────┐
+          │              │              │
+ ┌────────▼──────┐ ┌─────▼──────┐ ┌────▼────────┐
+ │ ValidatePass  │ │  SplitPass │ │ EnhancePass │ reads: tree → writes: tree
+ │ (read-only)   │ │            │ │             │
+ └───────────────┘ └────────────┘ └──────┬──────┘
+                                         │
+                              ┌──────────▼──────────┐
+                              │     EnrichPass      │ reads: tree → writes: tree, description
+                              └──────────┬──────────┘
+                                         │
+                    ┌────────────────────┼──────────────────┐
+                    │                    │                  │
+          ┌─────────▼─────────┐ ┌───────▼──────────┐  ┌───▼────────┐
+          │   ReasoningPass   │ │  NavigationPass  │  │ OptimizePass│
+          │ writes: reasoning │ │ writes: navigation│  │            │
+          └─────────┬─────────┘ └──────────────────┘  └────────────┘
+                    │
+          ┌─────────▼─────────┐
+          │    ConceptPass    │ writes: concepts
+          └─────────┬─────────┘
+                    │
+          ┌─────────▼─────────┐
+          │    VerifyPass     │ reads: tree (validation only)
+          └───────────────────┘
+```

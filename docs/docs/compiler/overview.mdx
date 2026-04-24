@@ -1,0 +1,81 @@
+---
+sidebar_position: 1
+---
+
+# Overview
+
+`vectorless-compiler` is a Rust crate that compiles documents (Markdown, PDF) into agent-friendly intermediate artifacts. It follows the traditional compiler architecture — but instead of compiling source code into machine code, it compiles documents into structured trees, symbol tables, and navigation indexes.
+
+## Compiler Analogy
+
+Every concept in a traditional compiler maps directly to what this crate does:
+
+| Compiler Concept | Vectorless Equivalent | What It Does |
+|---|---|---|
+| Source code | PDF / Markdown / bytes | Raw input |
+| Lexer | Markdown / PDF parser | Breaks document into nodes |
+| AST | `DocumentTree` | Hierarchical data structure |
+| Semantic analysis | Validate + Enhance (LLM) | Enriches semantic information |
+| IR generation | Split + Enrich | Optimizes intermediate representation |
+| Code generation | Reasoning / Navigation index | Generates lookup indexes |
+| Symbol table | `ReasoningIndex` | name → location mapping |
+| Debug info | `NavigationIndex` | Runtime navigation data |
+| Object file | `PersistedDocument` | Serialized to disk |
+| Incremental compilation | Fingerprint + incremental | Only recompiles changed parts |
+
+## Architecture
+
+The pipeline is organized into four phases, each containing one or more passes:
+
+```text
+ Frontend  10: Parse     → Break document into raw nodes
+ Frontend  20: Build     → Construct tree + apply thinning
+ Analysis  22: Validate  → Tree integrity checks (optional)
+ Transform 25: Split     → Break oversized leaf nodes (optional)
+ Analysis  30: Enhance   → LLM summaries (optional)
+ Transform 40: Enrich    → Metadata + cross-references
+ Backend   45: Reasoning → Keyword→path symbol table
+ Backend   47: Concept   → Key concept extraction (optional)
+ Backend   50: Navigation→ Runtime navigation index
+ Backend   55: Verify    → Output validation
+ Backend   60: Optimize  → Final tree optimization
+```
+
+Each pass is an independent unit that declares its dependencies and access patterns. The orchestrator resolves the dependency graph, groups independent passes for parallel execution, and handles failures with configurable policies.
+
+## Module Structure
+
+```text
+vectorless-compiler/src/
+├── config.rs          PipelineOptions, SourceFormat, ThinningConfig
+├── parse/             Document parsers (Markdown, PDF)
+├── pipeline/          Executor, orchestrator, context, checkpoint
+├── passes/
+│   ├── frontend/      ParsePass, BuildPass
+│   ├── analysis/      ValidatePass, EnhancePass
+│   ├── transform/     SplitPass, EnrichPass
+│   └── backend/       ReasoningPass, ConceptPass, NavigationPass,
+│                       VerifyPass, OptimizePass
+├── summary/           Summary strategies (Full, Selective, Lazy)
+└── incremental/       Change detection, action resolution, tree update
+```
+
+## Quick Example
+
+```rust
+use vectorless_compiler::{PipelineExecutor, PipelineOptions};
+use vectorless_compiler::pipeline::CompilerInput;
+
+// Create executor with LLM enhancement
+let executor = PipelineExecutor::with_llm(llm_client);
+
+// Compile a document
+let input = CompilerInput::file("./report.pdf");
+let options = PipelineOptions::default();
+let result = executor.execute(input, options).await?;
+
+// Access outputs
+let tree = result.tree.expect("tree must exist");
+let reasoning = result.reasoning_index;
+let navigation = result.navigation_index;
+```

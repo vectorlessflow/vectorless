@@ -27,6 +27,12 @@ mod toc;
 mod tree;
 pub mod understanding;
 
+// New: Agent acceleration types
+mod chain;
+mod evidence;
+mod overlap;
+mod query_route;
+
 pub use format::DocumentFormat;
 pub use navigation::{ChildRoute, DocCard, NavEntry, NavigationIndex, SectionCard};
 pub use node::{NodeId, TreeNode};
@@ -39,3 +45,9 @@ pub use structure::{DocumentStructure, StructureNode};
 pub use toc::{TocConfig, TocEntry, TocNode, TocView};
 pub use tree::{DocumentTree, RetrievalIndex};
 pub use understanding::{Concept, Document, DocumentInfo, IngestInput};
+
+// Re-export agent acceleration types
+pub use chain::{ChainIndex, ChainType, ReasoningChain};
+pub use evidence::{EvidenceScore, EvidenceScoreMap};
+pub use overlap::{ContentOverlapMap, OverlapEntry, OverlapType};
+pub use query_route::{ConceptRoute, QueryRoutingTable, RouteTarget};

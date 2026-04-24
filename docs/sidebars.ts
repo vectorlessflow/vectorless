@@ -13,6 +13,18 @@ const sidebars: SidebarsConfig = {
     'architecture',
     {
       type: 'category',
+      label: 'Vectorless Compiler',
+      items: [
+        'compiler/overview',
+        'compiler/pipeline',
+        'compiler/passes',
+        'compiler/configuration',
+        'compiler/incremental',
+        'compiler/checkpoint',
+      ],
+    },
+    {
+      type: 'category',
       label: 'RFC',
       items: [
         'rfc/router',

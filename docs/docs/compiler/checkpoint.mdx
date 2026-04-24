@@ -1,0 +1,117 @@
+---
+sidebar_position: 6
+---
+
+# Checkpoint and Resume
+
+Checkpointing allows the pipeline to resume from where it left off after an interruption (crash, timeout, process kill). This is critical for large documents where LLM-enhanced compilation can take minutes.
+
+## How It Works
+
+When `PipelineOptions::checkpoint_dir` is set, the orchestrator saves state to disk after each execution group completes:
+
+```text
+Group 0: [ParsePass]              → save checkpoint
+Group 1: [BuildPass]              → save checkpoint
+Group 2: [ValidatePass, SplitPass] → save checkpoint
+Group 3: [EnhancePass]            → save checkpoint  ← expensive LLM calls
+...
+```
+
+On restart, the orchestrator loads the checkpoint and skips already-completed passes.
+
+## What's Stored
+
+Each checkpoint contains:
+
+```rust
+pub struct PipelineCheckpoint {
+    pub doc_id: String,
+    pub source_hash: String,           // SHA-256 of source content
+    pub processing_version: u32,       // Algorithm version
+    pub config_fingerprint: String,    // Hash of PipelineOptions
+    pub completed_stages: Vec<String>, // Names of completed passes
+    pub context_data: CheckpointContextData,
+    pub timestamp: DateTime<Utc>,
+}
+
+pub struct CheckpointContextData {
+    pub raw_nodes: Vec<RawNode>,          // From ParsePass
+    pub tree: Option<DocumentTree>,        // From BuildPass
+    pub metrics: IndexMetrics,             // Cumulative metrics
+    pub page_count: Option<usize>,
+    pub line_count: Option<usize>,
+    pub description: Option<String>,
+}
+```
+
+## Validation
+
+Before resuming, the checkpoint is validated against the current input:
+
+| Check | Purpose |
+|---|---|
+| `source_hash` matches | Source content hasn't changed |
+| `processing_version` matches | Algorithm hasn't been upgraded |
+| `config_fingerprint` matches | Pipeline options haven't changed |
+
+If any check fails, the checkpoint is discarded and the pipeline starts fresh.
+
+## Lifecycle
+
+```text
+┌──────────────┐     ┌──────────────┐     ┌──────────────┐
+│  Start       │────▶│ Load         │────▶│ Valid?       │
+│  Pipeline    │     │ Checkpoint   │     │              │
+└──────────────┘     └──────────────┘     └──┬───────┬───┘
+                                              │       │
+                                         Yes  │   No  │
+                                              │       │
+                                    ┌─────────▼──┐  ┌─▼──────────┐
+                                    │ Resume from │  │ Start fresh │
+                                    │ completed   │  │             │
+                                    │ stages      │  │             │
+                                    └──────┬──────┘  └────────────┘
+                                           │
+                              ┌────────────▼─────────────┐
+                              │ Execute remaining passes  │
+                              │ Save after each group     │
+                              └────────────┬─────────────┘
+                                           │
+                              ┌────────────▼─────────────┐
+                              │ All complete?             │
+                              │ → Clear checkpoint file   │
+                              └──────────────────────────┘
+```
+
+## Configuration
+
+```rust
+let options = PipelineOptions::default()
+    .with_checkpoint_dir("./workspace/checkpoints");
+```
+
+Checkpoints are stored as individual JSON files in the checkpoint directory, one per document (keyed by `doc_id`). On successful completion, the checkpoint file is deleted.
+
+## CheckpointManager API
+
+```rust
+let manager = CheckpointManager::new("./checkpoints");
+
+// Save checkpoint
+manager.save(&doc_id, &checkpoint)?;
+
+// Load checkpoint
+let checkpoint = manager.load(&doc_id);
+
+// Check if valid for resume
+let valid = CheckpointManager::is_valid_for_resume(
+    &checkpoint,
+    &source_hash,
+    processing_version,
+    &config_fingerprint,
+);
+
+// Clear after successful completion
+manager.clear(&doc_id)?;
+```
