@@ -3,8 +3,8 @@
 
 //! Reasoning Index Stage - Build pre-computed reasoning index.
 //!
-//! This stage runs after EnrichStage (which generates descriptions and
-//! calculates metadata) and before OptimizeStage. It builds a
+//! This stage runs after EnrichPass (which generates descriptions and
+//! calculates metadata) and before OptimizePass. It builds a
 //! [`ReasoningIndex`] from the document tree's TOC, summaries, and keywords.
 
 use std::collections::HashMap;
@@ -19,8 +19,8 @@ use vectorless_error::Result;
 use vectorless_llm::LlmClient;
 use vectorless_scoring::extract_keywords;
 
-use super::async_trait;
-use super::{AccessPattern, CompileStage, StageResult};
+use crate::passes::async_trait;
+use crate::passes::{AccessPattern, CompilePass, PassResult};
 use crate::pipeline::CompileContext;
 
 /// Reasoning Index Stage - builds a pre-computed reasoning index from the document tree.
@@ -29,11 +29,11 @@ use crate::pipeline::CompileContext;
 /// - Topic-to-path mappings from titles and summaries
 /// - Summary shortcuts for high-frequency "overview" queries
 /// - Section map for fast ToC lookup
-pub struct ReasoningCompileStage {
+pub struct ReasoningPass {
     config: ReasoningIndexConfig,
 }
 
-impl ReasoningCompileStage {
+impl ReasoningPass {
     /// Create a new reasoning index stage with default config.
     pub fn new() -> Self {
         Self {
@@ -294,14 +294,14 @@ impl ReasoningCompileStage {
     }
 }
 
-impl Default for ReasoningCompileStage {
+impl Default for ReasoningPass {
     fn default() -> Self {
         Self::new()
     }
 }
 
 #[async_trait]
-impl CompileStage for ReasoningCompileStage {
+impl CompilePass for ReasoningPass {
     fn name(&self) -> &'static str {
         "reasoning_index"
     }
@@ -322,13 +322,13 @@ impl CompileStage for ReasoningCompileStage {
         }
     }
 
-    async fn execute(&mut self, ctx: &mut CompileContext) -> Result<StageResult> {
+    async fn execute(&mut self, ctx: &mut CompileContext) -> Result<PassResult> {
         let start = Instant::now();
 
         // Check if enabled via pipeline options
         if !ctx.options.reasoning_index.enabled {
             info!("[reasoning_index] Disabled, skipping");
-            return Ok(StageResult::success("reasoning_index"));
+            return Ok(PassResult::success("reasoning_index"));
         }
 
         // Use stage config, overridden by pipeline options
@@ -338,7 +338,7 @@ impl CompileStage for ReasoningCompileStage {
             Some(t) => t,
             None => {
                 warn!("[reasoning_index] No tree, cannot build index");
-                return Ok(StageResult::failure("reasoning_index", "Tree not built"));
+                return Ok(PassResult::failure("reasoning_index", "Tree not built"));
             }
         };
 
@@ -427,7 +427,7 @@ impl CompileStage for ReasoningCompileStage {
 
         ctx.reasoning_index = Some(reasoning_index);
 
-        let mut stage_result = StageResult::success("reasoning_index");
+        let mut stage_result = PassResult::success("reasoning_index");
         stage_result.duration_ms = duration;
         stage_result.metadata.insert(
             "keywords_indexed".to_string(),
@@ -452,7 +452,7 @@ mod tests {
     #[test]
     fn test_extract_node_keywords() {
         let keywords =
-            ReasoningCompileStage::extract_node_keywords("Introduction to Machine Learning", 2);
+            ReasoningPass::extract_node_keywords("Introduction to Machine Learning", 2);
         assert!(keywords.contains(&"introduction".to_string()));
         assert!(keywords.contains(&"machine".to_string()));
         assert!(keywords.contains(&"learning".to_string()));
@@ -460,7 +460,7 @@ mod tests {
 
     #[test]
     fn test_extract_node_keywords_min_length() {
-        let keywords = ReasoningCompileStage::extract_node_keywords("A B CD", 2);
+        let keywords = ReasoningPass::extract_node_keywords("A B CD", 2);
         assert!(!keywords.contains(&"a".to_string()));
         assert!(!keywords.contains(&"b".to_string()));
         assert!(keywords.contains(&"cd".to_string()));
@@ -468,7 +468,7 @@ mod tests {
 
     #[test]
     fn test_stage_config_default() {
-        let stage = ReasoningCompileStage::new();
+        let stage = ReasoningPass::new();
         assert!(stage.config.enabled);
         assert_eq!(stage.name(), "reasoning_index");
         assert!(stage.is_optional());
@@ -493,7 +493,7 @@ mod tests {
         }
 
         let config = ReasoningIndexConfig::default();
-        let (topic_paths, keyword_count) = ReasoningCompileStage::build_topic_paths(&tree, &config);
+        let (topic_paths, keyword_count) = ReasoningPass::build_topic_paths(&tree, &config);
 
         assert!(
             keyword_count > 0,
@@ -518,7 +518,7 @@ mod tests {
         let _c1 = tree.add_child(root, "rust ownership", "rust borrowing rules");
 
         let config = ReasoningIndexConfig::default();
-        let (topic_paths, _) = ReasoningCompileStage::build_topic_paths(&tree, &config);
+        let (topic_paths, _) = ReasoningPass::build_topic_paths(&tree, &config);
 
         // All weights should be in 0.0-1.0 range
         for entries in topic_paths.values() {
@@ -549,7 +549,7 @@ mod tests {
 
         let mut config = ReasoningIndexConfig::default();
         config.max_keyword_entries = 5;
-        let (topic_paths, keyword_count) = ReasoningCompileStage::build_topic_paths(&tree, &config);
+        let (topic_paths, keyword_count) = ReasoningPass::build_topic_paths(&tree, &config);
 
         assert!(
             keyword_count <= 5,
@@ -574,7 +574,7 @@ mod tests {
             n.structure = "2".to_string();
         }
 
-        let section_map = ReasoningCompileStage::build_section_map(&tree);
+        let section_map = ReasoningPass::build_section_map(&tree);
 
         // Should index by title (lowercase) and structure index
         assert!(section_map.contains_key("introduction"));
@@ -602,7 +602,7 @@ mod tests {
             n.summary = "second section summary".to_string();
         }
 
-        let shortcut = ReasoningCompileStage::build_summary_shortcut(&tree);
+        let shortcut = ReasoningPass::build_summary_shortcut(&tree);
         assert!(shortcut.is_some());
 
         let sc = shortcut.unwrap();
@@ -626,7 +626,7 @@ mod tests {
             n.summary = "child summary 2".to_string();
         }
 
-        let shortcut = ReasoningCompileStage::build_summary_shortcut(&tree);
+        let shortcut = ReasoningPass::build_summary_shortcut(&tree);
         assert!(shortcut.is_some());
 
         let sc = shortcut.unwrap();

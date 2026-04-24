@@ -5,9 +5,9 @@
 
 use tracing::{info, warn};
 
-use super::async_trait;
-use super::{AccessPattern, CompileStage};
-use crate::pipeline::{CompileContext, StageResult};
+use crate::passes::async_trait;
+use crate::passes::{AccessPattern, CompilePass};
+use crate::pipeline::{CompileContext, PassResult};
 use vectorless_error::{Error, Result};
 
 /// Verification stage — ensures ingest produced reliable output.
@@ -18,10 +18,10 @@ use vectorless_error::{Error, Result};
 /// - At least one concept was extracted
 ///
 /// Any check failure produces an error — no silent degradation.
-pub struct VerifyStage;
+pub struct VerifyPass;
 
 #[async_trait]
-impl CompileStage for VerifyStage {
+impl CompilePass for VerifyPass {
     fn name(&self) -> &str {
         "verify"
     }
@@ -41,7 +41,7 @@ impl CompileStage for VerifyStage {
         }
     }
 
-    async fn execute(&mut self, ctx: &mut CompileContext) -> Result<StageResult> {
+    async fn execute(&mut self, ctx: &mut CompileContext) -> Result<PassResult> {
         // Tree must exist and have nodes
         let tree = ctx
             .tree
@@ -73,6 +73,6 @@ impl CompileStage for VerifyStage {
             ctx.concepts.len()
         );
 
-        Ok(StageResult::success("verify"))
+        Ok(PassResult::success("verify"))
     }
 }

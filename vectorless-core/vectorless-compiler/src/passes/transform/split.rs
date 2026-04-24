@@ -10,7 +10,7 @@ use vectorless_document::{DocumentTree, NodeId};
 use vectorless_error::Result;
 use vectorless_utils::estimate_tokens;
 
-use super::{AccessPattern, CompileStage, StageResult, async_trait};
+use crate::passes::{AccessPattern, CompilePass, PassResult, async_trait};
 use crate::config::SplitConfig;
 use crate::pipeline::CompileContext;
 
@@ -21,9 +21,9 @@ use crate::pipeline::CompileContext;
 /// child nodes from the resulting chunks.
 ///
 /// This stage runs after validate (priority 22) at priority 25.
-pub struct SplitStage;
+pub struct SplitPass;
 
-impl SplitStage {
+impl SplitPass {
     /// Create a new split stage.
     pub fn new() -> Self {
         Self
@@ -201,14 +201,14 @@ impl SplitStage {
     }
 }
 
-impl Default for SplitStage {
+impl Default for SplitPass {
     fn default() -> Self {
         Self::new()
     }
 }
 
 #[async_trait]
-impl CompileStage for SplitStage {
+impl CompilePass for SplitPass {
     fn name(&self) -> &'static str {
         "split"
     }
@@ -232,21 +232,21 @@ impl CompileStage for SplitStage {
         }
     }
 
-    async fn execute(&mut self, ctx: &mut CompileContext) -> Result<StageResult> {
+    async fn execute(&mut self, ctx: &mut CompileContext) -> Result<PassResult> {
         let start = Instant::now();
 
         let tree = match ctx.tree.as_mut() {
             Some(t) => t,
             None => {
                 info!("[split] No tree, skipping");
-                return Ok(StageResult::success("split"));
+                return Ok(PassResult::success("split"));
             }
         };
 
         let config = &ctx.options.split;
         if !config.enabled {
             debug!("[split] Disabled, skipping");
-            return Ok(StageResult::success("split"));
+            return Ok(PassResult::success("split"));
         }
 
         info!(
@@ -267,7 +267,7 @@ impl CompileStage for SplitStage {
             split_count, node_count_before, node_count_after, duration
         );
 
-        let mut stage_result = StageResult::success("split");
+        let mut stage_result = PassResult::success("split");
         stage_result.duration_ms = duration;
         stage_result
             .metadata
@@ -292,7 +292,7 @@ mod tests {
     #[test]
     fn test_find_split_points_small_content() {
         let content = "Hello world";
-        let points = SplitStage::find_split_points(content, 8000);
+        let points = SplitPass::find_split_points(content, 8000);
         assert!(points.is_empty());
     }
 
@@ -312,7 +312,7 @@ mod tests {
             content.push_str("Final content. ");
         }
 
-        let points = SplitStage::find_split_points(&content, 200);
+        let points = SplitPass::find_split_points(&content, 200);
         assert!(!points.is_empty());
     }
 
@@ -326,7 +326,7 @@ mod tests {
             content.push_str("\n\n");
         }
 
-        let points = SplitStage::find_split_points(&content, 200);
+        let points = SplitPass::find_split_points(&content, 200);
         assert!(!points.is_empty());
     }
 
@@ -341,7 +341,7 @@ mod tests {
         tree.set_token_count(child, 15000);
 
         let config = SplitConfig::disabled();
-        let count = SplitStage::split_tree(&mut tree, &config);
+        let count = SplitPass::split_tree(&mut tree, &config);
         assert_eq!(count, 0);
     }
 }

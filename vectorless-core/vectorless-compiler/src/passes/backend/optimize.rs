@@ -3,7 +3,7 @@
 
 //! Optimize stage - Optimize tree structure.
 
-use super::{AccessPattern, async_trait};
+use crate::passes::{AccessPattern, async_trait};
 use std::time::Instant;
 use tracing::{debug, info};
 
@@ -11,12 +11,12 @@ use crate::pipeline::CompileContext;
 use vectorless_document::NodeId;
 use vectorless_error::Result;
 
-use super::{CompileStage, StageResult};
+use crate::passes::{CompilePass, PassResult};
 
 /// Optimize stage - optimizes tree structure.
-pub struct OptimizeStage;
+pub struct OptimizePass;
 
-impl OptimizeStage {
+impl OptimizePass {
     /// Create a new optimize stage.
     pub fn new() -> Self {
         Self
@@ -149,14 +149,14 @@ impl OptimizeStage {
     }
 }
 
-impl Default for OptimizeStage {
+impl Default for OptimizePass {
     fn default() -> Self {
         Self::new()
     }
 }
 
 #[async_trait]
-impl CompileStage for OptimizeStage {
+impl CompilePass for OptimizePass {
     fn name(&self) -> &'static str {
         "optimize"
     }
@@ -177,13 +177,13 @@ impl CompileStage for OptimizeStage {
         }
     }
 
-    async fn execute(&mut self, ctx: &mut CompileContext) -> Result<StageResult> {
+    async fn execute(&mut self, ctx: &mut CompileContext) -> Result<PassResult> {
         let start = Instant::now();
 
         let config = &ctx.options.optimization;
         if !config.enabled {
             debug!("[optimize] Disabled, skipping");
-            return Ok(StageResult::success("optimize"));
+            return Ok(PassResult::success("optimize"));
         }
 
         let tree = ctx
@@ -225,7 +225,7 @@ impl CompileStage for OptimizeStage {
             merged_count, removed_count, duration
         );
 
-        let mut stage_result = StageResult::success("optimize");
+        let mut stage_result = PassResult::success("optimize");
         stage_result.duration_ms = duration;
         stage_result
             .metadata
@@ -289,7 +289,7 @@ mod tests {
         let mut metrics = crate::pipeline::IndexMetrics::new();
 
         // Threshold 100: Leaf A (50) and Leaf B (30) should merge
-        let merged = OptimizeStage::merge_small_leaves(&mut tree, 100, &mut metrics);
+        let merged = OptimizePass::merge_small_leaves(&mut tree, 100, &mut metrics);
 
         assert_eq!(merged, 1);
         assert_eq!(metrics.nodes_merged, 1);
@@ -310,7 +310,7 @@ mod tests {
         let mut metrics = crate::pipeline::IndexMetrics::new();
 
         // Threshold 10: all leaves are above this, nothing merges
-        let merged = OptimizeStage::merge_small_leaves(&mut tree, 10, &mut metrics);
+        let merged = OptimizePass::merge_small_leaves(&mut tree, 10, &mut metrics);
         assert_eq!(merged, 0);
     }
 
@@ -328,7 +328,7 @@ mod tests {
         }
 
         let mut metrics = crate::pipeline::IndexMetrics::new();
-        let _ = OptimizeStage::merge_small_leaves(&mut tree, 100, &mut metrics);
+        let _ = OptimizePass::merge_small_leaves(&mut tree, 100, &mut metrics);
 
         // Leaf A should now contain both contents with heading prefix
         let a_node = tree.get(a).unwrap();
@@ -356,7 +356,7 @@ mod tests {
         }
 
         let mut metrics = crate::pipeline::IndexMetrics::new();
-        let merged = OptimizeStage::merge_small_leaves(&mut tree, 100, &mut metrics);
+        let merged = OptimizePass::merge_small_leaves(&mut tree, 100, &mut metrics);
 
         // Section is non-leaf, only Leaf is a leaf — no adjacent pair of leaves
         assert_eq!(merged, 0);
@@ -371,7 +371,7 @@ mod tests {
         let section = tree.add_child(root, "Section", "");
         let _leaf = tree.add_child(section, "Leaf", "content");
 
-        let removed = OptimizeStage::remove_empty_nodes(&mut tree);
+        let removed = OptimizePass::remove_empty_nodes(&mut tree);
         assert_eq!(removed, 1);
 
         let section_node = tree.get(section).unwrap();
@@ -383,7 +383,7 @@ mod tests {
         let mut tree = DocumentTree::new("Root", "");
         let _child = tree.add_child(tree.root(), "Child", "content");
 
-        let removed = OptimizeStage::remove_empty_nodes(&mut tree);
+        let removed = OptimizePass::remove_empty_nodes(&mut tree);
         assert_eq!(removed, 0);
     }
 
@@ -393,7 +393,7 @@ mod tests {
         let root = tree.root();
         let leaf = tree.add_child(root, "Leaf", "");
 
-        let removed = OptimizeStage::remove_empty_nodes(&mut tree);
+        let removed = OptimizePass::remove_empty_nodes(&mut tree);
         assert_eq!(removed, 0, "Leaves should not be removed");
 
         // Verify the leaf is indeed a leaf
@@ -408,7 +408,7 @@ mod tests {
         let _c1 = tree.add_child(section, "C1", "a");
         let _c2 = tree.add_child(section, "C2", "b");
 
-        let removed = OptimizeStage::remove_empty_nodes(&mut tree);
+        let removed = OptimizePass::remove_empty_nodes(&mut tree);
         assert_eq!(
             removed, 0,
             "Nodes with multiple children should not be removed"
@@ -422,13 +422,13 @@ mod tests {
         let section = tree.add_child(root, "Section", "has content");
         let _leaf = tree.add_child(section, "Leaf", "content");
 
-        let removed = OptimizeStage::remove_empty_nodes(&mut tree);
+        let removed = OptimizePass::remove_empty_nodes(&mut tree);
         assert_eq!(removed, 0);
     }
 
     #[tokio::test]
     async fn test_optimize_disabled_skips() {
-        let mut stage = OptimizeStage::new();
+        let mut stage = OptimizePass::new();
         assert_eq!(stage.name(), "optimize");
         assert!(stage.is_optional());
         assert_eq!(stage.depends_on(), vec!["enrich", "navigation_index"]);
@@ -449,7 +449,7 @@ mod tests {
         let mut tree = DocumentTree::new("Root", "");
         let mut metrics = crate::pipeline::IndexMetrics::new();
 
-        let merged = OptimizeStage::merge_small_leaves(&mut tree, 100, &mut metrics);
+        let merged = OptimizePass::merge_small_leaves(&mut tree, 100, &mut metrics);
         assert_eq!(merged, 0, "Root with no children should merge nothing");
     }
 }

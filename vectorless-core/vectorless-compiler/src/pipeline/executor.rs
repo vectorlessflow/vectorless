@@ -12,10 +12,10 @@ use vectorless_error::Result;
 use vectorless_llm::LlmClient;
 
 use super::super::PipelineOptions;
-use super::super::stages::{
-    BuildStage, ConceptExtractionStage, EnhanceStage, EnrichStage, CompileStage,
-    NavigationCompileStage, OptimizeStage, ParseStage, ReasoningCompileStage, SplitStage,
-    ValidateStage, VerifyStage,
+use super::super::passes::{
+    BuildPass, ConceptPass, EnhancePass, EnrichPass, CompilePass,
+    NavigationPass, OptimizePass, ParsePass, ReasoningPass, SplitPass,
+    ValidatePass, VerifyPass,
 };
 use super::context::{CompilerInput, CompileResult};
 use super::orchestrator::PipelineOrchestrator;
@@ -37,9 +37,9 @@ use super::orchestrator::PipelineOrchestrator;
 ///
 /// // Custom pipeline using orchestrator
 /// let orchestrator = PipelineOrchestrator::new()
-///     .stage(ParseStage::new())
+///     .stage(ParsePass::new())
 ///     .stage_with_priority(MyCustomStage::new(), 50)
-///     .stage(BuildStage::new());
+///     .stage(BuildPass::new());
 /// let executor = PipelineExecutor::from_orchestrator(orchestrator);
 /// ```
 pub struct PipelineExecutor {
@@ -62,16 +62,16 @@ impl PipelineExecutor {
     /// 10. `optimize` - Optimize tree structure
     pub fn new() -> Self {
         let orchestrator = PipelineOrchestrator::new()
-            .stage_with_priority(ParseStage::new(), 10)
-            .stage_with_priority(BuildStage::new(), 20)
-            .stage_with_priority(ValidateStage::new(), 22)
-            .stage_with_priority(SplitStage::new(), 25)
-            .stage_with_priority(EnrichStage::new(), 40)
-            .stage_with_priority(ReasoningCompileStage::new(), 45)
-            .stage_with_priority(ConceptExtractionStage::new(), 47)
-            .stage_with_priority(NavigationCompileStage::new(), 50)
-            .stage_with_priority(VerifyStage, 55)
-            .stage_with_priority(OptimizeStage::new(), 60);
+            .stage_with_priority(ParsePass::new(), 10)
+            .stage_with_priority(BuildPass::new(), 20)
+            .stage_with_priority(ValidatePass::new(), 22)
+            .stage_with_priority(SplitPass::new(), 25)
+            .stage_with_priority(EnrichPass::new(), 40)
+            .stage_with_priority(ReasoningPass::new(), 45)
+            .stage_with_priority(ConceptPass::new(), 47)
+            .stage_with_priority(NavigationPass::new(), 50)
+            .stage_with_priority(VerifyPass, 55)
+            .stage_with_priority(OptimizePass::new(), 60);
 
         Self { orchestrator }
     }
@@ -92,21 +92,21 @@ impl PipelineExecutor {
     /// 11. `optimize` - Optimize tree
     pub fn with_llm(client: LlmClient) -> Self {
         tracing::info!(
-            "PipelineExecutor::with_llm — cloning client to ParseStage + EnhanceStage + context"
+            "PipelineExecutor::with_llm — cloning client to ParsePass + EnhancePass + context"
         );
         let orchestrator = PipelineOrchestrator::new()
             .with_llm_client(client.clone())
-            .stage_with_priority(ParseStage::with_llm_client(client.clone()), 10)
-            .stage_with_priority(BuildStage::new(), 20)
-            .stage_with_priority(ValidateStage::new(), 22)
-            .stage_with_priority(SplitStage::new(), 25)
-            .stage_with_priority(EnhanceStage::with_llm_client(client.clone()), 30)
-            .stage_with_priority(EnrichStage::new(), 40)
-            .stage_with_priority(ReasoningCompileStage::new(), 45)
-            .stage_with_priority(ConceptExtractionStage::with_llm_client(client), 47)
-            .stage_with_priority(NavigationCompileStage::new(), 50)
-            .stage_with_priority(VerifyStage, 55)
-            .stage_with_priority(OptimizeStage::new(), 60);
+            .stage_with_priority(ParsePass::with_llm_client(client.clone()), 10)
+            .stage_with_priority(BuildPass::new(), 20)
+            .stage_with_priority(ValidatePass::new(), 22)
+            .stage_with_priority(SplitPass::new(), 25)
+            .stage_with_priority(EnhancePass::with_llm_client(client.clone()), 30)
+            .stage_with_priority(EnrichPass::new(), 40)
+            .stage_with_priority(ReasoningPass::new(), 45)
+            .stage_with_priority(ConceptPass::with_llm_client(client), 47)
+            .stage_with_priority(NavigationPass::new(), 50)
+            .stage_with_priority(VerifyPass, 55)
+            .stage_with_priority(OptimizePass::new(), 60);
 
         Self { orchestrator }
     }
@@ -119,9 +119,9 @@ impl PipelineExecutor {
     ///
     /// ```rust,ignore
     /// let orchestrator = PipelineOrchestrator::new()
-    ///     .stage_with_priority(ParseStage::new(), 10)
+    ///     .stage_with_priority(ParsePass::new(), 10)
     ///     .stage_with_priority(MyAnalysisStage::new(), 25)
-    ///     .stage_with_priority(BuildStage::new(), 20)
+    ///     .stage_with_priority(BuildPass::new(), 20)
     ///     .stage_with_deps(MyValidationStage::new(), 50, &["build"]);
     ///
     /// let executor = PipelineExecutor::from_orchestrator(orchestrator);
@@ -133,7 +133,7 @@ impl PipelineExecutor {
     /// Add a stage with default priority.
     ///
     /// The stage will be added after existing stages with the same priority.
-    pub fn add_stage(mut self, stage: impl CompileStage + 'static) -> Self {
+    pub fn add_stage(mut self, stage: impl CompilePass + 'static) -> Self {
         self.orchestrator = self.orchestrator.stage(stage);
         self
     }
@@ -143,7 +143,7 @@ impl PipelineExecutor {
     /// Lower priority = earlier execution.
     pub fn add_stage_with_priority(
         mut self,
-        stage: impl CompileStage + 'static,
+        stage: impl CompilePass + 'static,
         priority: i32,
     ) -> Self {
         self.orchestrator = self.orchestrator.stage_with_priority(stage, priority);
@@ -155,7 +155,7 @@ impl PipelineExecutor {
     /// The stage will run after all specified dependencies.
     pub fn add_stage_with_deps(
         mut self,
-        stage: impl CompileStage + 'static,
+        stage: impl CompilePass + 'static,
         priority: i32,
         depends_on: &[&str],
     ) -> Self {

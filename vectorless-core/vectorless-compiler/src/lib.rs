@@ -44,7 +44,7 @@ pub mod config;
 pub mod incremental;
 pub mod parse;
 pub mod pipeline;
-pub mod stages;
+pub mod passes;
 pub mod summary;
 
 // Re-export main types from pipeline

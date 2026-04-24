@@ -4,12 +4,12 @@
 //! Pipeline execution module.
 //!
 //! This module provides the core pipeline infrastructure:
-//! - [`CompileContext`] - Context passed between stages
-//! - [`PipelineExecutor`] - Executes the indexing pipeline
-//! - [`PipelineOrchestrator`] - Flexible stage orchestration with dependencies
+//! - [`CompileContext`] - Context passed between passes
+//! - [`PipelineExecutor`] - Executes the compilation pipeline
+//! - [`PipelineOrchestrator`] - Flexible pass orchestration with dependencies
 //! - [`IndexMetrics`] - Performance metrics collection
-//! - [`FailurePolicy`] - Configurable failure handling for stages
-//! - [`StageRetryConfig`] - Retry configuration for stages
+//! - [`FailurePolicy`] - Configurable failure handling for passes
+//! - [`StageRetryConfig`] - Retry configuration for passes
 
 mod checkpoint;
 mod context;
@@ -18,7 +18,7 @@ mod metrics;
 mod orchestrator;
 mod policy;
 
-pub use context::{CompileContext, CompilerInput, CompileResult, StageResult};
+pub use context::{CompileContext, CompilerInput, CompileResult, PassResult};
 pub use executor::PipelineExecutor;
 pub use metrics::IndexMetrics;
 pub use policy::{FailurePolicy, StageRetryConfig};

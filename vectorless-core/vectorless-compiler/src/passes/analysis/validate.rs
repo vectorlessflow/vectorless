@@ -9,7 +9,7 @@ use tracing::{debug, info, warn};
 
 use vectorless_error::Result;
 
-use super::{AccessPattern, CompileStage, StageResult, async_trait};
+use crate::passes::{AccessPattern, CompilePass, PassResult, async_trait};
 use crate::pipeline::CompileContext;
 
 /// Maximum allowed tree depth.
@@ -49,9 +49,9 @@ struct ValidationIssue {
 /// 3. Empty title detection on leaf nodes
 /// 4. Token count consistency (parent >= sum of children)
 /// 5. Content duplication detection
-pub struct ValidateStage;
+pub struct ValidatePass;
 
-impl ValidateStage {
+impl ValidatePass {
     /// Create a new validate stage.
     pub fn new() -> Self {
         Self
@@ -215,14 +215,14 @@ impl ValidateStage {
     }
 }
 
-impl Default for ValidateStage {
+impl Default for ValidatePass {
     fn default() -> Self {
         Self::new()
     }
 }
 
 #[async_trait]
-impl CompileStage for ValidateStage {
+impl CompilePass for ValidatePass {
     fn name(&self) -> &'static str {
         "validate"
     }
@@ -246,7 +246,7 @@ impl CompileStage for ValidateStage {
         }
     }
 
-    async fn execute(&mut self, ctx: &mut CompileContext) -> Result<StageResult> {
+    async fn execute(&mut self, ctx: &mut CompileContext) -> Result<PassResult> {
         let start = Instant::now();
 
         let node_count = ctx.tree.as_ref().map(|t| t.node_count()).unwrap_or(0);
@@ -283,7 +283,7 @@ impl CompileStage for ValidateStage {
             warnings, errors, duration
         );
 
-        let mut stage_result = StageResult::success("validate");
+        let mut stage_result = PassResult::success("validate");
         stage_result.duration_ms = duration;
         stage_result
             .metadata
@@ -314,7 +314,7 @@ mod tests {
         let tree = DocumentTree::new("Root", "");
         let ctx = make_context_with_tree(tree);
 
-        let stage = ValidateStage::new();
+        let stage = ValidatePass::new();
         let issues = stage.validate_tree(&ctx);
 
         // Single root node is valid — no issues expected
@@ -329,7 +329,7 @@ mod tests {
 
         let ctx = make_context_with_tree(tree);
 
-        let stage = ValidateStage::new();
+        let stage = ValidatePass::new();
         let issues = stage.validate_tree(&ctx);
 
         assert!(issues.is_empty());
@@ -343,7 +343,7 @@ mod tests {
 
         let ctx = make_context_with_tree(tree);
 
-        let stage = ValidateStage::new();
+        let stage = ValidatePass::new();
         let issues = stage.validate_tree(&ctx);
 
         let warning_count = issues
@@ -359,7 +359,7 @@ mod tests {
         let options = crate::config::PipelineOptions::default();
         let ctx = CompileContext::new(input, options);
 
-        let stage = ValidateStage::new();
+        let stage = ValidatePass::new();
         let issues = stage.validate_tree(&ctx);
 
         assert_eq!(issues.len(), 1);

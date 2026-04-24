@@ -3,24 +3,24 @@
 
 //! Parse stage - Parse documents into raw nodes.
 
-use super::async_trait;
+use crate::passes::async_trait;
 use std::time::Instant;
 use tracing::{debug, info};
 
 use vectorless_document::DocumentFormat;
 use vectorless_error::Result;
 
-use super::{CompileStage, StageResult};
+use crate::passes::{CompilePass, PassResult};
 use crate::SourceFormat;
 use crate::pipeline::{CompileContext, CompilerInput};
 
 /// Parse stage - extracts raw nodes from documents.
-pub struct ParseStage {
+pub struct ParsePass {
     /// Optional LLM client for PDF structure extraction.
     llm_client: Option<vectorless_llm::LlmClient>,
 }
 
-impl ParseStage {
+impl ParsePass {
     /// Create a new parse stage.
     pub fn new() -> Self {
         Self { llm_client: None }
@@ -52,19 +52,19 @@ impl ParseStage {
     }
 }
 
-impl Default for ParseStage {
+impl Default for ParsePass {
     fn default() -> Self {
         Self::new()
     }
 }
 
 #[async_trait]
-impl CompileStage for ParseStage {
+impl CompilePass for ParsePass {
     fn name(&self) -> &'static str {
         "parse"
     }
 
-    async fn execute(&mut self, ctx: &mut CompileContext) -> Result<StageResult> {
+    async fn execute(&mut self, ctx: &mut CompileContext) -> Result<PassResult> {
         let start = Instant::now();
 
         // Detect format
@@ -151,7 +151,7 @@ impl CompileStage for ParseStage {
             duration
         );
 
-        let mut stage_result = StageResult::success("parse");
+        let mut stage_result = PassResult::success("parse");
         stage_result.duration_ms = duration;
         stage_result.metadata.insert(
             "node_count".to_string(),

@@ -12,8 +12,8 @@ use vectorless_document::Concept;
 use vectorless_error::Result;
 use vectorless_llm::LlmClient;
 
-use super::async_trait;
-use super::{AccessPattern, CompileStage, StageResult};
+use crate::passes::async_trait;
+use crate::passes::{AccessPattern, CompilePass, PassResult};
 use crate::pipeline::CompileContext;
 
 /// Maximum number of top keywords to send to the LLM for concept extraction.
@@ -27,11 +27,11 @@ const MAX_CONCEPTS: usize = 15;
 /// Takes the reasoning index's topic entries and tree summaries, then uses
 /// a single LLM call to extract structured [`Concept`] values.
 /// Falls back to basic keyword-based concepts when no LLM is available.
-pub struct ConceptExtractionStage {
+pub struct ConceptPass {
     llm_client: Option<LlmClient>,
 }
 
-impl ConceptExtractionStage {
+impl ConceptPass {
     /// Create a new stage without LLM support (keyword-based fallback).
     pub fn new() -> Self {
         Self { llm_client: None }
@@ -46,7 +46,7 @@ impl ConceptExtractionStage {
 }
 
 #[async_trait]
-impl CompileStage for ConceptExtractionStage {
+impl CompilePass for ConceptPass {
     fn name(&self) -> &str {
         "concept_extraction"
     }
@@ -67,7 +67,7 @@ impl CompileStage for ConceptExtractionStage {
         }
     }
 
-    async fn execute(&mut self, ctx: &mut CompileContext) -> Result<StageResult> {
+    async fn execute(&mut self, ctx: &mut CompileContext) -> Result<PassResult> {
         let concepts = if let Some(ref client) = self.llm_client {
             extract_with_llm(ctx, client).await
         } else {
@@ -78,7 +78,7 @@ impl CompileStage for ConceptExtractionStage {
         ctx.concepts = concepts;
         info!("[concept_extraction] Extracted {} concepts", count);
 
-        Ok(StageResult::success("concept_extraction"))
+        Ok(PassResult::success("concept_extraction"))
     }
 }
 

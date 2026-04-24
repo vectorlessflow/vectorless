@@ -1,7 +1,7 @@
 // Copyright (c) 2026 vectorless developers
 // SPDX-License-Identifier: Apache-2.0
 
-//! Index context for passing data between stages.
+//! Compile context for passing data between passes.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -115,10 +115,10 @@ impl CompilerInput {
     }
 }
 
-/// Result from a single stage execution.
+/// Result from a single pass execution.
 #[derive(Debug, Clone)]
-pub struct StageResult {
-    /// Whether the stage succeeded.
+pub struct PassResult {
+    /// Whether the pass succeeded.
     pub success: bool,
 
     /// Duration in milliseconds.
@@ -128,10 +128,10 @@ pub struct StageResult {
     pub metadata: HashMap<String, serde_json::Value>,
 }
 
-impl StageResult {
+impl PassResult {
     /// Create a successful result.
     pub fn success(name: &str) -> Self {
-        println!("Stage '{}' completed successfully", name);
+        println!("Pass '{}' completed successfully", name);
 
         Self {
             success: true,
@@ -142,7 +142,7 @@ impl StageResult {
 
     /// Create a failed result.
     pub fn failure(name: &str, error: &str) -> Self {
-        println!("Stage '{}' failed: {}", name, error);
+        println!("Pass '{}' failed: {}", name, error);
 
         let mut metadata = HashMap::new();
         metadata.insert(
@@ -168,6 +168,10 @@ impl StageResult {
         self
     }
 }
+
+/// Backward-compatible alias.
+#[deprecated(since = "0.2.0", note = "Use `PassResult` instead")]
+pub type StageResult = PassResult;
 
 /// Summary cache for lazy generation.
 #[derive(Debug, Clone, Default)]
@@ -209,7 +213,7 @@ impl SummaryCache {
     }
 }
 
-/// Index context passed between stages.
+/// Compile context passed between passes.
 #[derive(Debug)]
 pub struct CompileContext {
     /// Document ID.
@@ -258,8 +262,8 @@ pub struct CompileContext {
     /// When set, the enhance and reasoning stages can reuse data from unchanged nodes.
     pub existing_tree: Option<DocumentTree>,
 
-    /// Stage execution results.
-    pub stage_results: HashMap<String, StageResult>,
+    /// Pass execution results.
+    pub stage_results: HashMap<String, PassResult>,
 
     /// Performance metrics.
     pub metrics: IndexMetrics,
@@ -361,8 +365,8 @@ impl CompileContext {
         }
     }
 
-    /// Record a stage result.
-    pub fn record_stage(&mut self, name: &str, result: StageResult) {
+    /// Record a pass result.
+    pub fn record_stage(&mut self, name: &str, result: PassResult) {
         self.stage_results.insert(name.to_string(), result);
     }
 

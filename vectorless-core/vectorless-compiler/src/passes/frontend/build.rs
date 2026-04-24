@@ -3,7 +3,7 @@
 
 //! Build stage - Build tree from raw nodes.
 
-use super::async_trait;
+use crate::passes::async_trait;
 use std::time::Instant;
 use tracing::{debug, info};
 
@@ -12,14 +12,14 @@ use vectorless_document::{DocumentTree, NodeId};
 use vectorless_error::Result;
 use vectorless_utils::estimate_tokens;
 
-use super::{CompileStage, StageResult};
+use crate::passes::{CompilePass, PassResult};
 use crate::ThinningConfig;
 use crate::pipeline::CompileContext;
 
 /// Build stage - constructs a tree from raw nodes.
-pub struct BuildStage;
+pub struct BuildPass;
 
-impl BuildStage {
+impl BuildPass {
     /// Create a new build stage.
     pub fn new() -> Self {
         Self
@@ -236,14 +236,14 @@ impl BuildStage {
     }
 }
 
-impl Default for BuildStage {
+impl Default for BuildPass {
     fn default() -> Self {
         Self::new()
     }
 }
 
 #[async_trait]
-impl CompileStage for BuildStage {
+impl CompilePass for BuildPass {
     fn name(&self) -> &'static str {
         "build"
     }
@@ -252,7 +252,7 @@ impl CompileStage for BuildStage {
         vec!["parse"]
     }
 
-    async fn execute(&mut self, ctx: &mut CompileContext) -> Result<StageResult> {
+    async fn execute(&mut self, ctx: &mut CompileContext) -> Result<PassResult> {
         let start = Instant::now();
 
         // Take raw nodes from context
@@ -260,7 +260,7 @@ impl CompileStage for BuildStage {
 
         if raw_nodes.is_empty() {
             info!("[build] No raw nodes, skipping");
-            return Ok(StageResult::success("build"));
+            return Ok(PassResult::success("build"));
         }
 
         info!(
@@ -319,7 +319,7 @@ impl CompileStage for BuildStage {
             node_count, skipped, duration
         );
 
-        let mut stage_result = StageResult::success("build");
+        let mut stage_result = PassResult::success("build");
         stage_result.duration_ms = duration;
         stage_result.metadata.insert(
             "node_count".to_string(),

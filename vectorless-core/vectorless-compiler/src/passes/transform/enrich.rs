@@ -3,20 +3,20 @@
 
 //! Enrich stage - Add metadata to the tree.
 
-use super::async_trait;
+use crate::passes::async_trait;
 use std::time::Instant;
 use tracing::{debug, info};
 
 use vectorless_document::{DocumentTree, NodeId, ReferenceExtractor, TocView};
 use vectorless_error::Result;
 
-use super::{AccessPattern, CompileStage, StageResult};
+use crate::passes::{AccessPattern, CompilePass, PassResult};
 use crate::pipeline::CompileContext;
 
 /// Enrich stage - adds metadata to the tree.
-pub struct EnrichStage;
+pub struct EnrichPass;
 
-impl EnrichStage {
+impl EnrichPass {
     /// Create a new enrich stage.
     pub fn new() -> Self {
         Self
@@ -138,14 +138,14 @@ impl EnrichStage {
     }
 }
 
-impl Default for EnrichStage {
+impl Default for EnrichPass {
     fn default() -> Self {
         Self::new()
     }
 }
 
 #[async_trait]
-impl CompileStage for EnrichStage {
+impl CompilePass for EnrichPass {
     fn name(&self) -> &'static str {
         "enrich"
     }
@@ -163,7 +163,7 @@ impl CompileStage for EnrichStage {
         }
     }
 
-    async fn execute(&mut self, ctx: &mut CompileContext) -> Result<StageResult> {
+    async fn execute(&mut self, ctx: &mut CompileContext) -> Result<PassResult> {
         let start = Instant::now();
 
         let tree = ctx
@@ -208,7 +208,7 @@ impl CompileStage for EnrichStage {
             total_tokens, resolved_refs, duration
         );
 
-        let mut stage_result = StageResult::success("enrich");
+        let mut stage_result = PassResult::success("enrich");
         stage_result.duration_ms = duration;
         stage_result
             .metadata
@@ -234,7 +234,7 @@ mod tests {
         let mut tree = DocumentTree::new("Root", "root content");
         tree.add_child(tree.root(), "Section 1", "No references here.");
 
-        let resolved = EnrichStage::resolve_references(&mut tree);
+        let resolved = EnrichPass::resolve_references(&mut tree);
         assert_eq!(resolved, 0);
     }
 }

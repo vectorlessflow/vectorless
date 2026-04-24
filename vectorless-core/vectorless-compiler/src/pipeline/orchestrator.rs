@@ -30,24 +30,24 @@ use tracing::{debug, error, info, warn};
 use vectorless_error::Result;
 
 use super::super::PipelineOptions;
-use super::super::stages::CompileStage;
+use super::super::passes::CompilePass;
 use super::checkpoint::{CheckpointContextData, CheckpointManager, PipelineCheckpoint};
-use super::context::{CompileContext, CompilerInput, CompileResult, StageResult};
+use super::context::{CompileContext, CompilerInput, CompileResult, PassResult};
 use super::policy::FailurePolicy;
 
 /// Stage entry with metadata for orchestration.
-struct StageEntry {
+struct PassEntry {
     /// The stage implementation.
-    stage: Box<dyn CompileStage>,
+    stage: Box<dyn CompilePass>,
     /// Priority (lower = earlier execution).
     priority: i32,
     /// Names of stages this depends on.
     depends_on: Vec<String>,
 }
 
-impl std::fmt::Debug for StageEntry {
+impl std::fmt::Debug for PassEntry {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("StageEntry")
+        f.debug_struct("PassEntry")
             .field("name", &self.stage.name())
             .field("priority", &self.priority)
             .field("depends_on", &self.depends_on)
@@ -93,7 +93,7 @@ pub struct ExecutionGroup {
 /// ```
 pub struct PipelineOrchestrator {
     /// Registered stages with metadata.
-    stages: Vec<StageEntry>,
+    stages: Vec<PassEntry>,
     /// Shared LLM client injected into pipeline context.
     llm_client: Option<vectorless_llm::LlmClient>,
 }
@@ -124,10 +124,10 @@ impl PipelineOrchestrator {
     /// Dependencies are automatically read from the stage's `depends_on()` method.
     pub fn stage<S>(mut self, stage: S) -> Self
     where
-        S: CompileStage + 'static,
+        S: CompilePass + 'static,
     {
         let deps = stage.depends_on();
-        self.stages.push(StageEntry {
+        self.stages.push(PassEntry {
             stage: Box::new(stage),
             priority: 100,
             depends_on: deps.into_iter().map(|s| s.to_string()).collect(),
@@ -142,10 +142,10 @@ impl PipelineOrchestrator {
     /// Default priority is 100.
     pub fn stage_with_priority<S>(mut self, stage: S, priority: i32) -> Self
     where
-        S: CompileStage + 'static,
+        S: CompilePass + 'static,
     {
         let deps = stage.depends_on();
-        self.stages.push(StageEntry {
+        self.stages.push(PassEntry {
             stage: Box::new(stage),
             priority,
             depends_on: deps.into_iter().map(|s| s.to_string()).collect(),
@@ -164,7 +164,7 @@ impl PipelineOrchestrator {
         explicit_depends_on: &[&str],
     ) -> Self
     where
-        S: CompileStage + 'static,
+        S: CompilePass + 'static,
     {
         let trait_deps = stage.depends_on();
         let mut all_deps: Vec<String> = trait_deps.into_iter().map(|s| s.to_string()).collect();
@@ -176,7 +176,7 @@ impl PipelineOrchestrator {
             }
         }
 
-        self.stages.push(StageEntry {
+        self.stages.push(PassEntry {
             stage: Box::new(stage),
             priority,
             depends_on: all_deps,
@@ -346,9 +346,9 @@ impl PipelineOrchestrator {
 
     /// Execute a stage with its failure policy applied.
     async fn execute_stage_with_policy(
-        stage: &mut Box<dyn CompileStage>,
+        stage: &mut Box<dyn CompilePass>,
         ctx: &mut CompileContext,
-    ) -> Result<StageResult> {
+    ) -> Result<PassResult> {
         let policy = stage.failure_policy();
         let stage_name = stage.name().to_string();
 
@@ -364,7 +364,7 @@ impl PipelineOrchestrator {
                     Ok(result) => Ok(result),
                     Err(e) => {
                         warn!("Stage {} failed, skipping: {}", stage_name, e);
-                        Ok(StageResult::failure(&stage_name, &e.to_string()))
+                        Ok(PassResult::failure(&stage_name, &e.to_string()))
                     }
                 }
             }
@@ -403,7 +403,7 @@ impl PipelineOrchestrator {
 
     /// Handle the result of a stage execution (shared between sequential and parallel paths).
     fn handle_stage_result(
-        result: Result<StageResult>,
+        result: Result<PassResult>,
         stage_name: &str,
         policy: &FailurePolicy,
         ctx: &mut CompileContext,
@@ -421,7 +421,7 @@ impl PipelineOrchestrator {
                     );
                     ctx.stage_results.insert(
                         stage_name.to_string(),
-                        StageResult::failure(stage_name, &e.to_string()),
+                        PassResult::failure(stage_name, &e.to_string()),
                     );
                     Ok(())
                 } else {
@@ -506,7 +506,7 @@ impl PipelineOrchestrator {
                     // Mark completed stages as done
                     for stage_name in &checkpoint.completed_stages {
                         ctx.stage_results
-                            .insert(stage_name.clone(), StageResult::success(stage_name));
+                            .insert(stage_name.clone(), PassResult::success(stage_name));
                     }
                 } else {
                     info!("Checkpoint exists but invalid, starting fresh");
@@ -556,7 +556,7 @@ impl PipelineOrchestrator {
                     .copied();
 
                 // For each stage, prepare (stage, context) pair.
-                // Swap out stages from self.stages to get owned Box<dyn CompileStage>.
+                // Swap out stages from self.stages to get owned Box<dyn CompilePass>.
                 let mut entries: Vec<ParallelEntry> = Vec::with_capacity(group.stage_indices.len());
 
                 for &idx in &group.stage_indices {
@@ -610,7 +610,7 @@ impl PipelineOrchestrator {
 
                 // Execute writer on main ctx concurrently with readers.
                 // Move each reader's stage+ctx into an owned async block.
-                // All futures are !Send (Box<dyn CompileStage>), but join_all
+                // All futures are !Send (Box<dyn CompilePass>), but join_all
                 // works fine on the same thread.
 
                 let reader_futs: Vec<
@@ -619,7 +619,7 @@ impl PipelineOrchestrator {
                             dyn std::future::Future<
                                     Output = (
                                         ParallelEntry,
-                                        std::result::Result<StageResult, vectorless_error::Error>,
+                                        std::result::Result<PassResult, vectorless_error::Error>,
                                     ),
                                 > + Send,
                         >,
@@ -699,7 +699,7 @@ impl PipelineOrchestrator {
                                 );
                                 ctx.stage_results.insert(
                                     stage_name.clone(),
-                                    StageResult::failure(&stage_name, &e.to_string()),
+                                    PassResult::failure(&stage_name, &e.to_string()),
                                 );
                             } else {
                                 error!("Stage {} failed, stopping pipeline: {}", stage_name, e);
@@ -841,13 +841,13 @@ impl PipelineOrchestrator {
 struct NopStage;
 
 #[async_trait::async_trait]
-impl CompileStage for NopStage {
+impl CompilePass for NopStage {
     fn name(&self) -> &'static str {
         "_nop"
     }
 
-    async fn execute(&mut self, _ctx: &mut CompileContext) -> Result<StageResult> {
-        Ok(StageResult::success("_nop"))
+    async fn execute(&mut self, _ctx: &mut CompileContext) -> Result<PassResult> {
+        Ok(PassResult::success("_nop"))
     }
 }
 
@@ -860,7 +860,7 @@ struct ParallelEntry {
     /// Index into orchestrator's stages vec (for swapping back).
     idx: usize,
     /// The owned stage implementation.
-    stage: Box<dyn CompileStage>,
+    stage: Box<dyn CompilePass>,
     /// Cloned context for reader stages; None for the tree writer
     /// (which uses the main ctx directly).
     ctx: Option<CompileContext>,
@@ -869,7 +869,7 @@ struct ParallelEntry {
     /// Failure policy (captured before swap).
     policy: FailurePolicy,
     /// Access pattern (captured before swap).
-    access: crate::stages::AccessPattern,
+    access: crate::passes::AccessPattern,
 }
 
 /// Builder for creating custom stage configurations.
@@ -935,7 +935,7 @@ impl CustomStageBuilder {
 
 #[cfg(test)]
 mod tests {
-    use super::super::context::StageResult;
+    use super::super::context::PassResult;
     use super::*;
 
     #[test]
@@ -1016,13 +1016,13 @@ mod tests {
     }
 
     #[async_trait::async_trait]
-    impl CompileStage for MockStage {
+    impl CompilePass for MockStage {
         fn name(&self) -> &str {
             &self.name
         }
 
-        async fn execute(&mut self, _ctx: &mut CompileContext) -> Result<StageResult> {
-            Ok(StageResult::success(&self.name))
+        async fn execute(&mut self, _ctx: &mut CompileContext) -> Result<PassResult> {
+            Ok(PassResult::success(&self.name))
         }
     }
 }

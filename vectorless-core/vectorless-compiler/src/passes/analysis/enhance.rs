@@ -3,7 +3,7 @@
 
 //! Enhance stage - Generate summaries using LLM.
 
-use super::async_trait;
+use crate::passes::async_trait;
 use futures::StreamExt;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -16,7 +16,7 @@ use vectorless_llm::LlmClient;
 use vectorless_llm::memo::{MemoKey, MemoStore};
 use vectorless_utils::fingerprint::Fingerprint;
 
-use super::{CompileStage, StageResult};
+use crate::passes::{CompilePass, PassResult};
 use crate::pipeline::{FailurePolicy, CompileContext, StageRetryConfig};
 use crate::summary::{LlmSummaryGenerator, SummaryGenerator, SummaryStrategy};
 
@@ -29,14 +29,14 @@ struct PendingNode {
 }
 
 /// Enhance stage - generates summaries using LLM.
-pub struct EnhanceStage {
+pub struct EnhancePass {
     /// LLM client for summary generation.
     llm_client: Option<Arc<LlmClient>>,
     /// Memo store for caching LLM results.
     memo_store: Option<Arc<MemoStore>>,
 }
 
-impl EnhanceStage {
+impl EnhancePass {
     /// Create a new enhance stage.
     pub fn new() -> Self {
         Self {
@@ -120,14 +120,14 @@ impl EnhanceStage {
     }
 }
 
-impl Default for EnhanceStage {
+impl Default for EnhancePass {
     fn default() -> Self {
         Self::new()
     }
 }
 
 #[async_trait]
-impl CompileStage for EnhanceStage {
+impl CompilePass for EnhancePass {
     fn name(&self) -> &'static str {
         "enhance"
     }
@@ -149,7 +149,7 @@ impl CompileStage for EnhanceStage {
         )
     }
 
-    async fn execute(&mut self, ctx: &mut CompileContext) -> Result<StageResult> {
+    async fn execute(&mut self, ctx: &mut CompileContext) -> Result<PassResult> {
         let start = Instant::now();
 
         info!(
@@ -164,7 +164,7 @@ impl CompileStage for EnhanceStage {
                 "[enhance] Skipped: strategy={:?}",
                 ctx.options.summary_strategy
             );
-            return Ok(StageResult::success("enhance"));
+            return Ok(PassResult::success("enhance"));
         }
 
         // Get LLM client
@@ -172,7 +172,7 @@ impl CompileStage for EnhanceStage {
             Some(client) => client,
             None => {
                 warn!("[enhance] No LLM client, skipping summary generation");
-                return Ok(StageResult::success("enhance"));
+                return Ok(PassResult::success("enhance"));
             }
         };
 
@@ -181,7 +181,7 @@ impl CompileStage for EnhanceStage {
             Some(t) => t,
             None => {
                 warn!("[enhance] No tree built, skipping");
-                return Ok(StageResult::success("enhance"));
+                return Ok(PassResult::success("enhance"));
             }
         };
 
@@ -383,7 +383,7 @@ impl CompileStage for EnhanceStage {
             generated, shortcut_used, failed, skipped_no_content, skipped_tokens, duration
         );
 
-        let mut stage_result = StageResult::success("enhance");
+        let mut stage_result = PassResult::success("enhance");
         stage_result.duration_ms = duration;
         stage_result.metadata.insert(
             "summaries_generated".to_string(),
@@ -408,7 +408,7 @@ OVERVIEW: This section covers payment integration and billing configuration.
 QUESTIONS: How to set up payments?, What currencies are supported?, How to configure invoices?
 TAGS: payments, billing, invoices, currency";
 
-        let (overview, questions, tags) = EnhanceStage::parse_structured_nav_response(response);
+        let (overview, questions, tags) = EnhancePass::parse_structured_nav_response(response);
 
         assert!(overview.contains("payment integration"));
         assert_eq!(questions.len(), 3);
@@ -421,7 +421,7 @@ TAGS: payments, billing, invoices, currency";
     fn test_parse_structured_nav_response_partial() {
         // Only overview, no questions or tags
         let response = "OVERVIEW: A general introduction to the system.";
-        let (overview, questions, tags) = EnhanceStage::parse_structured_nav_response(response);
+        let (overview, questions, tags) = EnhancePass::parse_structured_nav_response(response);
 
         assert!(overview.contains("general introduction"));
         assert!(questions.is_empty());
@@ -432,7 +432,7 @@ TAGS: payments, billing, invoices, currency";
     fn test_parse_structured_nav_response_fallback() {
         // No markers at all — fallback to entire response as overview
         let response = "This is just a plain summary without any markers.";
-        let (overview, questions, tags) = EnhanceStage::parse_structured_nav_response(response);
+        let (overview, questions, tags) = EnhancePass::parse_structured_nav_response(response);
 
         assert_eq!(overview, response.trim());
         assert!(questions.is_empty());
@@ -441,7 +441,7 @@ TAGS: payments, billing, invoices, currency";
 
     #[test]
     fn test_parse_structured_nav_response_empty() {
-        let (overview, questions, tags) = EnhanceStage::parse_structured_nav_response("");
+        let (overview, questions, tags) = EnhancePass::parse_structured_nav_response("");
         assert!(overview.is_empty());
         assert!(questions.is_empty());
         assert!(tags.is_empty());
