@@ -18,6 +18,7 @@ const config: Config = {
 
   stylesheets: [
     'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css',
+    'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap',
   ],
 
   organizationName: 'vectorlessflow',
@@ -74,6 +75,7 @@ const config: Config = {
       },
       items: [
         {to: '/docs/getting-started', label: 'Documentation', position: 'left'},
+        {href: 'https://github.com/vectorlessflow/vectorless', label: 'GitHub', position: 'left'},
       ],
     },
     prism: {

@@ -137,17 +137,7 @@ nav.navbar,
   color: var(--primary) !important;
 }
 
-/* ===== Homepage Code Syntax Highlighting ===== */
-.kw { color: #FF7B72; font-weight: 600; }
-.fn { color: #D2A8FF; }
-.str { color: #A5D6FF; }
-.cmt { color: #8B949E; font-style: italic; }
-
-/* ===== Prevent scroll on homepage ===== */
-html:has(.heroBanner) {
-  overflow: hidden;
+.navbar__link--external::after {
+  display: none !important;
 }
 
-html:has(.heroBanner) body {
-  overflow: hidden;
-}
