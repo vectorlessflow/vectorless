@@ -1,7 +1,7 @@
 // Copyright (c) 2026 vectorless developers
 // SPDX-License-Identifier: Apache-2.0
 
-//! Pipeline orchestrator for managing and executing index stages.
+//! Pipeline orchestrator for managing and executing compile passes.
 //!
 //! The orchestrator provides:
 //! - Stage registration with priority

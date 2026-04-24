@@ -65,7 +65,7 @@ pub mod passes;
 pub mod summary;
 
 // Re-export main types from pipeline
-pub use pipeline::{CompilerInput, IndexMetrics, PipelineExecutor, CompileResult};
+pub use pipeline::{CompilerInput, CompileMetrics, PipelineExecutor, CompileResult};
 
 // Re-export config types
 pub use config::{SourceFormat, PipelineOptions, ThinningConfig};

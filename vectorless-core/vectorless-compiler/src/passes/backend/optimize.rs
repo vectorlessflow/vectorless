@@ -30,7 +30,7 @@ impl OptimizePass {
     fn merge_small_leaves(
         tree: &mut vectorless_document::DocumentTree,
         min_tokens: usize,
-        metrics: &mut crate::IndexMetrics,
+        metrics: &mut crate::CompileMetrics,
     ) -> usize {
         let mut merged_count = 0;
 
@@ -286,7 +286,7 @@ mod tests {
     fn test_merge_small_leaves_merges_adjacent_pair() {
         let mut tree = make_merge_test_tree();
         let root = tree.root();
-        let mut metrics = crate::pipeline::IndexMetrics::new();
+        let mut metrics = crate::pipeline::CompileMetrics::new();
 
         // Threshold 100: Leaf A (50) and Leaf B (30) should merge
         let merged = OptimizePass::merge_small_leaves(&mut tree, 100, &mut metrics);
@@ -307,7 +307,7 @@ mod tests {
     #[test]
     fn test_merge_small_leaves_nothing_above_threshold() {
         let mut tree = make_merge_test_tree();
-        let mut metrics = crate::pipeline::IndexMetrics::new();
+        let mut metrics = crate::pipeline::CompileMetrics::new();
 
         // Threshold 10: all leaves are above this, nothing merges
         let merged = OptimizePass::merge_small_leaves(&mut tree, 10, &mut metrics);
@@ -327,7 +327,7 @@ mod tests {
             n.token_count = Some(5);
         }
 
-        let mut metrics = crate::pipeline::IndexMetrics::new();
+        let mut metrics = crate::pipeline::CompileMetrics::new();
         let _ = OptimizePass::merge_small_leaves(&mut tree, 100, &mut metrics);
 
         // Leaf A should now contain both contents with heading prefix
@@ -355,7 +355,7 @@ mod tests {
             n.token_count = Some(5);
         }
 
-        let mut metrics = crate::pipeline::IndexMetrics::new();
+        let mut metrics = crate::pipeline::CompileMetrics::new();
         let merged = OptimizePass::merge_small_leaves(&mut tree, 100, &mut metrics);
 
         // Section is non-leaf, only Leaf is a leaf — no adjacent pair of leaves
@@ -447,7 +447,7 @@ mod tests {
     #[test]
     fn test_merge_small_leaves_empty_tree() {
         let mut tree = DocumentTree::new("Root", "");
-        let mut metrics = crate::pipeline::IndexMetrics::new();
+        let mut metrics = crate::pipeline::CompileMetrics::new();
 
         let merged = OptimizePass::merge_small_leaves(&mut tree, 100, &mut metrics);
         assert_eq!(merged, 0, "Root with no children should merge nothing");

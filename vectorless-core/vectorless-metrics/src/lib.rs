@@ -51,6 +51,6 @@ mod llm;
 mod retrieval;
 
 pub use hub::{MetricsHub, MetricsReport};
-pub use index::IndexMetrics;
+pub use index::CompileMetrics;
 pub use llm::LlmMetricsReport;
 pub use retrieval::RetrievalMetricsReport;

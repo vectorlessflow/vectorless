@@ -1,13 +1,13 @@
 // Copyright (c) 2026 vectorless developers
 // SPDX-License-Identifier: Apache-2.0
 
-//! Indexing pipeline metrics.
+//! Compile pipeline metrics.
 
 use serde::{Deserialize, Serialize};
 
-/// Performance metrics for the indexing pipeline.
+/// Performance metrics for the compile pipeline.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct IndexMetrics {
+pub struct CompileMetrics {
     /// Parse stage duration (ms).
     #[serde(default)]
     pub parse_time_ms: u64,
@@ -127,7 +127,7 @@ pub struct IndexMetrics {
     pub nodes_scored: usize,
 }
 
-impl IndexMetrics {
+impl CompileMetrics {
     /// Create new metrics with start time.
     pub fn new() -> Self {
         Self::default()

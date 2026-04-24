@@ -1,7 +1,7 @@
 // Copyright (c) 2026 vectorless developers
 // SPDX-License-Identifier: Apache-2.0
 
-//! Persistence utilities for saving and loading document indices.
+//! Persistence utilities for saving and loading compiled documents.
 //!
 //! # Features
 //!
@@ -13,7 +13,10 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::path::PathBuf;
 
-use vectorless_document::{DocumentTree, NavigationIndex, ReasoningIndex};
+use vectorless_document::{
+    ChainIndex, ContentOverlapMap, DocumentTree, EvidenceScoreMap, NavigationIndex,
+    QueryRoutingTable, ReasoningIndex,
+};
 use vectorless_error::Error;
 use vectorless_error::Result;
 
@@ -25,7 +28,7 @@ const FORMAT_VERSION: u32 = 1;
 /// Increment this when the document structure changes in a
 /// backward-incompatible way (e.g. field renames, new required fields).
 /// Old documents will be detected and logged as stale on load.
-const SCHEMA_VERSION: u32 = 1;
+const SCHEMA_VERSION: u32 = 2;
 
 /// Metadata for a persisted document.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -208,7 +211,7 @@ impl DocumentMeta {
     }
 }
 
-/// A persisted document index containing tree and metadata.
+/// A persisted compiled document containing tree, indexes, and metadata.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PersistedDocument {
     /// Schema version — incremented on backward-incompatible changes.
@@ -237,6 +240,24 @@ pub struct PersistedDocument {
     /// Key concepts extracted from the document.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub concepts: Vec<vectorless_document::Concept>,
+
+    // ── Agent acceleration data ──
+
+    /// Pre-computed query routing table for Agent acceleration.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub query_routes: Option<QueryRoutingTable>,
+
+    /// Reasoning chain index for cross-section navigation.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub chain_index: Option<ChainIndex>,
+
+    /// Content overlap map to prevent duplicate visits.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub content_overlap: Option<ContentOverlapMap>,
+
+    /// Per-node evidence quality scores.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub evidence_scores: Option<EvidenceScoreMap>,
 }
 
 impl PersistedDocument {
@@ -250,6 +271,10 @@ impl PersistedDocument {
             reasoning_index: None,
             navigation_index: None,
             concepts: Vec::new(),
+            query_routes: None,
+            chain_index: None,
+            content_overlap: None,
+            evidence_scores: None,
         }
     }
 

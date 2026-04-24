@@ -16,7 +16,7 @@ use tracing::{info, warn};
 use crate::parse::RawNode;
 use vectorless_document::DocumentTree;
 
-use super::metrics::IndexMetrics;
+use super::metrics::CompileMetrics;
 
 /// Serializable checkpoint capturing pipeline state at a point in time.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -53,7 +53,7 @@ pub struct CheckpointContextData {
     pub tree: Option<DocumentTree>,
 
     /// Metrics collected so far.
-    pub metrics: IndexMetrics,
+    pub metrics: CompileMetrics,
 
     /// Page count (for PDFs).
     pub page_count: Option<usize>,
@@ -192,7 +192,7 @@ mod tests {
             context_data: CheckpointContextData {
                 raw_nodes: Vec::new(),
                 tree: Some(DocumentTree::new("Test", "content")),
-                metrics: IndexMetrics::default(),
+                metrics: CompileMetrics::default(),
                 page_count: None,
                 line_count: Some(10),
                 description: None,
@@ -309,7 +309,7 @@ mod tests {
             context_data: CheckpointContextData {
                 raw_nodes: Vec::new(),
                 tree: Some(tree),
-                metrics: IndexMetrics::default(),
+                metrics: CompileMetrics::default(),
                 page_count: None,
                 line_count: None,
                 description: None,

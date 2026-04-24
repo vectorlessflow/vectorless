@@ -1,15 +1,15 @@
 // Copyright (c) 2026 vectorless developers
 // SPDX-License-Identifier: Apache-2.0
 
-//! Failure policies for pipeline stages.
+//! Failure policies for pipeline passes.
 //!
-//! This module provides configurable failure handling for index pipeline stages.
+//! This module provides configurable failure handling for compile pipeline passes.
 //!
 //! # Policies
 //!
-//! - **Fail** - Stop the entire pipeline on stage failure (default for required stages)
-//! - **Skip** - Skip the failed stage and continue the pipeline
-//! - **Retry** - Retry the stage with exponential backoff before failing
+//! - **Fail** - Stop the entire pipeline on pass failure (default for required passes)
+//! - **Skip** - Skip the failed pass and continue the pipeline
+//! - **Retry** - Retry the pass with exponential backoff before failing
 //!
 //! # Example
 //!

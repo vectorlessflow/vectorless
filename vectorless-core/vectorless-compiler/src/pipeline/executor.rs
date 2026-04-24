@@ -1,7 +1,7 @@
 // Copyright (c) 2026 vectorless developers
 // SPDX-License-Identifier: Apache-2.0
 
-//! Pipeline executor for running index stages.
+//! Pipeline executor for running compile passes.
 //!
 //! The executor uses [`PipelineOrchestrator`] internally for flexible
 //! stage management with priority-based ordering and dependency resolution.
@@ -20,10 +20,10 @@ use super::super::passes::{
 use super::context::{CompilerInput, CompileResult};
 use super::orchestrator::PipelineOrchestrator;
 
-/// Pipeline executor for document indexing.
+/// Pipeline executor for document compilation.
 ///
-/// Uses [`PipelineOrchestrator`] internally for stage management.
-/// Supports both preset configurations and custom stage pipelines.
+/// Uses [`PipelineOrchestrator`] internally for pass management.
+/// Supports both preset configurations and custom pass pipelines.
 ///
 /// # Example
 ///
@@ -192,7 +192,7 @@ impl PipelineExecutor {
         options: PipelineOptions,
     ) -> Result<CompileResult> {
         info!(
-            "Starting index pipeline with {} stages",
+            "Starting compile pipeline with {} passes",
             self.orchestrator.stage_count()
         );
         self.orchestrator.execute(input, options).await

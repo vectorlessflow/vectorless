@@ -36,7 +36,7 @@ use super::{
 
 /// The main Engine client.
 ///
-/// Provides high-level operations for document indexing and retrieval.
+/// Provides high-level operations for document compilation and retrieval.
 /// Uses interior mutability to allow sharing across async tasks.
 ///
 /// # Cloning
@@ -51,7 +51,7 @@ pub struct Engine {
     /// Configuration (immutable, shared).
     config: Arc<Config>,
 
-    /// Indexer client for document indexing.
+    /// Indexer client for document compilation.
     indexer: IndexerClient,
 
     /// Workspace client for persistence.
@@ -278,7 +278,7 @@ impl Engine {
         name: Option<&str>,
         pipeline_options: PipelineOptions,
         existing_tree: Option<&DocumentTree>,
-    ) -> Result<super::indexed_document::IndexedDocument> {
+    ) -> Result<super::compiled_document::CompiledDocument> {
         let retry = &self.config.llm.retry;
         let max_attempts = retry.max_attempts;
 
@@ -313,13 +313,13 @@ impl Engine {
         unreachable!()
     }
 
-    /// Convert an [`IndexedDocument`] to an [`CompileArtifact`] and persist it.
+    /// Convert an [`CompiledDocument`] to an [`CompileArtifact`] and persist it.
     ///
     /// If `old_id` is provided, the old document is removed after a
     /// successful save (atomic save-first, then remove old).
     async fn index_and_persist(
         &self,
-        doc: super::indexed_document::IndexedDocument,
+        doc: super::compiled_document::CompiledDocument,
         pipeline_options: &PipelineOptions,
         source_label: &str,
         old_id: Option<&str>,
@@ -347,8 +347,8 @@ impl Engine {
         (vec![item], Vec::new())
     }
 
-    /// Build an [`CompileArtifact`] from an [`IndexedDocument`](super::indexed_document::IndexedDocument).
-    fn build_index_item(doc: &super::indexed_document::IndexedDocument) -> CompileArtifact {
+    /// Build an [`CompileArtifact`] from an [`CompiledDocument`](super::compiled_document::CompiledDocument).
+    fn build_index_item(doc: &super::compiled_document::CompiledDocument) -> CompileArtifact {
         CompileArtifact::new(
             doc.id.clone(),
             doc.name.clone(),
@@ -772,10 +772,10 @@ mod tests {
     // -- build_index_item ----------------------------------------------------------------
 
     // Build_index_item only transforms data -- no I/O.
-    use crate::indexed_document::IndexedDocument;
+    use crate::compiled_document::CompiledDocument;
 
-    fn make_doc() -> IndexedDocument {
-        IndexedDocument::new("test-id", vectorless_compiler::parse::DocumentFormat::Markdown)
+    fn make_doc() -> CompiledDocument {
+        CompiledDocument::new("test-id", vectorless_compiler::parse::DocumentFormat::Markdown)
             .with_name("test.md")
             .with_description("test doc")
             .with_source_path(std::path::PathBuf::from("/tmp/test.md"))
@@ -799,7 +799,7 @@ mod tests {
 
     #[test]
     fn test_build_index_item_no_source_path() {
-        let doc = IndexedDocument::new("id", vectorless_compiler::parse::DocumentFormat::Pdf);
+        let doc = CompiledDocument::new("id", vectorless_compiler::parse::DocumentFormat::Pdf);
         let item = Engine::build_index_item(&doc);
 
         assert_eq!(item.source_path, Some(String::new())); // unwrap_or_default

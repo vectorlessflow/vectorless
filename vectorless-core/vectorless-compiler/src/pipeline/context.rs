@@ -14,9 +14,9 @@ use vectorless_document::{
 use vectorless_llm::LlmClient;
 
 use super::super::{PipelineOptions, SummaryStrategy};
-use super::metrics::IndexMetrics;
+use super::metrics::CompileMetrics;
 
-/// Input for the index pipeline.
+/// Input for the compile pipeline.
 #[derive(Debug, Clone)]
 pub enum CompilerInput {
     /// Index from file path.
@@ -283,7 +283,7 @@ pub struct CompileContext {
     pub stage_results: HashMap<String, PassResult>,
 
     /// Performance metrics.
-    pub metrics: IndexMetrics,
+    pub metrics: CompileMetrics,
 
     /// Document description.
     pub description: Option<String>,
@@ -320,7 +320,7 @@ impl CompileContext {
             evidence_scores: None,
             existing_tree: None,
             stage_results: HashMap::new(),
-            metrics: IndexMetrics::default(),
+            metrics: CompileMetrics::default(),
             description: None,
             page_count: None,
             line_count: None,
@@ -425,7 +425,7 @@ impl CompileContext {
     }
 }
 
-/// Final result from the index pipeline.
+/// Final result from the compile pipeline.
 #[derive(Debug)]
 pub struct CompileResult {
     /// Document ID.
@@ -453,7 +453,7 @@ pub struct CompileResult {
     pub line_count: Option<usize>,
 
     /// Performance metrics.
-    pub metrics: IndexMetrics,
+    pub metrics: CompileMetrics,
 
     /// Summary cache.
     pub summary_cache: SummaryCache,

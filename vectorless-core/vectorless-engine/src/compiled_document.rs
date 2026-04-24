@@ -1,9 +1,9 @@
 // Copyright (c) 2026 vectorless developers
 // SPDX-License-Identifier: Apache-2.0
 
-//! Internal intermediate type produced by the indexing pipeline.
+//! Internal intermediate type produced by the compile pipeline.
 //!
-//! [`IndexedDocument`] is an internal-only type that carries data from
+//! [`CompiledDocument`] is an internal-only type that carries data from
 //! [`IndexerClient`](super::indexer::IndexerClient) to [`Engine`](super::Engine).
 //! It is **not** part of the public API.
 
@@ -11,15 +11,15 @@ use std::path::PathBuf;
 
 use vectorless_document::DocumentFormat;
 use vectorless_document::DocumentTree;
-use vectorless_metrics::IndexMetrics;
+use vectorless_metrics::CompileMetrics;
 use vectorless_storage::PageContent;
 
-/// An indexed document with its tree structure and metadata.
+/// A compiled document with its tree structure, indexes, and metadata.
 ///
-/// Internal intermediate produced by the indexing pipeline and consumed
+/// Internal intermediate produced by the compile pipeline and consumed
 /// by [`Engine`](super::Engine) to create a [`PersistedDocument`](vectorless_storage::PersistedDocument).
 #[derive(Debug, Clone)]
-pub(crate) struct IndexedDocument {
+pub(crate) struct CompiledDocument {
     /// Unique document identifier.
     pub id: String,
 
@@ -44,8 +44,8 @@ pub(crate) struct IndexedDocument {
     /// Per-page content (for PDFs).
     pub pages: Vec<PageContent>,
 
-    /// Indexing pipeline metrics.
-    pub metrics: Option<IndexMetrics>,
+    /// Compile pipeline metrics.
+    pub metrics: Option<CompileMetrics>,
 
     /// Pre-computed reasoning index for retrieval acceleration.
     pub reasoning_index: Option<vectorless_document::ReasoningIndex>,
@@ -55,10 +55,24 @@ pub(crate) struct IndexedDocument {
 
     /// Key concepts extracted from the document.
     pub concepts: Vec<vectorless_document::Concept>,
+
+    // ── Agent acceleration data ──
+
+    /// Pre-computed query routing table for Agent acceleration.
+    pub query_routes: Option<vectorless_document::QueryRoutingTable>,
+
+    /// Reasoning chain index for cross-section navigation.
+    pub chain_index: Option<vectorless_document::ChainIndex>,
+
+    /// Content overlap map to prevent duplicate visits.
+    pub content_overlap: Option<vectorless_document::ContentOverlapMap>,
+
+    /// Per-node evidence quality scores.
+    pub evidence_scores: Option<vectorless_document::EvidenceScoreMap>,
 }
 
-impl IndexedDocument {
-    /// Create a new indexed document.
+impl CompiledDocument {
+    /// Create a new compiled document.
     pub fn new(id: impl Into<String>, format: DocumentFormat) -> Self {
         Self {
             id: id.into(),
@@ -73,6 +87,10 @@ impl IndexedDocument {
             reasoning_index: None,
             navigation_index: None,
             concepts: Vec::new(),
+            query_routes: None,
+            chain_index: None,
+            content_overlap: None,
+            evidence_scores: None,
         }
     }
 
@@ -106,8 +124,8 @@ impl IndexedDocument {
         self
     }
 
-    /// Set the indexing metrics.
-    pub fn with_metrics(mut self, metrics: IndexMetrics) -> Self {
+    /// Set the compile metrics.
+    pub fn with_metrics(mut self, metrics: CompileMetrics) -> Self {
         self.metrics = Some(metrics);
         self
     }
@@ -118,8 +136,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_indexed_document() {
-        let doc = IndexedDocument::new("doc-1", DocumentFormat::Markdown)
+    fn test_compiled_document() {
+        let doc = CompiledDocument::new("doc-1", DocumentFormat::Markdown)
             .with_name("Test Document")
             .with_description("A test document");
 

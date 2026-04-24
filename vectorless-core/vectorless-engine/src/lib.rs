@@ -13,7 +13,7 @@
 mod builder;
 mod compile_input;
 mod engine;
-mod indexed_document;
+mod compiled_document;
 mod indexer;
 mod types;
 mod workspace;

@@ -8,7 +8,7 @@
 use serde::{Deserialize, Serialize};
 
 use vectorless_document::DocumentFormat;
-use vectorless_metrics::IndexMetrics;
+use vectorless_metrics::CompileMetrics;
 
 // ============================================================
 // Partial Success
@@ -210,7 +210,7 @@ pub struct CompileArtifact {
     /// Page count (for PDFs).
     pub page_count: Option<usize>,
     /// Indexing pipeline metrics (timing, LLM usage, node stats).
-    pub metrics: Option<IndexMetrics>,
+    pub metrics: Option<CompileMetrics>,
 }
 
 impl CompileArtifact {
@@ -240,13 +240,13 @@ impl CompileArtifact {
     }
 
     /// Set the indexing metrics.
-    pub fn with_metrics(mut self, metrics: IndexMetrics) -> Self {
+    pub fn with_metrics(mut self, metrics: CompileMetrics) -> Self {
         self.metrics = Some(metrics);
         self
     }
 
     /// Set the indexing metrics (optional).
-    pub fn with_metrics_opt(mut self, metrics: Option<IndexMetrics>) -> Self {
+    pub fn with_metrics_opt(mut self, metrics: Option<CompileMetrics>) -> Self {
         self.metrics = metrics;
         self
     }

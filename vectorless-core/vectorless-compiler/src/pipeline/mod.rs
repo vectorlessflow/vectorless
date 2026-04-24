@@ -7,7 +7,7 @@
 //! - [`CompileContext`] - Context passed between passes
 //! - [`PipelineExecutor`] - Executes the compilation pipeline
 //! - [`PipelineOrchestrator`] - Flexible pass orchestration with dependencies
-//! - [`IndexMetrics`] - Performance metrics collection
+//! - [`CompileMetrics`] - Performance metrics collection
 //! - [`FailurePolicy`] - Configurable failure handling for passes
 //! - [`StageRetryConfig`] - Retry configuration for passes
 
@@ -20,5 +20,5 @@ mod policy;
 
 pub use context::{CompileContext, CompilerInput, CompileResult, PassResult};
 pub use executor::PipelineExecutor;
-pub use metrics::IndexMetrics;
+pub use metrics::CompileMetrics;
 pub use policy::{FailurePolicy, StageRetryConfig};

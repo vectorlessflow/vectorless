@@ -257,7 +257,7 @@ impl Default for PdfParser {
 }
 
 impl PdfParser {
-    /// Parse a PDF file into raw nodes for the index pipeline.
+    /// Parse a PDF file into raw nodes for the compile pipeline.
     pub async fn parse_file(&self, path: &Path) -> Result<ParseResult> {
         let bytes = tokio::fs::read(path)
             .await
@@ -267,7 +267,7 @@ impl PdfParser {
             .await
     }
 
-    /// Parse PDF bytes into raw nodes for the index pipeline.
+    /// Parse PDF bytes into raw nodes for the compile pipeline.
     pub async fn parse_bytes_async(
         &self,
         bytes: &[u8],

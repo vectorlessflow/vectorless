@@ -1,7 +1,7 @@
 // Copyright (c) 2026 vectorless developers
 // SPDX-License-Identifier: Apache-2.0
 
-//! Document parsing for the index pipeline.
+//! Document parsing for the compile pipeline.
 //!
 //! Supports Markdown and PDF formats. Parsing is dispatched directly
 //! via `match` — no trait objects or registry needed.

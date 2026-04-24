@@ -1,9 +1,9 @@
 // Copyright (c) 2026 vectorless developers
 // SPDX-License-Identifier: Apache-2.0
 
-//! Configuration types for the index pipeline.
+//! Configuration types for the compile pipeline.
 //!
-//! This module contains all configuration types used by the indexing pipeline:
+//! This module contains all configuration types used by the compilation pipeline:
 //! - [`SourceFormat`] - Document format selection
 //! - [`PipelineOptions`] - Full pipeline configuration
 //! - [`OptimizationConfig`] - Tree optimization settings
