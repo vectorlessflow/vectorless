@@ -10,9 +10,9 @@ use vectorless_document::{DocumentTree, NodeId};
 use vectorless_error::Result;
 use vectorless_utils::estimate_tokens;
 
-use super::{AccessPattern, IndexStage, StageResult, async_trait};
+use super::{AccessPattern, CompileStage, StageResult, async_trait};
 use crate::config::SplitConfig;
-use crate::pipeline::IndexContext;
+use crate::pipeline::CompileContext;
 
 /// Split stage — breaks oversized leaf nodes into smaller children.
 ///
@@ -208,7 +208,7 @@ impl Default for SplitStage {
 }
 
 #[async_trait]
-impl IndexStage for SplitStage {
+impl CompileStage for SplitStage {
     fn name(&self) -> &'static str {
         "split"
     }
@@ -232,7 +232,7 @@ impl IndexStage for SplitStage {
         }
     }
 
-    async fn execute(&mut self, ctx: &mut IndexContext) -> Result<StageResult> {
+    async fn execute(&mut self, ctx: &mut CompileContext) -> Result<StageResult> {
         let start = Instant::now();
 
         let tree = match ctx.tree.as_mut() {

@@ -15,7 +15,7 @@ use super::metrics::IndexMetrics;
 
 /// Input for the index pipeline.
 #[derive(Debug, Clone)]
-pub enum IndexInput {
+pub enum CompilerInput {
     /// Index from file path.
     File(PathBuf),
 
@@ -40,7 +40,7 @@ pub enum IndexInput {
     },
 }
 
-impl IndexInput {
+impl CompilerInput {
     /// Create input from file path.
     pub fn file(path: impl Into<PathBuf>) -> Self {
         Self::File(path.into())
@@ -211,12 +211,12 @@ impl SummaryCache {
 
 /// Index context passed between stages.
 #[derive(Debug)]
-pub struct IndexContext {
+pub struct CompileContext {
     /// Document ID.
     pub doc_id: String,
 
     /// Source input.
-    pub input: IndexInput,
+    pub input: CompilerInput,
 
     /// Document format.
     pub format: DocumentFormat,
@@ -245,10 +245,10 @@ pub struct IndexContext {
     /// Summary cache for lazy generation.
     pub summary_cache: SummaryCache,
 
-    /// Pre-computed reasoning index (built by ReasoningIndexStage).
+    /// Pre-computed reasoning index (built by ReasoningCompileStage).
     pub reasoning_index: Option<ReasoningIndex>,
 
-    /// Navigation index for Agent-based retrieval (built by NavigationIndexStage).
+    /// Navigation index for Agent-based retrieval (built by NavigationCompileStage).
     pub navigation_index: Option<NavigationIndex>,
 
     /// Key concepts extracted from the document (built by ConceptExtractionStage).
@@ -274,9 +274,9 @@ pub struct IndexContext {
     pub line_count: Option<usize>,
 }
 
-impl IndexContext {
+impl CompileContext {
     /// Create a new context from input.
-    pub fn new(input: IndexInput, options: PipelineOptions) -> Self {
+    pub fn new(input: CompilerInput, options: PipelineOptions) -> Self {
         let source_hash = Self::compute_source_hash(&input);
         Self {
             doc_id: uuid::Uuid::new_v4().to_string(),
@@ -303,17 +303,17 @@ impl IndexContext {
     }
 
     /// Compute SHA-256 hash of the source content.
-    fn compute_source_hash(input: &IndexInput) -> String {
+    fn compute_source_hash(input: &CompilerInput) -> String {
         use sha2::{Digest, Sha256};
         let hash = match input {
-            IndexInput::File(path) => {
+            CompilerInput::File(path) => {
                 // Hash the file path as proxy — actual content may not be readable yet
                 // (the parse stage reads it). This is sufficient for checkpoint invalidation
                 // since a different file path implies different content.
                 Sha256::digest(path.to_string_lossy().as_bytes())
             }
-            IndexInput::Content { content, .. } => Sha256::digest(content.as_bytes()),
-            IndexInput::Bytes { data, .. } => Sha256::digest(data),
+            CompilerInput::Content { content, .. } => Sha256::digest(content.as_bytes()),
+            CompilerInput::Bytes { data, .. } => Sha256::digest(data),
         };
         format!("{:x}", hash)
     }
@@ -377,8 +377,8 @@ impl IndexContext {
     }
 
     /// Finalize and build the result.
-    pub fn finalize(self) -> PipelineResult {
-        PipelineResult {
+    pub fn finalize(self) -> CompileResult {
+        CompileResult {
             doc_id: self.doc_id,
             name: self.name,
             format: self.format,
@@ -398,7 +398,7 @@ impl IndexContext {
 
 /// Final result from the index pipeline.
 #[derive(Debug)]
-pub struct PipelineResult {
+pub struct CompileResult {
     /// Document ID.
     pub doc_id: String,
 
@@ -439,7 +439,7 @@ pub struct PipelineResult {
     pub concepts: Vec<Concept>,
 }
 
-impl PipelineResult {
+impl CompileResult {
     /// Check if the result has a tree.
     pub fn has_tree(&self) -> bool {
         self.tree.is_some()

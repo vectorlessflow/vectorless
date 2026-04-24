@@ -41,7 +41,7 @@ impl FailedItem {
 ///
 /// Controls how the indexer handles existing documents and re-indexing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum IndexMode {
+pub enum CompileMode {
     /// Default mode - skip if already indexed.
     ///
     /// If a document with the same source has already been indexed,
@@ -58,15 +58,15 @@ pub enum IndexMode {
     /// Incremental mode - only re-index changed files.
     ///
     /// Re-index only if the file has been modified since the last index.
-    /// For content/bytes sources, this behaves like [`IndexMode::Default`].
+    /// For content/bytes sources, this behaves like [`CompileMode::Default`].
     Incremental,
 }
 
 /// Options for indexing a document.
 #[derive(Debug, Clone)]
-pub struct IndexOptions {
+pub struct CompileOptions {
     /// Indexing mode.
-    pub mode: IndexMode,
+    pub mode: CompileMode,
 
     /// Whether to generate summaries using LLM.
     pub generate_summaries: bool,
@@ -86,10 +86,10 @@ pub struct IndexOptions {
     pub timeout_secs: Option<u64>,
 }
 
-impl Default for IndexOptions {
+impl Default for CompileOptions {
     fn default() -> Self {
         Self {
-            mode: IndexMode::Default,
+            mode: CompileMode::Default,
             generate_summaries: true,
             generate_ids: true,
             generate_description: true,
@@ -99,7 +99,7 @@ impl Default for IndexOptions {
     }
 }
 
-impl IndexOptions {
+impl CompileOptions {
     /// Create new index options with defaults.
     pub fn new() -> Self {
         Self::default()
@@ -121,10 +121,10 @@ impl IndexOptions {
     ///
     /// # Modes
     ///
-    /// - [`IndexMode::Default`] - Skip if already indexed
-    /// - [`IndexMode::Force`] - Always re-index
-    /// - [`IndexMode::Incremental`] - Only re-index changed files
-    pub fn with_mode(mut self, mode: IndexMode) -> Self {
+    /// - [`CompileMode::Default`] - Skip if already indexed
+    /// - [`CompileMode::Force`] - Always re-index
+    /// - [`CompileMode::Incremental`] - Only re-index changed files
+    pub fn with_mode(mut self, mode: CompileMode) -> Self {
         self.mode = mode;
         self
     }
@@ -142,17 +142,17 @@ impl IndexOptions {
 
 /// Result of a document indexing operation.
 #[derive(Debug, Clone)]
-pub struct IndexResult {
+pub struct CompileOutput {
     /// Successfully indexed items.
-    pub items: Vec<IndexItem>,
+    pub items: Vec<CompileArtifact>,
 
     /// Items that failed to index (partial success).
     pub failed: Vec<FailedItem>,
 }
 
-impl IndexResult {
+impl CompileOutput {
     /// Create a new index result.
-    pub fn new(items: Vec<IndexItem>) -> Self {
+    pub fn new(items: Vec<CompileArtifact>) -> Self {
         Self {
             items,
             failed: Vec::new(),
@@ -160,7 +160,7 @@ impl IndexResult {
     }
 
     /// Create with both successes and failures.
-    pub fn with_partial(items: Vec<IndexItem>, failed: Vec<FailedItem>) -> Self {
+    pub fn with_partial(items: Vec<CompileArtifact>, failed: Vec<FailedItem>) -> Self {
         Self { items, failed }
     }
 
@@ -196,7 +196,7 @@ impl IndexResult {
 
 /// A single indexed document item.
 #[derive(Debug, Clone)]
-pub struct IndexItem {
+pub struct CompileArtifact {
     /// The unique document ID.
     pub doc_id: String,
     /// The document name.
@@ -213,7 +213,7 @@ pub struct IndexItem {
     pub metrics: Option<IndexMetrics>,
 }
 
-impl IndexItem {
+impl CompileArtifact {
     /// Create a new index item.
     pub fn new(
         doc_id: impl Into<String>,
@@ -287,27 +287,27 @@ mod tests {
 
     #[test]
     fn test_index_options() {
-        let options = IndexOptions::new()
+        let options = CompileOptions::new()
             .with_summaries()
-            .with_mode(IndexMode::Force);
+            .with_mode(CompileMode::Force);
 
         assert!(options.generate_summaries);
-        assert_eq!(options.mode, IndexMode::Force);
+        assert_eq!(options.mode, CompileMode::Force);
     }
 
     #[test]
     fn test_index_options_timeout() {
-        let opts = IndexOptions::new().with_timeout_secs(30);
+        let opts = CompileOptions::new().with_timeout_secs(30);
         assert_eq!(opts.timeout_secs, Some(30));
 
-        let default = IndexOptions::default();
+        let default = CompileOptions::default();
         assert_eq!(default.timeout_secs, None);
     }
 
     #[test]
     fn test_index_result() {
-        let item = IndexItem::new("doc-1", "Test", DocumentFormat::Markdown, None, None);
-        let result = IndexResult::new(vec![item]);
+        let item = CompileArtifact::new("doc-1", "Test", DocumentFormat::Markdown, None, None);
+        let result = CompileOutput::new(vec![item]);
 
         assert_eq!(result.doc_id(), Some("doc-1"));
         assert_eq!(result.len(), 1);
@@ -316,7 +316,7 @@ mod tests {
 
     #[test]
     fn test_index_result_empty() {
-        let result = IndexResult::new(vec![]);
+        let result = CompileOutput::new(vec![]);
         assert!(result.is_empty());
         assert_eq!(result.doc_id(), None);
     }
@@ -324,17 +324,17 @@ mod tests {
     #[test]
     fn test_index_result_multiple() {
         let items = vec![
-            IndexItem::new("doc-1", "A", DocumentFormat::Markdown, None, None),
-            IndexItem::new("doc-2", "B", DocumentFormat::Pdf, None, None),
+            CompileArtifact::new("doc-1", "A", DocumentFormat::Markdown, None, None),
+            CompileArtifact::new("doc-2", "B", DocumentFormat::Pdf, None, None),
         ];
-        let result = IndexResult::new(items);
+        let result = CompileOutput::new(items);
         assert_eq!(result.len(), 2);
         assert_eq!(result.doc_id(), None);
     }
 
     #[test]
     fn test_partial_success() {
-        let items = vec![IndexItem::new(
+        let items = vec![CompileArtifact::new(
             "doc-1",
             "A",
             DocumentFormat::Markdown,
@@ -342,7 +342,7 @@ mod tests {
             None,
         )];
         let failed = vec![FailedItem::new("missing.pdf", "File not found")];
-        let result = IndexResult::with_partial(items, failed);
+        let result = CompileOutput::with_partial(items, failed);
 
         assert_eq!(result.len(), 1);
         assert!(result.has_failures());

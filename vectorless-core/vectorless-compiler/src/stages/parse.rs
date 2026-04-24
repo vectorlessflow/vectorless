@@ -10,9 +10,9 @@ use tracing::{debug, info};
 use vectorless_document::DocumentFormat;
 use vectorless_error::Result;
 
-use super::{IndexStage, StageResult};
-use crate::IndexMode;
-use crate::pipeline::{IndexContext, IndexInput};
+use super::{CompileStage, StageResult};
+use crate::SourceFormat;
+use crate::pipeline::{CompileContext, CompilerInput};
 
 /// Parse stage - extracts raw nodes from documents.
 pub struct ParseStage {
@@ -34,20 +34,20 @@ impl ParseStage {
     }
 
     /// Detect document format from path and options.
-    fn detect_format(&self, ctx: &IndexContext) -> Result<DocumentFormat> {
+    fn detect_format(&self, ctx: &CompileContext) -> Result<DocumentFormat> {
         match ctx.options.mode {
-            IndexMode::Auto => match &ctx.input {
-                IndexInput::File(path) => {
+            SourceFormat::Auto => match &ctx.input {
+                CompilerInput::File(path) => {
                     let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
                     DocumentFormat::from_extension(ext).ok_or_else(|| {
                         vectorless_error::Error::Parse(format!("Unknown format: {}", ext))
                     })
                 }
-                IndexInput::Content { format, .. } => Ok(*format),
-                IndexInput::Bytes { format, .. } => Ok(*format),
+                CompilerInput::Content { format, .. } => Ok(*format),
+                CompilerInput::Bytes { format, .. } => Ok(*format),
             },
-            IndexMode::Markdown => Ok(DocumentFormat::Markdown),
-            IndexMode::Pdf => Ok(DocumentFormat::Pdf),
+            SourceFormat::Markdown => Ok(DocumentFormat::Markdown),
+            SourceFormat::Pdf => Ok(DocumentFormat::Pdf),
         }
     }
 }
@@ -59,12 +59,12 @@ impl Default for ParseStage {
 }
 
 #[async_trait]
-impl IndexStage for ParseStage {
+impl CompileStage for ParseStage {
     fn name(&self) -> &'static str {
         "parse"
     }
 
-    async fn execute(&mut self, ctx: &mut IndexContext) -> Result<StageResult> {
+    async fn execute(&mut self, ctx: &mut CompileContext) -> Result<StageResult> {
         let start = Instant::now();
 
         // Detect format
@@ -72,9 +72,9 @@ impl IndexStage for ParseStage {
         ctx.format = format;
 
         let input_type = match &ctx.input {
-            IndexInput::File(_) => "file",
-            IndexInput::Content { .. } => "content",
-            IndexInput::Bytes { .. } => "bytes",
+            CompilerInput::File(_) => "file",
+            CompilerInput::Content { .. } => "content",
+            CompilerInput::Bytes { .. } => "bytes",
         };
         info!(
             "[parse] Starting: format={:?}, input={}, llm={}",
@@ -85,7 +85,7 @@ impl IndexStage for ParseStage {
 
         // Parse based on input type
         let result = match &ctx.input {
-            IndexInput::File(path) => {
+            CompilerInput::File(path) => {
                 // Resolve path
                 let path = path.canonicalize().unwrap_or_else(|_| path.clone());
                 ctx.source_path = Some(path.clone());
@@ -102,7 +102,7 @@ impl IndexStage for ParseStage {
                 // Parse directly
                 crate::parse::parse_file(&path, format, self.llm_client.clone()).await?
             }
-            IndexInput::Content {
+            CompilerInput::Content {
                 content,
                 name,
                 format,
@@ -115,7 +115,7 @@ impl IndexStage for ParseStage {
                 // Parse content directly
                 crate::parse::parse_content(content, *format, self.llm_client.clone()).await?
             }
-            IndexInput::Bytes { data, name, format } => {
+            CompilerInput::Bytes { data, name, format } => {
                 // Set name
                 ctx.name = name.clone();
 

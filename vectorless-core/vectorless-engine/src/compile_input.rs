@@ -1,9 +1,9 @@
 // Copyright (c) 2026 vectorless developers
 // SPDX-License-Identifier: Apache-2.0
 
-//! Index context for document indexing operations.
+//! Compile input for document compilation operations.
 //!
-//! [`IndexContext`] supports single or multiple document sources:
+//! [`CompileInput`] supports single or multiple document sources:
 //! - **File path** — Load and parse a file from disk
 //! - **Content string** — Parse content directly (HTML, Markdown, text)
 //! - **Byte data** — Parse binary data (PDF, DOCX)
@@ -12,15 +12,15 @@ use std::path::PathBuf;
 
 use vectorless_document::DocumentFormat;
 
-use super::types::{IndexMode, IndexOptions};
+use super::types::{CompileMode, CompileOptions};
 
 // ============================================================
-// Index Source
+// Compile Source
 // ============================================================
 
-/// The source of document content for indexing.
+/// The source of document content for compilation.
 #[derive(Debug, Clone)]
-pub(crate) enum IndexSource {
+pub(crate) enum CompileSource {
     /// Load document from a file path.
     Path(PathBuf),
 
@@ -38,35 +38,35 @@ pub(crate) enum IndexSource {
 }
 
 // ============================================================
-// Index Context
+// Compile Input
 // ============================================================
 
-/// Context for document indexing operations.
+/// Input for document compilation operations.
 ///
 /// Supports single or multiple document sources. When multiple sources
-/// are provided, each is indexed independently and the results are
-/// collected into [`IndexResult`](super::IndexResult).
+/// are provided, each is compiled independently and the results are
+/// collected into [`CompileOutput`](super::CompileOutput).
 #[derive(Debug, Clone)]
-pub struct IndexContext {
+pub struct CompileInput {
     /// Document sources (supports multiple).
-    pub(crate) sources: Vec<IndexSource>,
+    pub(crate) sources: Vec<CompileSource>,
 
     /// Optional document name for metadata (single-source only).
     pub(crate) name: Option<String>,
 
     /// Indexing options.
-    pub(crate) options: IndexOptions,
+    pub(crate) options: CompileOptions,
 }
 
-impl IndexContext {
+impl CompileInput {
     /// Create from a single file path.
     ///
     /// The document format is automatically detected from the file extension.
     pub fn from_path(path: impl Into<PathBuf>) -> Self {
         Self {
-            sources: vec![IndexSource::Path(path.into())],
+            sources: vec![CompileSource::Path(path.into())],
             name: None,
-            options: IndexOptions::default(),
+            options: CompileOptions::default(),
         }
     }
 
@@ -75,10 +75,10 @@ impl IndexContext {
         Self {
             sources: paths
                 .into_iter()
-                .map(|p| IndexSource::Path(p.into()))
+                .map(|p| CompileSource::Path(p.into()))
                 .collect(),
             name: None,
-            options: IndexOptions::default(),
+            options: CompileOptions::default(),
         }
     }
 
@@ -107,7 +107,7 @@ impl IndexContext {
         Self {
             sources,
             name: None,
-            options: IndexOptions::default(),
+            options: CompileOptions::default(),
         }
     }
 
@@ -116,7 +116,7 @@ impl IndexContext {
         dir: &std::path::Path,
         extensions: &[&str],
         recursive: bool,
-        sources: &mut Vec<IndexSource>,
+        sources: &mut Vec<CompileSource>,
     ) {
         if let Ok(entries) = std::fs::read_dir(dir) {
             let mut subdirs = Vec::new();
@@ -128,7 +128,7 @@ impl IndexContext {
                     }
                 } else if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
                     if extensions.contains(&ext.to_lowercase().as_str()) {
-                        sources.push(IndexSource::Path(path));
+                        sources.push(CompileSource::Path(path));
                     }
                 }
             }
@@ -141,24 +141,24 @@ impl IndexContext {
     /// Create from a content string.
     pub fn from_content(content: impl Into<String>, format: DocumentFormat) -> Self {
         Self {
-            sources: vec![IndexSource::Content {
+            sources: vec![CompileSource::Content {
                 data: content.into(),
                 format,
             }],
             name: None,
-            options: IndexOptions::default(),
+            options: CompileOptions::default(),
         }
     }
 
     /// Create from binary data.
     pub fn from_bytes(bytes: Vec<u8>, format: DocumentFormat) -> Self {
         Self {
-            sources: vec![IndexSource::Bytes {
+            sources: vec![CompileSource::Bytes {
                 data: bytes,
                 format,
             }],
             name: None,
-            options: IndexOptions::default(),
+            options: CompileOptions::default(),
         }
     }
 
@@ -169,13 +169,13 @@ impl IndexContext {
     }
 
     /// Set the indexing options.
-    pub fn with_options(mut self, options: IndexOptions) -> Self {
+    pub fn with_options(mut self, options: CompileOptions) -> Self {
         self.options = options;
         self
     }
 
     /// Set the indexing mode.
-    pub fn with_mode(mut self, mode: IndexMode) -> Self {
+    pub fn with_mode(mut self, mode: CompileMode) -> Self {
         self.options.mode = mode;
         self
     }
@@ -196,41 +196,41 @@ impl IndexContext {
     }
 
     /// Get the indexing options.
-    pub fn options(&self) -> &IndexOptions {
+    pub fn options(&self) -> &CompileOptions {
         &self.options
     }
 }
 
-impl From<PathBuf> for IndexContext {
+impl From<PathBuf> for CompileInput {
     fn from(path: PathBuf) -> Self {
         Self::from_path(path)
     }
 }
 
-impl From<&std::path::Path> for IndexContext {
+impl From<&std::path::Path> for CompileInput {
     fn from(path: &std::path::Path) -> Self {
         Self::from_path(path.to_path_buf())
     }
 }
 
-impl From<&str> for IndexContext {
+impl From<&str> for CompileInput {
     fn from(path: &str) -> Self {
         Self::from_path(path)
     }
 }
 
-impl From<String> for IndexContext {
+impl From<String> for CompileInput {
     fn from(path: String) -> Self {
         Self::from_path(path)
     }
 }
 
-impl std::fmt::Display for IndexSource {
+impl std::fmt::Display for CompileSource {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            IndexSource::Path(p) => write!(f, "path:{}", p.display()),
-            IndexSource::Content { format, .. } => write!(f, "content:{}", format.extension()),
-            IndexSource::Bytes { format, .. } => write!(f, "bytes:{}", format.extension()),
+            CompileSource::Path(p) => write!(f, "path:{}", p.display()),
+            CompileSource::Content { format, .. } => write!(f, "content:{}", format.extension()),
+            CompileSource::Bytes { format, .. } => write!(f, "bytes:{}", format.extension()),
         }
     }
 }
@@ -241,44 +241,44 @@ mod tests {
 
     #[test]
     fn test_from_path() {
-        let ctx = IndexContext::from_path("./test.md");
+        let ctx = CompileInput::from_path("./test.md");
         assert_eq!(ctx.len(), 1);
         assert!(ctx.name.is_none());
     }
 
     #[test]
     fn test_from_paths() {
-        let ctx = IndexContext::from_paths(vec!["./a.md", "./b.pdf"]);
+        let ctx = CompileInput::from_paths(vec!["./a.md", "./b.pdf"]);
         assert_eq!(ctx.len(), 2);
     }
 
     #[test]
     fn test_from_content() {
-        let ctx = IndexContext::from_content("# Title", DocumentFormat::Markdown);
+        let ctx = CompileInput::from_content("# Title", DocumentFormat::Markdown);
         assert_eq!(ctx.len(), 1);
     }
 
     #[test]
     fn test_from_bytes() {
-        let ctx = IndexContext::from_bytes(vec![1, 2, 3], DocumentFormat::Pdf);
+        let ctx = CompileInput::from_bytes(vec![1, 2, 3], DocumentFormat::Pdf);
         assert_eq!(ctx.len(), 1);
     }
 
     #[test]
     fn test_with_name() {
-        let ctx = IndexContext::from_path("./test.md").with_name("My Document");
+        let ctx = CompileInput::from_path("./test.md").with_name("My Document");
         assert_eq!(ctx.name(), Some("My Document"));
     }
 
     #[test]
     fn test_with_mode() {
-        let ctx = IndexContext::from_path("./test.md").with_mode(IndexMode::Force);
-        assert_eq!(ctx.options.mode, IndexMode::Force);
+        let ctx = CompileInput::from_path("./test.md").with_mode(CompileMode::Force);
+        assert_eq!(ctx.options.mode, CompileMode::Force);
     }
 
     #[test]
     fn test_from_path_trait() {
-        let ctx = IndexContext::from(PathBuf::from("./test.md"));
+        let ctx = CompileInput::from(PathBuf::from("./test.md"));
         assert_eq!(ctx.len(), 1);
     }
 
@@ -300,11 +300,11 @@ mod tests {
         std::fs::write(tmp.join("sub/deep/ignore.dat"), b"xxx").unwrap();
 
         // Non-recursive: only top-level
-        let ctx = IndexContext::from_dir(&tmp, false);
+        let ctx = CompileInput::from_dir(&tmp, false);
         assert_eq!(ctx.len(), 1); // only a.md
 
         // Recursive: all levels
-        let ctx = IndexContext::from_dir(&tmp, true);
+        let ctx = CompileInput::from_dir(&tmp, true);
         assert_eq!(ctx.len(), 3); // a.md, b.md, c.pdf
 
         let _ = std::fs::remove_dir_all(&tmp);

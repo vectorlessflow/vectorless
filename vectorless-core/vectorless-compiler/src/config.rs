@@ -4,7 +4,7 @@
 //! Configuration types for the index pipeline.
 //!
 //! This module contains all configuration types used by the indexing pipeline:
-//! - [`IndexMode`] - Document format selection
+//! - [`SourceFormat`] - Document format selection
 //! - [`PipelineOptions`] - Full pipeline configuration
 //! - [`OptimizationConfig`] - Tree optimization settings
 //! - [`ThinningConfig`] - Node merging settings
@@ -19,7 +19,7 @@ use std::path::PathBuf;
 
 /// Index mode for document processing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum IndexMode {
+pub enum SourceFormat {
     /// Auto-detect format from file extension.
     Auto,
     /// Force Markdown format.
@@ -28,7 +28,7 @@ pub enum IndexMode {
     Pdf,
 }
 
-impl Default for IndexMode {
+impl Default for SourceFormat {
     fn default() -> Self {
         Self::Auto
     }
@@ -191,7 +191,7 @@ impl SplitConfig {
 #[derive(Debug, Clone)]
 pub struct PipelineOptions {
     /// Index mode.
-    pub mode: IndexMode,
+    pub mode: SourceFormat,
 
     /// Whether to generate node IDs.
     pub generate_ids: bool,
@@ -238,7 +238,7 @@ pub struct PipelineOptions {
 impl Default for PipelineOptions {
     fn default() -> Self {
         Self {
-            mode: IndexMode::Auto,
+            mode: SourceFormat::Auto,
             generate_ids: true,
             summary_strategy: SummaryStrategy::full(),
             thinning: ThinningConfig::default(),
@@ -262,7 +262,7 @@ impl PipelineOptions {
     }
 
     /// Set the index mode.
-    pub fn with_mode(mut self, mode: IndexMode) -> Self {
+    pub fn with_mode(mut self, mode: SourceFormat) -> Self {
         self.mode = mode;
         self
     }
@@ -352,8 +352,8 @@ mod tests {
 
     #[test]
     fn test_index_mode_default() {
-        let mode = IndexMode::default();
-        assert_eq!(mode, IndexMode::Auto);
+        let mode = SourceFormat::default();
+        assert_eq!(mode, SourceFormat::Auto);
     }
 
     #[test]
@@ -380,10 +380,10 @@ mod tests {
     #[test]
     fn test_pipeline_options_builder() {
         let options = PipelineOptions::new()
-            .with_mode(IndexMode::Markdown)
+            .with_mode(SourceFormat::Markdown)
             .with_generate_ids(false);
 
-        assert_eq!(options.mode, IndexMode::Markdown);
+        assert_eq!(options.mode, SourceFormat::Markdown);
         assert!(!options.generate_ids);
     }
 }

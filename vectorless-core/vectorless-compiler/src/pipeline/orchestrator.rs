@@ -30,15 +30,15 @@ use tracing::{debug, error, info, warn};
 use vectorless_error::Result;
 
 use super::super::PipelineOptions;
-use super::super::stages::IndexStage;
+use super::super::stages::CompileStage;
 use super::checkpoint::{CheckpointContextData, CheckpointManager, PipelineCheckpoint};
-use super::context::{IndexContext, IndexInput, PipelineResult, StageResult};
+use super::context::{CompileContext, CompilerInput, CompileResult, StageResult};
 use super::policy::FailurePolicy;
 
 /// Stage entry with metadata for orchestration.
 struct StageEntry {
     /// The stage implementation.
-    stage: Box<dyn IndexStage>,
+    stage: Box<dyn CompileStage>,
     /// Priority (lower = earlier execution).
     priority: i32,
     /// Names of stages this depends on.
@@ -124,7 +124,7 @@ impl PipelineOrchestrator {
     /// Dependencies are automatically read from the stage's `depends_on()` method.
     pub fn stage<S>(mut self, stage: S) -> Self
     where
-        S: IndexStage + 'static,
+        S: CompileStage + 'static,
     {
         let deps = stage.depends_on();
         self.stages.push(StageEntry {
@@ -142,7 +142,7 @@ impl PipelineOrchestrator {
     /// Default priority is 100.
     pub fn stage_with_priority<S>(mut self, stage: S, priority: i32) -> Self
     where
-        S: IndexStage + 'static,
+        S: CompileStage + 'static,
     {
         let deps = stage.depends_on();
         self.stages.push(StageEntry {
@@ -164,7 +164,7 @@ impl PipelineOrchestrator {
         explicit_depends_on: &[&str],
     ) -> Self
     where
-        S: IndexStage + 'static,
+        S: CompileStage + 'static,
     {
         let trait_deps = stage.depends_on();
         let mut all_deps: Vec<String> = trait_deps.into_iter().map(|s| s.to_string()).collect();
@@ -346,8 +346,8 @@ impl PipelineOrchestrator {
 
     /// Execute a stage with its failure policy applied.
     async fn execute_stage_with_policy(
-        stage: &mut Box<dyn IndexStage>,
-        ctx: &mut IndexContext,
+        stage: &mut Box<dyn CompileStage>,
+        ctx: &mut CompileContext,
     ) -> Result<StageResult> {
         let policy = stage.failure_policy();
         let stage_name = stage.name().to_string();
@@ -406,7 +406,7 @@ impl PipelineOrchestrator {
         result: Result<StageResult>,
         stage_name: &str,
         policy: &FailurePolicy,
-        ctx: &mut IndexContext,
+        ctx: &mut CompileContext,
     ) -> Result<()> {
         match result {
             Ok(result) => {
@@ -438,9 +438,9 @@ impl PipelineOrchestrator {
     /// Failure policies are applied per-stage.
     pub async fn execute(
         &mut self,
-        input: IndexInput,
+        input: CompilerInput,
         options: PipelineOptions,
-    ) -> Result<PipelineResult> {
+    ) -> Result<CompileResult> {
         let total_start = Instant::now();
         info!(
             "Starting orchestrated pipeline with {} stages",
@@ -471,8 +471,8 @@ impl PipelineOrchestrator {
         // Create context
         let mut opts = options;
         let existing_tree = opts.existing_tree.take();
-        let mut ctx = IndexContext::new(input, opts);
-        // Inject shared LLM client into context for stages that need it (e.g. ReasoningIndexStage)
+        let mut ctx = CompileContext::new(input, opts);
+        // Inject shared LLM client into context for stages that need it (e.g. ReasoningCompileStage)
         if let Some(client) = self.llm_client.take() {
             ctx = ctx.with_llm_client(client);
         }
@@ -556,7 +556,7 @@ impl PipelineOrchestrator {
                     .copied();
 
                 // For each stage, prepare (stage, context) pair.
-                // Swap out stages from self.stages to get owned Box<dyn IndexStage>.
+                // Swap out stages from self.stages to get owned Box<dyn CompileStage>.
                 let mut entries: Vec<ParallelEntry> = Vec::with_capacity(group.stage_indices.len());
 
                 for &idx in &group.stage_indices {
@@ -571,7 +571,7 @@ impl PipelineOrchestrator {
                     } else {
                         // Reader gets a cloned context
                         let mut clone =
-                            IndexContext::new(IndexInput::content(""), ctx.options.clone());
+                            CompileContext::new(CompilerInput::content(""), ctx.options.clone());
                         clone.tree = ctx.tree.clone();
                         clone.existing_tree = ctx.existing_tree.clone();
                         clone.doc_id = ctx.doc_id.clone();
@@ -610,7 +610,7 @@ impl PipelineOrchestrator {
 
                 // Execute writer on main ctx concurrently with readers.
                 // Move each reader's stage+ctx into an owned async block.
-                // All futures are !Send (Box<dyn IndexStage>), but join_all
+                // All futures are !Send (Box<dyn CompileStage>), but join_all
                 // works fine on the same thread.
 
                 let reader_futs: Vec<
@@ -740,7 +740,7 @@ impl PipelineOrchestrator {
     ///
     /// Reads the reader's AccessPattern to know which fields to copy,
     /// and merges additive metrics (LLM calls, tokens, etc.).
-    fn merge_reader_outputs(ctx: &mut IndexContext, reader: &ParallelEntry) {
+    fn merge_reader_outputs(ctx: &mut CompileContext, reader: &ParallelEntry) {
         if reader.access.writes_reasoning_index {
             if let Some(ref rctx) = reader.ctx {
                 ctx.reasoning_index = rctx.reasoning_index.clone();
@@ -791,7 +791,7 @@ impl PipelineOrchestrator {
     }
 
     /// Save a checkpoint of the current pipeline state.
-    fn save_checkpoint(ctx: &IndexContext) {
+    fn save_checkpoint(ctx: &CompileContext) {
         let checkpoint_dir = match ctx.options.checkpoint_dir {
             Some(ref dir) => dir.clone(),
             None => return,
@@ -841,12 +841,12 @@ impl PipelineOrchestrator {
 struct NopStage;
 
 #[async_trait::async_trait]
-impl IndexStage for NopStage {
+impl CompileStage for NopStage {
     fn name(&self) -> &'static str {
         "_nop"
     }
 
-    async fn execute(&mut self, _ctx: &mut IndexContext) -> Result<StageResult> {
+    async fn execute(&mut self, _ctx: &mut CompileContext) -> Result<StageResult> {
         Ok(StageResult::success("_nop"))
     }
 }
@@ -860,10 +860,10 @@ struct ParallelEntry {
     /// Index into orchestrator's stages vec (for swapping back).
     idx: usize,
     /// The owned stage implementation.
-    stage: Box<dyn IndexStage>,
+    stage: Box<dyn CompileStage>,
     /// Cloned context for reader stages; None for the tree writer
     /// (which uses the main ctx directly).
-    ctx: Option<IndexContext>,
+    ctx: Option<CompileContext>,
     /// Stage name (captured before swap).
     name: String,
     /// Failure policy (captured before swap).
@@ -1016,12 +1016,12 @@ mod tests {
     }
 
     #[async_trait::async_trait]
-    impl IndexStage for MockStage {
+    impl CompileStage for MockStage {
         fn name(&self) -> &str {
             &self.name
         }
 
-        async fn execute(&mut self, _ctx: &mut IndexContext) -> Result<StageResult> {
+        async fn execute(&mut self, _ctx: &mut CompileContext) -> Result<StageResult> {
             Ok(StageResult::success(&self.name))
         }
     }

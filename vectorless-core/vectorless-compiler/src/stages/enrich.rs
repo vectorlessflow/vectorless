@@ -10,8 +10,8 @@ use tracing::{debug, info};
 use vectorless_document::{DocumentTree, NodeId, ReferenceExtractor, TocView};
 use vectorless_error::Result;
 
-use super::{AccessPattern, IndexStage, StageResult};
-use crate::pipeline::IndexContext;
+use super::{AccessPattern, CompileStage, StageResult};
+use crate::pipeline::CompileContext;
 
 /// Enrich stage - adds metadata to the tree.
 pub struct EnrichStage;
@@ -78,7 +78,7 @@ impl EnrichStage {
     }
 
     /// Generate document description from root summary.
-    fn generate_description(&self, ctx: &mut IndexContext) {
+    fn generate_description(&self, ctx: &mut CompileContext) {
         if !ctx.options.generate_description {
             return;
         }
@@ -145,7 +145,7 @@ impl Default for EnrichStage {
 }
 
 #[async_trait]
-impl IndexStage for EnrichStage {
+impl CompileStage for EnrichStage {
     fn name(&self) -> &'static str {
         "enrich"
     }
@@ -163,7 +163,7 @@ impl IndexStage for EnrichStage {
         }
     }
 
-    async fn execute(&mut self, ctx: &mut IndexContext) -> Result<StageResult> {
+    async fn execute(&mut self, ctx: &mut CompileContext) -> Result<StageResult> {
         let start = Instant::now();
 
         let tree = ctx

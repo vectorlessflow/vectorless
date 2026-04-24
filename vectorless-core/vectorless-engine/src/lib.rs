@@ -1,18 +1,18 @@
 // Copyright (c) 2026 vectorless developers
 // SPDX-License-Identifier: Apache-2.0
 
-//! High-level client API for document indexing and retrieval.
+//! High-level client API for document compilation and retrieval.
 //!
 //! This module provides the main entry point for using vectorless:
-//! - [`Engine`] — The main client for indexing and querying documents
+//! - [`Engine`] — The main client for compiling and querying documents
 //! - [`EngineBuilder`] — Builder pattern for client configuration
-//! - [`IndexContext`] — Unified input for document indexing
+//! - [`CompileInput`] — Unified input for document compilation
 //!
 //! Retrieval (ask) is handled by the Python strategy layer.
 
 mod builder;
+mod compile_input;
 mod engine;
-mod index_context;
 mod indexed_document;
 mod indexer;
 mod types;
@@ -29,16 +29,16 @@ pub use engine::Engine;
 // Context Types
 // ============================================================
 
-pub use index_context::IndexContext;
+pub use compile_input::CompileInput;
 
 // ============================================================
 // Result & Info Types
 // ============================================================
 
-pub use types::{FailedItem, IndexItem, IndexMode, IndexOptions, IndexResult};
+pub use types::{FailedItem, CompileArtifact, CompileMode, CompileOptions, CompileOutput};
 
 // ============================================================
-// Parser Types (needed for IndexContext::from_content)
+// Parser Types (needed for CompileInput::from_content)
 // ============================================================
 
 pub use vectorless_document::DocumentFormat;

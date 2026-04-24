@@ -13,11 +13,11 @@ use vectorless_llm::LlmClient;
 
 use super::super::PipelineOptions;
 use super::super::stages::{
-    BuildStage, ConceptExtractionStage, EnhanceStage, EnrichStage, IndexStage,
-    NavigationIndexStage, OptimizeStage, ParseStage, ReasoningIndexStage, SplitStage,
+    BuildStage, ConceptExtractionStage, EnhanceStage, EnrichStage, CompileStage,
+    NavigationCompileStage, OptimizeStage, ParseStage, ReasoningCompileStage, SplitStage,
     ValidateStage, VerifyStage,
 };
-use super::context::{IndexInput, PipelineResult};
+use super::context::{CompilerInput, CompileResult};
 use super::orchestrator::PipelineOrchestrator;
 
 /// Pipeline executor for document indexing.
@@ -67,9 +67,9 @@ impl PipelineExecutor {
             .stage_with_priority(ValidateStage::new(), 22)
             .stage_with_priority(SplitStage::new(), 25)
             .stage_with_priority(EnrichStage::new(), 40)
-            .stage_with_priority(ReasoningIndexStage::new(), 45)
+            .stage_with_priority(ReasoningCompileStage::new(), 45)
             .stage_with_priority(ConceptExtractionStage::new(), 47)
-            .stage_with_priority(NavigationIndexStage::new(), 50)
+            .stage_with_priority(NavigationCompileStage::new(), 50)
             .stage_with_priority(VerifyStage, 55)
             .stage_with_priority(OptimizeStage::new(), 60);
 
@@ -102,9 +102,9 @@ impl PipelineExecutor {
             .stage_with_priority(SplitStage::new(), 25)
             .stage_with_priority(EnhanceStage::with_llm_client(client.clone()), 30)
             .stage_with_priority(EnrichStage::new(), 40)
-            .stage_with_priority(ReasoningIndexStage::new(), 45)
+            .stage_with_priority(ReasoningCompileStage::new(), 45)
             .stage_with_priority(ConceptExtractionStage::with_llm_client(client), 47)
-            .stage_with_priority(NavigationIndexStage::new(), 50)
+            .stage_with_priority(NavigationCompileStage::new(), 50)
             .stage_with_priority(VerifyStage, 55)
             .stage_with_priority(OptimizeStage::new(), 60);
 
@@ -133,7 +133,7 @@ impl PipelineExecutor {
     /// Add a stage with default priority.
     ///
     /// The stage will be added after existing stages with the same priority.
-    pub fn add_stage(mut self, stage: impl IndexStage + 'static) -> Self {
+    pub fn add_stage(mut self, stage: impl CompileStage + 'static) -> Self {
         self.orchestrator = self.orchestrator.stage(stage);
         self
     }
@@ -143,7 +143,7 @@ impl PipelineExecutor {
     /// Lower priority = earlier execution.
     pub fn add_stage_with_priority(
         mut self,
-        stage: impl IndexStage + 'static,
+        stage: impl CompileStage + 'static,
         priority: i32,
     ) -> Self {
         self.orchestrator = self.orchestrator.stage_with_priority(stage, priority);
@@ -155,7 +155,7 @@ impl PipelineExecutor {
     /// The stage will run after all specified dependencies.
     pub fn add_stage_with_deps(
         mut self,
-        stage: impl IndexStage + 'static,
+        stage: impl CompileStage + 'static,
         priority: i32,
         depends_on: &[&str],
     ) -> Self {
@@ -180,9 +180,9 @@ impl PipelineExecutor {
     /// Stages are executed in dependency-resolved order.
     pub async fn execute(
         &mut self,
-        input: IndexInput,
+        input: CompilerInput,
         options: PipelineOptions,
-    ) -> Result<PipelineResult> {
+    ) -> Result<CompileResult> {
         info!(
             "Starting index pipeline with {} stages",
             self.orchestrator.stage_count()

@@ -3,7 +3,7 @@
 
 //! Navigation Index Stage — Build the Agent navigation index from the document tree.
 //!
-//! This stage runs after EnrichStage and ReasoningIndexStage. It reads the
+//! This stage runs after EnrichStage and ReasoningCompileStage. It reads the
 //! enhanced TreeNode fields (summary, description, routing_keywords, leaf_count)
 //! and builds a [`NavigationIndex`] containing compact [`NavEntry`] and
 //! [`ChildRoute`] records for every non-leaf node.
@@ -21,8 +21,8 @@ use vectorless_document::{ChildRoute, DocumentTree, NavEntry, NavigationIndex, N
 use vectorless_error::Result;
 
 use super::async_trait;
-use super::{AccessPattern, IndexStage, StageResult};
-use crate::pipeline::IndexContext;
+use super::{AccessPattern, CompileStage, StageResult};
+use crate::pipeline::CompileContext;
 
 /// Navigation Index Stage — builds the Agent navigation index.
 ///
@@ -32,9 +32,9 @@ use crate::pipeline::IndexContext;
 ///
 /// The resulting [`NavigationIndex`] is stored in `ctx.navigation_index` and
 /// serialized as part of [`PersistedDocument`](vectorless_storage::persistence::PersistedDocument).
-pub struct NavigationIndexStage;
+pub struct NavigationCompileStage;
 
-impl NavigationIndexStage {
+impl NavigationCompileStage {
     /// Create a new navigation index stage.
     pub fn new() -> Self {
         Self
@@ -118,14 +118,14 @@ impl NavigationIndexStage {
     }
 }
 
-impl Default for NavigationIndexStage {
+impl Default for NavigationCompileStage {
     fn default() -> Self {
         Self::new()
     }
 }
 
 #[async_trait]
-impl IndexStage for NavigationIndexStage {
+impl CompileStage for NavigationCompileStage {
     fn name(&self) -> &'static str {
         "navigation_index"
     }
@@ -146,7 +146,7 @@ impl IndexStage for NavigationIndexStage {
         }
     }
 
-    async fn execute(&mut self, ctx: &mut IndexContext) -> Result<StageResult> {
+    async fn execute(&mut self, ctx: &mut CompileContext) -> Result<StageResult> {
         let start = Instant::now();
 
         let tree = match ctx.tree.as_ref() {
@@ -320,7 +320,7 @@ mod tests {
         let root = tree.root();
 
         // Root has 3 leaves: 1.1, 1.2, 2.1
-        assert_eq!(NavigationIndexStage::count_leaves(&tree, root), 3);
+        assert_eq!(NavigationCompileStage::count_leaves(&tree, root), 3);
     }
 
     #[test]
@@ -328,7 +328,7 @@ mod tests {
         let tree = DocumentTree::new("Root", "content");
         let root = tree.root();
 
-        assert_eq!(NavigationIndexStage::count_leaves(&tree, root), 1);
+        assert_eq!(NavigationCompileStage::count_leaves(&tree, root), 1);
     }
 
     #[test]
@@ -336,7 +336,7 @@ mod tests {
         let tree = build_test_tree();
         let root = tree.root();
 
-        let entry = NavigationIndexStage::build_nav_entry(&tree, root, 3);
+        let entry = NavigationCompileStage::build_nav_entry(&tree, root, 3);
         assert_eq!(entry.overview, "A comprehensive guide");
         assert_eq!(entry.leaf_count, 3);
         assert_eq!(entry.level, 0);
@@ -347,7 +347,7 @@ mod tests {
         let tree = DocumentTree::new("Root", "content");
         let root = tree.root();
 
-        let entry = NavigationIndexStage::build_nav_entry(&tree, root, 1);
+        let entry = NavigationCompileStage::build_nav_entry(&tree, root, 1);
         assert_eq!(entry.overview, "Root");
     }
 
@@ -357,14 +357,14 @@ mod tests {
         let root = tree.root();
         let children: Vec<_> = tree.children_iter(root).collect();
 
-        let route = NavigationIndexStage::build_child_route(&tree, children[0], 2);
+        let route = NavigationCompileStage::build_child_route(&tree, children[0], 2);
         assert_eq!(route.title, "Section 1");
         assert_eq!(route.leaf_count, 2);
     }
 
     #[test]
     fn test_stage_config() {
-        let stage = NavigationIndexStage::new();
+        let stage = NavigationCompileStage::new();
         assert_eq!(stage.name(), "navigation_index");
         assert!(stage.is_optional());
         assert_eq!(stage.depends_on(), vec!["enrich"]);
@@ -391,14 +391,14 @@ mod tests {
         tree.set_summary(sec1, "Getting started");
 
         // Build context with the tree
-        let mut ctx = IndexContext::new(
-            crate::pipeline::IndexInput::content("test"),
+        let mut ctx = CompileContext::new(
+            crate::pipeline::CompilerInput::content("test"),
             crate::config::PipelineOptions::default(),
         );
         ctx.tree = Some(tree);
 
         // Execute the stage
-        let mut stage = NavigationIndexStage::new();
+        let mut stage = NavigationCompileStage::new();
         let result = stage.execute(&mut ctx).await;
 
         assert!(result.is_ok());
@@ -439,13 +439,13 @@ mod tests {
         // Single node = root is leaf → no non-leaf nodes → empty index
         let tree = DocumentTree::new("Root", "content");
 
-        let mut ctx = IndexContext::new(
-            crate::pipeline::IndexInput::content("test"),
+        let mut ctx = CompileContext::new(
+            crate::pipeline::CompilerInput::content("test"),
             crate::config::PipelineOptions::default(),
         );
         ctx.tree = Some(tree);
 
-        let mut stage = NavigationIndexStage::new();
+        let mut stage = NavigationCompileStage::new();
         let result = stage.execute(&mut ctx).await;
 
         assert!(result.is_ok());
@@ -458,13 +458,13 @@ mod tests {
 
     #[tokio::test]
     async fn test_execute_no_tree() {
-        let ctx = IndexContext::new(
-            crate::pipeline::IndexInput::content("test"),
+        let ctx = CompileContext::new(
+            crate::pipeline::CompilerInput::content("test"),
             crate::config::PipelineOptions::default(),
         );
         // ctx.tree is None
 
-        let mut stage = NavigationIndexStage::new();
+        let mut stage = NavigationCompileStage::new();
         // Can't move ctx since tree is None, construct manually
         let mut ctx = ctx;
         ctx.tree = None;
@@ -481,7 +481,7 @@ mod tests {
         let root = tree.root();
         let child = tree.add_child(root, "Child", "this is a long content string that exceeds 100 characters and should be truncated when used as a fallback description for the child route");
 
-        let route = NavigationIndexStage::build_child_route(&tree, child, 1);
+        let route = NavigationCompileStage::build_child_route(&tree, child, 1);
         assert_eq!(route.title, "Child");
         // description should be truncated content, not the full string
         assert!(route.description.len() <= 100);
@@ -497,7 +497,7 @@ mod tests {
         // Clear any auto-generated content
         tree.set_summary(child, "");
 
-        let route = NavigationIndexStage::build_child_route(&tree, child, 1);
+        let route = NavigationCompileStage::build_child_route(&tree, child, 1);
         assert_eq!(route.title, "Orphan Section");
         // Fallback: description = title when no summary and no content
         assert_eq!(route.description, "Orphan Section");
@@ -510,7 +510,7 @@ mod tests {
         let child = tree.add_child(root, "Child", "some content");
         tree.set_summary(child, "A concise summary");
 
-        let route = NavigationIndexStage::build_child_route(&tree, child, 1);
+        let route = NavigationCompileStage::build_child_route(&tree, child, 1);
         assert_eq!(route.description, "A concise summary");
     }
 
@@ -524,14 +524,14 @@ mod tests {
         tree.set_summary(root, "Root overview");
         tree.set_summary(sec1, "Section overview");
 
-        let root_entry = NavigationIndexStage::build_nav_entry(&tree, root, 3);
+        let root_entry = NavigationCompileStage::build_nav_entry(&tree, root, 3);
         assert_eq!(root_entry.level, 0);
 
-        let sec1_entry = NavigationIndexStage::build_nav_entry(&tree, sec1, 1);
+        let sec1_entry = NavigationCompileStage::build_nav_entry(&tree, sec1, 1);
         assert_eq!(sec1_entry.level, 1);
 
         // Leaf node should still return valid NavEntry if called
-        let leaf_entry = NavigationIndexStage::build_nav_entry(&tree, sec1_1, 1);
+        let leaf_entry = NavigationCompileStage::build_nav_entry(&tree, sec1_1, 1);
         assert_eq!(leaf_entry.level, 2);
         assert_eq!(leaf_entry.overview, "S1.1"); // no summary → fallback to title
     }
@@ -549,11 +549,11 @@ mod tests {
         let _s2a = tree.add_child(sec2, "S2.A", "leaf");
 
         // sec1 subtree has 3 leaves
-        assert_eq!(NavigationIndexStage::count_leaves(&tree, sec1), 3);
+        assert_eq!(NavigationCompileStage::count_leaves(&tree, sec1), 3);
         // sec2 subtree has 1 leaf
-        assert_eq!(NavigationIndexStage::count_leaves(&tree, sec2), 1);
+        assert_eq!(NavigationCompileStage::count_leaves(&tree, sec2), 1);
         // root has 4 leaves total
-        assert_eq!(NavigationIndexStage::count_leaves(&tree, root), 4);
+        assert_eq!(NavigationCompileStage::count_leaves(&tree, root), 4);
     }
 
     /// Helper to check success without destructuring.

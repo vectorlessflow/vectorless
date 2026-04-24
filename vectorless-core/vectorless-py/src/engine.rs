@@ -1,7 +1,7 @@
 // Copyright (c) 2026 vectorless developers
 // SPDX-License-Identifier: Apache-2.0
 
-//! Engine Python wrapper — async ingest/ask/forget/list_documents.
+//! Engine Python wrapper — async compile/forget/list_documents.
 
 use pyo3::prelude::*;
 use pyo3_async_runtimes::tokio::future_into_py;
@@ -20,8 +20,8 @@ use super::metrics::PyMetricsReport;
 // Engine async helpers (named functions to avoid FnOnce HRTB issue)
 // ============================================================
 
-async fn run_ingest(engine: Arc<Engine>, input: IngestInput) -> PyResult<PyDocumentInfo> {
-    let doc = engine.ingest(input).await.map_err(to_py_err)?;
+async fn run_compile(engine: Arc<Engine>, input: IngestInput) -> PyResult<PyDocumentInfo> {
+    let doc = engine.compile(input).await.map_err(to_py_err)?;
     Ok(PyDocumentInfo { inner: doc })
 }
 
@@ -87,14 +87,9 @@ fn run_metrics_report(engine: Arc<Engine>) -> PyMetricsReport {
 ///
 /// engine = Engine(api_key="sk-...", model="gpt-4o")
 ///
-/// # Understand a document
-/// doc = await engine.ingest("./report.pdf")
+/// # Compile a document
+/// doc = await engine.compile("./report.pdf")
 /// print(doc.summary)
-///
-/// # Ask a question
-/// answer = await engine.ask("What is the revenue?", doc_ids=[doc.doc_id])
-/// print(answer.content)
-/// print(answer.trace)  # reasoning trace — always present
 ///
 /// # List all understood documents
 /// docs = await engine.list_documents()
@@ -168,7 +163,7 @@ impl PyEngine {
         })
     }
 
-    /// Understand a document — parse, analyze, and persist.
+    /// Compile a document — parse, analyze, and persist.
     ///
     /// Args:
     ///     path: File path to the document (PDF or Markdown).
@@ -177,11 +172,11 @@ impl PyEngine {
     ///     DocumentInfo with doc_id, summary, structure, concepts.
     ///
     /// Raises:
-    ///     VectorlessError: If ingest fails.
-    fn ingest<'py>(&self, py: Python<'py>, path: String) -> PyResult<Bound<'py, PyAny>> {
+    ///     VectorlessError: If compilation fails.
+    fn compile<'py>(&self, py: Python<'py>, path: String) -> PyResult<Bound<'py, PyAny>> {
         let engine = Arc::clone(&self.inner);
         let input = IngestInput::Path(path.into());
-        future_into_py(py, run_ingest(engine, input))
+        future_into_py(py, run_compile(engine, input))
     }
 
     /// Remove a document by ID.

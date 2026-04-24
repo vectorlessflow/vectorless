@@ -27,7 +27,7 @@ from vectorless.llm_client import LLMClient
 from vectorless.streaming import StreamingQueryResult
 from vectorless.types.graph import DocumentGraphWrapper
 from vectorless.types.results import (
-    IndexResultWrapper,
+    CompileOutput,
 )
 
 logger = logging.getLogger(__name__)
@@ -36,7 +36,7 @@ logger = logging.getLogger(__name__)
 class Engine:
     """High-level Vectorless engine.
 
-    compile (ingest) runs in Rust; ask (retrieval) runs in Python.
+    compile runs in Rust; ask (retrieval) runs in Python.
 
     Configuration precedence: constructor args > env vars > config file > defaults.
 
@@ -140,7 +140,7 @@ class Engine:
         name: str | None = None,
         mode: str = "default",
         force: bool = False,
-    ) -> IndexResultWrapper:
+    ) -> CompileOutput:
         """Compile a document from various sources.
 
         Exactly one source must be provided: path, paths, directory,
@@ -154,13 +154,13 @@ class Engine:
                 "Provide exactly one source: path, paths, directory, content, or bytes_data"
             )
 
-        # For single file, delegate to Rust ingest
+        # For single file, delegate to Rust compile
         if path is not None:
             source_desc = str(path)
             self._events.emit_index(
                 IndexEventData(event_type=IndexEventType.STARTED, path=source_desc)
             )
-            doc_info = await self._rust.ingest(str(path))
+            doc_info = await self._rust.compile(str(path))
             self._events.emit_index(
                 IndexEventData(
                     event_type=IndexEventType.COMPLETE,
@@ -168,7 +168,7 @@ class Engine:
                     message=f"Indexed {doc_info.doc_id}",
                 )
             )
-            return IndexResultWrapper.from_doc_info(doc_info)
+            return CompileOutput.from_doc_info(doc_info)
 
         # For multiple files, index them sequentially
         if paths is not None:
@@ -189,15 +189,15 @@ class Engine:
             return await self.compile_batch(file_paths, mode="force" if force else mode)
 
         if content is not None:
-            # Write content to a temp file and ingest
+            # Write content to a temp file and compile
             import tempfile
             suffix = ".md" if format == "markdown" else f".{format}"
             with tempfile.NamedTemporaryFile(mode="w", suffix=suffix, delete=False) as f:
                 f.write(content)
                 tmp_path = f.name
             try:
-                doc_info = await self._rust.ingest(tmp_path)
-                return IndexResultWrapper.from_doc_info(doc_info)
+                doc_info = await self._rust.compile(tmp_path)
+                return CompileOutput.from_doc_info(doc_info)
             finally:
                 import os
                 os.unlink(tmp_path)
@@ -209,8 +209,8 @@ class Engine:
                 f.write(bytes_data)
                 tmp_path = f.name
             try:
-                doc_info = await self._rust.ingest(tmp_path)
-                return IndexResultWrapper.from_doc_info(doc_info)
+                doc_info = await self._rust.compile(tmp_path)
+                return CompileOutput.from_doc_info(doc_info)
             finally:
                 import os
                 os.unlink(tmp_path)
@@ -225,7 +225,7 @@ class Engine:
         jobs: int = 1,
         force: bool = False,
         progress: bool = True,
-    ) -> IndexResultWrapper:
+    ) -> CompileOutput:
         """Compile multiple files with optional concurrency.
 
         Args:
@@ -242,7 +242,7 @@ class Engine:
                 self._events.emit_index(
                     IndexEventData(event_type=IndexEventType.STARTED, path=str(p))
                 )
-                doc_info = await self._rust.ingest(str(p))
+                doc_info = await self._rust.compile(str(p))
                 if progress:
                     self._events.emit_index(
                         IndexEventData(
@@ -256,7 +256,7 @@ class Engine:
         async with asyncio.TaskGroup() as tg:
             tasks = [tg.create_task(_index_one(p)) for p in paths]
         results = [t.result() for t in tasks]
-        return IndexResultWrapper.from_doc_infos(list(results))
+        return CompileOutput.from_doc_infos(list(results))
 
     # ── Querying (Python strategy layer) ────────────────────────
 

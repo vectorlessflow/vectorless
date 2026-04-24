@@ -1,8 +1,10 @@
 """Ask pipeline — query reasoning, multi-agent retrieval, and answer synthesis."""
 
 from vectorless.ask.dispatcher import dispatch
+from vectorless.ask.errors import AskError, BudgetExceededError, LLMFailureError, NavigationError, ParseError, VerificationError
 from vectorless.ask.evaluate import evaluate
 from vectorless.ask.orchestrator import Orchestrator
+from vectorless.ask.protocols import NavigableDocument
 from vectorless.ask.plan import Complexity, QueryIntent, QueryPlan, SubQuery
 from vectorless.ask.types import (
     DispatchEntry,
@@ -25,6 +27,7 @@ from vectorless.ask.worker import Worker
 
 # New modules
 from vectorless.ask.blackboard import Discovery, SharedBlackboard
+from vectorless.ask.events import AskEvent
 from vectorless.ask.reasoning import (
     Ambiguity,
     AmbiguityType,
@@ -47,6 +50,13 @@ __all__ = [
     "Evidence",
     "Metrics",
     "TraceStep",
+    # Error types
+    "AskError",
+    "LLMFailureError",
+    "ParseError",
+    "BudgetExceededError",
+    "NavigationError",
+    "VerificationError",
     # Worker types
     "WorkerOutput",
     "WorkerMetrics",
@@ -54,6 +64,7 @@ __all__ = [
     # Orchestrator types
     "Orchestrator",
     "OrchestratorState",
+    "NavigableDocument",
     "DispatchEntry",
     "DocCard",
     "EvalResult",
@@ -82,6 +93,8 @@ __all__ = [
     # Shared blackboard
     "Discovery",
     "SharedBlackboard",
+    # Events
+    "AskEvent",
     # Verification
     "VerifyPipeline",
     "VerificationDimension",

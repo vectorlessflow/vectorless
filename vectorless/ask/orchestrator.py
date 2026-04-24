@@ -23,6 +23,8 @@ from dataclasses import dataclass
 from typing import Any
 
 from vectorless.ask.protocols import DocLoader, EventCallback
+from vectorless.ask.events import AskEvent
+from vectorless.ask.errors import AskError, LLMFailureError, NavigationError
 from vectorless.ask.utils import extract_keywords, format_evidence
 from vectorless.ask.types import (
     DispatchEntry,
@@ -113,6 +115,7 @@ class Orchestrator:
         query_analysis: QueryAnalysis | None = None,
         max_rounds: int = 15,
         max_llm_calls: int = 0,
+        max_concurrent_workers: int = 5,
         event_callback: EventCallback | None = None,
     ) -> None:
         self._query = query
@@ -122,6 +125,7 @@ class Orchestrator:
         self._skip_analysis = skip_analysis
         self._max_rounds = max_rounds
         self._max_llm_calls = max_llm_calls
+        self._worker_semaphore = asyncio.Semaphore(max_concurrent_workers)
         self._emit = event_callback or _noop_emit
 
         # Accept both old QueryPlan and new QueryAnalysis
@@ -159,10 +163,16 @@ class Orchestrator:
 
         if analyze_result is None:
             # No results or already answered
+            await self._emit({"event": AskEvent.COMPLETED, "reason": "no_results"})
             return state.into_output("")
 
         state.total_llm_calls += analyze_result.llm_calls
         initial_dispatches = analyze_result.dispatches
+
+        await self._emit({
+            "event": AskEvent.QUERY_ANALYZED,
+            "dispatches": len(initial_dispatches),
+        })
 
         # --- Phase 2: Supervisor loop ---
         outcome = await self._supervisor_loop(
@@ -182,13 +192,24 @@ class Orchestrator:
 
         # --- Phase 3: Finalize — rerank + assemble Output ---
         if state.all_evidence:
-            return await self._finalize_output(
+            await self._emit({
+                "event": AskEvent.EVIDENCE_COLLECTED,
+                "evidence_count": len(state.all_evidence),
+            })
+            output = await self._finalize_output(
                 state,
                 self._query_analysis.intent if self._query_analysis else None,
                 confidence,
             )
+            await self._emit({
+                "event": AskEvent.COMPLETED,
+                "confidence": output.confidence,
+                "evidence_count": len(output.evidence),
+            })
+            return output
 
         logger.info("No evidence collected — returning empty output")
+        await self._emit({"event": AskEvent.COMPLETED, "reason": "no_evidence"})
         return state.into_output("")
 
     # -----------------------------------------------------------------------
@@ -239,8 +260,11 @@ class Orchestrator:
 
         try:
             analysis_output = await llm.complete(system, user)
-        except Exception as e:
+        except LLMFailureError as e:
             logger.error("Orchestrator analysis LLM call failed: %s", e)
+            return None
+        except Exception as e:
+            logger.error("Orchestrator analysis unexpected error: %s", e)
             return None
 
         logger.info(
@@ -323,6 +347,11 @@ class Orchestrator:
                     "Dispatching %d Workers (iteration=%d)",
                     len(current_dispatches), iteration,
                 )
+                await self._emit({
+                    "event": AskEvent.WORKERS_DISPATCHED,
+                    "worker_count": len(current_dispatches),
+                    "iteration": iteration,
+                })
                 await self._adaptive_dispatch(
                     query, current_dispatches, cards, llm, state,
                     blackboard, iteration,
@@ -352,8 +381,11 @@ class Orchestrator:
                     llm=llm,
                 )
                 llm_calls += 1
+            except AskError as e:
+                logger.error("Verification failed (typed): %s", e)
+                break
             except Exception as e:
-                logger.error("Verification failed: %s", e)
+                logger.error("Verification unexpected error: %s", e)
                 break
 
             logger.info(
@@ -365,9 +397,20 @@ class Orchestrator:
 
             if verification_result.passed:
                 eval_sufficient = True
+                await self._emit({
+                    "event": AskEvent.VERIFICATION_PASSED,
+                    "confidence": verification_result.overall_confidence,
+                    "iteration": iteration,
+                })
                 break
 
             # Verification failed — check iteration limit
+            await self._emit({
+                "event": AskEvent.VERIFICATION_FAILED,
+                "confidence": verification_result.overall_confidence,
+                "gaps": verification_result.gaps,
+                "iteration": iteration,
+            })
             if iteration >= MAX_VERIFICATION_ITERATIONS - 1:
                 logger.info(
                     "Max verification iterations reached — returning with current confidence"
@@ -394,6 +437,12 @@ class Orchestrator:
                 "Evidence insufficient (evidence=%d, iteration=%d) — replanning",
                 len(state.all_evidence), iteration,
             )
+            await self._emit({
+                "event": AskEvent.REPLAN_TRIGGERED,
+                "evidence_count": len(state.all_evidence),
+                "gaps": verification_result.gaps if verification_result else [],
+                "iteration": iteration,
+            })
 
             missing_info = "; ".join(verification_result.gaps) if verification_result.gaps else ""
             try:
@@ -500,21 +549,32 @@ class Orchestrator:
                 "Worker completed for doc %d (%s): evidence=%d, rounds=%d",
                 idx, card.name, len(result.evidence), result.metrics.rounds_used,
             )
+            await self._emit({
+                "event": AskEvent.WORKER_COMPLETED,
+                "doc_idx": idx,
+                "doc_name": card.name,
+                "evidence_count": len(result.evidence),
+                "rounds_used": result.metrics.rounds_used,
+            })
             return (idx, result)
 
         tasks = [run_worker(d) for d in dispatches]
 
-        # Use TaskGroup with per-task exception wrapping to maintain
-        # the same fault-tolerance as gather(return_exceptions=True)
+        # Use TaskGroup with per-task exception wrapping and a semaphore
+        # to bound concurrency (default 5 workers in parallel).
         task_results: list[tuple[int, WorkerOutput] | Exception] = []
+        semaphore = self._worker_semaphore
+        emit = self._emit
+
         async with asyncio.TaskGroup() as tg:
             async def _safe_run(d: DispatchEntry) -> None:
-                try:
-                    result = await run_worker(d)
-                    task_results.append(result)
-                except Exception as e:
-                    task_results.append(e)
-                    logger.warning("Worker failed: %s", e)
+                async with semaphore:
+                    try:
+                        result = await run_worker(d)
+                        task_results.append(result)
+                    except Exception as e:
+                        task_results.append(e)
+                        logger.warning("Worker failed: %s", e)
 
             for d in dispatches:
                 tg.create_task(_safe_run(d))
@@ -578,6 +638,13 @@ class Orchestrator:
                 "Worker completed for doc %d (%s): evidence=%d, rounds=%d",
                 idx, card.name, len(result.evidence), result.metrics.rounds_used,
             )
+            await self._emit({
+                "event": AskEvent.WORKER_COMPLETED,
+                "doc_idx": idx,
+                "doc_name": card.name,
+                "evidence_count": len(result.evidence),
+                "rounds_used": result.metrics.rounds_used,
+            })
 
             state.collect_result(idx, result)
 
@@ -644,7 +711,12 @@ class Orchestrator:
         intent: Any,  # QueryIntent or None
         confidence: float,
     ) -> Output:
-        """Rerank evidence and assemble the final Output."""
+        """Rerank evidence and assemble the final Output.
+
+        For non-factual/non-navigational intents with sufficient confidence,
+        runs an optional LLM synthesis step to produce a coherent answer
+        from the top evidence.
+        """
         from vectorless.ask.plan import QueryIntent as PlanIntent
         from vectorless.ask.reasoning.types import QueryIntent
 
@@ -662,6 +734,7 @@ class Orchestrator:
             effective_intent = _plan_intent_map.get(intent_value, PlanIntent.FACTUAL)
         else:
             effective_intent = PlanIntent.FACTUAL
+            intent_value = "factual"
 
         reranked = rerank_process(
             evidence=state.all_evidence,
@@ -671,7 +744,23 @@ class Orchestrator:
 
         state.total_llm_calls += reranked.llm_calls
 
-        output = state.into_output(reranked.answer)
+        answer = reranked.answer
+
+        # Optional LLM synthesis for non-trivial intents
+        _synthesis_intents = {"analytical", "summary", "comparative"}
+        if intent_value in _synthesis_intents and confidence > 0.5 and reranked.evidence:
+            try:
+                answer = await self._synthesize_answer(
+                    query=self._query,
+                    evidence=reranked.evidence[:5],
+                    intent=intent_value,
+                    llm=self._llm,
+                )
+                state.total_llm_calls += 1
+            except Exception as e:
+                logger.warning("Answer synthesis failed, using reranked output: %s", e)
+
+        output = state.into_output(answer)
         output.confidence = reranked.confidence
 
         logger.info(
@@ -681,14 +770,40 @@ class Orchestrator:
 
         return output
 
+    async def _synthesize_answer(
+        self,
+        query: str,
+        evidence: list[Evidence],
+        intent: str,
+        llm: LLMClient,
+    ) -> str:
+        """LLM-powered answer synthesis from top evidence.
+
+        Used for analytical, summary, and comparative intents where the
+        raw evidence formatting is not enough — the user expects a coherent
+        synthesized answer.
+        """
+        evidence_text = format_evidence(evidence)
+        system = (
+            "You are a document analysis assistant. Synthesize a clear, well-structured "
+            "answer from the provided evidence. Cite the source sections. Do not "
+            "hallucinate information not present in the evidence."
+        )
+        user = (
+            f"Question: {query}\n\n"
+            f"Evidence:\n{evidence_text}\n\n"
+            f"Provide a comprehensive answer based on the evidence above."
+        )
+        response = await llm.complete(system, user)
+        return response.strip()
+
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _noop_emit(event: dict) -> Any:
+async def _noop_emit(event: dict) -> None:
     """No-op event emitter."""
-    return asyncio.ensure_future(asyncio.sleep(0))
 
 
 def _compute_confidence(

@@ -13,8 +13,8 @@ use vectorless_error::Result;
 use vectorless_llm::LlmClient;
 
 use super::async_trait;
-use super::{AccessPattern, IndexStage, StageResult};
-use crate::pipeline::IndexContext;
+use super::{AccessPattern, CompileStage, StageResult};
+use crate::pipeline::CompileContext;
 
 /// Maximum number of top keywords to send to the LLM for concept extraction.
 const MAX_TOPICS: usize = 20;
@@ -46,7 +46,7 @@ impl ConceptExtractionStage {
 }
 
 #[async_trait]
-impl IndexStage for ConceptExtractionStage {
+impl CompileStage for ConceptExtractionStage {
     fn name(&self) -> &str {
         "concept_extraction"
     }
@@ -67,7 +67,7 @@ impl IndexStage for ConceptExtractionStage {
         }
     }
 
-    async fn execute(&mut self, ctx: &mut IndexContext) -> Result<StageResult> {
+    async fn execute(&mut self, ctx: &mut CompileContext) -> Result<StageResult> {
         let concepts = if let Some(ref client) = self.llm_client {
             extract_with_llm(ctx, client).await
         } else {
@@ -83,7 +83,7 @@ impl IndexStage for ConceptExtractionStage {
 }
 
 /// Extract concepts using LLM from topics and summaries.
-async fn extract_with_llm(ctx: &mut IndexContext, client: &LlmClient) -> Vec<Concept> {
+async fn extract_with_llm(ctx: &mut CompileContext, client: &LlmClient) -> Vec<Concept> {
     let (topics, section_titles) = gather_source_data(ctx);
 
     if topics.is_empty() {
@@ -143,7 +143,7 @@ async fn extract_with_llm(ctx: &mut IndexContext, client: &LlmClient) -> Vec<Con
 }
 
 /// Fallback: derive basic concepts from topic keywords.
-fn extract_from_topics(ctx: &mut IndexContext) -> Vec<Concept> {
+fn extract_from_topics(ctx: &mut CompileContext) -> Vec<Concept> {
     let (topics, section_titles) = gather_source_data(ctx);
 
     topics
@@ -158,7 +158,7 @@ fn extract_from_topics(ctx: &mut IndexContext) -> Vec<Concept> {
 }
 
 /// Gather top topics and section titles from the pipeline context.
-fn gather_source_data(ctx: &IndexContext) -> (Vec<(String, f32)>, Vec<String>) {
+fn gather_source_data(ctx: &CompileContext) -> (Vec<(String, f32)>, Vec<String>) {
     // Collect top keywords by weight
     let mut topics: Vec<(String, f32)> = Vec::new();
 

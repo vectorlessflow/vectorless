@@ -12,9 +12,9 @@ use vectorless_document::{DocumentTree, NodeId};
 use vectorless_error::Result;
 use vectorless_utils::estimate_tokens;
 
-use super::{IndexStage, StageResult};
+use super::{CompileStage, StageResult};
 use crate::ThinningConfig;
-use crate::pipeline::IndexContext;
+use crate::pipeline::CompileContext;
 
 /// Build stage - constructs a tree from raw nodes.
 pub struct BuildStage;
@@ -158,7 +158,7 @@ impl BuildStage {
     }
 
     /// Build tree from raw nodes.
-    fn build_tree(&self, raw_nodes: Vec<RawNode>, ctx: &mut IndexContext) -> DocumentTree {
+    fn build_tree(&self, raw_nodes: Vec<RawNode>, ctx: &mut CompileContext) -> DocumentTree {
         let root_title = ctx.name.clone();
         let root_content = String::new();
 
@@ -243,7 +243,7 @@ impl Default for BuildStage {
 }
 
 #[async_trait]
-impl IndexStage for BuildStage {
+impl CompileStage for BuildStage {
     fn name(&self) -> &'static str {
         "build"
     }
@@ -252,7 +252,7 @@ impl IndexStage for BuildStage {
         vec!["parse"]
     }
 
-    async fn execute(&mut self, ctx: &mut IndexContext) -> Result<StageResult> {
+    async fn execute(&mut self, ctx: &mut CompileContext) -> Result<StageResult> {
         let start = Instant::now();
 
         // Take raw nodes from context

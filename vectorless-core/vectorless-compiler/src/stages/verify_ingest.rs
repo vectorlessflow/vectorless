@@ -6,8 +6,8 @@
 use tracing::{info, warn};
 
 use super::async_trait;
-use super::{AccessPattern, IndexStage};
-use crate::pipeline::{IndexContext, StageResult};
+use super::{AccessPattern, CompileStage};
+use crate::pipeline::{CompileContext, StageResult};
 use vectorless_error::{Error, Result};
 
 /// Verification stage — ensures ingest produced reliable output.
@@ -21,7 +21,7 @@ use vectorless_error::{Error, Result};
 pub struct VerifyStage;
 
 #[async_trait]
-impl IndexStage for VerifyStage {
+impl CompileStage for VerifyStage {
     fn name(&self) -> &str {
         "verify"
     }
@@ -41,7 +41,7 @@ impl IndexStage for VerifyStage {
         }
     }
 
-    async fn execute(&mut self, ctx: &mut IndexContext) -> Result<StageResult> {
+    async fn execute(&mut self, ctx: &mut CompileContext) -> Result<StageResult> {
         // Tree must exist and have nodes
         let tree = ctx
             .tree

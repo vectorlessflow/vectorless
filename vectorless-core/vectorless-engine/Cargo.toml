@@ -14,7 +14,7 @@ vectorless-document = { path = "../vectorless-document" }
 vectorless-error = { path = "../vectorless-error" }
 vectorless-events = { path = "../vectorless-events" }
 vectorless-graph = { path = "../vectorless-graph" }
-vectorless-index = { path = "../vectorless-index" }
+vectorless-compiler = { path = "../vectorless-compiler" }
 vectorless-llm = { path = "../vectorless-llm" }
 vectorless-metrics = { path = "../vectorless-metrics" }
 vectorless-storage = { path = "../vectorless-storage" }

@@ -9,8 +9,8 @@ use tracing::{debug, info, warn};
 
 use vectorless_error::Result;
 
-use super::{AccessPattern, IndexStage, StageResult, async_trait};
-use crate::pipeline::IndexContext;
+use super::{AccessPattern, CompileStage, StageResult, async_trait};
+use crate::pipeline::CompileContext;
 
 /// Maximum allowed tree depth.
 const MAX_DEPTH: usize = 20;
@@ -58,7 +58,7 @@ impl ValidateStage {
     }
 
     /// Run all validation checks and collect issues.
-    fn validate_tree(&self, ctx: &IndexContext) -> Vec<ValidationIssue> {
+    fn validate_tree(&self, ctx: &CompileContext) -> Vec<ValidationIssue> {
         let tree = match ctx.tree.as_ref() {
             Some(t) => t,
             None => {
@@ -222,7 +222,7 @@ impl Default for ValidateStage {
 }
 
 #[async_trait]
-impl IndexStage for ValidateStage {
+impl CompileStage for ValidateStage {
     fn name(&self) -> &'static str {
         "validate"
     }
@@ -246,7 +246,7 @@ impl IndexStage for ValidateStage {
         }
     }
 
-    async fn execute(&mut self, ctx: &mut IndexContext) -> Result<StageResult> {
+    async fn execute(&mut self, ctx: &mut CompileContext) -> Result<StageResult> {
         let start = Instant::now();
 
         let node_count = ctx.tree.as_ref().map(|t| t.node_count()).unwrap_or(0);
@@ -301,10 +301,10 @@ mod tests {
     use super::*;
     use vectorless_document::DocumentTree;
 
-    fn make_context_with_tree(tree: DocumentTree) -> IndexContext {
-        let input = crate::IndexInput::content("test");
+    fn make_context_with_tree(tree: DocumentTree) -> CompileContext {
+        let input = crate::CompilerInput::content("test");
         let options = crate::config::PipelineOptions::default();
-        let mut ctx = IndexContext::new(input, options);
+        let mut ctx = CompileContext::new(input, options);
         ctx.tree = Some(tree);
         ctx
     }
@@ -355,9 +355,9 @@ mod tests {
 
     #[test]
     fn test_validate_no_tree_error() {
-        let input = crate::IndexInput::content("test");
+        let input = crate::CompilerInput::content("test");
         let options = crate::config::PipelineOptions::default();
-        let ctx = IndexContext::new(input, options);
+        let ctx = CompileContext::new(input, options);
 
         let stage = ValidateStage::new();
         let issues = stage.validate_tree(&ctx);

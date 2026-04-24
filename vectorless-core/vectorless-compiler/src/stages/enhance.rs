@@ -16,8 +16,8 @@ use vectorless_llm::LlmClient;
 use vectorless_llm::memo::{MemoKey, MemoStore};
 use vectorless_utils::fingerprint::Fingerprint;
 
-use super::{IndexStage, StageResult};
-use crate::pipeline::{FailurePolicy, IndexContext, StageRetryConfig};
+use super::{CompileStage, StageResult};
+use crate::pipeline::{FailurePolicy, CompileContext, StageRetryConfig};
 use crate::summary::{LlmSummaryGenerator, SummaryGenerator, SummaryStrategy};
 
 /// A node that needs LLM summary generation.
@@ -111,7 +111,7 @@ impl EnhanceStage {
     }
 
     /// Check if summary generation is needed based on strategy.
-    fn needs_summaries(&self, ctx: &IndexContext) -> bool {
+    fn needs_summaries(&self, ctx: &CompileContext) -> bool {
         match &ctx.options.summary_strategy {
             SummaryStrategy::None => false,
             SummaryStrategy::Lazy { .. } => false, // Generated on-demand at query time
@@ -127,7 +127,7 @@ impl Default for EnhanceStage {
 }
 
 #[async_trait]
-impl IndexStage for EnhanceStage {
+impl CompileStage for EnhanceStage {
     fn name(&self) -> &'static str {
         "enhance"
     }
@@ -149,7 +149,7 @@ impl IndexStage for EnhanceStage {
         )
     }
 
-    async fn execute(&mut self, ctx: &mut IndexContext) -> Result<StageResult> {
+    async fn execute(&mut self, ctx: &mut CompileContext) -> Result<StageResult> {
         let start = Instant::now();
 
         info!(

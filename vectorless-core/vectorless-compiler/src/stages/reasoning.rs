@@ -20,8 +20,8 @@ use vectorless_llm::LlmClient;
 use vectorless_scoring::extract_keywords;
 
 use super::async_trait;
-use super::{AccessPattern, IndexStage, StageResult};
-use crate::pipeline::IndexContext;
+use super::{AccessPattern, CompileStage, StageResult};
+use crate::pipeline::CompileContext;
 
 /// Reasoning Index Stage - builds a pre-computed reasoning index from the document tree.
 ///
@@ -29,11 +29,11 @@ use crate::pipeline::IndexContext;
 /// - Topic-to-path mappings from titles and summaries
 /// - Summary shortcuts for high-frequency "overview" queries
 /// - Section map for fast ToC lookup
-pub struct ReasoningIndexStage {
+pub struct ReasoningCompileStage {
     config: ReasoningIndexConfig,
 }
 
-impl ReasoningIndexStage {
+impl ReasoningCompileStage {
     /// Create a new reasoning index stage with default config.
     pub fn new() -> Self {
         Self {
@@ -294,14 +294,14 @@ impl ReasoningIndexStage {
     }
 }
 
-impl Default for ReasoningIndexStage {
+impl Default for ReasoningCompileStage {
     fn default() -> Self {
         Self::new()
     }
 }
 
 #[async_trait]
-impl IndexStage for ReasoningIndexStage {
+impl CompileStage for ReasoningCompileStage {
     fn name(&self) -> &'static str {
         "reasoning_index"
     }
@@ -322,7 +322,7 @@ impl IndexStage for ReasoningIndexStage {
         }
     }
 
-    async fn execute(&mut self, ctx: &mut IndexContext) -> Result<StageResult> {
+    async fn execute(&mut self, ctx: &mut CompileContext) -> Result<StageResult> {
         let start = Instant::now();
 
         // Check if enabled via pipeline options
@@ -452,7 +452,7 @@ mod tests {
     #[test]
     fn test_extract_node_keywords() {
         let keywords =
-            ReasoningIndexStage::extract_node_keywords("Introduction to Machine Learning", 2);
+            ReasoningCompileStage::extract_node_keywords("Introduction to Machine Learning", 2);
         assert!(keywords.contains(&"introduction".to_string()));
         assert!(keywords.contains(&"machine".to_string()));
         assert!(keywords.contains(&"learning".to_string()));
@@ -460,7 +460,7 @@ mod tests {
 
     #[test]
     fn test_extract_node_keywords_min_length() {
-        let keywords = ReasoningIndexStage::extract_node_keywords("A B CD", 2);
+        let keywords = ReasoningCompileStage::extract_node_keywords("A B CD", 2);
         assert!(!keywords.contains(&"a".to_string()));
         assert!(!keywords.contains(&"b".to_string()));
         assert!(keywords.contains(&"cd".to_string()));
@@ -468,7 +468,7 @@ mod tests {
 
     #[test]
     fn test_stage_config_default() {
-        let stage = ReasoningIndexStage::new();
+        let stage = ReasoningCompileStage::new();
         assert!(stage.config.enabled);
         assert_eq!(stage.name(), "reasoning_index");
         assert!(stage.is_optional());
@@ -493,7 +493,7 @@ mod tests {
         }
 
         let config = ReasoningIndexConfig::default();
-        let (topic_paths, keyword_count) = ReasoningIndexStage::build_topic_paths(&tree, &config);
+        let (topic_paths, keyword_count) = ReasoningCompileStage::build_topic_paths(&tree, &config);
 
         assert!(
             keyword_count > 0,
@@ -518,7 +518,7 @@ mod tests {
         let _c1 = tree.add_child(root, "rust ownership", "rust borrowing rules");
 
         let config = ReasoningIndexConfig::default();
-        let (topic_paths, _) = ReasoningIndexStage::build_topic_paths(&tree, &config);
+        let (topic_paths, _) = ReasoningCompileStage::build_topic_paths(&tree, &config);
 
         // All weights should be in 0.0-1.0 range
         for entries in topic_paths.values() {
@@ -549,7 +549,7 @@ mod tests {
 
         let mut config = ReasoningIndexConfig::default();
         config.max_keyword_entries = 5;
-        let (topic_paths, keyword_count) = ReasoningIndexStage::build_topic_paths(&tree, &config);
+        let (topic_paths, keyword_count) = ReasoningCompileStage::build_topic_paths(&tree, &config);
 
         assert!(
             keyword_count <= 5,
@@ -574,7 +574,7 @@ mod tests {
             n.structure = "2".to_string();
         }
 
-        let section_map = ReasoningIndexStage::build_section_map(&tree);
+        let section_map = ReasoningCompileStage::build_section_map(&tree);
 
         // Should index by title (lowercase) and structure index
         assert!(section_map.contains_key("introduction"));
@@ -602,7 +602,7 @@ mod tests {
             n.summary = "second section summary".to_string();
         }
 
-        let shortcut = ReasoningIndexStage::build_summary_shortcut(&tree);
+        let shortcut = ReasoningCompileStage::build_summary_shortcut(&tree);
         assert!(shortcut.is_some());
 
         let sc = shortcut.unwrap();
@@ -626,7 +626,7 @@ mod tests {
             n.summary = "child summary 2".to_string();
         }
 
-        let shortcut = ReasoningIndexStage::build_summary_shortcut(&tree);
+        let shortcut = ReasoningCompileStage::build_summary_shortcut(&tree);
         assert!(shortcut.is_some());
 
         let sc = shortcut.unwrap();

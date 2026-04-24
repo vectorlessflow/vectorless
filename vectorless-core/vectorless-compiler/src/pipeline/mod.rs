@@ -4,7 +4,7 @@
 //! Pipeline execution module.
 //!
 //! This module provides the core pipeline infrastructure:
-//! - [`IndexContext`] - Context passed between stages
+//! - [`CompileContext`] - Context passed between stages
 //! - [`PipelineExecutor`] - Executes the indexing pipeline
 //! - [`PipelineOrchestrator`] - Flexible stage orchestration with dependencies
 //! - [`IndexMetrics`] - Performance metrics collection
@@ -18,7 +18,7 @@ mod metrics;
 mod orchestrator;
 mod policy;
 
-pub use context::{IndexContext, IndexInput, PipelineResult, StageResult};
+pub use context::{CompileContext, CompilerInput, CompileResult, StageResult};
 pub use executor::PipelineExecutor;
 pub use metrics::IndexMetrics;
 pub use policy::{FailurePolicy, StageRetryConfig};

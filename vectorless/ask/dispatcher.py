@@ -14,6 +14,7 @@ from __future__ import annotations
 import logging
 
 from vectorless.ask.protocols import DocLoader, EventCallback
+from vectorless.ask.errors import AskError
 from vectorless.ask.types import DocCard, Output, Specified, Workspace
 from vectorless.ask.orchestrator import Orchestrator
 from vectorless.ask.reasoning import QueryAnalysis, QueryAnalyzer
@@ -38,7 +39,13 @@ async def dispatch(
     # Step 1: Query reasoning (multi-stage analysis)
     logger.info("dispatch: query reasoning started")
     analyzer = QueryAnalyzer()
-    query_analysis = await analyzer.analyze(query, llm)
+    try:
+        query_analysis = await analyzer.analyze(query, llm)
+    except AskError:
+        raise
+    except Exception as e:
+        from vectorless.ask.errors import LLMFailureError
+        raise LLMFailureError(f"Query analysis failed: {e}") from e
     logger.info(
         "dispatch: query reasoning complete (intent=%s, complexity=%s)",
         query_analysis.intent.value,

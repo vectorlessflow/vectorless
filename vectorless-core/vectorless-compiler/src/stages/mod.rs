@@ -19,15 +19,15 @@ pub use build::BuildStage;
 pub use concept::ConceptExtractionStage;
 pub use enhance::EnhanceStage;
 pub use enrich::EnrichStage;
-pub use navigation::NavigationIndexStage;
+pub use navigation::NavigationCompileStage;
 pub use optimize::OptimizeStage;
 pub use parse::ParseStage;
-pub use reasoning::ReasoningIndexStage;
+pub use reasoning::ReasoningCompileStage;
 pub use split::SplitStage;
 pub use validate::ValidateStage;
 pub use verify_ingest::VerifyStage;
 
-use super::pipeline::{FailurePolicy, IndexContext, StageResult};
+use super::pipeline::{FailurePolicy, CompileContext, StageResult};
 pub use async_trait::async_trait;
 use vectorless_error::Result;
 
@@ -67,21 +67,21 @@ pub struct AccessPattern {
 /// struct MyStage;
 ///
 /// #[async_trait]
-/// impl IndexStage for MyStage {
+/// impl CompileStage for MyStage {
 ///     fn name(&self) -> &str { "my_stage" }
 ///
 ///     fn depends_on(&self) -> Vec<&'static str> {
 ///         vec!["parse", "build"]
 ///     }
 ///
-///     async fn execute(&mut self, ctx: &mut IndexContext) -> Result<StageResult> {
+///     async fn execute(&mut self, ctx: &mut CompileContext) -> Result<StageResult> {
 ///         // Process the context...
 ///         Ok(StageResult::success("my_stage"))
 ///     }
 /// }
 /// ```
 #[async_trait]
-pub trait IndexStage: Send + Sync {
+pub trait CompileStage: Send + Sync {
     /// Stage name (must be unique within pipeline).
     fn name(&self) -> &str;
 
@@ -89,7 +89,7 @@ pub trait IndexStage: Send + Sync {
     ///
     /// This method receives a mutable reference to the shared context,
     /// allowing stages to read from and write to it.
-    async fn execute(&mut self, ctx: &mut IndexContext) -> Result<StageResult>;
+    async fn execute(&mut self, ctx: &mut CompileContext) -> Result<StageResult>;
 
     /// Whether this stage is optional (can be skipped on failure).
     ///

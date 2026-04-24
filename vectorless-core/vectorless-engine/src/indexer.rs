@@ -9,12 +9,12 @@
 //! # Example
 //!
 //! ```rust,ignore
-//! use vectorless::client::{IndexerClient, IndexContext};
+//! use vectorless::client::{IndexerClient, CompileInput};
 //!
 //! let indexer = IndexerClient::new(executor);
 //!
 //! let result = indexer
-//!     .index(IndexContext::from_path("./document.md"))
+//!     .index(CompileInput::from_path("./document.md"))
 //!     .await?;
 //!
 //! println!("Indexed: {} ({} nodes)", result.id, result.tree.as_ref().map(|t| t.node_count()).unwrap_or(0));
@@ -28,11 +28,11 @@ use uuid::Uuid;
 
 use vectorless_document::DocumentFormat;
 use vectorless_error::{Error, Result};
-use vectorless_index::{IndexInput, IndexMode, PipelineExecutor, PipelineOptions};
+use vectorless_compiler::{CompilerInput, SourceFormat, PipelineExecutor, PipelineOptions};
 use vectorless_llm::LlmClient;
 use vectorless_storage::{DocumentMeta, PersistedDocument};
 
-use super::index_context::IndexSource;
+use super::compile_input::CompileSource;
 use super::indexed_document::IndexedDocument;
 use vectorless_events::{EventEmitter, IndexEvent};
 
@@ -71,7 +71,7 @@ impl IndexerClient {
     /// (including checkpoint dir, reasoning config, etc.).
     pub async fn index(
         &self,
-        source: &IndexSource,
+        source: &CompileSource,
         name: Option<&str>,
         pipeline_options: PipelineOptions,
     ) -> Result<IndexedDocument> {
@@ -84,19 +84,19 @@ impl IndexerClient {
     /// The caller provides fully constructed [`PipelineOptions`].
     pub async fn index_with_existing(
         &self,
-        source: &IndexSource,
+        source: &CompileSource,
         name: Option<&str>,
         mut pipeline_options: PipelineOptions,
         existing_tree: Option<&vectorless_document::DocumentTree>,
     ) -> Result<IndexedDocument> {
         pipeline_options.existing_tree = existing_tree.cloned();
         match source {
-            IndexSource::Path(path) => self.index_from_path(path, name, pipeline_options).await,
-            IndexSource::Content { data, format } => {
+            CompileSource::Path(path) => self.index_from_path(path, name, pipeline_options).await,
+            CompileSource::Content { data, format } => {
                 self.index_from_content(data, *format, name, pipeline_options)
                     .await
             }
-            IndexSource::Bytes { data, format } => {
+            CompileSource::Bytes { data, format } => {
                 self.index_from_bytes(data, *format, name, pipeline_options)
                     .await
             }
@@ -132,7 +132,7 @@ impl IndexerClient {
         // Resolve format from pipeline options (set by Engine) — no re-detection
         let format = Self::format_from_mode(&pipeline_options.mode);
 
-        let input = IndexInput::file(&path);
+        let input = CompilerInput::file(&path);
         self.run_pipeline(
             input,
             format,
@@ -164,7 +164,7 @@ impl IndexerClient {
             ));
         }
 
-        let input = IndexInput::content(content);
+        let input = CompilerInput::content(content);
         self.run_pipeline(
             input,
             format,
@@ -202,7 +202,7 @@ impl IndexerClient {
             bytes.len()
         );
 
-        let input = IndexInput::bytes(bytes);
+        let input = CompilerInput::bytes(bytes);
         self.run_pipeline(
             input,
             format,
@@ -218,7 +218,7 @@ impl IndexerClient {
     #[tracing::instrument(skip_all, fields(format = ?format, source = %source_label))]
     async fn run_pipeline(
         &self,
-        input: IndexInput,
+        input: CompilerInput,
         format: DocumentFormat,
         source_label: &str,
         name: Option<&str>,
@@ -245,7 +245,7 @@ impl IndexerClient {
     fn build_indexed_document(
         &self,
         doc_id: String,
-        result: vectorless_index::PipelineResult,
+        result: vectorless_compiler::CompileResult,
         format: DocumentFormat,
         name: Option<&str>,
         path: Option<&Path>,
@@ -296,11 +296,11 @@ impl IndexerClient {
     ///
     /// Falls back to Markdown for `Auto` mode (the engine resolves
     /// `Auto` to a concrete format before calling the indexer).
-    fn format_from_mode(mode: &IndexMode) -> DocumentFormat {
+    fn format_from_mode(mode: &SourceFormat) -> DocumentFormat {
         match mode {
-            IndexMode::Markdown => DocumentFormat::Markdown,
-            IndexMode::Pdf => DocumentFormat::Pdf,
-            IndexMode::Auto => DocumentFormat::Markdown,
+            SourceFormat::Markdown => DocumentFormat::Markdown,
+            SourceFormat::Pdf => DocumentFormat::Pdf,
+            SourceFormat::Auto => DocumentFormat::Markdown,
         }
     }
 

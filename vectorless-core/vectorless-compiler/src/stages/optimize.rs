@@ -7,11 +7,11 @@ use super::{AccessPattern, async_trait};
 use std::time::Instant;
 use tracing::{debug, info};
 
-use crate::pipeline::IndexContext;
+use crate::pipeline::CompileContext;
 use vectorless_document::NodeId;
 use vectorless_error::Result;
 
-use super::{IndexStage, StageResult};
+use super::{CompileStage, StageResult};
 
 /// Optimize stage - optimizes tree structure.
 pub struct OptimizeStage;
@@ -156,7 +156,7 @@ impl Default for OptimizeStage {
 }
 
 #[async_trait]
-impl IndexStage for OptimizeStage {
+impl CompileStage for OptimizeStage {
     fn name(&self) -> &'static str {
         "optimize"
     }
@@ -177,7 +177,7 @@ impl IndexStage for OptimizeStage {
         }
     }
 
-    async fn execute(&mut self, ctx: &mut IndexContext) -> Result<StageResult> {
+    async fn execute(&mut self, ctx: &mut CompileContext) -> Result<StageResult> {
         let start = Instant::now();
 
         let config = &ctx.options.optimization;
@@ -243,8 +243,8 @@ impl IndexStage for OptimizeStage {
 mod tests {
     use super::*;
     use crate::PipelineOptions;
-    use crate::pipeline::IndexContext;
-    use crate::pipeline::IndexInput;
+    use crate::pipeline::CompileContext;
+    use crate::pipeline::CompilerInput;
     use vectorless_document::DocumentTree;
 
     /// Create a tree with small leaf children under root for merge tests.
@@ -436,8 +436,8 @@ mod tests {
         let mut options = PipelineOptions::default();
         options.optimization.enabled = false;
 
-        let input = IndexInput::content("# Test\nHello");
-        let mut ctx = IndexContext::new(input, options);
+        let input = CompilerInput::content("# Test\nHello");
+        let mut ctx = CompileContext::new(input, options);
         ctx.tree = Some(DocumentTree::new("Root", "content"));
 
         let result = stage.execute(&mut ctx).await.unwrap();

@@ -18,7 +18,7 @@ use vectorless_primitives::{
 use super::error::VectorlessError;
 
 // =========================================================================
-// PyDocumentInfo (existing — returned by ingest)
+// PyDocumentInfo (existing — returned by compile)
 // =========================================================================
 
 /// Information about an understood document.

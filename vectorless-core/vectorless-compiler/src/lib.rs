@@ -1,11 +1,11 @@
 // Copyright (c) 2026 vectorless developers
 // SPDX-License-Identifier: Apache-2.0
 
-//! Index Pipeline module.
+//! Document Compiler module.
 //!
-//! This module provides a modular, extensible document indexing pipeline.
+//! This module provides a modular document compilation pipeline that transforms
+//! documents (Markdown, PDF) into agent-friendly intermediate artifacts.
 //!
-//! # Architecture
 //!
 //! ```text
 //! Priority  10: ┌──────────┐
@@ -39,21 +39,6 @@
 //!
 //! Checkpointing is available when `PipelineOptions::checkpoint_dir` is set.
 //! State is saved after each stage group and resumed on restart.
-//!
-//! # Usage
-//!
-//! ```rust,ignore
-//! use vectorless::index::{PipelineExecutor, IndexInput, PipelineOptions};
-//! use vectorless::index::summary::SummaryStrategy;
-//!
-//! let options = PipelineOptions::new()
-//!     .with_summary_strategy(SummaryStrategy::selective(100, true));
-//!
-//! let result = PipelineExecutor::new()
-//!     .with_options(options)
-//!     .execute(input)
-//!     .await?;
-//! ```
 
 pub mod config;
 pub mod incremental;
@@ -63,10 +48,10 @@ pub mod stages;
 pub mod summary;
 
 // Re-export main types from pipeline
-pub use pipeline::{IndexInput, IndexMetrics, PipelineExecutor, PipelineResult};
+pub use pipeline::{CompilerInput, IndexMetrics, PipelineExecutor, CompileResult};
 
 // Re-export config types
-pub use config::{IndexMode, PipelineOptions, ThinningConfig};
+pub use config::{SourceFormat, PipelineOptions, ThinningConfig};
 pub use vectorless_document::ReasoningIndexConfig;
 
 // Re-export summary
