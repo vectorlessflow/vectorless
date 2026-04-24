@@ -172,10 +172,6 @@ impl PassResult {
     }
 }
 
-/// Backward-compatible alias.
-#[deprecated(since = "0.2.0", note = "Use `PassResult` instead")]
-pub type StageResult = PassResult;
-
 /// Summary cache for lazy generation.
 #[derive(Debug, Clone, Default)]
 pub struct SummaryCache {

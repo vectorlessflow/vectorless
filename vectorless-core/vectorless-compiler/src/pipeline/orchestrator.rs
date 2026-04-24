@@ -872,67 +872,6 @@ struct ParallelEntry {
     access: crate::passes::AccessPattern,
 }
 
-/// Builder for creating custom stage configurations.
-///
-/// This is a convenience type for configuring custom stages
-/// without manually calling the orchestrator methods.
-pub struct CustomStageBuilder {
-    name: String,
-    priority: i32,
-    depends_on: Vec<String>,
-    optional: bool,
-}
-
-impl CustomStageBuilder {
-    /// Create a new custom stage builder.
-    pub fn new(name: impl Into<String>) -> Self {
-        Self {
-            name: name.into(),
-            priority: 100,
-            depends_on: Vec::new(),
-            optional: false,
-        }
-    }
-
-    /// Set priority (lower = earlier).
-    pub fn priority(mut self, priority: i32) -> Self {
-        self.priority = priority;
-        self
-    }
-
-    /// Add a dependency.
-    pub fn depends_on(mut self, stage: impl Into<String>) -> Self {
-        self.depends_on.push(stage.into());
-        self
-    }
-
-    /// Mark as optional (failures won't stop pipeline).
-    pub fn optional(mut self) -> Self {
-        self.optional = true;
-        self
-    }
-
-    /// Get the stage name.
-    pub fn name(&self) -> &str {
-        &self.name
-    }
-
-    /// Get the priority.
-    pub fn get_priority(&self) -> i32 {
-        self.priority
-    }
-
-    /// Get dependencies.
-    pub fn get_deps(&self) -> &[String] {
-        &self.depends_on
-    }
-
-    /// Check if optional.
-    pub fn is_optional(&self) -> bool {
-        self.optional
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::super::context::PassResult;
@@ -987,19 +926,6 @@ mod tests {
         assert_eq!(orchestrator.stage_count(), 1);
         assert!(!orchestrator.has_stage("a"));
         assert!(orchestrator.has_stage("b"));
-    }
-
-    #[test]
-    fn test_custom_stage_builder() {
-        let builder = CustomStageBuilder::new("my_stage")
-            .priority(50)
-            .depends_on("parse")
-            .optional();
-
-        assert_eq!(builder.name(), "my_stage");
-        assert_eq!(builder.get_priority(), 50);
-        assert_eq!(builder.get_deps(), &["parse".to_string()]);
-        assert!(builder.is_optional());
     }
 
     /// Mock stage for testing.
