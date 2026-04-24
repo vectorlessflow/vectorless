@@ -31,8 +31,10 @@ impl OverlapPass {
 
     /// Compute Jaccard similarity between two strings (word-level).
     fn jaccard(a: &str, b: &str) -> f64 {
-        let words_a: HashSet<&str> = a.to_lowercase().split_whitespace().collect();
-        let words_b: HashSet<&str> = b.to_lowercase().split_whitespace().collect();
+        let a_lower = a.to_lowercase();
+        let b_lower = b.to_lowercase();
+        let words_a: HashSet<&str> = a_lower.split_whitespace().collect();
+        let words_b: HashSet<&str> = b_lower.split_whitespace().collect();
 
         if words_a.is_empty() && words_b.is_empty() {
             return 1.0;
@@ -171,6 +173,8 @@ impl CompilePass for OverlapPass {
             overlap_count, comparisons, duration,
         );
 
+        ctx.metrics.record_overlap(duration, overlap_count);
+
         ctx.content_overlap = Some(overlap_map);
 
         let mut result = PassResult::success("overlap");
@@ -185,5 +189,157 @@ impl CompilePass for OverlapPass {
         );
 
         Ok(result)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_jaccard_identical() {
+        let sim = OverlapPass::jaccard("hello world foo bar", "hello world foo bar");
+        assert!((sim - 1.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_jaccard_no_overlap() {
+        let sim = OverlapPass::jaccard("alpha beta gamma", "delta epsilon zeta");
+        assert!((sim - 0.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_jaccard_partial() {
+        let sim = OverlapPass::jaccard("alpha beta gamma", "beta gamma delta");
+        // intersection: beta, gamma (2), union: alpha, beta, gamma, delta (4) = 0.5
+        assert!((sim - 0.5).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_jaccard_empty() {
+        assert!((OverlapPass::jaccard("", "") - 1.0).abs() < f64::EPSILON);
+        assert!((OverlapPass::jaccard("content", "") - 0.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_jaccard_case_insensitive() {
+        let sim = OverlapPass::jaccard("Hello World", "hello world");
+        assert!((sim - 1.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_classify_overlap_duplicate() {
+        assert_eq!(OverlapPass::classify_overlap(0.95, 100, 100), OverlapType::Duplicate);
+    }
+
+    #[test]
+    fn test_classify_overlap_subset() {
+        // 0.85 similarity with similar lengths → Subset
+        assert_eq!(OverlapPass::classify_overlap(0.85, 100, 90), OverlapType::Subset);
+    }
+
+    #[test]
+    fn test_classify_overlap_summary() {
+        // 0.85 similarity with very different lengths → Summary
+        assert_eq!(OverlapPass::classify_overlap(0.85, 100, 30), OverlapType::Summary);
+    }
+
+    #[test]
+    fn test_stage_config() {
+        let pass = OverlapPass::new();
+        assert_eq!(pass.name(), "overlap");
+        assert!(pass.is_optional());
+        assert_eq!(pass.depends_on(), vec!["build"]);
+
+        let ap = pass.access_pattern();
+        assert!(ap.reads_tree);
+        assert!(ap.writes_content_overlap);
+        assert!(!ap.writes_tree);
+    }
+
+    #[tokio::test]
+    async fn test_execute_no_tree() {
+        let mut ctx = CompileContext::new(
+            crate::pipeline::CompilerInput::content("test"),
+            crate::config::PipelineOptions::default(),
+        );
+        ctx.tree = None;
+
+        let mut pass = OverlapPass::new();
+        let result = pass.execute(&mut ctx).await.unwrap();
+        assert!(!result.success);
+        assert!(ctx.content_overlap.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_execute_single_leaf() {
+        let tree = vectorless_document::DocumentTree::new("Root", "single leaf content");
+        let mut ctx = CompileContext::new(
+            crate::pipeline::CompilerInput::content("test"),
+            crate::config::PipelineOptions::default(),
+        );
+        ctx.tree = Some(tree);
+
+        let mut pass = OverlapPass::new();
+        let result = pass.execute(&mut ctx).await;
+
+        assert!(result.is_ok());
+        assert!(result.unwrap().success);
+        let map = ctx.content_overlap.unwrap();
+        assert_eq!(map.overlap_count(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_execute_with_duplicates() {
+        let mut tree = vectorless_document::DocumentTree::new("Root", "");
+        let root = tree.root();
+
+        // Two leaf nodes with identical content (long enough to pass the 50-char threshold)
+        let long_content = "This is a sufficiently long piece of content that should pass the minimum length threshold for overlap detection in the system.".to_string();
+        tree.add_child(root, "Section A", &long_content);
+        tree.add_child(root, "Section B", &long_content);
+
+        let mut ctx = CompileContext::new(
+            crate::pipeline::CompilerInput::content("test"),
+            crate::config::PipelineOptions::default(),
+        );
+        ctx.tree = Some(tree);
+
+        let mut pass = OverlapPass::new();
+        let result = pass.execute(&mut ctx).await;
+
+        assert!(result.is_ok());
+        assert!(result.unwrap().success);
+
+        let map = ctx.content_overlap.unwrap();
+        assert_eq!(map.overlap_count(), 1);
+        assert_eq!(map.overlaps[0].overlap_type, OverlapType::Duplicate);
+    }
+
+    #[tokio::test]
+    async fn test_execute_no_overlap() {
+        let mut tree = vectorless_document::DocumentTree::new("Root", "");
+        let root = tree.root();
+
+        // Two leaf nodes with completely different content
+        tree.add_child(root, "Section A",
+            "Alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu xi omicron pi rho sigma tau upsilon phi chi psi omega");
+        tree.add_child(root, "Section B",
+            "Apple banana cherry date elderberry fig grape honeydew kiwi lemon mango nectarine orange papaya quince raspberry strawberry tangerine");
+
+        let mut ctx = CompileContext::new(
+            crate::pipeline::CompilerInput::content("test"),
+            crate::config::PipelineOptions::default(),
+        );
+        ctx.tree = Some(tree);
+
+        let mut pass = OverlapPass::new();
+        let result = pass.execute(&mut ctx).await;
+
+        assert!(result.is_ok());
+        assert!(result.unwrap().success);
+
+        let map = ctx.content_overlap.unwrap();
+        assert_eq!(map.overlap_count(), 0);
     }
 }

@@ -34,6 +34,18 @@
 //! Backend   50: ┌────▼──────────┐
 //!               │ Navigation Idx│  Debug info for runtime navigation
 //!               └────┬──────────┘
+//! Backend   52: ┌────▼──────────┐
+//!               │    Route      │  Query routing table
+//!               └────┬──────────┘
+//! Backend   54: ┌────▼──────────┐
+//!               │    Chain      │  Reasoning chain index
+//!               └────┬──────────┘
+//! Backend   56: ┌────▼──────────┐
+//!               │   Overlap     │  Content overlap detection
+//!               └────┬──────────┘
+//! Backend   58: ┌────▼──────────┐
+//!               │    Score      │  Evidence quality scoring
+//!               └────┬──────────┘
 //! Backend   55: ┌────▼──────┐
 //!               │  Verify   │  Output validation
 //!               └────┬──────┘

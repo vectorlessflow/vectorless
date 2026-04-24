@@ -7,9 +7,9 @@
 //! between sections. No LLM calls — uses reference types and tree structure.
 
 use std::time::Instant;
-use tracing::{debug, info, warn};
+use tracing::{info, warn};
 
-use vectorless_document::{ChainIndex, ChainType, ReasoningChain, NodeId};
+use vectorless_document::{ChainIndex, ChainType, ReasoningChain};
 use vectorless_error::Result;
 
 use crate::passes::async_trait;
@@ -143,6 +143,8 @@ impl CompilePass for ChainPass {
             chain_count, node_count, duration,
         );
 
+        ctx.metrics.record_chain(duration, chain_count);
+
         ctx.chain_index = Some(index);
 
         let mut result = PassResult::success("chain");
@@ -157,5 +159,138 @@ impl CompilePass for ChainPass {
         );
 
         Ok(result)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use vectorless_document::NodeReference;
+
+    fn build_test_tree_with_refs() -> vectorless_document::DocumentTree {
+        let mut tree = vectorless_document::DocumentTree::new("Root", "root content");
+        let root = tree.root();
+
+        let sec1 = tree.add_child(root, "Introduction", "See Section 2 for details");
+        let sec2 = tree.add_child(root, "Methods", "As shown in Table 1");
+        let appendix = tree.add_child(root, "Appendix A", "Supporting data");
+
+        // Add references: sec1 → sec2 (Section ref), sec2 → appendix (Appendix ref)
+        if let Some(n) = tree.get_mut(sec1) {
+            n.references = vec![NodeReference {
+                ref_text: "Section".to_string(),
+                target_node: Some(sec2),
+            }];
+        }
+        if let Some(n) = tree.get_mut(sec2) {
+            n.references = vec![NodeReference {
+                ref_text: "Appendix".to_string(),
+                target_node: Some(appendix),
+            }];
+        }
+
+        tree
+    }
+
+    #[test]
+    fn test_stage_config() {
+        let pass = ChainPass::new();
+        assert_eq!(pass.name(), "chain");
+        assert!(pass.is_optional());
+        assert_eq!(pass.depends_on(), vec!["enrich"]);
+
+        let ap = pass.access_pattern();
+        assert!(ap.reads_tree);
+        assert!(ap.writes_chain_index);
+        assert!(!ap.writes_tree);
+    }
+
+    #[test]
+    fn test_classify_chain_section_elaboration() {
+        // Section ref to deeper node = Elaboration
+        assert_eq!(ChainPass::classify_chain("Section", 0, 1), ChainType::Elaboration);
+    }
+
+    #[test]
+    fn test_classify_chain_section_supporting() {
+        // Section ref to same or shallower depth = Supporting
+        assert_eq!(ChainPass::classify_chain("Section", 1, 0), ChainType::Supporting);
+    }
+
+    #[test]
+    fn test_classify_chain_appendix() {
+        assert_eq!(ChainPass::classify_chain("Appendix", 0, 1), ChainType::Supporting);
+    }
+
+    #[test]
+    fn test_classify_chain_table_figure() {
+        assert_eq!(ChainPass::classify_chain("Table", 0, 1), ChainType::Supporting);
+        assert_eq!(ChainPass::classify_chain("Figure", 0, 1), ChainType::Supporting);
+        assert_eq!(ChainPass::classify_chain("Equation", 0, 1), ChainType::Supporting);
+    }
+
+    #[test]
+    fn test_classify_chain_footnote() {
+        assert_eq!(ChainPass::classify_chain("Footnote", 0, 2), ChainType::Elaboration);
+    }
+
+    #[test]
+    fn test_classify_chain_unknown() {
+        assert_eq!(ChainPass::classify_chain("custom", 0, 0), ChainType::Supporting);
+    }
+
+    #[tokio::test]
+    async fn test_execute_end_to_end() {
+        let tree = build_test_tree_with_refs();
+
+        let mut ctx = CompileContext::new(
+            crate::pipeline::CompilerInput::content("test"),
+            crate::config::PipelineOptions::default(),
+        );
+        ctx.tree = Some(tree);
+
+        let mut pass = ChainPass::new();
+        let result = pass.execute(&mut ctx).await;
+
+        assert!(result.is_ok());
+        let pass_result = result.unwrap();
+        assert!(pass_result.success);
+
+        let index = ctx.chain_index.unwrap();
+        assert_eq!(index.chain_count(), 2); // sec1→sec2, sec2→appendix
+        assert!(index.node_count() >= 2);
+    }
+
+    #[tokio::test]
+    async fn test_execute_no_tree() {
+        let mut ctx = CompileContext::new(
+            crate::pipeline::CompilerInput::content("test"),
+            crate::config::PipelineOptions::default(),
+        );
+        ctx.tree = None;
+
+        let mut pass = ChainPass::new();
+        let result = pass.execute(&mut ctx).await.unwrap();
+        assert!(!result.success);
+        assert!(ctx.chain_index.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_execute_no_references() {
+        let tree = vectorless_document::DocumentTree::new("Root", "no references");
+        let mut ctx = CompileContext::new(
+            crate::pipeline::CompilerInput::content("test"),
+            crate::config::PipelineOptions::default(),
+        );
+        ctx.tree = Some(tree);
+
+        let mut pass = ChainPass::new();
+        let result = pass.execute(&mut ctx).await;
+
+        assert!(result.is_ok());
+        assert!(result.unwrap().success);
+
+        let index = ctx.chain_index.unwrap();
+        assert_eq!(index.chain_count(), 0);
     }
 }

@@ -109,6 +109,10 @@ impl PipelineExecutor {
             .stage_with_priority(ReasoningPass::new(), 45)
             .stage_with_priority(ConceptPass::with_llm_client(client), 47)
             .stage_with_priority(NavigationPass::new(), 50)
+            .stage_with_priority(RoutePass::new(), 52)
+            .stage_with_priority(ChainPass::new(), 54)
+            .stage_with_priority(OverlapPass::new(), 56)
+            .stage_with_priority(ScorePass::new(), 58)
             .stage_with_priority(VerifyPass, 55)
             .stage_with_priority(OptimizePass::new(), 60);
 

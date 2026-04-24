@@ -3,8 +3,6 @@
 
 //! Concept extraction stage — extracts key concepts from topics and summaries.
 
-use std::collections::HashMap;
-
 use serde::Deserialize;
 use tracing::{info, warn};
 

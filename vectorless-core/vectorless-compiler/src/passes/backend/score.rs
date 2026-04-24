@@ -8,9 +8,9 @@
 
 use std::collections::HashSet;
 use std::time::Instant;
-use tracing::{debug, info, warn};
+use tracing::{info, warn};
 
-use vectorless_document::{EvidenceScore, EvidenceScoreMap, NodeId};
+use vectorless_document::{EvidenceScore, EvidenceScoreMap};
 use vectorless_error::Result;
 
 use crate::passes::async_trait;
@@ -181,6 +181,8 @@ impl CompilePass for ScorePass {
             scored_count, avg_density, duration,
         );
 
+        ctx.metrics.record_score(duration, scored_count);
+
         ctx.evidence_scores = Some(score_map);
 
         let mut result = PassResult::success("score");
@@ -195,5 +197,169 @@ impl CompilePass for ScorePass {
         );
 
         Ok(result)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_compute_density_unique() {
+        // All unique words → density = 1.0
+        assert!((ScorePass::compute_density("alpha beta gamma delta") - 1.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_compute_density_repeated() {
+        // "word" appears 3 times out of 3 → density = 1/3
+        let d = ScorePass::compute_density("word word word");
+        assert!((d - (1.0 / 3.0)).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_compute_density_empty() {
+        assert!((ScorePass::compute_density("") - 0.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_compute_data_richness_numbers() {
+        let score = ScorePass::compute_data_richness("Revenue was $4.2B in Q3 2024, up 12.5%");
+        assert!(score > 0.0, "Should detect numbers");
+    }
+
+    #[test]
+    fn test_compute_data_richness_table() {
+        let score = ScorePass::compute_data_richness("| A | B | C |\n|---|---|---|\n| 1 | 2 | 3 |");
+        assert!(score > 0.0, "Should detect table markers");
+    }
+
+    #[test]
+    fn test_compute_data_richness_code() {
+        let score = ScorePass::compute_data_richness("```rust\nfn main() {}\n```");
+        assert!(score > 0.0, "Should detect code blocks");
+    }
+
+    #[test]
+    fn test_compute_data_richness_list() {
+        let score = ScorePass::compute_data_richness("- item one\n- item two\n- item three");
+        assert!(score > 0.0, "Should detect lists");
+    }
+
+    #[test]
+    fn test_compute_data_richness_plain() {
+        let score = ScorePass::compute_data_richness("just some plain text without any structured data");
+        assert!((score - 0.0).abs() < f64::EPSILON, "Plain text should have low richness");
+    }
+
+    #[test]
+    fn test_compute_data_richness_empty() {
+        assert!((ScorePass::compute_data_richness("") - 0.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_compute_specificity_high() {
+        // Lots of technical terms, few filler words
+        let s = ScorePass::compute_specificity("HashMap NodeId DocumentTree CompileContext PipelineExecutor");
+        assert!(s > 0.8, "Technical content should have high specificity");
+    }
+
+    #[test]
+    fn test_compute_specificity_low() {
+        // All filler words
+        let s = ScorePass::compute_specificity("the is a an and or but in on at to for of with this that");
+        assert!(s < 0.3, "Filler content should have low specificity");
+    }
+
+    #[test]
+    fn test_compute_specificity_empty() {
+        assert!((ScorePass::compute_specificity("") - 0.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_evidence_score_composite() {
+        let score = EvidenceScore {
+            density: 1.0,
+            data_richness: 1.0,
+            specificity: 1.0,
+        };
+        assert!((score.composite() - 1.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_stage_config() {
+        let pass = ScorePass::new();
+        assert_eq!(pass.name(), "score");
+        assert!(pass.is_optional());
+        assert_eq!(pass.depends_on(), vec!["enrich"]);
+
+        let ap = pass.access_pattern();
+        assert!(ap.reads_tree);
+        assert!(ap.writes_evidence_scores);
+        assert!(!ap.writes_tree);
+    }
+
+    #[tokio::test]
+    async fn test_execute_end_to_end() {
+        let mut tree = vectorless_document::DocumentTree::new("Root", "");
+        let root = tree.root();
+        tree.add_child(root, "Section 1", "Revenue was $4.2B in Q3 2024");
+        tree.add_child(root, "Section 2", "HashMap implementation details");
+
+        let mut ctx = CompileContext::new(
+            crate::pipeline::CompilerInput::content("test"),
+            crate::config::PipelineOptions::default(),
+        );
+        ctx.tree = Some(tree);
+
+        let mut pass = ScorePass::new();
+        let result = pass.execute(&mut ctx).await;
+
+        assert!(result.is_ok());
+        assert!(result.unwrap().success);
+
+        let scores = ctx.evidence_scores.unwrap();
+        assert_eq!(scores.len(), 2);
+
+        // All scored nodes should have positive composite
+        for (_, composite) in scores.ranked_nodes() {
+            assert!(composite > 0.0);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_execute_no_tree() {
+        let mut ctx = CompileContext::new(
+            crate::pipeline::CompilerInput::content("test"),
+            crate::config::PipelineOptions::default(),
+        );
+        ctx.tree = None;
+
+        let mut pass = ScorePass::new();
+        let result = pass.execute(&mut ctx).await.unwrap();
+        assert!(!result.success);
+        assert!(ctx.evidence_scores.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_execute_empty_content() {
+        let mut tree = vectorless_document::DocumentTree::new("Root", "");
+        let root = tree.root();
+        tree.add_child(root, "Empty Section", "");
+
+        let mut ctx = CompileContext::new(
+            crate::pipeline::CompilerInput::content("test"),
+            crate::config::PipelineOptions::default(),
+        );
+        ctx.tree = Some(tree);
+
+        let mut pass = ScorePass::new();
+        let result = pass.execute(&mut ctx).await;
+
+        assert!(result.is_ok());
+        assert!(result.unwrap().success);
+
+        let scores = ctx.evidence_scores.unwrap();
+        assert_eq!(scores.len(), 0); // Empty content nodes are skipped
     }
 }

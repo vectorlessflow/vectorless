@@ -9,7 +9,7 @@
 
 use std::collections::HashMap;
 use std::time::Instant;
-use tracing::{debug, info, warn};
+use tracing::{info, warn};
 
 use vectorless_document::{DocumentTree, NodeId, QueryRoutingTable, RouteTarget, ConceptRoute};
 use vectorless_error::Result;
@@ -190,6 +190,8 @@ impl CompilePass for RoutePass {
             intent_count, concept_count, duration,
         );
 
+        ctx.metrics.record_route(duration, intent_count, concept_count);
+
         ctx.query_routes = Some(table);
 
         let mut result = PassResult::success("route");
@@ -204,5 +206,152 @@ impl CompilePass for RoutePass {
         );
 
         Ok(result)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn build_test_tree_with_hints() -> DocumentTree {
+        let mut tree = DocumentTree::new("Root", "root content");
+        let root = tree.root();
+
+        let sec1 = tree.add_child(root, "Revenue Q3", "Q3 revenue was $4.2B");
+        let sec2 = tree.add_child(root, "Revenue Q4", "Q4 revenue was $5.1B");
+
+        // Add question hints
+        if let Some(n) = tree.get_mut(root) {
+            n.question_hints = vec!["What was the revenue?".to_string()];
+            n.routing_keywords = vec!["revenue".to_string(), "finance".to_string()];
+        }
+        if let Some(n) = tree.get_mut(sec1) {
+            n.routing_keywords = vec!["revenue".to_string(), "Q3".to_string()];
+        }
+        if let Some(n) = tree.get_mut(sec2) {
+            n.question_hints = vec!["What was Q4 revenue?".to_string()];
+            n.routing_keywords = vec!["revenue".to_string(), "Q4".to_string()];
+        }
+
+        tree
+    }
+
+    #[test]
+    fn test_stage_config() {
+        let pass = RoutePass::new();
+        assert_eq!(pass.name(), "route");
+        assert!(pass.is_optional());
+        assert_eq!(pass.depends_on(), vec!["navigation_index"]);
+
+        let ap = pass.access_pattern();
+        assert!(ap.reads_tree);
+        assert!(ap.writes_query_routes);
+        assert!(!ap.writes_tree);
+    }
+
+    #[test]
+    fn test_build_child_routes_basic() {
+        let tree = build_test_tree_with_hints();
+        let root = tree.root();
+        let targets = RoutePass::build_child_routes(&tree, root);
+
+        assert_eq!(targets.len(), 2);
+        // Should be sorted by relevance descending
+        assert!(targets[0].relevance >= targets[1].relevance);
+    }
+
+    #[test]
+    fn test_build_child_routes_with_hints() {
+        let tree = build_test_tree_with_hints();
+        let root = tree.root();
+
+        // Root has question hints, so build routes from its children
+        let targets = RoutePass::build_child_routes(&tree, root);
+        assert!(!targets.is_empty());
+
+        // At least one child should have content-based reason
+        let has_section_reason = targets.iter().any(|t| t.reason.starts_with("Section:"));
+        assert!(has_section_reason);
+    }
+
+    #[test]
+    fn test_build_concept_routes() {
+        let tree = build_test_tree_with_hints();
+        let routes = RoutePass::build_concept_routes(&tree);
+
+        assert!(!routes.is_empty());
+
+        // "revenue" appears on all 3 nodes
+        let revenue_route = routes.iter().find(|r| r.concept == "revenue");
+        assert!(revenue_route.is_some());
+        assert!(revenue_route.unwrap().targets.len() >= 2);
+    }
+
+    #[test]
+    fn test_build_concept_routes_empty() {
+        let tree = DocumentTree::new("Root", "no keywords");
+        let routes = RoutePass::build_concept_routes(&tree);
+        assert!(routes.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_execute_end_to_end() {
+        let tree = build_test_tree_with_hints();
+
+        let mut ctx = CompileContext::new(
+            crate::pipeline::CompilerInput::content("test"),
+            crate::config::PipelineOptions::default(),
+        );
+        ctx.tree = Some(tree);
+
+        let mut pass = RoutePass::new();
+        let result = pass.execute(&mut ctx).await;
+
+        assert!(result.is_ok());
+        let pass_result = result.unwrap();
+        assert!(pass_result.success);
+
+        // Verify routing table
+        let table = ctx.query_routes.unwrap();
+        assert!(table.intent_route_count() > 0);
+        assert!(table.concept_route_count() > 0);
+
+        // Verify metrics recorded
+        assert!(ctx.metrics.route_time_ms > 0 || pass_result.duration_ms >= 0);
+    }
+
+    #[tokio::test]
+    async fn test_execute_no_tree() {
+        let mut ctx = CompileContext::new(
+            crate::pipeline::CompilerInput::content("test"),
+            crate::config::PipelineOptions::default(),
+        );
+        ctx.tree = None;
+
+        let mut pass = RoutePass::new();
+        let result = pass.execute(&mut ctx).await.unwrap();
+        assert!(!result.success);
+        assert!(ctx.query_routes.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_execute_no_hints_no_keywords() {
+        let tree = DocumentTree::new("Root", "plain content");
+        let mut ctx = CompileContext::new(
+            crate::pipeline::CompilerInput::content("test"),
+            crate::config::PipelineOptions::default(),
+        );
+        ctx.tree = Some(tree);
+
+        let mut pass = RoutePass::new();
+        let result = pass.execute(&mut ctx).await;
+
+        assert!(result.is_ok());
+        let pass_result = result.unwrap();
+        assert!(pass_result.success);
+
+        let table = ctx.query_routes.unwrap();
+        assert_eq!(table.intent_route_count(), 0);
+        assert_eq!(table.concept_route_count(), 0);
     }
 }

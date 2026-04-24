@@ -501,6 +501,10 @@ impl CompileResult {
             + self.metrics.enrich_time_ms
             + self.metrics.reasoning_index_time_ms
             + self.metrics.navigation_index_time_ms
+            + self.metrics.route_time_ms
+            + self.metrics.chain_time_ms
+            + self.metrics.overlap_time_ms
+            + self.metrics.score_time_ms
             + self.metrics.optimize_time_ms
     }
 }

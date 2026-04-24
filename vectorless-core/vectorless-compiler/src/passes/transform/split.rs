@@ -229,6 +229,10 @@ impl CompilePass for SplitPass {
             writes_navigation_index: false,
             writes_description: false,
             writes_concepts: false,
+            writes_query_routes: false,
+            writes_chain_index: false,
+            writes_content_overlap: false,
+            writes_evidence_scores: false,
         }
     }
 
