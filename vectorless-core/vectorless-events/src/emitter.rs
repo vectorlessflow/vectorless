@@ -10,13 +10,10 @@ use std::sync::Arc;
 
 use parking_lot::RwLock;
 
-use super::types::{IndexEvent, QueryEvent, WorkspaceEvent};
+use super::types::{IndexEvent, WorkspaceEvent};
 
 /// Type alias for sync index handler.
 pub(crate) type IndexHandler = Box<dyn Fn(&IndexEvent) + Send + Sync>;
-
-/// Type alias for sync query handler.
-pub(crate) type QueryHandler = Box<dyn Fn(&QueryEvent) + Send + Sync>;
 
 /// Type alias for sync workspace handler.
 pub(crate) type WorkspaceHandler = Box<dyn Fn(&WorkspaceEvent) + Send + Sync>;
@@ -26,9 +23,6 @@ struct EventEmitterInner {
     /// Index event handlers.
     index_handlers: Vec<IndexHandler>,
 
-    /// Query event handlers.
-    query_handlers: Vec<QueryHandler>,
-
     /// Workspace event handlers.
     workspace_handlers: Vec<WorkspaceHandler>,
 }
@@ -37,7 +31,6 @@ impl Default for EventEmitterInner {
     fn default() -> Self {
         Self {
             index_handlers: Vec::new(),
-            query_handlers: Vec::new(),
             workspace_handlers: Vec::new(),
         }
     }
@@ -80,15 +73,6 @@ impl EventEmitter {
         self
     }
 
-    /// Add a query event handler.
-    pub fn on_query<F>(self, handler: F) -> Self
-    where
-        F: Fn(&QueryEvent) + Send + Sync + 'static,
-    {
-        self.inner.write().query_handlers.push(Box::new(handler));
-        self
-    }
-
     /// Add a workspace event handler.
     pub fn on_workspace<F>(self, handler: F) -> Self
     where
@@ -109,14 +93,6 @@ impl EventEmitter {
         }
     }
 
-    /// Emit a query event.
-    pub fn emit_query(&self, event: QueryEvent) {
-        let inner = self.inner.read();
-        for handler in &inner.query_handlers {
-            handler(&event);
-        }
-    }
-
     /// Emit a workspace event.
     pub fn emit_workspace(&self, event: WorkspaceEvent) {
         let inner = self.inner.read();
@@ -128,9 +104,7 @@ impl EventEmitter {
     /// Check if there are any handlers registered.
     pub fn has_handlers(&self) -> bool {
         let inner = self.inner.read();
-        !inner.index_handlers.is_empty()
-            || !inner.query_handlers.is_empty()
-            || !inner.workspace_handlers.is_empty()
+        !inner.index_handlers.is_empty() || !inner.workspace_handlers.is_empty()
     }
 
     /// Merge another emitter into this one.
@@ -140,9 +114,6 @@ impl EventEmitter {
         inner
             .index_handlers
             .extend(other_inner.index_handlers.drain(..));
-        inner
-            .query_handlers
-            .extend(other_inner.query_handlers.drain(..));
         inner
             .workspace_handlers
             .extend(other_inner.workspace_handlers.drain(..));
@@ -173,7 +144,6 @@ impl std::fmt::Debug for EventEmitter {
         let inner = self.inner.read();
         f.debug_struct("EventEmitter")
             .field("index_handlers", &inner.index_handlers.len())
-            .field("query_handlers", &inner.query_handlers.len())
             .field("workspace_handlers", &inner.workspace_handlers.len())
             .finish()
     }
@@ -201,22 +171,6 @@ mod tests {
         });
 
         assert_eq!(counter.load(Ordering::SeqCst), 2);
-    }
-
-    #[test]
-    fn test_event_emitter_query() {
-        let counter = Arc::new(AtomicUsize::new(0));
-        let counter_clone = counter.clone();
-
-        let emitter = EventEmitter::new().on_query(move |_e| {
-            counter_clone.fetch_add(1, Ordering::SeqCst);
-        });
-
-        emitter.emit_query(QueryEvent::Started {
-            query: "test".to_string(),
-        });
-
-        assert_eq!(counter.load(Ordering::SeqCst), 1);
     }
 
     #[test]

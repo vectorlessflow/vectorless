@@ -35,10 +35,7 @@ pub use index_context::IndexContext;
 // Result & Info Types
 // ============================================================
 
-pub use types::{
-    Confidence, EvidenceItem, FailedItem, IndexItem, IndexMode, IndexOptions, IndexResult,
-    QueryMetrics, QueryResult, QueryResultItem,
-};
+pub use types::{FailedItem, IndexItem, IndexMode, IndexOptions, IndexResult};
 
 // ============================================================
 // Parser Types (needed for IndexContext::from_content)
@@ -52,11 +49,9 @@ pub use vectorless_document::DocumentFormat;
 
 pub use vectorless_config::Config;
 pub use vectorless_document::DocumentTree;
-pub use vectorless_document::{
-    Answer, Concept, DocumentInfo, Evidence, IngestInput, ReasoningTrace, TraceStep,
-};
+pub use vectorless_document::{Concept, DocumentInfo, IngestInput};
 pub use vectorless_error::{Error, Result};
-pub use vectorless_events::{EventEmitter, IndexEvent, QueryEvent, WorkspaceEvent};
+pub use vectorless_events::{EventEmitter, IndexEvent, WorkspaceEvent};
 pub use vectorless_graph::{
     DocumentGraph, DocumentGraphNode, EdgeEvidence, GraphEdge, WeightedKeyword,
 };

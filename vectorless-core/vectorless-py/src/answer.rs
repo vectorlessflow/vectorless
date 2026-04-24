@@ -5,7 +5,7 @@
 
 use pyo3::prelude::*;
 
-use ::vectorless_engine::Answer;
+use ::vectorless_document::Answer;
 
 /// A reasoned answer with evidence and trace.
 #[pyclass(name = "Answer", skip_from_py_object)]

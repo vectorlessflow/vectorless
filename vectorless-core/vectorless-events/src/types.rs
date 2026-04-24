@@ -3,11 +3,10 @@
 
 //! Event types for client operations.
 //!
-//! Provides enums for indexing, query, and workspace events
+//! Provides enums for indexing and workspace events
 //! that can be observed via [`EventEmitter`](super::EventEmitter).
 
 use vectorless_document::DocumentFormat;
-use vectorless_document::SufficiencyLevel;
 
 /// Indexing operation events.
 #[derive(Debug, Clone)]
@@ -51,56 +50,6 @@ pub enum IndexEvent {
     },
 
     /// Error occurred during indexing.
-    Error {
-        /// Error message.
-        message: String,
-    },
-}
-
-/// Query operation events.
-#[derive(Debug, Clone)]
-pub enum QueryEvent {
-    /// Search started.
-    Started {
-        /// The query string.
-        query: String,
-    },
-
-    /// Node visited during search.
-    NodeVisited {
-        /// Node ID.
-        node_id: String,
-        /// Node title.
-        title: String,
-        /// Relevance score.
-        score: f32,
-    },
-
-    /// Candidate result found.
-    CandidateFound {
-        /// Node ID.
-        node_id: String,
-        /// Relevance score.
-        score: f32,
-    },
-
-    /// Sufficiency check result.
-    SufficiencyCheck {
-        /// Sufficiency level.
-        level: SufficiencyLevel,
-        /// Total tokens collected.
-        tokens: usize,
-    },
-
-    /// Query completed.
-    Complete {
-        /// Total results found.
-        total_results: usize,
-        /// Overall confidence score.
-        confidence: f32,
-    },
-
-    /// Error occurred during query.
     Error {
         /// Error message.
         message: String,

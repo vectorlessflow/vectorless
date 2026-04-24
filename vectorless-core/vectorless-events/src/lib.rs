@@ -28,4 +28,4 @@ mod emitter;
 mod types;
 
 pub use emitter::EventEmitter;
-pub use types::{IndexEvent, QueryEvent, WorkspaceEvent};
+pub use types::{IndexEvent, WorkspaceEvent};
