@@ -20,6 +20,9 @@ Every concept in a traditional compiler maps directly to what this crate does:
 | Code generation | Reasoning / Navigation index | Generates lookup indexes |
 | Symbol table | `ReasoningIndex` | name → location mapping |
 | Debug info | `NavigationIndex` | Runtime navigation data |
+| Linker | RoutePass / ChainPass | Pre-computed routing + reasoning chains |
+| Dead code elimination | OverlapPass | Detects duplicate content regions |
+| Optimization hints | ScorePass | Evidence quality scoring per node |
 | Object file | `PersistedDocument` | Serialized to disk |
 | Incremental compilation | Fingerprint + incremental | Only recompiles changed parts |
 
@@ -37,6 +40,10 @@ The pipeline is organized into four phases, each containing one or more passes:
  Backend   45: Reasoning → Keyword→path symbol table
  Backend   47: Concept   → Key concept extraction (optional)
  Backend   50: Navigation→ Runtime navigation index
+ Backend   52: Route     → Query routing table (optional)
+ Backend   54: Chain     → Reasoning chain index (optional)
+ Backend   56: Overlap   → Content overlap detection (optional)
+ Backend   58: Score     → Evidence quality scoring (optional)
  Backend   55: Verify    → Output validation
  Backend   60: Optimize  → Final tree optimization
 ```
@@ -55,6 +62,7 @@ vectorless-compiler/src/
 │   ├── analysis/      ValidatePass, EnhancePass
 │   ├── transform/     SplitPass, EnrichPass
 │   └── backend/       ReasoningPass, ConceptPass, NavigationPass,
+│                       RoutePass, ChainPass, OverlapPass, ScorePass,
 │                       VerifyPass, OptimizePass
 ├── summary/           Summary strategies (Full, Selective, Lazy)
 └── incremental/       Change detection, action resolution, tree update
@@ -78,4 +86,8 @@ let result = executor.execute(input, options).await?;
 let tree = result.tree.expect("tree must exist");
 let reasoning = result.reasoning_index;
 let navigation = result.navigation_index;
+let routes = result.query_routes;       // Agent acceleration
+let chains = result.chain_index;        // Cross-section reasoning
+let overlaps = result.content_overlap;  // Dedup hints
+let scores = result.evidence_scores;    // Priority scoring
 ```

@@ -9,7 +9,7 @@
 use std::time::Instant;
 use tracing::{info, warn};
 
-use vectorless_document::{ChainIndex, ChainType, ReasoningChain};
+use vectorless_document::{ChainIndex, ChainType, ReasoningChain, RefType};
 use vectorless_error::Result;
 
 use crate::passes::async_trait;
@@ -30,23 +30,22 @@ impl ChainPass {
 
     /// Determine chain type from the reference structure.
     fn classify_chain(
-        ref_type: &str,
+        ref_type: RefType,
         source_depth: usize,
         target_depth: usize,
     ) -> ChainType {
         match ref_type {
-            "Section" | "section" => {
+            RefType::Section => {
                 if target_depth > source_depth {
                     ChainType::Elaboration
                 } else {
                     ChainType::Supporting
                 }
             }
-            "Appendix" | "appendix" => ChainType::Supporting,
-            "Table" | "Figure" | "Equation" | "table" | "figure" | "equation" => {
+            RefType::Appendix | RefType::Table | RefType::Figure | RefType::Equation => {
                 ChainType::Supporting
             }
-            "Footnote" | "footnote" => ChainType::Elaboration,
+            RefType::Footnote => ChainType::Elaboration,
             _ => ChainType::Supporting,
         }
     }
@@ -112,7 +111,7 @@ impl CompilePass for ChainPass {
                 };
 
                 let chain_type = Self::classify_chain(
-                    &reference.ref_text,
+                    reference.ref_type,
                     node.depth,
                     tree.get(target_id).map(|n| n.depth).unwrap_or(0),
                 );
@@ -165,7 +164,7 @@ impl CompilePass for ChainPass {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use vectorless_document::NodeReference;
+    use vectorless_document::{NodeReference, RefType};
 
     fn build_test_tree_with_refs() -> vectorless_document::DocumentTree {
         let mut tree = vectorless_document::DocumentTree::new("Root", "root content");
@@ -177,16 +176,24 @@ mod tests {
 
         // Add references: sec1 → sec2 (Section ref), sec2 → appendix (Appendix ref)
         if let Some(n) = tree.get_mut(sec1) {
-            n.references = vec![NodeReference {
-                ref_text: "Section".to_string(),
-                target_node: Some(sec2),
-            }];
+            n.references = vec![NodeReference::resolved(
+                "see Section 2".to_string(),
+                "2".to_string(),
+                RefType::Section,
+                4,
+                sec2,
+                1.0,
+            )];
         }
         if let Some(n) = tree.get_mut(sec2) {
-            n.references = vec![NodeReference {
-                ref_text: "Appendix".to_string(),
-                target_node: Some(appendix),
-            }];
+            n.references = vec![NodeReference::resolved(
+                "Appendix A".to_string(),
+                "A".to_string(),
+                RefType::Appendix,
+                12,
+                appendix,
+                1.0,
+            )];
         }
 
         tree
@@ -207,36 +214,34 @@ mod tests {
 
     #[test]
     fn test_classify_chain_section_elaboration() {
-        // Section ref to deeper node = Elaboration
-        assert_eq!(ChainPass::classify_chain("Section", 0, 1), ChainType::Elaboration);
+        assert_eq!(ChainPass::classify_chain(RefType::Section, 0, 1), ChainType::Elaboration);
     }
 
     #[test]
     fn test_classify_chain_section_supporting() {
-        // Section ref to same or shallower depth = Supporting
-        assert_eq!(ChainPass::classify_chain("Section", 1, 0), ChainType::Supporting);
+        assert_eq!(ChainPass::classify_chain(RefType::Section, 1, 0), ChainType::Supporting);
     }
 
     #[test]
     fn test_classify_chain_appendix() {
-        assert_eq!(ChainPass::classify_chain("Appendix", 0, 1), ChainType::Supporting);
+        assert_eq!(ChainPass::classify_chain(RefType::Appendix, 0, 1), ChainType::Supporting);
     }
 
     #[test]
     fn test_classify_chain_table_figure() {
-        assert_eq!(ChainPass::classify_chain("Table", 0, 1), ChainType::Supporting);
-        assert_eq!(ChainPass::classify_chain("Figure", 0, 1), ChainType::Supporting);
-        assert_eq!(ChainPass::classify_chain("Equation", 0, 1), ChainType::Supporting);
+        assert_eq!(ChainPass::classify_chain(RefType::Table, 0, 1), ChainType::Supporting);
+        assert_eq!(ChainPass::classify_chain(RefType::Figure, 0, 1), ChainType::Supporting);
+        assert_eq!(ChainPass::classify_chain(RefType::Equation, 0, 1), ChainType::Supporting);
     }
 
     #[test]
     fn test_classify_chain_footnote() {
-        assert_eq!(ChainPass::classify_chain("Footnote", 0, 2), ChainType::Elaboration);
+        assert_eq!(ChainPass::classify_chain(RefType::Footnote, 0, 2), ChainType::Elaboration);
     }
 
     #[test]
     fn test_classify_chain_unknown() {
-        assert_eq!(ChainPass::classify_chain("custom", 0, 0), ChainType::Supporting);
+        assert_eq!(ChainPass::classify_chain(RefType::Unknown, 0, 0), ChainType::Supporting);
     }
 
     #[tokio::test]
