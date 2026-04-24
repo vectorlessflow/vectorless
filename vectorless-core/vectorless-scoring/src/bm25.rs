@@ -95,20 +95,6 @@ impl<K> FieldDocument<K> {
     }
 }
 
-/// Key for field-specific document storage.
-#[derive(Debug, Clone, Hash, Eq, PartialEq)]
-struct FieldKey<K> {
-    doc_id: K,
-    field: Field,
-}
-
-#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
-enum Field {
-    Title,
-    Summary,
-    Content,
-}
-
 /// BM25 engine with per-field weighting support.
 ///
 /// This wraps the `bm25` crate's Embedder and Scorer to provide:

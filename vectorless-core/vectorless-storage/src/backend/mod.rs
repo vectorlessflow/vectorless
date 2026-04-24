@@ -27,7 +27,6 @@
 //! ```
 
 mod file;
-mod memory;
 mod trait_def;
 
 pub use file::FileBackend;
