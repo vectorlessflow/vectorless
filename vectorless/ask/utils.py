@@ -7,7 +7,10 @@ import re
 
 
 def parse_json_response(response: str) -> dict:
-    """Parse LLM response as JSON, handling markdown-wrapped output."""
+    """Parse LLM response as JSON, handling markdown-wrapped output.
+
+    Raises ``ValueError`` if the response cannot be parsed as JSON.
+    """
     trimmed = response.strip()
 
     if trimmed.startswith("```"):
@@ -30,4 +33,7 @@ def parse_json_response(response: str) -> dict:
                     except json.JSONDecodeError:
                         break
 
-    return json.loads(trimmed)
+    try:
+        return json.loads(trimmed)
+    except json.JSONDecodeError as e:
+        raise ValueError(f"Failed to parse LLM response as JSON: {e}") from e
