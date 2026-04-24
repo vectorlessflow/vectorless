@@ -5,7 +5,7 @@ build-backend = "maturin"
 [project]
 name = "vectorless"
 dynamic = ["version"]
-description = "Document Understanding Engine for AI"
+description = "Knowing by reasoning, not vectors."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "Apache-2.0" }
