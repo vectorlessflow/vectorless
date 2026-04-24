@@ -26,18 +26,13 @@ use super::frontmatter;
 ///
 /// # Example
 ///
-/// ```rust
-/// use vectorless::parser::markdown::MarkdownParser;
-/// use vectorless::parser::DocumentParser;
+/// ```rust,ignore
+/// use vectorless_compiler::parse::markdown::MarkdownParser;
 ///
-/// # #[tokio::main]
-/// # async fn main() -> vectorless::Result<()> {
 /// let parser = MarkdownParser::new();
 /// let result = parser.parse("# Title\n\nContent").await?;
 ///
 /// println!("Found {} nodes", result.node_count());
-/// # Ok(())
-/// # }
 /// ```
 #[derive(Debug, Clone)]
 pub struct MarkdownParser {

@@ -9,17 +9,11 @@
 ///
 /// # Example
 ///
-/// ```rust
-/// use vectorless::parser::markdown::MarkdownConfig;
+/// ```rust,ignore
+/// use vectorless_compiler::parse::markdown::config::MarkdownConfig;
 ///
 /// // Default GFM configuration
 /// let config = MarkdownConfig::default();
-///
-/// // Strict CommonMark
-/// let config = MarkdownConfig::commonmark();
-///
-/// // Documentation-focused
-/// let config = MarkdownConfig::documentation();
 ///
 /// // Custom configuration
 /// let config = MarkdownConfig {

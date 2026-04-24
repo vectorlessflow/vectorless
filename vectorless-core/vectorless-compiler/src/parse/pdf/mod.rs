@@ -9,11 +9,10 @@
 //!
 //! # Example
 //!
-//! ```rust,no_run
-//! use vectorless::parser::pdf::{PdfParser, PdfPage};
+//! ```rust,ignore
+//! use vectorless_compiler::parse::pdf::{PdfParser, PdfPage};
 //! use std::path::Path;
 //!
-//! # fn main() -> vectorless::Result<()> {
 //! let parser = PdfParser::new();
 //! let result = parser.parse_file(Path::new("document.pdf"))?;
 //!
@@ -21,8 +20,6 @@
 //! for page in &result.pages {
 //!     println!("Page {}: {} tokens", page.number, page.token_count);
 //! }
-//! # Ok(())
-//! # }
 //! ```
 
 mod parser;

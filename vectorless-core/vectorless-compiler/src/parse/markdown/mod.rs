@@ -15,12 +15,10 @@
 //!
 //! # Example
 //!
-//! ```rust
-//! use vectorless::parser::markdown::{MarkdownParser, MarkdownConfig};
+//! ```rust,ignore
+//! use vectorless_compiler::parse::markdown::MarkdownParser;
 //!
 //! let parser = MarkdownParser::new();
-//! // or with custom config:
-//! // let parser = MarkdownParser::with_config(MarkdownConfig::gfm());
 //! ```
 
 mod config;

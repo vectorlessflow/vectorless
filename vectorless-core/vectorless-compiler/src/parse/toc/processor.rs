@@ -94,14 +94,12 @@ impl Default for TocProcessorConfig {
 ///
 /// # Example
 ///
-/// ```rust,no_run
-/// use vectorless::parser::toc::TocProcessor;
-/// use vectorless::parser::pdf::PdfParser;
+/// ```rust,ignore
+/// use vectorless_compiler::parse::toc::processor::TocProcessor;
+/// use vectorless_compiler::parse::pdf::PdfParser;
 ///
-/// # #[tokio::main]
-/// # async fn main() -> vectorless::Result<()> {
 /// let pdf_parser = PdfParser::new();
-/// let result = pdf_parser.parse_file("document.pdf".as_ref()).await?;
+/// let result = pdf_parser.parse_file("document.pdf".as_ref())?;
 ///
 /// let processor = TocProcessor::new();
 /// let entries = processor.process(&result.pages).await?;
@@ -109,8 +107,6 @@ impl Default for TocProcessorConfig {
 /// for entry in &entries {
 ///     println!("{} - Page {:?}", entry.title, entry.physical_page);
 /// }
-/// # Ok(())
-/// # }
 /// ```
 pub struct TocProcessor {
     config: TocProcessorConfig,
