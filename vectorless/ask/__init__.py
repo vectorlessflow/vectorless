@@ -26,7 +26,7 @@ from vectorless.ask.understand import understand
 from vectorless.ask.worker import Worker
 
 # New modules
-from vectorless.ask.blackboard import Discovery, SharedBlackboard
+from vectorless.ask.blackboard import Discovery, SharedBlackboard, extract_llm_insights
 from vectorless.ask.events import AskEvent
 from vectorless.ask.reasoning import (
     Ambiguity,
@@ -93,6 +93,7 @@ __all__ = [
     # Shared blackboard
     "Discovery",
     "SharedBlackboard",
+    "extract_llm_insights",
     # Events
     "AskEvent",
     # Verification

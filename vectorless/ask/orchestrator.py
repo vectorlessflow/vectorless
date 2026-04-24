@@ -42,7 +42,7 @@ from vectorless.llm_client import LLMClient
 from vectorless.ask.reasoning.types import QueryAnalysis
 from vectorless.ask.reasoning.analyzer import QueryAnalyzer
 from vectorless.ask.verify import VerifyPipeline, VerificationResult
-from vectorless.ask.blackboard import SharedBlackboard, extract_discoveries
+from vectorless.ask.blackboard import SharedBlackboard, extract_discoveries, extract_llm_insights
 from vectorless.ask.prompts import (
     OrchestratorAnalysisParams,
     orchestrator_analysis,
@@ -652,6 +652,17 @@ class Orchestrator:
             discoveries = extract_discoveries(result, card.name)
             for d in discoveries:
                 blackboard.add_discovery(d)
+
+            # LLM-powered cross-document insight extraction (only for multi-doc)
+            if len(cards) > 1 and result.evidence:
+                try:
+                    llm_insights = await extract_llm_insights(
+                        result, card.name, query, llm,
+                    )
+                    for d in llm_insights:
+                        blackboard.add_discovery(d)
+                except Exception as e:
+                    logger.warning("LLM insight extraction failed for %s: %s", card.name, e)
 
     # -----------------------------------------------------------------------
     # Replan — mirrors Rust orchestrator/replan.rs
