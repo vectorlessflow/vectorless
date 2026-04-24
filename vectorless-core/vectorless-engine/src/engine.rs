@@ -439,18 +439,6 @@ impl Engine {
         Ok(doc.info())
     }
 
-    /// Ask a question — returns a reasoned answer with evidence and trace.
-    ///
-    /// Ask a question about the indexed documents.
-    ///
-    /// **Note**: Retrieval is now handled by the Python strategy layer.
-    /// This method returns an error — use Engine.ask() from the Python SDK.
-    pub async fn ask(&self, _input: &str, _ids: &[String]) -> Result<Answer> {
-        Err(Error::Config(
-            "Retrieval has been migrated to Python. Use Engine.ask() from the Python SDK.".into(),
-        ))
-    }
-
     /// Remove a document from the workspace.
     pub async fn forget(&self, doc_id: &str) -> Result<()> {
         self.workspace.remove(doc_id).await?;

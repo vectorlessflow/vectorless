@@ -10,7 +10,6 @@ use tokio::runtime::Runtime;
 
 use ::vectorless_engine::{Engine, EngineBuilder, IngestInput};
 
-use super::answer::PyAnswer;
 use super::document::{PyDocument, PyDocumentInfo};
 use super::error::VectorlessError;
 use super::error::to_py_err;
@@ -24,15 +23,6 @@ use super::metrics::PyMetricsReport;
 async fn run_ingest(engine: Arc<Engine>, input: IngestInput) -> PyResult<PyDocumentInfo> {
     let doc = engine.ingest(input).await.map_err(to_py_err)?;
     Ok(PyDocumentInfo { inner: doc })
-}
-
-async fn run_ask(
-    engine: Arc<Engine>,
-    question: String,
-    doc_ids: Vec<String>,
-) -> PyResult<PyAnswer> {
-    let answer = engine.ask(&question, &doc_ids).await.map_err(to_py_err)?;
-    Ok(PyAnswer { inner: answer })
 }
 
 async fn run_forget(engine: Arc<Engine>, doc_id: String) -> PyResult<()> {
@@ -192,29 +182,6 @@ impl PyEngine {
         let engine = Arc::clone(&self.inner);
         let input = IngestInput::Path(path.into());
         future_into_py(py, run_ingest(engine, input))
-    }
-
-    /// Ask a question — returns a reasoned answer with evidence and trace.
-    ///
-    /// Args:
-    ///     question: The question to ask (required).
-    ///     doc_ids: List of document IDs to search. Empty = search all.
-    ///
-    /// Returns:
-    ///     Answer with content, evidence, confidence, and trace.
-    ///
-    /// Raises:
-    ///     VectorlessError: If ask fails.
-    #[pyo3(signature = (question, doc_ids=None))]
-    fn ask<'py>(
-        &self,
-        py: Python<'py>,
-        question: String,
-        doc_ids: Option<Vec<String>>,
-    ) -> PyResult<Bound<'py, PyAny>> {
-        let engine = Arc::clone(&self.inner);
-        let ids = doc_ids.unwrap_or_default();
-        future_into_py(py, run_ask(engine, question, ids))
     }
 
     /// Remove a document by ID.
