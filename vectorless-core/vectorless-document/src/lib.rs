@@ -27,7 +27,7 @@ mod toc;
 mod tree;
 pub mod understanding;
 
-pub use format::{DocumentFormat, SufficiencyLevel};
+pub use format::DocumentFormat;
 pub use navigation::{ChildRoute, DocCard, NavEntry, NavigationIndex, SectionCard};
 pub use node::{NodeId, TreeNode};
 pub use reasoning::{
@@ -38,6 +38,4 @@ pub use reference::ReferenceExtractor;
 pub use structure::{DocumentStructure, StructureNode};
 pub use toc::{TocConfig, TocEntry, TocNode, TocView};
 pub use tree::{DocumentTree, RetrievalIndex};
-pub use understanding::{
-    Answer, Concept, Document, DocumentInfo, Evidence, IngestInput, ReasoningTrace, TraceStep,
-};
+pub use understanding::{Concept, Document, DocumentInfo, IngestInput};

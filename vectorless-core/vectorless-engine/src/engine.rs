@@ -8,40 +8,6 @@
 //! - [`ingest`](Engine::ingest) — Understand a document (parse, analyze, persist)
 //! - [`forget`](Engine::forget) — Remove a document
 //! - [`list_documents`](Engine::list_documents) — List all understood documents
-//!
-//! # Example
-//!
-//! ```rust,no_run
-//! use vectorless::{EngineBuilder, IngestInput};
-//!
-//! # #[tokio::main]
-//! # async fn main() -> Result<(), Box<dyn std::error::Error>> {
-//! let engine = EngineBuilder::new()
-//!     .with_key("sk-...")
-//!     .with_model("gpt-4o")
-//!     .with_endpoint("https://api.openai.com/v1")
-//!     .build()
-//!     .await?;
-//!
-//! // Understand a document
-//! let doc = engine.ingest(IngestInput::Path("./document.md".into())).await?;
-//! println!("{}: {}", doc.name, doc.summary);
-//!
-//! // Ask a question
-//! let answer = engine.ask("What is this?", &[doc.doc_id.clone()]).await?;
-//! println!("{}", answer.content);
-//!
-//! // List all understood documents
-//! let docs = engine.list_documents().await?;
-//! for d in &docs {
-//!     println!("{}: {}", d.name, d.summary);
-//! }
-//!
-//! // Forget a document
-//! engine.forget(&doc.doc_id).await?;
-//! # Ok(())
-//! # }
-//! ```
 
 use std::{collections::HashMap, sync::Arc};
 

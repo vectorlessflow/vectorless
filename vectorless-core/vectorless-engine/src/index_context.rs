@@ -7,34 +7,6 @@
 //! - **File path** — Load and parse a file from disk
 //! - **Content string** — Parse content directly (HTML, Markdown, text)
 //! - **Byte data** — Parse binary data (PDF, DOCX)
-//!
-//! # Single document
-//!
-//! ```rust,no_run
-//! use vectorless::client::IndexContext;
-//!
-//! let ctx = IndexContext::from_path("./document.md");
-//! ```
-//!
-//! # Multiple documents
-//!
-//! ```rust,no_run
-//! use vectorless::client::IndexContext;
-//!
-//! let ctx = IndexContext::from_paths(vec!["./doc1.md", "./doc2.pdf"]);
-//! ```
-//!
-//! # From directory
-//!
-//! ```rust,no_run
-//! use vectorless::client::IndexContext;
-//!
-//! // Non-recursive (top-level only)
-//! let ctx = IndexContext::from_dir("./documents", false);
-//!
-//! // Recursive (includes subdirectories)
-//! let ctx = IndexContext::from_dir("./documents", true);
-//! ```
 
 use std::path::PathBuf;
 
@@ -74,29 +46,6 @@ pub(crate) enum IndexSource {
 /// Supports single or multiple document sources. When multiple sources
 /// are provided, each is indexed independently and the results are
 /// collected into [`IndexResult`](super::IndexResult).
-///
-/// # Examples
-///
-/// ```rust,no_run
-/// use vectorless::client::IndexContext;
-/// use vectorless::client::DocumentFormat;
-///
-/// # #[tokio::main]
-/// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
-/// # let engine = vectorless::EngineBuilder::new().build().await?;
-/// // Single file
-/// let result = engine.index(IndexContext::from_path("./doc.md")).await?;
-///
-/// // Multiple files
-/// let result = engine.index(
-///     IndexContext::from_paths(vec!["./doc1.md", "./doc2.pdf"])
-/// ).await?;
-///
-/// // Entire directory
-/// let result = engine.index(IndexContext::from_dir("./docs", false)).await?;
-/// # Ok(())
-/// # }
-/// ```
 #[derive(Debug, Clone)]
 pub struct IndexContext {
     /// Document sources (supports multiple).
