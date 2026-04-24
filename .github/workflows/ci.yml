@@ -58,7 +58,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Check documentation build
-        run: cargo doc -p vectorless --no-deps --all-features
+        run: cargo doc -p vectorless-engine --no-deps --all-features
         env:
           RUSTDOCFLAGS: -D warnings
 
