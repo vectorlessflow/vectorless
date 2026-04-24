@@ -1,5 +1,19 @@
 # HISTORY
 
+## 0.1.12 (2026-04-24)
+
+- **Compile pipeline**: renamed index pipeline to compile pipeline with passes-based architecture
+- **Compiler refactor**: renamed stages to passes, removed deprecated `StageResult` alias and `CustomStageBuilder`
+- New backend compilation passes: query routing, reasoning chains, overlap detection, and scoring
+- Agent acceleration data added to compiled documents
+- LLM-powered cross-document insight extraction in ask module
+- Enhanced JSON parsing with proper error handling
+- Upgraded minimum Python version to 3.11
+- Removed unused modules: agent, memory backend, validation, ReferenceResolver, SufficiencyLevel
+- Restructured configuration modules and removed legacy retrieval config
+- Simplified storage layer by removing memory backend
+- Documentation updates for architecture and compilation pipeline
+
 ## 0.1.11 (2026-04-21)
 
 - Project description updated to "reasoning-based document engine"
