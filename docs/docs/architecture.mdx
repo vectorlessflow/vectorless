@@ -10,7 +10,7 @@ Vectorless transforms documents into hierarchical semantic trees and uses LLM-po
 
 ```text
 ┌──────────────┐     ┌──────────────┐     ┌──────────────┐
-│   Document   │────▶│    Index     │────▶│   Storage    │
+│   Document   │────▶│   Compile    │────▶│   Storage    │
 │  (PDF/MD)    │     │   Pipeline   │     │   (Disk)     │
 └──────────────┘     └──────────────┘     └──────┬───────┘
                                                   │
@@ -20,23 +20,42 @@ Vectorless transforms documents into hierarchical semantic trees and uses LLM-po
                      └──────────────┘     └──────────────┘
 ```
 
-## Index Pipeline
+## Compile Pipeline
 
-The indexing pipeline processes documents through ordered stages:
+The compile pipeline processes documents through four phases (Frontend → Analysis → Transform → Backend), each containing independent passes:
 
-| Stage | Priority | Description |
-|-------|----------|-------------|
-| **Parse** | 10 | Parse document into raw nodes (Markdown headings, PDF pages) |
-| **Build** | 20 | Construct arena-based tree with thinning and content merge |
-| **Validate** | 22 | Tree integrity checks |
-| **Split** | 25 | Split oversized leaf nodes (>4000 tokens) |
-| **Enhance** | 30 | Generate LLM summaries (Full, Selective, or Lazy strategy) |
-| **Enrich** | 40 | Calculate metadata, page ranges, resolve cross-references |
-| **Reasoning Index** | 45 | Build keyword-to-node mappings, synonym expansion, summary shortcuts |
-| **Navigation Index** | 50 | Build NavEntry + ChildRoute data for agent navigation |
-| **Optimize** | 60 | Final tree optimization |
+| Phase | Pass | Priority | Description |
+|-------|------|----------|-------------|
+| **Frontend** | Parse | 10 | Parse document into raw nodes (Markdown headings, PDF pages) |
+| **Frontend** | Build | 20 | Construct arena-based tree with thinning and content merge |
+| **Analysis** | Validate | 22 | Tree integrity checks |
+| **Transform** | Split | 25 | Split oversized leaf nodes (>4000 tokens) |
+| **Transform** | Enhance | 30 | Generate LLM summaries (Full, Selective, or Lazy strategy) |
+| **Transform** | Enrich | 40 | Calculate metadata, page ranges, resolve cross-references |
+| **Backend** | Reasoning Index | 45 | Build keyword-to-node mappings, synonym expansion, summary shortcuts |
+| **Backend** | Concept | 46 | Extract key concepts with section associations |
+| **Backend** | Navigation Index | 50 | Build NavEntry + ChildRoute data for agent navigation |
+| **Backend** | Route | 52 | Build query routing table (intent routes + concept routes) |
+| **Backend** | Chain | 54 | Build reasoning chains from cross-references |
+| **Backend** | Overlap | 56 | Detect content overlap between nodes (Jaccard similarity) |
+| **Backend** | Score | 58 | Compute evidence quality scores (density, richness, specificity) |
+| **Backend** | Verify | 59 | Validate compiled output integrity |
+| **Backend** | Optimize | 60 | Final tree optimization |
 
-Each stage is independently configurable. The pipeline supports incremental re-indexing via content fingerprinting.
+Each pass is independently configurable. The pipeline supports incremental recompilation via content fingerprinting and checkpoint/resume for fault tolerance.
+
+### Agent Acceleration Data
+
+The backend passes produce pre-computed acceleration data used by Workers during retrieval:
+
+| Data | Pass | Purpose |
+|------|------|---------|
+| **QueryRoutingTable** | Route | Maps intents and concepts to scored target nodes |
+| **ChainIndex** | Chain | Connects sections via reasoning chains (elaboration, supporting, etc.) |
+| **ContentOverlapMap** | Overlap | Flags duplicate/subset/summary overlap between nodes |
+| **EvidenceScoreMap** | Score | Ranks nodes by information density and data richness |
+
+This data is injected as Phase 1.5 hints into the Worker's navigation plan, allowing the LLM to make informed routing decisions without additional navigation steps.
 
 ## Tree Structure
 
@@ -104,7 +123,7 @@ When the user specifies document IDs directly, the Orchestrator skips the analys
 Each Worker navigates a single document's tree to collect evidence through a command-based loop:
 
 1. **Bird's-eye** — `ls` the root for an overview
-2. **Plan** — LLM generates a navigation plan based on keyword index hits
+2. **Plan** — LLM generates a navigation plan based on keyword index hits + acceleration data
 3. **Navigate** — Loop: LLM selects command → execute → observe result → repeat
 4. **Return** — Collected evidence only — no answer synthesis
 
@@ -132,6 +151,7 @@ Workers prioritize keyword-based navigation over manual exploration:
 1. When keyword index hits are available, Workers use `find` with the exact keyword to jump directly to relevant sections
 2. Workers use `ls` when no keyword hints exist or when discovering unknown structure
 3. Workers use `findtree` when the section title pattern is known but not the exact name
+4. Pre-computed acceleration data (routes, scores, chains) is injected as Phase 1.5 hints to guide the Worker toward high-value nodes
 
 #### Dynamic Re-planning
 
@@ -149,11 +169,11 @@ The system returns raw evidence text — no LLM synthesis or paraphrasing. This 
 
 ## DocCard Catalog
 
-When multiple documents are indexed, Vectorless maintains a lightweight `catalog.bin` containing DocCard metadata for each document. This allows the Orchestrator to analyze and select relevant documents without loading the full document trees — a significant optimization for workspaces with many documents.
+When multiple documents are compiled, Vectorless maintains a lightweight `catalog.bin` containing DocCard metadata for each document. This allows the Orchestrator to analyze and select relevant documents without loading the full document trees — a significant optimization for workspaces with many documents.
 
 ## Cross-Document Graph
 
-When multiple documents are indexed, Vectorless automatically builds a relationship graph based on shared keywords and Jaccard similarity. The graph is constructed as a background task after each indexing operation.
+When multiple documents are compiled, Vectorless automatically builds a relationship graph based on shared keywords and Jaccard similarity. The graph is constructed as a background task after each compilation operation.
 
 ## Zero Infrastructure
 

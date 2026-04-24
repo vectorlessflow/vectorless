@@ -390,9 +390,9 @@ impl PyDocument {
         future_into_py(py, async move {
             let num = node_id
                 .strip_prefix('n')
-                .ok_or_else(|| VectorlessError::new("NodeId must start with 'n'", "navigation"))?
+                .ok_or_else(|| VectorlessError::new("NodeId must start with 'n'".to_string(), "navigation"))?
                 .parse::<u64>()
-                .map_err(|_| VectorlessError::new("Invalid NodeId", "navigation"))?;
+                .map_err(|_| VectorlessError::new("Invalid NodeId".to_string(), "navigation"))?;
             let nav = nav.lock().await;
             Ok(nav
                 .chains_for(num)
@@ -413,9 +413,9 @@ impl PyDocument {
         future_into_py(py, async move {
             let num = node_id
                 .strip_prefix('n')
-                .ok_or_else(|| VectorlessError::new("NodeId must start with 'n'", "navigation"))?
+                .ok_or_else(|| VectorlessError::new("NodeId must start with 'n'".to_string(), "navigation"))?
                 .parse::<u64>()
-                .map_err(|_| VectorlessError::new("Invalid NodeId", "navigation"))?;
+                .map_err(|_| VectorlessError::new("Invalid NodeId".to_string(), "navigation"))?;
             let nav = nav.lock().await;
             Ok(nav
                 .overlaps_for(num)
@@ -436,9 +436,9 @@ impl PyDocument {
         future_into_py(py, async move {
             let num = node_id
                 .strip_prefix('n')
-                .ok_or_else(|| VectorlessError::new("NodeId must start with 'n'", "navigation"))?
+                .ok_or_else(|| VectorlessError::new("NodeId must start with 'n'".to_string(), "navigation"))?
                 .parse::<u64>()
-                .map_err(|_| VectorlessError::new("Invalid NodeId", "navigation"))?;
+                .map_err(|_| VectorlessError::new("Invalid NodeId".to_string(), "navigation"))?;
             let nav = nav.lock().await;
             Ok(nav
                 .evidence_score_for(num)

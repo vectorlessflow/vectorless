@@ -276,7 +276,8 @@ impl DocumentNavigator {
 
     /// Get concept routes matching a keyword.
     pub async fn concept_routes(&self, keyword: &str) -> Vec<ConceptRouteInfo> {
-        self.doc
+        let targets: Vec<RouteTargetInfo> = self
+            .doc
             .query_routes
             .as_ref()
             .map(|table| {
@@ -288,18 +289,18 @@ impl DocumentNavigator {
                         relevance: t.relevance,
                         reason: t.reason.clone(),
                     })
-                    .collect::<Vec<_>>()
+                    .collect()
             })
-            .unwrap_or_default()
-            .into_iter()
-            .map(|targets| ConceptRouteInfo {
-                concept: keyword.to_string(),
-                targets,
-            })
-            .collect()
-            .into_iter()
-            .take(1)
-            .collect()
+            .unwrap_or_default();
+
+        if targets.is_empty() {
+            return Vec::new();
+        }
+
+        vec![ConceptRouteInfo {
+            concept: keyword.to_string(),
+            targets,
+        }]
     }
 
     /// Get reasoning chains involving a specific node.
