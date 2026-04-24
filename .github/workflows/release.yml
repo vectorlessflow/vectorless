@@ -9,18 +9,6 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  # Publish Rust crate to crates.io
-  publish-crates:
-    name: Publish to crates.io
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - name: Publish vectorless crate
-        run: cargo publish -p vectorless
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-
   # Publish Python package to PyPI
   publish-pypi:
     name: Publish to PyPI
@@ -40,7 +28,7 @@ jobs:
   github-release:
     name: GitHub Release
     runs-on: ubuntu-latest
-    needs: [publish-crates, publish-pypi]
+    needs: [publish-pypi]
     permissions:
       contents: write
     steps:
