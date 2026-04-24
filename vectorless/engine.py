@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from pathlib import Path
-from typing import Any, Callable, List, Optional, Union
+from typing import Any
 
 from vectorless._internal._core import Engine as RustEngine
 from vectorless.ask.dispatcher import dispatch
@@ -57,12 +57,12 @@ class Engine:
 
     def __init__(
         self,
-        api_key: Optional[str] = None,
-        model: Optional[str] = None,
-        endpoint: Optional[str] = None,
-        config: Optional[EngineConfig] = None,
-        config_file: Optional[Union[str, Path]] = None,
-        events: Optional[EventEmitter] = None,
+        api_key: str | None = None,
+        model: str | None = None,
+        endpoint: str | None = None,
+        config: EngineConfig | None = None,
+        config_file: str | Path | None = None,
+        events: EventEmitter | None = None,
     ) -> None:
         self._events = events or EventEmitter()
 
@@ -89,7 +89,7 @@ class Engine:
         )
 
     @classmethod
-    def from_env(cls, events: Optional[EventEmitter] = None) -> Engine:
+    def from_env(cls, events: EventEmitter | None = None) -> Engine:
         """Create an Engine from environment variables only."""
         config = load_config_from_env()
         return cls(config=config, events=events)
@@ -97,8 +97,8 @@ class Engine:
     @classmethod
     def from_config_file(
         cls,
-        path: Union[str, Path],
-        events: Optional[EventEmitter] = None,
+        path: str | Path,
+        events: EventEmitter | None = None,
     ) -> Engine:
         """Create an Engine from a TOML config file."""
         config = load_config_from_file(Path(path))
@@ -106,10 +106,10 @@ class Engine:
 
     def _resolve_config(
         self,
-        api_key: Optional[str],
-        model: Optional[str],
-        endpoint: Optional[str],
-        config_file: Optional[Union[str, Path]],
+        api_key: str | None,
+        model: str | None,
+        endpoint: str | None,
+        config_file: str | Path | None,
     ) -> EngineConfig:
         overrides: dict[str, Any] = {}
         llm_overrides: dict[str, Any] = {}
@@ -131,13 +131,13 @@ class Engine:
 
     async def compile(
         self,
-        path: Optional[Union[str, Path]] = None,
-        paths: Optional[List[Union[str, Path]]] = None,
-        directory: Optional[Union[str, Path]] = None,
-        content: Optional[str] = None,
-        bytes_data: Optional[bytes] = None,
+        path: str | Path | None = None,
+        paths: list[str | Path] | None = None,
+        directory: str | Path | None = None,
+        content: str | None = None,
+        bytes_data: bytes | None = None,
         format: str = "markdown",
-        name: Optional[str] = None,
+        name: str | None = None,
         mode: str = "default",
         force: bool = False,
     ) -> IndexResultWrapper:
@@ -219,7 +219,7 @@ class Engine:
 
     async def compile_batch(
         self,
-        paths: List[Union[str, Path]],
+        paths: list[str | Path],
         *,
         mode: str = "default",
         jobs: int = 1,
@@ -237,7 +237,7 @@ class Engine:
         """
         semaphore = asyncio.Semaphore(jobs)
 
-        async def _index_one(p: Union[str, Path]) -> object:
+        async def _index_one(p: str | Path) -> object:
             async with semaphore:
                 self._events.emit_index(
                     IndexEventData(event_type=IndexEventType.STARTED, path=str(p))
@@ -253,7 +253,9 @@ class Engine:
                     )
                 return doc_info
 
-        results = await asyncio.gather(*[_index_one(p) for p in paths])
+        async with asyncio.TaskGroup() as tg:
+            tasks = [tg.create_task(_index_one(p)) for p in paths]
+        results = [t.result() for t in tasks]
         return IndexResultWrapper.from_doc_infos(list(results))
 
     # ── Querying (Python strategy layer) ────────────────────────
@@ -262,8 +264,8 @@ class Engine:
         self,
         question: str,
         *,
-        doc_ids: Optional[List[str]] = None,
-        timeout_secs: Optional[int] = None,
+        doc_ids: list[str] | None = None,
+        timeout_secs: int | None = None,
     ) -> Output:
         """Ask a question and get results with source attribution.
 
@@ -304,8 +306,8 @@ class Engine:
         self,
         question: str,
         *,
-        doc_ids: Optional[List[str]] = None,
-        timeout_secs: Optional[int] = None,
+        doc_ids: list[str] | None = None,
+        timeout_secs: int | None = None,
     ) -> StreamingQueryResult:
         """Stream query progress as an async iterator.
 
@@ -326,8 +328,8 @@ class Engine:
     async def _ask_python(
         self,
         question: str,
-        doc_ids: Optional[List[str]],
-        event_queue: Optional[asyncio.Queue] = None,
+        doc_ids: list[str] | None,
+        event_queue: asyncio.Queue | None = None,
     ) -> Output:
         """Run the full Python strategy: dispatch → Output.
 
@@ -409,7 +411,7 @@ class Engine:
 
     # ── Graph (Rust) ────────────────────────────────────────────
 
-    async def get_graph(self) -> Optional[DocumentGraphWrapper]:
+    async def get_graph(self) -> DocumentGraphWrapper | None:
         """Get the cross-document relationship graph."""
         graph = await self._rust.get_graph()
         if graph is None:

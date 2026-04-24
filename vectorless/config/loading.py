@@ -3,19 +3,11 @@
 from __future__ import annotations
 
 import os
-import sys
+import tomllib
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from vectorless.config.models import EngineConfig, LlmConfig, StorageConfig
-
-if sys.version_info >= (3, 11):
-    import tomllib
-else:
-    try:
-        import tomli as tomllib  # type: ignore[no-redef]
-    except ImportError:
-        tomllib = None  # type: ignore[assignment]
 
 
 def load_config_from_env(prefix: str = "VECTORLESS_") -> EngineConfig:
@@ -31,7 +23,7 @@ def load_config_from_env(prefix: str = "VECTORLESS_") -> EngineConfig:
     """
     llm = LlmConfig()
     storage = StorageConfig()
-    metrics_enabled: Optional[bool] = None
+    metrics_enabled: bool | None = None
 
     env_map = {
         f"{prefix}API_KEY": ("llm.api_key", str),
@@ -101,8 +93,7 @@ def load_config_from_file(path: Path) -> EngineConfig:
     """
     if tomllib is None:
         raise ImportError(
-            "TOML parsing requires 'tomli' on Python < 3.11. "
-            "Install with: pip install vectorless[cli]"
+            "TOML parsing requires Python >= 3.11 (tomllib built-in)."
         )
 
     with open(path, "rb") as f:
@@ -112,9 +103,9 @@ def load_config_from_file(path: Path) -> EngineConfig:
 
 
 def load_config(
-    config_file: Optional[Path] = None,
+    config_file: Path | None = None,
     env_prefix: str = "VECTORLESS_",
-    overrides: Optional[dict[str, Any]] = None,
+    overrides: dict[str, Any] | None = None,
 ) -> EngineConfig:
     """Load configuration with layered precedence.
 
@@ -128,8 +119,7 @@ def load_config(
     if config_file is not None and config_file.exists():
         if tomllib is None:
             raise ImportError(
-                "TOML parsing requires 'tomli' on Python < 3.11. "
-                "Install with: pip install vectorless[cli]"
+                "TOML parsing requires Python >= 3.11 (tomllib built-in)."
             )
         with open(config_file, "rb") as f:
             file_data = tomllib.load(f)

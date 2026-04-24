@@ -12,8 +12,8 @@ All queries go through dispatch():
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable
 
+from vectorless.ask.protocols import DocLoader, EventCallback
 from vectorless.ask.types import DocCard, Output, Specified, Workspace
 from vectorless.ask.orchestrator import Orchestrator
 from vectorless.ask.reasoning import QueryAnalysis, QueryAnalyzer
@@ -26,8 +26,8 @@ async def dispatch(
     query: str,
     scope: Specified | Workspace,
     llm: LLMClient,
-    doc_loader: Callable[[str], Any],
-    event_callback: Any = None,
+    doc_loader: DocLoader,
+    event_callback: EventCallback | None = None,
 ) -> Output:
     """Unified entry point — mirrors Rust dispatcher::dispatch().
 

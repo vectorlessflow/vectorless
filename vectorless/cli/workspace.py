@@ -115,20 +115,11 @@ def load_config(workspace: str) -> Dict[str, Any]:
     Returns:
         Configuration dict.
     """
-    import sys
-
     config_path = Path(workspace) / CONFIG_FILE
     if not config_path.exists():
         return {}
 
-    if sys.version_info >= (3, 11):
-        import tomllib
-    else:
-        try:
-            import tomli as tomllib  # type: ignore[no-redef]
-        except ImportError:
-            # Fallback: parse as plain text (comments-only files)
-            return {}
+    import tomllib
 
     with open(config_path, "rb") as f:
         return tomllib.load(f)

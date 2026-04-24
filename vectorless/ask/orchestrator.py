@@ -23,6 +23,7 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
+from vectorless.ask.protocols import DocLoader, EventCallback
 from vectorless.ask.types import (
     DispatchEntry,
     DocCard,
@@ -104,7 +105,7 @@ class Orchestrator:
         self,
         query: str,
         doc_cards: list[DocCard],
-        doc_loader: Any,  # async callable: (doc_id: str) -> PyDocument
+        doc_loader: DocLoader,
         llm_client: LLMClient,
         *,
         skip_analysis: bool = False,
@@ -112,7 +113,7 @@ class Orchestrator:
         query_analysis: QueryAnalysis | None = None,
         max_rounds: int = 15,
         max_llm_calls: int = 0,
-        event_callback: Any = None,  # async callable: (dict) -> None
+        event_callback: EventCallback | None = None,
     ) -> None:
         self._query = query
         self._doc_cards = doc_cards
@@ -502,11 +503,24 @@ class Orchestrator:
             return (idx, result)
 
         tasks = [run_worker(d) for d in dispatches]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
 
-        for item in results:
+        # Use TaskGroup with per-task exception wrapping to maintain
+        # the same fault-tolerance as gather(return_exceptions=True)
+        task_results: list[tuple[int, WorkerOutput] | Exception] = []
+        async with asyncio.TaskGroup() as tg:
+            async def _safe_run(d: DispatchEntry) -> None:
+                try:
+                    result = await run_worker(d)
+                    task_results.append(result)
+                except Exception as e:
+                    task_results.append(e)
+                    logger.warning("Worker failed: %s", e)
+
+            for d in dispatches:
+                tg.create_task(_safe_run(d))
+
+        for item in task_results:
             if isinstance(item, Exception):
-                logger.warning("Worker failed: %s", item)
                 continue
             idx, output = item
             state.collect_result(idx, output)
