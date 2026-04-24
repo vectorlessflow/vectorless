@@ -6,7 +6,6 @@
 //! The Engine provides a unified API for the Document Understanding Engine:
 //!
 //! - [`ingest`](Engine::ingest) — Understand a document (parse, analyze, persist)
-//! - [`ask`](Engine::ask) — Ask a question (returns answer + evidence + trace)
 //! - [`forget`](Engine::forget) — Remove a document
 //! - [`list_documents`](Engine::list_documents) — List all understood documents
 //!
@@ -51,7 +50,7 @@ use tracing::{info, warn};
 
 use vectorless_config::Config;
 use vectorless_document::{
-    Answer, Document as UnderstandingDocument, DocumentTree, Evidence, IngestInput, ReasoningTrace,
+    Document as UnderstandingDocument, DocumentTree, IngestInput,
 };
 use vectorless_error::{Error, Result};
 use vectorless_events::EventEmitter;
@@ -550,29 +549,6 @@ impl Engine {
     // ============================================================
     // Internal
     // ============================================================
-
-    /// Load documents by ID, returning loaded artifacts and failures.
-    async fn load_documents(
-        &self,
-        doc_ids: &[String],
-    ) -> Result<(Vec<vectorless_document::Document>, Vec<FailedItem>)> {
-        let mut documents = Vec::new();
-        let mut failed = Vec::new();
-        for doc_id in doc_ids {
-            match self.workspace.load(doc_id).await {
-                Ok(Some(doc)) => {
-                    documents.push(Self::persisted_to_understanding_document(doc));
-                }
-                Ok(None) => {
-                    failed.push(FailedItem::new(doc_id, "Document not found"));
-                }
-                Err(e) => {
-                    failed.push(FailedItem::new(doc_id, &e.to_string()));
-                }
-            }
-        }
-        Ok((documents, failed))
-    }
 
     /// Run a future with an optional timeout.
     /// If `timeout_secs` is `Some`, wraps the future in `tokio::time::timeout`.

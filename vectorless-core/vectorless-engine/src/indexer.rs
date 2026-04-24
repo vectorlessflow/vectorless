@@ -59,14 +59,6 @@ impl IndexerClient {
         }
     }
 
-    /// Create with a custom executor factory (for testing).
-    pub(crate) fn with_factory(factory: Arc<dyn Fn() -> PipelineExecutor + Send + Sync>) -> Self {
-        Self {
-            executor_factory: factory,
-            events: EventEmitter::new(),
-        }
-    }
-
     /// Create with event emitter.
     pub fn with_events(mut self, events: EventEmitter) -> Self {
         self.events = events;

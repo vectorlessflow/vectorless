@@ -415,27 +415,6 @@ pub struct DocumentInfo {
     pub line_count: Option<usize>,
 }
 
-impl DocumentInfo {
-    /// Create a new document info.
-    pub fn new(id: impl Into<String>, name: impl Into<String>) -> Self {
-        Self {
-            id: id.into(),
-            name: name.into(),
-            format: String::new(),
-            description: None,
-            source_path: None,
-            page_count: None,
-            line_count: None,
-        }
-    }
-
-    /// Set the format.
-    pub fn with_format(mut self, format: impl Into<String>) -> Self {
-        self.format = format.into();
-        self
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -482,15 +461,7 @@ mod tests {
         assert!(result.single().is_some());
         assert_eq!(result.single().unwrap().doc_id, "doc-1");
     }
-
-    #[test]
-    fn test_document_info() {
-        let info = DocumentInfo::new("doc-1", "Test").with_format("markdown");
-
-        assert_eq!(info.id, "doc-1");
-        assert_eq!(info.format, "markdown");
-    }
-
+    
     #[test]
     fn test_index_result() {
         let item = IndexItem::new("doc-1", "Test", DocumentFormat::Markdown, None, None);

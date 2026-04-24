@@ -144,32 +144,6 @@ impl WorkspaceClient {
         Ok(self.workspace.contains(doc_id).await)
     }
 
-    /// List all documents in the workspace.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the workspace read fails.
-    pub async fn list(&self) -> Result<Vec<DocumentInfo>> {
-        let doc_ids = self.workspace.list_documents().await;
-        let mut result = Vec::with_capacity(doc_ids.len());
-
-        for id in &doc_ids {
-            if let Some(meta) = self.workspace.get_meta(id).await {
-                result.push(DocumentInfo {
-                    id: meta.id,
-                    name: meta.doc_name,
-                    format: meta.doc_type,
-                    description: meta.doc_description,
-                    source_path: meta.path,
-                    page_count: meta.page_count,
-                    line_count: meta.line_count,
-                });
-            }
-        }
-
-        Ok(result)
-    }
-
     /// Get document info by ID.
     ///
     /// # Errors
