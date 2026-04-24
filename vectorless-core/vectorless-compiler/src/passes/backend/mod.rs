@@ -3,22 +3,22 @@
 
 //! Backend passes — code generation (indexes), verification, and optimization.
 
-mod reasoning;
+mod chain;
 mod concept;
 mod navigation;
-mod verify;
 mod optimize;
-mod route;
-mod chain;
 mod overlap;
+mod reasoning;
+mod route;
 mod score;
+mod verify;
 
-pub use reasoning::ReasoningPass;
+pub use chain::ChainPass;
 pub use concept::ConceptPass;
 pub use navigation::NavigationPass;
-pub use verify::VerifyPass;
 pub use optimize::OptimizePass;
-pub use route::RoutePass;
-pub use chain::ChainPass;
 pub use overlap::OverlapPass;
+pub use reasoning::ReasoningPass;
+pub use route::RoutePass;
 pub use score::ScorePass;
+pub use verify::VerifyPass;

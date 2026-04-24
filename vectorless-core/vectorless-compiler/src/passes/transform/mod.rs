@@ -3,8 +3,8 @@
 
 //! Transform passes — IR-level tree restructuring and enrichment.
 
-mod split;
 mod enrich;
+mod split;
 
-pub use split::SplitPass;
 pub use enrich::EnrichPass;
+pub use split::SplitPass;

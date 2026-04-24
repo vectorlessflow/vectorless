@@ -242,7 +242,6 @@ pub struct PersistedDocument {
     pub concepts: Vec<vectorless_document::Concept>,
 
     // ── Agent acceleration data ──
-
     /// Pre-computed query routing table for Agent acceleration.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub query_routes: Option<QueryRoutingTable>,

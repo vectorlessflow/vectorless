@@ -89,7 +89,6 @@ pub struct CompileMetrics {
     pub nodes_merged: usize,
 
     // ── Agent acceleration pass metrics ──
-
     /// Route pass duration (ms).
     #[serde(default)]
     pub route_time_ms: u64,

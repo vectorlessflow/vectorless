@@ -64,13 +64,22 @@ impl ScorePass {
         }
 
         // Lists (-, *, numbered)
-        let list_markers = content.lines().filter(|l| {
-            let trimmed = l.trim();
-            trimmed.starts_with("- ")
-                || trimmed.starts_with("* ")
-                || trimmed.starts_with("+ ")
-                || (trimmed.len() > 2 && trimmed.as_bytes().first().map(|b| b.is_ascii_digit()).unwrap_or(false) && trimmed.contains('.'))
-        }).count();
+        let list_markers = content
+            .lines()
+            .filter(|l| {
+                let trimmed = l.trim();
+                trimmed.starts_with("- ")
+                    || trimmed.starts_with("* ")
+                    || trimmed.starts_with("+ ")
+                    || (trimmed.len() > 2
+                        && trimmed
+                            .as_bytes()
+                            .first()
+                            .map(|b| b.is_ascii_digit())
+                            .unwrap_or(false)
+                        && trimmed.contains('.'))
+            })
+            .count();
         if list_markers > 0 {
             score += 0.2 * (list_markers as f64).min(5.0) / 5.0;
         }
@@ -87,13 +96,16 @@ impl ScorePass {
 
         // Generic filler words that indicate low specificity
         let filler = [
-            "the", "is", "a", "an", "and", "or", "but", "in", "on", "at",
-            "to", "for", "of", "with", "this", "that", "it", "from", "by",
-            "was", "were", "be", "have", "has", "had", "are", "will", "would",
+            "the", "is", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for", "of",
+            "with", "this", "that", "it", "from", "by", "was", "were", "be", "have", "has", "had",
+            "are", "will", "would",
         ];
         let filler_set: HashSet<&str> = filler.iter().copied().collect();
 
-        let filler_count = words.iter().filter(|w| filler_set.contains(w.to_lowercase().as_str())).count() as f64;
+        let filler_count = words
+            .iter()
+            .filter(|w| filler_set.contains(w.to_lowercase().as_str()))
+            .count() as f64;
         let total = words.len() as f64;
 
         // Higher ratio of non-filler = higher specificity
@@ -143,7 +155,10 @@ impl CompilePass for ScorePass {
         let leaves = tree.leaves();
         let mut score_map = EvidenceScoreMap::new();
 
-        info!("[score] Computing evidence scores for {} leaf nodes", leaves.len());
+        info!(
+            "[score] Computing evidence scores for {} leaf nodes",
+            leaves.len()
+        );
 
         for &node_id in &leaves {
             let node = match tree.get(node_id) {
@@ -160,11 +175,14 @@ impl CompilePass for ScorePass {
             let data_richness = Self::compute_data_richness(content);
             let specificity = Self::compute_specificity(content);
 
-            score_map.insert(node_id, EvidenceScore {
-                density,
-                data_richness,
-                specificity,
-            });
+            score_map.insert(
+                node_id,
+                EvidenceScore {
+                    density,
+                    data_richness,
+                    specificity,
+                },
+            );
         }
 
         let scored_count = score_map.len();
@@ -187,10 +205,9 @@ impl CompilePass for ScorePass {
 
         let mut result = PassResult::success("score");
         result.duration_ms = duration;
-        result.metadata.insert(
-            "scored_nodes".to_string(),
-            serde_json::json!(scored_count),
-        );
+        result
+            .metadata
+            .insert("scored_nodes".to_string(), serde_json::json!(scored_count));
         result.metadata.insert(
             "avg_density".to_string(),
             serde_json::json!(format!("{:.3}", avg_density)),
@@ -248,8 +265,12 @@ mod tests {
 
     #[test]
     fn test_compute_data_richness_plain() {
-        let score = ScorePass::compute_data_richness("just some plain text without any structured data");
-        assert!((score - 0.0).abs() < f64::EPSILON, "Plain text should have low richness");
+        let score =
+            ScorePass::compute_data_richness("just some plain text without any structured data");
+        assert!(
+            (score - 0.0).abs() < f64::EPSILON,
+            "Plain text should have low richness"
+        );
     }
 
     #[test]
@@ -260,14 +281,18 @@ mod tests {
     #[test]
     fn test_compute_specificity_high() {
         // Lots of technical terms, few filler words
-        let s = ScorePass::compute_specificity("HashMap NodeId DocumentTree CompileContext PipelineExecutor");
+        let s = ScorePass::compute_specificity(
+            "HashMap NodeId DocumentTree CompileContext PipelineExecutor",
+        );
         assert!(s > 0.8, "Technical content should have high specificity");
     }
 
     #[test]
     fn test_compute_specificity_low() {
         // All filler words
-        let s = ScorePass::compute_specificity("the is a an and or but in on at to for of with this that");
+        let s = ScorePass::compute_specificity(
+            "the is a an and or but in on at to for of with this that",
+        );
         assert!(s < 0.3, "Filler content should have low specificity");
     }
 

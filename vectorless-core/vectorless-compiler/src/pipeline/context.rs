@@ -8,8 +8,8 @@ use std::path::PathBuf;
 
 use crate::parse::{DocumentFormat, RawNode};
 use vectorless_document::{
-    Concept, DocumentTree, NavigationIndex, NodeId, ReasoningIndex,
-    QueryRoutingTable, ChainIndex, ContentOverlapMap, EvidenceScoreMap,
+    ChainIndex, Concept, ContentOverlapMap, DocumentTree, EvidenceScoreMap, NavigationIndex,
+    NodeId, QueryRoutingTable, ReasoningIndex,
 };
 use vectorless_llm::LlmClient;
 
@@ -258,7 +258,6 @@ pub struct CompileContext {
     pub concepts: Vec<Concept>,
 
     // ── Agent acceleration data (built by backend passes) ──
-
     /// Pre-computed query routing table (built by RoutePass).
     pub query_routes: Option<QueryRoutingTable>,
 

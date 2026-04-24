@@ -11,9 +11,8 @@ use tokio::sync::Mutex;
 
 use vectorless_primitives::{
     ChainInfo, CollectedEvidence, ConceptInfo, ConceptRouteInfo, DocCardInfo, DocumentNavigator,
-    EvidenceScoreInfo, FindResult, MatchResult, NodeInfo, NodeStats, OverlapInfo,
-    RouteTargetInfo, SectionCardInfo, SectionSummaryInfo, SimilarResult, TocEntry,
-    TopicEntryInfo, WordCount,
+    EvidenceScoreInfo, FindResult, MatchResult, NodeInfo, NodeStats, OverlapInfo, RouteTargetInfo,
+    SectionCardInfo, SectionSummaryInfo, SimilarResult, TocEntry, TopicEntryInfo, WordCount,
 };
 
 use super::error::VectorlessError;
@@ -363,11 +362,7 @@ impl PyDocument {
     }
 
     /// Get concept routes matching a keyword.
-    fn concept_routes<'py>(
-        &self,
-        py: Python<'py>,
-        keyword: String,
-    ) -> PyResult<Bound<'py, PyAny>> {
+    fn concept_routes<'py>(&self, py: Python<'py>, keyword: String) -> PyResult<Bound<'py, PyAny>> {
         let nav = Arc::clone(&self.inner);
         future_into_py(py, async move {
             let nav = nav.lock().await;
@@ -381,16 +376,14 @@ impl PyDocument {
     }
 
     /// Get reasoning chains involving a specific node.
-    fn chains_for<'py>(
-        &self,
-        py: Python<'py>,
-        node_id: String,
-    ) -> PyResult<Bound<'py, PyAny>> {
+    fn chains_for<'py>(&self, py: Python<'py>, node_id: String) -> PyResult<Bound<'py, PyAny>> {
         let nav = Arc::clone(&self.inner);
         future_into_py(py, async move {
             let num = node_id
                 .strip_prefix('n')
-                .ok_or_else(|| VectorlessError::new("NodeId must start with 'n'".to_string(), "navigation"))?
+                .ok_or_else(|| {
+                    VectorlessError::new("NodeId must start with 'n'".to_string(), "navigation")
+                })?
                 .parse::<u64>()
                 .map_err(|_| VectorlessError::new("Invalid NodeId".to_string(), "navigation"))?;
             let nav = nav.lock().await;
@@ -404,16 +397,14 @@ impl PyDocument {
     }
 
     /// Get overlapping nodes for a specific node.
-    fn overlaps_for<'py>(
-        &self,
-        py: Python<'py>,
-        node_id: String,
-    ) -> PyResult<Bound<'py, PyAny>> {
+    fn overlaps_for<'py>(&self, py: Python<'py>, node_id: String) -> PyResult<Bound<'py, PyAny>> {
         let nav = Arc::clone(&self.inner);
         future_into_py(py, async move {
             let num = node_id
                 .strip_prefix('n')
-                .ok_or_else(|| VectorlessError::new("NodeId must start with 'n'".to_string(), "navigation"))?
+                .ok_or_else(|| {
+                    VectorlessError::new("NodeId must start with 'n'".to_string(), "navigation")
+                })?
                 .parse::<u64>()
                 .map_err(|_| VectorlessError::new("Invalid NodeId".to_string(), "navigation"))?;
             let nav = nav.lock().await;
@@ -427,23 +418,18 @@ impl PyDocument {
     }
 
     /// Get evidence quality score for a specific node.
-    fn evidence_score<'py>(
-        &self,
-        py: Python<'py>,
-        node_id: String,
-    ) -> PyResult<Bound<'py, PyAny>> {
+    fn evidence_score<'py>(&self, py: Python<'py>, node_id: String) -> PyResult<Bound<'py, PyAny>> {
         let nav = Arc::clone(&self.inner);
         future_into_py(py, async move {
             let num = node_id
                 .strip_prefix('n')
-                .ok_or_else(|| VectorlessError::new("NodeId must start with 'n'".to_string(), "navigation"))?
+                .ok_or_else(|| {
+                    VectorlessError::new("NodeId must start with 'n'".to_string(), "navigation")
+                })?
                 .parse::<u64>()
                 .map_err(|_| VectorlessError::new("Invalid NodeId".to_string(), "navigation"))?;
             let nav = nav.lock().await;
-            Ok(nav
-                .evidence_score_for(num)
-                .await
-                .map(PyEvidenceScore::from))
+            Ok(nav.evidence_score_for(num).await.map(PyEvidenceScore::from))
         })
     }
 
@@ -1135,7 +1121,11 @@ impl From<ChainInfo> for PyChainInfo {
     fn from(v: ChainInfo) -> Self {
         Self {
             premises: v.premises.into_iter().map(|id| format!("n{id}")).collect(),
-            conclusions: v.conclusions.into_iter().map(|id| format!("n{id}")).collect(),
+            conclusions: v
+                .conclusions
+                .into_iter()
+                .map(|id| format!("n{id}"))
+                .collect(),
             chain_type: v.chain_type,
             summary: v.summary,
         }

@@ -17,7 +17,7 @@ use vectorless_llm::memo::{MemoKey, MemoStore};
 use vectorless_utils::fingerprint::Fingerprint;
 
 use crate::passes::{CompilePass, PassResult};
-use crate::pipeline::{FailurePolicy, CompileContext, StageRetryConfig};
+use crate::pipeline::{CompileContext, FailurePolicy, StageRetryConfig};
 use crate::summary::{LlmSummaryGenerator, SummaryGenerator, SummaryStrategy};
 
 /// A node that needs LLM summary generation.

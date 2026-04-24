@@ -53,7 +53,9 @@ pub struct ContentOverlapMap {
 impl ContentOverlapMap {
     /// Create a new empty overlap map.
     pub fn new() -> Self {
-        Self { overlaps: Vec::new() }
+        Self {
+            overlaps: Vec::new(),
+        }
     }
 
     /// Add an overlap entry.

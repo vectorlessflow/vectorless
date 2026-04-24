@@ -13,11 +13,11 @@ use vectorless_llm::LlmClient;
 
 use super::super::PipelineOptions;
 use super::super::passes::{
-    BuildPass, ChainPass, ConceptPass, EnhancePass, EnrichPass, CompilePass,
-    NavigationPass, OptimizePass, OverlapPass, ParsePass, ReasoningPass,
-    RoutePass, ScorePass, SplitPass, ValidatePass, VerifyPass,
+    BuildPass, ChainPass, CompilePass, ConceptPass, EnhancePass, EnrichPass, NavigationPass,
+    OptimizePass, OverlapPass, ParsePass, ReasoningPass, RoutePass, ScorePass, SplitPass,
+    ValidatePass, VerifyPass,
 };
-use super::context::{CompilerInput, CompileResult};
+use super::context::{CompileResult, CompilerInput};
 use super::orchestrator::PipelineOrchestrator;
 
 /// Pipeline executor for document compilation.

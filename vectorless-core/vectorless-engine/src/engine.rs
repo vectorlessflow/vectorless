@@ -14,23 +14,21 @@ use std::{collections::HashMap, sync::Arc};
 use futures::StreamExt;
 use tracing::{info, warn};
 
-use vectorless_config::Config;
-use vectorless_document::{
-    Document as UnderstandingDocument, DocumentTree, IngestInput,
-};
-use vectorless_error::{Error, Result};
-use vectorless_events::EventEmitter;
 use vectorless_compiler::{
     PipelineOptions,
     incremental::{self, IndexAction},
 };
+use vectorless_config::Config;
+use vectorless_document::{Document as UnderstandingDocument, DocumentTree, IngestInput};
+use vectorless_error::{Error, Result};
+use vectorless_events::EventEmitter;
 use vectorless_metrics::MetricsHub;
 use vectorless_storage::{PersistedDocument, Workspace};
 
 use super::{
     compile_input::{CompileInput, CompileSource},
     indexer::IndexerClient,
-    types::{FailedItem, CompileArtifact, CompileMode, CompileOutput},
+    types::{CompileArtifact, CompileMode, CompileOutput, FailedItem},
     workspace::WorkspaceClient,
 };
 
@@ -545,7 +543,7 @@ impl Engine {
         options: &super::types::CompileOptions,
         source: &CompileSource,
     ) -> PipelineOptions {
-        use vectorless_compiler::{SourceFormat, ReasoningIndexConfig, SummaryStrategy};
+        use vectorless_compiler::{ReasoningIndexConfig, SourceFormat, SummaryStrategy};
 
         let format = match source {
             CompileSource::Path(path) => self
@@ -779,10 +777,13 @@ mod tests {
     use crate::compiled_document::CompiledDocument;
 
     fn make_doc() -> CompiledDocument {
-        CompiledDocument::new("test-id", vectorless_compiler::parse::DocumentFormat::Markdown)
-            .with_name("test.md")
-            .with_description("test doc")
-            .with_source_path(std::path::PathBuf::from("/tmp/test.md"))
+        CompiledDocument::new(
+            "test-id",
+            vectorless_compiler::parse::DocumentFormat::Markdown,
+        )
+        .with_name("test.md")
+        .with_description("test doc")
+        .with_source_path(std::path::PathBuf::from("/tmp/test.md"))
     }
 
     #[test]

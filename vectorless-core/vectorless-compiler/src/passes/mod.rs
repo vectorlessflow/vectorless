@@ -9,18 +9,21 @@
 //! - **Transform** — IR-level tree restructuring (`split`, `enrich`)
 //! - **Backend** — Index generation, verification, and optimization
 
-pub mod frontend;
 pub mod analysis;
-pub mod transform;
 pub mod backend;
+pub mod frontend;
+pub mod transform;
 
 // Re-export all passes from submodules
-pub use frontend::{ParsePass, BuildPass};
-pub use analysis::{ValidatePass, EnhancePass};
-pub use transform::{SplitPass, EnrichPass};
-pub use backend::{ReasoningPass, ConceptPass, NavigationPass, VerifyPass, OptimizePass, RoutePass, ChainPass, OverlapPass, ScorePass};
+pub use analysis::{EnhancePass, ValidatePass};
+pub use backend::{
+    ChainPass, ConceptPass, NavigationPass, OptimizePass, OverlapPass, ReasoningPass, RoutePass,
+    ScorePass, VerifyPass,
+};
+pub use frontend::{BuildPass, ParsePass};
+pub use transform::{EnrichPass, SplitPass};
 
-use super::pipeline::{FailurePolicy, CompileContext, PassResult};
+use super::pipeline::{CompileContext, FailurePolicy, PassResult};
 pub use async_trait::async_trait;
 use vectorless_error::Result;
 

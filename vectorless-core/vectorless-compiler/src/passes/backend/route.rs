@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use std::time::Instant;
 use tracing::{info, warn};
 
-use vectorless_document::{DocumentTree, NodeId, QueryRoutingTable, RouteTarget, ConceptRoute};
+use vectorless_document::{ConceptRoute, DocumentTree, NodeId, QueryRoutingTable, RouteTarget};
 use vectorless_error::Result;
 
 use crate::passes::async_trait;
@@ -31,10 +31,7 @@ impl RoutePass {
     }
 
     /// Build route targets from a node's children.
-    fn build_child_routes(
-        tree: &DocumentTree,
-        parent_id: NodeId,
-    ) -> Vec<RouteTarget> {
+    fn build_child_routes(tree: &DocumentTree, parent_id: NodeId) -> Vec<RouteTarget> {
         let children: Vec<_> = tree.children_iter(parent_id).collect();
         let mut targets = Vec::with_capacity(children.len());
 
@@ -56,7 +53,10 @@ impl RoutePass {
             };
 
             let reason = if hint_count > 0 {
-                format!("Can answer: {}", node.question_hints.first().unwrap_or(&String::new()))
+                format!(
+                    "Can answer: {}",
+                    node.question_hints.first().unwrap_or(&String::new())
+                )
             } else {
                 format!("Section: {}", node.title)
             };
@@ -69,7 +69,11 @@ impl RoutePass {
         }
 
         // Sort by relevance descending
-        targets.sort_by(|a, b| b.relevance.partial_cmp(&a.relevance).unwrap_or(std::cmp::Ordering::Equal));
+        targets.sort_by(|a, b| {
+            b.relevance
+                .partial_cmp(&a.relevance)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         targets
     }
 
@@ -101,7 +105,11 @@ impl RoutePass {
         let mut routes: Vec<ConceptRoute> = concept_map
             .into_iter()
             .map(|(concept, mut targets)| {
-                targets.sort_by(|a, b| b.relevance.partial_cmp(&a.relevance).unwrap_or(std::cmp::Ordering::Equal));
+                targets.sort_by(|a, b| {
+                    b.relevance
+                        .partial_cmp(&a.relevance)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                });
                 targets.truncate(10); // limit per concept
                 ConceptRoute { concept, targets }
             })
@@ -153,7 +161,10 @@ impl CompilePass for RoutePass {
         };
 
         let all_nodes = tree.traverse();
-        info!("[route] Building routing table for {} nodes", all_nodes.len());
+        info!(
+            "[route] Building routing table for {} nodes",
+            all_nodes.len()
+        );
 
         let mut table = QueryRoutingTable::new();
 
@@ -190,16 +201,16 @@ impl CompilePass for RoutePass {
             intent_count, concept_count, duration,
         );
 
-        ctx.metrics.record_route(duration, intent_count, concept_count);
+        ctx.metrics
+            .record_route(duration, intent_count, concept_count);
 
         ctx.query_routes = Some(table);
 
         let mut result = PassResult::success("route");
         result.duration_ms = duration;
-        result.metadata.insert(
-            "intent_routes".to_string(),
-            serde_json::json!(intent_count),
-        );
+        result
+            .metadata
+            .insert("intent_routes".to_string(), serde_json::json!(intent_count));
         result.metadata.insert(
             "concept_routes".to_string(),
             serde_json::json!(concept_count),

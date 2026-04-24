@@ -12,8 +12,8 @@
 
 mod builder;
 mod compile_input;
-mod engine;
 mod compiled_document;
+mod engine;
 mod indexer;
 mod types;
 mod workspace;
@@ -35,7 +35,7 @@ pub use compile_input::CompileInput;
 // Result & Info Types
 // ============================================================
 
-pub use types::{FailedItem, CompileArtifact, CompileMode, CompileOptions, CompileOutput};
+pub use types::{CompileArtifact, CompileMode, CompileOptions, CompileOutput, FailedItem};
 
 // ============================================================
 // Parser Types (needed for CompileInput::from_content)

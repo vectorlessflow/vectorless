@@ -32,7 +32,7 @@ use vectorless_error::Result;
 use super::super::PipelineOptions;
 use super::super::passes::CompilePass;
 use super::checkpoint::{CheckpointContextData, CheckpointManager, PipelineCheckpoint};
-use super::context::{CompileContext, CompilerInput, CompileResult, PassResult};
+use super::context::{CompileContext, CompileResult, CompilerInput, PassResult};
 use super::policy::FailurePolicy;
 
 /// Stage entry with metadata for orchestration.

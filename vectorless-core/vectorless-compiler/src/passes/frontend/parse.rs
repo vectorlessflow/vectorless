@@ -10,8 +10,8 @@ use tracing::{debug, info};
 use vectorless_document::DocumentFormat;
 use vectorless_error::Result;
 
-use crate::passes::{CompilePass, PassResult};
 use crate::SourceFormat;
+use crate::passes::{CompilePass, PassResult};
 use crate::pipeline::{CompileContext, CompilerInput};
 
 /// Parse stage - extracts raw nodes from documents.

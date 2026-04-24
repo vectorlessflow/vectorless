@@ -10,7 +10,7 @@ use std::collections::HashSet;
 use std::time::Instant;
 use tracing::{debug, info, warn};
 
-use vectorless_document::{ContentOverlapMap, OverlapEntry, OverlapType, NodeId};
+use vectorless_document::{ContentOverlapMap, NodeId, OverlapEntry, OverlapType};
 use vectorless_error::Result;
 
 use crate::passes::async_trait;
@@ -179,14 +179,12 @@ impl CompilePass for OverlapPass {
 
         let mut result = PassResult::success("overlap");
         result.duration_ms = duration;
-        result.metadata.insert(
-            "overlaps".to_string(),
-            serde_json::json!(overlap_count),
-        );
-        result.metadata.insert(
-            "comparisons".to_string(),
-            serde_json::json!(comparisons),
-        );
+        result
+            .metadata
+            .insert("overlaps".to_string(), serde_json::json!(overlap_count));
+        result
+            .metadata
+            .insert("comparisons".to_string(), serde_json::json!(comparisons));
 
         Ok(result)
     }
@@ -229,19 +227,28 @@ mod tests {
 
     #[test]
     fn test_classify_overlap_duplicate() {
-        assert_eq!(OverlapPass::classify_overlap(0.95, 100, 100), OverlapType::Duplicate);
+        assert_eq!(
+            OverlapPass::classify_overlap(0.95, 100, 100),
+            OverlapType::Duplicate
+        );
     }
 
     #[test]
     fn test_classify_overlap_subset() {
         // 0.85 similarity with similar lengths → Subset
-        assert_eq!(OverlapPass::classify_overlap(0.85, 100, 90), OverlapType::Subset);
+        assert_eq!(
+            OverlapPass::classify_overlap(0.85, 100, 90),
+            OverlapType::Subset
+        );
     }
 
     #[test]
     fn test_classify_overlap_summary() {
         // 0.85 similarity with very different lengths → Summary
-        assert_eq!(OverlapPass::classify_overlap(0.85, 100, 30), OverlapType::Summary);
+        assert_eq!(
+            OverlapPass::classify_overlap(0.85, 100, 30),
+            OverlapType::Summary
+        );
     }
 
     #[test]

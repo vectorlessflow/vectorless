@@ -29,11 +29,7 @@ impl ChainPass {
     }
 
     /// Determine chain type from the reference structure.
-    fn classify_chain(
-        ref_type: RefType,
-        source_depth: usize,
-        target_depth: usize,
-    ) -> ChainType {
+    fn classify_chain(ref_type: RefType, source_depth: usize, target_depth: usize) -> ChainType {
         match ref_type {
             RefType::Section => {
                 if target_depth > source_depth {
@@ -148,14 +144,12 @@ impl CompilePass for ChainPass {
 
         let mut result = PassResult::success("chain");
         result.duration_ms = duration;
-        result.metadata.insert(
-            "chains".to_string(),
-            serde_json::json!(chain_count),
-        );
-        result.metadata.insert(
-            "nodes".to_string(),
-            serde_json::json!(node_count),
-        );
+        result
+            .metadata
+            .insert("chains".to_string(), serde_json::json!(chain_count));
+        result
+            .metadata
+            .insert("nodes".to_string(), serde_json::json!(node_count));
 
         Ok(result)
     }
@@ -214,34 +208,58 @@ mod tests {
 
     #[test]
     fn test_classify_chain_section_elaboration() {
-        assert_eq!(ChainPass::classify_chain(RefType::Section, 0, 1), ChainType::Elaboration);
+        assert_eq!(
+            ChainPass::classify_chain(RefType::Section, 0, 1),
+            ChainType::Elaboration
+        );
     }
 
     #[test]
     fn test_classify_chain_section_supporting() {
-        assert_eq!(ChainPass::classify_chain(RefType::Section, 1, 0), ChainType::Supporting);
+        assert_eq!(
+            ChainPass::classify_chain(RefType::Section, 1, 0),
+            ChainType::Supporting
+        );
     }
 
     #[test]
     fn test_classify_chain_appendix() {
-        assert_eq!(ChainPass::classify_chain(RefType::Appendix, 0, 1), ChainType::Supporting);
+        assert_eq!(
+            ChainPass::classify_chain(RefType::Appendix, 0, 1),
+            ChainType::Supporting
+        );
     }
 
     #[test]
     fn test_classify_chain_table_figure() {
-        assert_eq!(ChainPass::classify_chain(RefType::Table, 0, 1), ChainType::Supporting);
-        assert_eq!(ChainPass::classify_chain(RefType::Figure, 0, 1), ChainType::Supporting);
-        assert_eq!(ChainPass::classify_chain(RefType::Equation, 0, 1), ChainType::Supporting);
+        assert_eq!(
+            ChainPass::classify_chain(RefType::Table, 0, 1),
+            ChainType::Supporting
+        );
+        assert_eq!(
+            ChainPass::classify_chain(RefType::Figure, 0, 1),
+            ChainType::Supporting
+        );
+        assert_eq!(
+            ChainPass::classify_chain(RefType::Equation, 0, 1),
+            ChainType::Supporting
+        );
     }
 
     #[test]
     fn test_classify_chain_footnote() {
-        assert_eq!(ChainPass::classify_chain(RefType::Footnote, 0, 2), ChainType::Elaboration);
+        assert_eq!(
+            ChainPass::classify_chain(RefType::Footnote, 0, 2),
+            ChainType::Elaboration
+        );
     }
 
     #[test]
     fn test_classify_chain_unknown() {
-        assert_eq!(ChainPass::classify_chain(RefType::Unknown, 0, 0), ChainType::Supporting);
+        assert_eq!(
+            ChainPass::classify_chain(RefType::Unknown, 0, 0),
+            ChainType::Supporting
+        );
     }
 
     #[tokio::test]

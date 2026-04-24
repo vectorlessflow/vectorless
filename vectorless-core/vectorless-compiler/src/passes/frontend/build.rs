@@ -12,8 +12,8 @@ use vectorless_document::{DocumentTree, NodeId};
 use vectorless_error::Result;
 use vectorless_utils::estimate_tokens;
 
-use crate::passes::{CompilePass, PassResult};
 use crate::ThinningConfig;
+use crate::passes::{CompilePass, PassResult};
 use crate::pipeline::CompileContext;
 
 /// Build stage - constructs a tree from raw nodes.

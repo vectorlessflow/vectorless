@@ -57,7 +57,6 @@ pub(crate) struct CompiledDocument {
     pub concepts: Vec<vectorless_document::Concept>,
 
     // ── Agent acceleration data ──
-
     /// Pre-computed query routing table for Agent acceleration.
     pub query_routes: Option<vectorless_document::QueryRoutingTable>,
 

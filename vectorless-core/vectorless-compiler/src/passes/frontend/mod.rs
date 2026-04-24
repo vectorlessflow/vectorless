@@ -3,8 +3,8 @@
 
 //! Frontend passes — parse document into AST.
 
-mod parse;
 mod build;
+mod parse;
 
-pub use parse::ParsePass;
 pub use build::BuildPass;
+pub use parse::ParsePass;

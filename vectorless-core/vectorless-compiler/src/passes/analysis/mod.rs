@@ -3,8 +3,8 @@
 
 //! Analysis passes — semantic validation and LLM enhancement.
 
-mod validate;
 mod enhance;
+mod validate;
 
-pub use validate::ValidatePass;
 pub use enhance::EnhancePass;
+pub use validate::ValidatePass;

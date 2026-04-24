@@ -26,9 +26,9 @@ use std::sync::Arc;
 use tracing::info;
 use uuid::Uuid;
 
+use vectorless_compiler::{CompilerInput, PipelineExecutor, PipelineOptions, SourceFormat};
 use vectorless_document::DocumentFormat;
 use vectorless_error::{Error, Result};
-use vectorless_compiler::{CompilerInput, SourceFormat, PipelineExecutor, PipelineOptions};
 use vectorless_llm::LlmClient;
 use vectorless_storage::{DocumentMeta, PersistedDocument};
 

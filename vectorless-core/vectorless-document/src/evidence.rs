@@ -70,7 +70,10 @@ impl EvidenceScoreMap {
 
     /// Get the composite score for a node, defaulting to 0.0.
     pub fn composite_for(&self, node_id: NodeId) -> f64 {
-        self.scores.get(&node_id).map(|s| s.composite()).unwrap_or(0.0)
+        self.scores
+            .get(&node_id)
+            .map(|s| s.composite())
+            .unwrap_or(0.0)
     }
 
     /// Get nodes sorted by composite score (highest first).

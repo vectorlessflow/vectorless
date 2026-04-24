@@ -60,15 +60,15 @@
 pub mod config;
 pub mod incremental;
 pub mod parse;
-pub mod pipeline;
 pub mod passes;
+pub mod pipeline;
 pub mod summary;
 
 // Re-export main types from pipeline
-pub use pipeline::{CompilerInput, CompileMetrics, PipelineExecutor, CompileResult};
+pub use pipeline::{CompileMetrics, CompileResult, CompilerInput, PipelineExecutor};
 
 // Re-export config types
-pub use config::{SourceFormat, PipelineOptions, ThinningConfig};
+pub use config::{PipelineOptions, SourceFormat, ThinningConfig};
 pub use vectorless_document::ReasoningIndexConfig;
 
 // Re-export summary

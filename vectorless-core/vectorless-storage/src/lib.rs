@@ -8,7 +8,7 @@
 //! - **Persistence** — Save/load document trees and metadata with atomic writes
 //! - **Cache** — LRU cache for loaded documents
 //! - **Lock** — File locking for multi-process safety
-//! - **Backend** — Storage backend abstraction (file, memory, etc.) 
+//! - **Backend** — Storage backend abstraction (file, memory, etc.)
 
 pub mod backend;
 pub mod cache;

@@ -40,4 +40,3 @@ pub mod throttle;
 pub use client::LlmClient;
 pub use error::LlmResult;
 pub use pool::LlmPool;
-

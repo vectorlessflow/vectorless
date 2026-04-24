@@ -10,8 +10,8 @@ use vectorless_document::{DocumentTree, NodeId};
 use vectorless_error::Result;
 use vectorless_utils::estimate_tokens;
 
-use crate::passes::{AccessPattern, CompilePass, PassResult, async_trait};
 use crate::config::SplitConfig;
+use crate::passes::{AccessPattern, CompilePass, PassResult, async_trait};
 use crate::pipeline::CompileContext;
 
 /// Split stage — breaks oversized leaf nodes into smaller children.

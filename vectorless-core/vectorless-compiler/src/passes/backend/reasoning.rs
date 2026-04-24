@@ -451,8 +451,7 @@ mod tests {
 
     #[test]
     fn test_extract_node_keywords() {
-        let keywords =
-            ReasoningPass::extract_node_keywords("Introduction to Machine Learning", 2);
+        let keywords = ReasoningPass::extract_node_keywords("Introduction to Machine Learning", 2);
         assert!(keywords.contains(&"introduction".to_string()));
         assert!(keywords.contains(&"machine".to_string()));
         assert!(keywords.contains(&"learning".to_string()));

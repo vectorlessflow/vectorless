@@ -18,7 +18,7 @@ mod metrics;
 mod orchestrator;
 mod policy;
 
-pub use context::{CompileContext, CompilerInput, CompileResult, PassResult};
+pub use context::{CompileContext, CompileResult, CompilerInput, PassResult};
 pub use executor::PipelineExecutor;
 pub use metrics::CompileMetrics;
 pub use policy::{FailurePolicy, StageRetryConfig};
