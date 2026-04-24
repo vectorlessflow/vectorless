@@ -18,7 +18,7 @@ pub mod backend;
 pub use frontend::{ParsePass, BuildPass};
 pub use analysis::{ValidatePass, EnhancePass};
 pub use transform::{SplitPass, EnrichPass};
-pub use backend::{ReasoningPass, ConceptPass, NavigationPass, VerifyPass, OptimizePass};
+pub use backend::{ReasoningPass, ConceptPass, NavigationPass, VerifyPass, OptimizePass, RoutePass, ChainPass, OverlapPass, ScorePass};
 
 use super::pipeline::{FailurePolicy, CompileContext, PassResult};
 pub use async_trait::async_trait;

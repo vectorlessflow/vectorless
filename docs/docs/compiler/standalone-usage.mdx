@@ -1,0 +1,42 @@
+---
+sidebar_position: 9
+---
+
+# Standalone Crate Usage
+
+*🚧 This page is a work in progress. Content will be added soon.*
+
+## Overview
+
+`vectorless-compiler` is designed as a reusable crate that can be published to [crates.io](https://crates.io) and used independently of the full Vectorless engine. This page covers using it as a standalone document compiler.
+
+## Topics to Cover
+
+- Adding `vectorless-compiler` to `Cargo.toml`
+- Running the pipeline without the Engine facade
+- Using `PipelineExecutor::new()` (no LLM) vs `with_llm()`
+- Accessing compilation outputs: tree, indexes, concepts
+- Integrating with custom storage backends
+- Integration testing patterns
+
+## Basic Usage
+
+```toml
+# Cargo.toml
+[dependencies]
+vectorless-compiler = "0.1"
+```
+
+```rust
+use vectorless_compiler::{PipelineExecutor, PipelineOptions};
+use vectorless_compiler::pipeline::CompilerInput;
+
+let mut executor = PipelineExecutor::new();
+let input = CompilerInput::file("./document.md");
+let result = executor.execute(input, PipelineOptions::default()).await?;
+
+println!("Tree nodes: {}", result.tree.unwrap().node_count());
+```
+
+{/* TODO: Full standalone usage guide */}
+{/* TODO: crates.io publishing details */}

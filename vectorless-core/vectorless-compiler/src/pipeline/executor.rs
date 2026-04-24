@@ -13,9 +13,9 @@ use vectorless_llm::LlmClient;
 
 use super::super::PipelineOptions;
 use super::super::passes::{
-    BuildPass, ConceptPass, EnhancePass, EnrichPass, CompilePass,
-    NavigationPass, OptimizePass, ParsePass, ReasoningPass, SplitPass,
-    ValidatePass, VerifyPass,
+    BuildPass, ChainPass, ConceptPass, EnhancePass, EnrichPass, CompilePass,
+    NavigationPass, OptimizePass, OverlapPass, ParsePass, ReasoningPass,
+    RoutePass, ScorePass, SplitPass, ValidatePass, VerifyPass,
 };
 use super::context::{CompilerInput, CompileResult};
 use super::orchestrator::PipelineOrchestrator;
@@ -70,6 +70,10 @@ impl PipelineExecutor {
             .stage_with_priority(ReasoningPass::new(), 45)
             .stage_with_priority(ConceptPass::new(), 47)
             .stage_with_priority(NavigationPass::new(), 50)
+            .stage_with_priority(RoutePass::new(), 52)
+            .stage_with_priority(ChainPass::new(), 54)
+            .stage_with_priority(OverlapPass::new(), 56)
+            .stage_with_priority(ScorePass::new(), 58)
             .stage_with_priority(VerifyPass, 55)
             .stage_with_priority(OptimizePass::new(), 60);
 

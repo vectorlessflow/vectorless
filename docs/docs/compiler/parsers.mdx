@@ -1,0 +1,38 @@
+---
+sidebar_position: 8
+---
+
+# Document Parsers
+
+*🚧 This page is a work in progress. Content will be added soon.*
+
+## Overview
+
+The `parse` module handles format-specific document parsing. It converts raw source bytes into a flat list of `RawNode` values that the BuildPass then assembles into a hierarchical tree.
+
+## Topics to Cover
+
+- `RawNode` structure and fields
+- `DocumentMeta` metadata
+- `DocumentFormat` enum and format detection
+- Markdown parser: heading hierarchy, code blocks, tables
+- PDF parser: page extraction, heading detection, LLM-assisted structure
+- Extending with new formats (DOCX, HTML, etc.)
+
+## RawNode
+
+```rust
+pub struct RawNode {
+    pub title: String,
+    pub content: String,
+    pub level: usize,        // Hierarchy level (0 = root)
+    pub line_start: usize,
+    pub line_end: usize,
+    pub page: Option<usize>,  // PDF only
+    pub token_count: Option<usize>,
+}
+```
+
+{/* TODO: Markdown parser details */}
+{/* TODO: PDF parser details */}
+{/* TODO: Adding new format support */}

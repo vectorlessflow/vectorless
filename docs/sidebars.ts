@@ -21,6 +21,9 @@ const sidebars: SidebarsConfig = {
         'compiler/configuration',
         'compiler/incremental',
         'compiler/checkpoint',
+        'compiler/custom-pass',
+        'compiler/parsers',
+        'compiler/standalone-usage',
       ],
     },
     {
