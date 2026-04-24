@@ -387,47 +387,6 @@ impl ReferenceExtractor {
     }
 }
 
-/// Reference resolver for batch resolution.
-///
-/// Caches resolved references for efficient reuse.
-#[derive(Debug, Clone, Default)]
-pub struct ReferenceResolver {
-    /// Cache of resolved references by ref_text.
-    cache: std::collections::HashMap<String, Option<NodeId>>,
-}
-
-impl ReferenceResolver {
-    /// Create a new reference resolver.
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Resolve references in batch and cache results.
-    pub fn resolve_batch(
-        &mut self,
-        references: &[NodeReference],
-        tree: &super::DocumentTree,
-        index: &super::RetrievalIndex,
-    ) {
-        for r#ref in references {
-            if !self.cache.contains_key(&r#ref.ref_text) {
-                let resolved = ReferenceExtractor::resolve_reference(r#ref, tree, index);
-                self.cache.insert(r#ref.ref_text.clone(), resolved);
-            }
-        }
-    }
-
-    /// Get a cached resolution.
-    pub fn get(&self, ref_text: &str) -> Option<Option<NodeId>> {
-        self.cache.get(ref_text).copied()
-    }
-
-    /// Clear the cache.
-    pub fn clear(&mut self) {
-        self.cache.clear();
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
