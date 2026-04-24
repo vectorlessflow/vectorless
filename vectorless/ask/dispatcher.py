@@ -3,7 +3,7 @@
 Mirrors vectorless-core/vectorless-agent/src/dispatcher.rs.
 
 All queries go through dispatch():
-1. Query understanding -> QueryPlan
+1. Query reasoning -> QueryAnalysis (via QueryAnalyzer)
 2. Scope resolution -> Specified | Workspace
 3. Orchestrator.run() (always)
 4. Return Output
@@ -16,7 +16,7 @@ from typing import Any, Callable
 
 from vectorless.ask.types import DocCard, Output, Specified, Workspace
 from vectorless.ask.orchestrator import Orchestrator
-from vectorless.ask.understand import understand
+from vectorless.ask.reasoning import QueryAnalysis, QueryAnalyzer
 from vectorless.llm_client import LLMClient
 
 logger = logging.getLogger(__name__)
@@ -35,13 +35,14 @@ async def dispatch(
     - Specified -> skip_analysis=True -> spawn Workers directly
     - Workspace -> skip_analysis=False -> analyze -> dispatch -> evaluate -> replan
     """
-    # Step 1: Query understanding
-    logger.info("dispatch: query understanding started")
-    query_plan = await understand(query, llm)
+    # Step 1: Query reasoning (multi-stage analysis)
+    logger.info("dispatch: query reasoning started")
+    analyzer = QueryAnalyzer()
+    query_analysis = await analyzer.analyze(query, llm)
     logger.info(
-        "dispatch: query understanding complete (intent=%s, complexity=%s)",
-        query_plan.intent.value,
-        query_plan.complexity.value,
+        "dispatch: query reasoning complete (intent=%s, complexity=%s)",
+        query_analysis.intent.value,
+        query_analysis.complexity.value,
     )
 
     # Step 2: Determine skip_analysis from scope
@@ -55,7 +56,7 @@ async def dispatch(
         doc_loader=doc_loader,
         llm_client=llm,
         skip_analysis=skip_analysis,
-        query_plan=query_plan,
+        query_analysis=query_analysis,
         event_callback=event_callback,
     )
     return await orchestrator.run()

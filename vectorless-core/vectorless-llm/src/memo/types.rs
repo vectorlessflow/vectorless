@@ -294,11 +294,6 @@ impl MemoEntry {
         let now = Utc::now();
         now - self.created_at > ttl
     }
-
-    /// Get the age of this entry.
-    pub fn age(&self) -> chrono::Duration {
-        Utc::now() - self.created_at
-    }
 }
 
 /// Statistics for the memo store.

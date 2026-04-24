@@ -40,6 +40,7 @@ class NavigationParams:
     plan: str = ""
     intent_context: str = ""
     keyword_hints: str = ""
+    shared_context: str = ""
 
 
 _WORKER_NAVIGATION_SYSTEM = """\
@@ -158,12 +159,17 @@ def worker_navigation(params: NavigationParams) -> tuple[str, str]:
         f"\nQuery context: {params.intent_context}" if params.intent_context else ""
     )
 
+    shared_context_section = (
+        f"\nCross-document context (from other Workers):\n{params.shared_context}\n"
+        if params.shared_context else ""
+    )
+
     user = (
         f"{last_feedback_section}"
         f"User question: {query}{task_section}{intent_section}\n"
         f"\nCurrent position: /{breadcrumb}\n"
         f"Collected evidence:\n"
-        f"{evidence_summary}{missing_section}{keyword_section}{visited_section}{plan_section}\n"
+        f"{evidence_summary}{missing_section}{keyword_section}{shared_context_section}{visited_section}{plan_section}\n"
         f"{history_section}"
         f"Remaining rounds: {remaining}/{max_rounds}\n"
         f"\nCommand:"
@@ -182,6 +188,7 @@ class WorkerDispatchParams:
     task: str
     doc_name: str
     breadcrumb: str
+    shared_context: str = ""
 
 
 def worker_dispatch(params: WorkerDispatchParams) -> tuple[str, str]:
@@ -218,11 +225,17 @@ def worker_dispatch(params: WorkerDispatchParams) -> tuple[str, str]:
         f"- When evidence is sufficient, use done."
     )
 
+    shared_context_section = (
+        f"\nCross-document context (from other Workers):\n{params.shared_context}\n"
+        if params.shared_context else ""
+    )
+
     user = (
         f"Original question: {original_query}\n"
         f"Your task: {task}\n"
         f"Document: {doc_name}\n"
         f"Current position: /{breadcrumb}\n"
+        f"{shared_context_section}"
         f"\nCommand:"
     )
 

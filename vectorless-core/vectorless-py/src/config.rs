@@ -22,7 +22,7 @@ use pyo3::prelude::*;
 ///
 /// engine = Engine(api_key="sk-...", model="gpt-4o", config=config)
 /// ```
-#[pyclass(name = "Config")]
+#[pyclass(name = "Config", skip_from_py_object)]
 pub struct PyConfig {
     pub(crate) inner: vectorless_engine::Config,
 }

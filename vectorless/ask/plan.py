@@ -4,6 +4,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from vectorless.ask.reasoning.types import QueryAnalysis
 
 
 class QueryIntent(str, Enum):
@@ -54,3 +58,23 @@ class QueryPlan:
         if self.rewritten:
             parts.append(f"Rewritten queries for matching: {'; '.join(self.rewritten)}")
         return "\n" + "\n".join(parts)
+
+    def to_query_analysis(self) -> QueryAnalysis:
+        """Convert this QueryPlan to a QueryAnalysis for backward compatibility."""
+        from vectorless.ask.reasoning.types import (
+            QueryAnalysis as QA,
+            RetrievalStrategy,
+        )
+        return QA(
+            original=self.original,
+            rewritten=self.rewritten,
+            intent=QueryIntent(self.intent.value),
+            complexity=Complexity(self.complexity.value),
+            keywords=self.keywords,
+            key_concepts=self.key_concepts,
+            strategy=RetrievalStrategy(strategy_type=self.strategy_hint or "focused"),
+            sub_queries=[
+                SubQuery(query=sq.query, target_docs=sq.target_docs)
+                for sq in self.sub_queries
+            ],
+        )

@@ -8,7 +8,7 @@ use pyo3::prelude::*;
 use ::vectorless_engine::{LlmMetricsReport, MetricsReport, RetrievalMetricsReport};
 
 /// LLM usage metrics report.
-#[pyclass(name = "LlmMetricsReport")]
+#[pyclass(name = "LlmMetricsReport", skip_from_py_object)]
 pub struct PyLlmMetricsReport {
     pub(crate) inner: LlmMetricsReport,
 }
@@ -102,7 +102,7 @@ impl PyLlmMetricsReport {
 }
 
 /// Retrieval operation metrics report.
-#[pyclass(name = "RetrievalMetricsReport")]
+#[pyclass(name = "RetrievalMetricsReport", skip_from_py_object)]
 pub struct PyRetrievalMetricsReport {
     pub(crate) inner: RetrievalMetricsReport,
 }
@@ -222,7 +222,7 @@ impl PyRetrievalMetricsReport {
 }
 
 /// Complete metrics report combining all subsystem metrics.
-#[pyclass(name = "MetricsReport")]
+#[pyclass(name = "MetricsReport", skip_from_py_object)]
 pub struct PyMetricsReport {
     pub(crate) inner: MetricsReport,
 }

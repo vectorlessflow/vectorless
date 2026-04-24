@@ -9,7 +9,7 @@ use pyo3::prelude::*;
 use ::vectorless_engine::Error as RustError;
 
 /// Python exception for vectorless errors.
-#[pyclass(extends = PyException, subclass)]
+#[pyclass(extends = PyException, subclass, skip_from_py_object)]
 pub struct VectorlessError {
     message: String,
     kind: String,

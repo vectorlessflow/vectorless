@@ -7,7 +7,6 @@
 //! not by directly interacting with this module.
 
 mod types;
-mod validator;
 
 pub use types::Config;
 pub use types::DocumentGraphConfig;

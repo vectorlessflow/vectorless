@@ -8,7 +8,7 @@ use pyo3::prelude::*;
 use ::vectorless_engine::Answer;
 
 /// A reasoned answer with evidence and trace.
-#[pyclass(name = "Answer")]
+#[pyclass(name = "Answer", skip_from_py_object)]
 pub struct PyAnswer {
     pub(crate) inner: Answer,
 }
@@ -71,7 +71,7 @@ impl PyAnswer {
 }
 
 /// A piece of evidence with source attribution.
-#[pyclass(name = "Evidence")]
+#[pyclass(name = "Evidence", skip_from_py_object)]
 pub struct PyEvidence {
     #[pyo3(get)]
     pub content: String,
@@ -84,7 +84,7 @@ pub struct PyEvidence {
 }
 
 /// Reasoning trace — always present.
-#[pyclass(name = "ReasoningTrace")]
+#[pyclass(name = "ReasoningTrace", skip_from_py_object)]
 pub struct PyReasoningTrace {
     #[pyo3(get)]
     pub steps: Vec<PyTraceStep>,

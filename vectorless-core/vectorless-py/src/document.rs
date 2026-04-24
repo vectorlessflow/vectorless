@@ -22,7 +22,7 @@ use super::error::VectorlessError;
 // =========================================================================
 
 /// Information about an understood document.
-#[pyclass(name = "DocumentInfo")]
+#[pyclass(name = "DocumentInfo", skip_from_py_object)]
 pub struct PyDocumentInfo {
     pub(crate) inner: vectorless_engine::DocumentInfo,
 }
@@ -81,7 +81,7 @@ impl PyDocumentInfo {
 }
 
 /// A key concept extracted from a document.
-#[pyclass(name = "Concept")]
+#[pyclass(name = "Concept", skip_from_py_object)]
 pub struct PyConcept {
     #[pyo3(get)]
     pub name: String,
@@ -106,7 +106,7 @@ pub struct PyConcept {
 /// print(await doc.pwd())
 /// print(await doc.cat(None))
 /// ```
-#[pyclass(name = "Document")]
+#[pyclass(name = "Document", skip_from_py_object)]
 pub struct PyDocument {
     inner: Arc<Mutex<DocumentNavigator>>,
 }
@@ -613,7 +613,7 @@ impl PyDocument {
 // =========================================================================
 
 /// Information about a node in the document tree.
-#[pyclass(name = "NodeInfo")]
+#[pyclass(name = "NodeInfo", skip_from_py_object)]
 #[derive(Clone)]
 pub struct PyNodeInfo {
     #[pyo3(get)]
@@ -647,7 +647,7 @@ impl From<NodeInfo> for PyNodeInfo {
 }
 
 /// A regex match within node content.
-#[pyclass(name = "MatchResult")]
+#[pyclass(name = "MatchResult", skip_from_py_object)]
 #[derive(Clone)]
 pub struct PyMatchResult {
     #[pyo3(get)]
@@ -672,7 +672,7 @@ impl From<MatchResult> for PyMatchResult {
 }
 
 /// A node found by search.
-#[pyclass(name = "FindResult")]
+#[pyclass(name = "FindResult", skip_from_py_object)]
 #[derive(Clone)]
 pub struct PyFindResult {
     #[pyo3(get)]
@@ -697,7 +697,7 @@ impl From<FindResult> for PyFindResult {
 }
 
 /// Word/line/character count.
-#[pyclass(name = "WordCount")]
+#[pyclass(name = "WordCount", skip_from_py_object)]
 #[derive(Clone)]
 pub struct PyWordCount {
     #[pyo3(get)]
@@ -719,7 +719,7 @@ impl From<WordCount> for PyWordCount {
 }
 
 /// Evidence collected during navigation.
-#[pyclass(name = "CollectedEvidence")]
+#[pyclass(name = "CollectedEvidence", skip_from_py_object)]
 #[derive(Clone)]
 pub struct PyCollectedEvidence {
     #[pyo3(get)]
@@ -744,7 +744,7 @@ impl From<CollectedEvidence> for PyCollectedEvidence {
 }
 
 /// A topic entry from the reasoning index.
-#[pyclass(name = "TopicEntry")]
+#[pyclass(name = "TopicEntry", skip_from_py_object)]
 #[derive(Clone)]
 pub struct PyTopicEntry {
     #[pyo3(get)]
@@ -766,7 +766,7 @@ impl From<TopicEntryInfo> for PyTopicEntry {
 }
 
 /// A section summary from the reasoning index.
-#[pyclass(name = "SectionSummary")]
+#[pyclass(name = "SectionSummary", skip_from_py_object)]
 #[derive(Clone)]
 pub struct PySectionSummary {
     #[pyo3(get)]
@@ -795,7 +795,7 @@ impl From<SectionSummaryInfo> for PySectionSummary {
 // =========================================================================
 
 /// A single entry in the table of contents.
-#[pyclass(name = "TocEntry")]
+#[pyclass(name = "TocEntry", skip_from_py_object)]
 #[derive(Clone)]
 pub struct PyTocEntry {
     #[pyo3(get)]
@@ -820,7 +820,7 @@ impl From<TocEntry> for PyTocEntry {
 }
 
 /// Statistics about a node.
-#[pyclass(name = "NodeStats")]
+#[pyclass(name = "NodeStats", skip_from_py_object)]
 #[derive(Clone)]
 pub struct PyNodeStats {
     #[pyo3(get)]
@@ -857,7 +857,7 @@ impl From<NodeStats> for PyNodeStats {
 }
 
 /// A node found by semantic similarity.
-#[pyclass(name = "SimilarResult")]
+#[pyclass(name = "SimilarResult", skip_from_py_object)]
 #[derive(Clone)]
 pub struct PySimilarResult {
     #[pyo3(get)]
@@ -882,7 +882,7 @@ impl From<SimilarResult> for PySimilarResult {
 }
 
 /// A top-level section in a document card.
-#[pyclass(name = "SectionCard")]
+#[pyclass(name = "SectionCard", skip_from_py_object)]
 #[derive(Clone)]
 pub struct PySectionCard {
     #[pyo3(get)]
@@ -904,7 +904,7 @@ impl From<SectionCardInfo> for PySectionCard {
 }
 
 /// Document-level overview card.
-#[pyclass(name = "DocCard")]
+#[pyclass(name = "DocCard", skip_from_py_object)]
 #[derive(Clone)]
 pub struct PyDocCard {
     #[pyo3(get)]
@@ -935,7 +935,7 @@ impl From<DocCardInfo> for PyDocCard {
 }
 
 /// A key concept extracted from the document.
-#[pyclass(name = "ConceptInfo")]
+#[pyclass(name = "ConceptInfo", skip_from_py_object)]
 #[derive(Clone)]
 pub struct PyConceptInfo {
     #[pyo3(get)]

@@ -102,7 +102,7 @@ fn run_metrics_report(engine: Arc<Engine>) -> PyMetricsReport {
 /// # Forget a document
 /// await engine.forget(doc.doc_id)
 /// ```
-#[pyclass(name = "Engine")]
+#[pyclass(name = "Engine", skip_from_py_object)]
 pub struct PyEngine {
     inner: Arc<Engine>,
 }

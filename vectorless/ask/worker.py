@@ -837,6 +837,7 @@ class Worker:
         max_llm_calls: int = 0,
         task: str | None = None,
         intent_context: str = "",
+        shared_context: str = "",
     ) -> None:
         self._doc = document
         self._query = query
@@ -845,6 +846,7 @@ class Worker:
         self._max_llm_calls = max_llm_calls
         self._task = task
         self._intent_context = intent_context
+        self._shared_context = shared_context
 
     async def run(self) -> WorkerOutput:
         """Execute the Worker navigation loop and return collected evidence."""
@@ -855,6 +857,7 @@ class Worker:
         max_rounds = self._max_rounds
         max_llm = self._max_llm_calls
         intent_context = self._intent_context
+        shared_context = self._shared_context
 
         state = WorkerState(remaining=max_rounds, max_rounds=max_rounds)
 
@@ -902,6 +905,7 @@ class Worker:
                     task=task or query,
                     doc_name=await doc.doc_name(),
                     breadcrumb=state.path_str(),
+                    shared_context=shared_context,
                 ))
             else:
                 visited_titles = await _visited_titles(state, doc)
@@ -919,6 +923,7 @@ class Worker:
                     plan=state.plan,
                     intent_context=intent_context,
                     keyword_hints=keyword_hints,
+                    shared_context=shared_context,
                 ))
 
             # LLM decision
