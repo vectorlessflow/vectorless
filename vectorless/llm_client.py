@@ -8,7 +8,8 @@ Features:
 - Structured JSON output via instructor + Pydantic
 - Automatic retry with feedback on validation failure
 - Per-request timeout
-- In-memory response cache (optional, per-session dedup)
+- LRU response cache (bounded, per-session dedup)
+- Per-call api_base (no global state mutation)
 """
 
 from __future__ import annotations
@@ -16,10 +17,14 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-from typing import Any, Optional, Type, TypeVar
+from collections import OrderedDict
+from typing import Any, Type, TypeVar
 
 import litellm
 from pydantic import BaseModel
+
+from vectorless.ask.errors import LLMFailureError, ParseError
+from vectorless.ask.utils import parse_json_response
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +36,36 @@ T = TypeVar("T", bound=BaseModel)
 
 DEFAULT_MAX_RETRIES = 2
 DEFAULT_TIMEOUT = 120.0  # seconds
+DEFAULT_CACHE_SIZE = 256
+
+# ---------------------------------------------------------------------------
+# LRU Cache
+# ---------------------------------------------------------------------------
+
+
+class _LRUCache:
+    """Bounded LRU cache for LLM response dedup."""
+
+    def __init__(self, max_size: int = DEFAULT_CACHE_SIZE) -> None:
+        self._cache: OrderedDict[str, str] = OrderedDict()
+        self._max_size = max_size
+
+    def get(self, key: str) -> str | None:
+        if key in self._cache:
+            self._cache.move_to_end(key)
+            return self._cache[key]
+        return None
+
+    def put(self, key: str, value: str) -> None:
+        if key in self._cache:
+            self._cache.move_to_end(key)
+        self._cache[key] = value
+        if len(self._cache) > self._max_size:
+            self._cache.popitem(last=False)
+
+    def clear(self) -> None:
+        self._cache.clear()
+
 
 # ---------------------------------------------------------------------------
 # LLMClient
@@ -60,23 +95,20 @@ class LLMClient:
         self,
         api_key: str,
         model: str,
-        endpoint: Optional[str] = None,
+        endpoint: str | None = None,
         *,
         max_retries: int = DEFAULT_MAX_RETRIES,
         timeout: float = DEFAULT_TIMEOUT,
         enable_cache: bool = True,
+        cache_size: int = DEFAULT_CACHE_SIZE,
     ) -> None:
         self._model = model
         self._api_key = api_key
         self._endpoint = endpoint
         self._max_retries = max_retries
         self._timeout = timeout
-        self._cache: dict[str, str] = {} if enable_cache else {}
+        self._cache = _LRUCache(cache_size) if enable_cache else None
         self._cache_enabled = enable_cache
-
-        # Configure litellm defaults
-        if endpoint:
-            litellm.api_base = endpoint
 
     @property
     def model(self) -> str:
@@ -90,7 +122,7 @@ class LLMClient:
         user: str,
         *,
         temperature: float = 0.0,
-        timeout: Optional[float] = None,
+        timeout: float | None = None,
     ) -> str:
         """Send a completion request and return the assistant message text.
 
@@ -104,8 +136,10 @@ class LLMClient:
             The assistant's text response.
         """
         cache_key = self._cache_key(system, user, temperature)
-        if self._cache_enabled and cache_key in self._cache:
-            return self._cache[cache_key]
+        if self._cache_enabled and self._cache is not None:
+            cached = self._cache.get(cache_key)
+            if cached is not None:
+                return cached
 
         response = await self._call_with_retry(
             system=system,
@@ -114,8 +148,8 @@ class LLMClient:
             timeout=timeout or self._timeout,
         )
 
-        if self._cache_enabled:
-            self._cache[cache_key] = response
+        if self._cache_enabled and self._cache is not None:
+            self._cache.put(cache_key, response)
 
         return response
 
@@ -125,14 +159,14 @@ class LLMClient:
         user: str,
         *,
         temperature: float = 0.0,
-        timeout: Optional[float] = None,
+        timeout: float | None = None,
     ) -> dict[str, Any]:
-        """Send a completion request and parse the response as JSON.
-
-        Falls back to regex extraction if the response is not valid JSON.
-        """
+        """Send a completion request and parse the response as JSON."""
         text = await self.complete(system, user, temperature=temperature, timeout=timeout)
-        return _extract_json(text)
+        try:
+            return parse_json_response(text)
+        except ValueError as e:
+            raise ParseError(str(e), raw_output=text) from e
 
     async def complete_structured(
         self,
@@ -140,9 +174,9 @@ class LLMClient:
         user: str,
         response_model: Type[T],
         *,
-        max_retries: Optional[int] = None,
+        max_retries: int | None = None,
         temperature: float = 0.0,
-        timeout: Optional[float] = None,
+        timeout: float | None = None,
     ) -> T:
         """Send a completion request with structured output via instructor.
 
@@ -186,7 +220,7 @@ class LLMClient:
         messages: list[dict[str, str]],
         *,
         temperature: float = 0.0,
-        timeout: Optional[float] = None,
+        timeout: float | None = None,
     ) -> str:
         """Send a completion request with pre-built messages."""
         response = await litellm.acompletion(
@@ -209,12 +243,14 @@ class LLMClient:
         timeout: float,
     ) -> str:
         """Call litellm.acompletion with retry on transient errors."""
+        import asyncio
+
         messages = [
             {"role": "system", "content": system},
             {"role": "user", "content": user},
         ]
 
-        last_error: Optional[Exception] = None
+        last_error: Exception | None = None
         for attempt in range(1 + self._max_retries):
             try:
                 response = await litellm.acompletion(
@@ -230,16 +266,22 @@ class LLMClient:
                 last_error = e
                 logger.warning("LLM rate limit hit, attempt %d/%d: %s", attempt + 1, self._max_retries + 1, e)
                 if attempt < self._max_retries:
-                    import asyncio
                     await asyncio.sleep(2 ** attempt)
             except litellm.Timeout as e:
                 last_error = e
                 logger.warning("LLM timeout, attempt %d/%d", attempt + 1, self._max_retries + 1)
+                if attempt < self._max_retries:
+                    await asyncio.sleep(1.0)
             except litellm.APIConnectionError as e:
                 last_error = e
                 logger.warning("LLM connection error, attempt %d/%d: %s", attempt + 1, self._max_retries + 1, e)
+                if attempt < self._max_retries:
+                    await asyncio.sleep(1.0)
 
-        raise LLMError(f"LLM call failed after {self._max_retries + 1} attempts: {last_error}") from last_error
+        raise LLMFailureError(
+            f"LLM call failed after {self._max_retries + 1} attempts: {last_error}",
+            attempts=self._max_retries + 1,
+        ) from last_error
 
     def _cache_key(self, system: str, user: str, temperature: float) -> str:
         raw = f"{self._model}:{temperature}:{system}|||{user}"
@@ -247,51 +289,5 @@ class LLMClient:
 
     def clear_cache(self) -> None:
         """Clear the in-memory response cache."""
-        if self._cache_enabled:
+        if self._cache is not None:
             self._cache.clear()
-
-
-# ---------------------------------------------------------------------------
-# Exceptions
-# ---------------------------------------------------------------------------
-
-
-class LLMError(Exception):
-    """Raised when an LLM call fails after all retries."""
-
-
-# ---------------------------------------------------------------------------
-# JSON extraction fallback
-# ---------------------------------------------------------------------------
-
-
-def _extract_json(text: str) -> dict[str, Any]:
-    """Extract a JSON object from LLM output.
-
-    Handles:
-    - Plain JSON
-    - JSON wrapped in ```json ... ``` code blocks
-    - JSON with leading/trailing text
-    """
-    import re
-
-    match = re.search(r"```(?:json)?\s*\n?(.*?)```", text, re.DOTALL)
-    if match:
-        text = match.group(1).strip()
-
-    start = text.find("{")
-    if start != -1:
-        depth = 0
-        for i in range(start, len(text)):
-            if text[i] == "{":
-                depth += 1
-            elif text[i] == "}":
-                depth -= 1
-                if depth == 0:
-                    candidate = text[start : i + 1]
-                    try:
-                        return json.loads(candidate)
-                    except json.JSONDecodeError:
-                        break
-
-    return json.loads(text.strip())

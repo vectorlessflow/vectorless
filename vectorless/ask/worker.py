@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from vectorless.ask.types import TraceStep, Evidence, WorkerOutput, WorkerState
+from vectorless.ask.utils import extract_keywords
 from vectorless.llm_client import LLMClient
 from vectorless.ask.tools import compare_nodes, summarize_section, trace_reasoning
 from vectorless.ask.prompts import (
@@ -999,14 +1000,7 @@ class Worker:
 
     async def _build_keyword_hints(self, doc: Any, query: str) -> str:
         """Build keyword hints from the document's reasoning index."""
-        # Extract simple keywords from the query
-        stop_words = {
-            "what", "is", "the", "a", "an", "how", "does", "do", "are",
-            "in", "on", "at", "to", "for", "of", "with", "and", "or",
-            "this", "that", "it", "from", "by", "was", "were", "be",
-        }
-        words = re.findall(r"\b\w+\b", query.lower())
-        keywords = [w for w in words if w not in stop_words and len(w) > 2]
+        keywords = extract_keywords(query)
 
         if not keywords:
             return ""

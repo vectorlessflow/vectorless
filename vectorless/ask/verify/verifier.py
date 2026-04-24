@@ -11,7 +11,7 @@ import logging
 
 from vectorless.llm_client import LLMClient
 from vectorless.ask.types import Evidence
-from vectorless.ask.utils import parse_json_response
+from vectorless.ask.utils import format_evidence, parse_json_response
 from vectorless.ask.verify.types import (
     DimensionScore,
     VerificationDimension,
@@ -65,16 +65,6 @@ _INTENT_THRESHOLDS: dict[str, dict[str, float]] = {
 }
 
 
-def _format_evidence(evidence: list[Evidence]) -> str:
-    """Format evidence for the verification prompt."""
-    if not evidence:
-        return "(no evidence)"
-    return "\n\n".join(
-        f"[{e.node_title}] (from {e.doc_name or 'unknown'})\n{e.content}"
-        for e in evidence
-    )
-
-
 class VerifyPipeline:
     """Multi-dimensional evidence verification pipeline.
 
@@ -103,7 +93,7 @@ class VerifyPipeline:
         Single combined LLM call assessing all 4 dimensions.
         Returns VerificationResult with pass/fail, scores, and gaps.
         """
-        evidence_text = _format_evidence(evidence)
+        evidence_text = format_evidence(evidence)
 
         if not evidence:
             return VerificationResult(

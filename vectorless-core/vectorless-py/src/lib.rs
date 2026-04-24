@@ -5,7 +5,6 @@
 
 use pyo3::prelude::*;
 
-mod answer;
 mod config;
 mod document;
 mod engine;
@@ -13,7 +12,6 @@ mod error;
 mod graph;
 mod metrics;
 
-use answer::{PyAnswer, PyEvidence, PyReasoningTrace, PyTraceStep};
 use config::PyConfig;
 use document::{
     PyCollectedEvidence, PyConcept, PyConceptInfo, PyDocCard, PyDocument, PyDocumentInfo,
@@ -26,15 +24,6 @@ use graph::{PyDocumentGraph, PyDocumentGraphNode, PyEdgeEvidence, PyGraphEdge, P
 use metrics::{PyLlmMetricsReport, PyMetricsReport, PyRetrievalMetricsReport};
 
 /// Vectorless — Document Understanding Engine for AI.
-///
-/// ```python
-/// from vectorless import Engine
-///
-/// engine = Engine(api_key="sk-...", model="gpt-4o")
-/// doc = await engine.ingest("./report.pdf")
-/// answer = await engine.ask("What is the revenue?", doc_ids=[doc.doc_id])
-/// print(answer.content)
-/// ```
 #[pymodule]
 fn _vectorless(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<VectorlessError>()?;
@@ -55,10 +44,6 @@ fn _vectorless(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PySectionCard>()?;
     m.add_class::<PyDocCard>()?;
     m.add_class::<PyConceptInfo>()?;
-    m.add_class::<PyAnswer>()?;
-    m.add_class::<PyEvidence>()?;
-    m.add_class::<PyReasoningTrace>()?;
-    m.add_class::<PyTraceStep>()?;
     m.add_class::<PyDocumentGraphNode>()?;
     m.add_class::<PyDocumentGraph>()?;
     m.add_class::<PyGraphEdge>()?;

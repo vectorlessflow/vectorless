@@ -13,7 +13,7 @@ import logging
 import re
 
 from vectorless.llm_client import LLMClient
-from vectorless.ask.utils import parse_json_response
+from vectorless.ask.utils import extract_keywords, parse_json_response
 from vectorless.ask.reasoning.types import (
     Ambiguity,
     AmbiguityType,
@@ -33,23 +33,6 @@ from vectorless.ask.reasoning.prompts import (
 )
 
 logger = logging.getLogger(__name__)
-
-
-def _extract_keywords(query: str) -> list[str]:
-    """Extract keywords from query using stop word filtering."""
-    stop_words = {
-        "what", "is", "the", "a", "an", "how", "does", "do", "are",
-        "in", "on", "at", "to", "for", "of", "with", "and", "or",
-        "this", "that", "it", "from", "by", "was", "were", "be",
-        "can", "could", "would", "should", "will", "has", "have",
-        "had", "not", "but", "if", "then", "than", "so", "as",
-        "there", "their", "they", "its", "about", "which", "when",
-        "who", "whom", "all", "each", "every", "both", "few",
-        "more", "most", "other", "some", "such", "no", "nor",
-        "only", "own", "same", "too", "very", "just", "because",
-    }
-    words = re.findall(r"\b\w+\b", query.lower())
-    return list(dict.fromkeys(w for w in words if w not in stop_words and len(w) > 2))
 
 
 def _parse_intent(raw: str) -> QueryIntent:
@@ -94,7 +77,7 @@ class QueryAnalyzer:
 
         Raises on LLM failure — no silent degradation.
         """
-        keywords = _extract_keywords(query)
+        keywords = extract_keywords(query)
 
         # Stage 1: Classify + Decompose
         system, user = stage1_classify_prompt(query, keywords)

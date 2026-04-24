@@ -19,11 +19,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import re
 from dataclasses import dataclass
 from typing import Any
 
 from vectorless.ask.protocols import DocLoader, EventCallback
+from vectorless.ask.utils import extract_keywords, format_evidence
 from vectorless.ask.types import (
     DispatchEntry,
     DocCard,
@@ -226,7 +226,7 @@ class Orchestrator:
         doc_cards_text = _format_doc_cards(cards)
 
         # Cross-document keyword search
-        keywords = _extract_keywords(query)
+        keywords = extract_keywords(query)
         find_text = await self._cross_doc_find(cards, keywords)
 
         # Build analysis prompt with query understanding context
@@ -376,7 +376,7 @@ class Orchestrator:
 
             # Re-analyze with gap context
             if self._query_analysis and verification_result.gaps:
-                evidence_summary = _format_evidence_context(state.all_evidence)
+                evidence_summary = format_evidence(state.all_evidence)
                 analyzer = QueryAnalyzer()
                 try:
                     self._query_analysis = await analyzer.re_analyze(
@@ -600,7 +600,7 @@ class Orchestrator:
         blackboard: SharedBlackboard | None = None,
     ) -> list[DispatchEntry]:
         """Replan dispatch targets based on missing information."""
-        evidence_summary = _format_evidence_context(state.all_evidence)
+        evidence_summary = format_evidence(state.all_evidence)
         doc_cards_text = _format_doc_cards(cards)
 
         # Include blackboard context in replan
@@ -707,19 +707,6 @@ def _compute_confidence(
     return max(0.1, 0.4 - replan_rounds * 0.1)
 
 
-def _extract_keywords(query: str) -> list[str]:
-    """Extract simple keywords from a query."""
-    stop_words = {
-        "what", "is", "the", "a", "an", "how", "does", "do", "are",
-        "in", "on", "at", "to", "for", "of", "with", "and", "or",
-        "this", "that", "it", "from", "by", "was", "were", "be",
-        "can", "could", "would", "should", "will", "has", "have",
-        "had", "not", "but", "if", "then", "than", "so", "as",
-    }
-    words = re.findall(r"\b\w+\b", query.lower())
-    return [w for w in words if w not in stop_words and len(w) > 2]
-
-
 def _format_doc_cards(cards: list[DocCard]) -> str:
     """Format document cards for the analysis prompt."""
     lines = []
@@ -730,13 +717,3 @@ def _format_doc_cards(cards: list[DocCard]) -> str:
             f"({card.section_count} sections){concepts}"
         )
     return "\n".join(lines)
-
-
-def _format_evidence_context(evidence: list[Evidence]) -> str:
-    """Format collected evidence for the replan prompt."""
-    if not evidence:
-        return "(no evidence collected)"
-    return "\n\n".join(
-        f"[{e.node_title}] (from {e.doc_name or 'unknown'})\n{e.content}"
-        for e in evidence
-    )
