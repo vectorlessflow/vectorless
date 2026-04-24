@@ -105,19 +105,50 @@ class SharedBlackboard:
 def extract_discoveries(worker_output, doc_name: str) -> list[Discovery]:
     """Extract discoveries from a WorkerOutput for the blackboard.
 
-    Converts Worker evidence into Discovery objects based on
-    evidence content and source paths.
+    Converts Worker evidence into Discovery objects:
+    - "evidence": direct evidence findings
+    - "cross_ref": evidence mentioning other documents by name
+    - "dead_end": nodes visited but no evidence collected (trace steps with empty results)
     """
     discoveries: list[Discovery] = []
+    evidence_docs_referenced: set[str] = set()
 
     for evidence in worker_output.evidence:
-        # Every evidence item is a potential cross-reference
+        # Check if evidence content references other documents
+        referenced_docs: list[str] = []
+        if evidence.content:
+            # Simple heuristic: look for document-like references
+            # (file.md, file.txt, "document X", etc.)
+            import re
+            doc_refs = re.findall(
+                r'(?:see|refer to|in|from|document(?:ed)? in)\s+["\']?([\w\-\.]+\.(?:md|txt|pdf|doc))["\']?',
+                evidence.content,
+                re.IGNORECASE,
+            )
+            if doc_refs:
+                referenced_docs = doc_refs
+                evidence_docs_referenced.update(doc_refs)
+
+        finding_type = "cross_ref" if referenced_docs else "evidence"
         discoveries.append(Discovery(
             worker_id=doc_name,
             doc_name=doc_name,
             node_title=evidence.node_title,
-            finding_type="evidence",
+            finding_type=finding_type,
             summary=f"Found: {evidence.node_title} ({len(evidence.content)} chars)",
+            relevance_to=referenced_docs,
+        ))
+
+    # Generate "lead" discoveries from cross-references found in evidence
+    if evidence_docs_referenced:
+        lead_docs = sorted(evidence_docs_referenced)
+        discoveries.append(Discovery(
+            worker_id=doc_name,
+            doc_name=doc_name,
+            node_title="cross_document_leads",
+            finding_type="lead",
+            summary=f"Evidence references other documents: {', '.join(lead_docs[:5])}",
+            relevance_to=lead_docs,
         ))
 
     return discoveries

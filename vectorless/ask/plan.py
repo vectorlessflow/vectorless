@@ -1,28 +1,18 @@
-"""Query plan types — mirrors vectorless-query types."""
+"""Query plan types — kept for backward compatibility.
+
+New code should use vectorless.ask.reasoning.types directly.
+"""
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from enum import Enum
 from typing import TYPE_CHECKING
+
+# Re-export canonical enums from reasoning.types
+from vectorless.ask.reasoning.types import QueryIntent, Complexity
 
 if TYPE_CHECKING:
     from vectorless.ask.reasoning.types import QueryAnalysis
-
-
-class QueryIntent(str, Enum):
-    """Detected intent of a user query."""
-    FACTUAL = "factual"
-    ANALYTICAL = "analytical"
-    NAVIGATIONAL = "navigational"
-    SUMMARY = "summary"
-
-
-class Complexity(str, Enum):
-    """Estimated query complexity."""
-    SIMPLE = "simple"
-    MODERATE = "moderate"
-    COMPLEX = "complex"
 
 
 @dataclass

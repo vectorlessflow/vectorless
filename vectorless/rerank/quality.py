@@ -12,7 +12,7 @@ from typing import Optional
 
 from vectorless.ask.types import Evidence
 from vectorless.llm_client import LLMClient
-from vectorless.ask.plan import QueryIntent
+from vectorless.ask.reasoning.types import QueryIntent
 
 logger = logging.getLogger(__name__)
 

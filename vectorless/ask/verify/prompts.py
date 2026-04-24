@@ -22,22 +22,22 @@ def verify_prompt(
         '    "factual_accuracy": {\n'
         '      "score": 0.0-1.0,\n'
         '      "reasoning": "...",\n'
-        '      "evidence_refs": ["node_title_1", "node_title_2"]\n'
+        '      "evidence_refs": ["doc_name/node_title", "doc_name/node_title"]\n'
         "    },\n"
         '    "completeness": {\n'
         '      "score": 0.0-1.0,\n'
         '      "reasoning": "...",\n'
-        '      "evidence_refs": ["node_title_1"]\n'
+        '      "evidence_refs": ["doc_name/node_title"]\n'
         "    },\n"
         '    "relevance": {\n'
         '      "score": 0.0-1.0,\n'
         '      "reasoning": "...",\n'
-        '      "evidence_refs": ["node_title_1"]\n'
+        '      "evidence_refs": ["doc_name/node_title"]\n'
         "    },\n"
         '    "coherence": {\n'
         '      "score": 0.0-1.0,\n'
         '      "reasoning": "...",\n'
-        '      "evidence_refs": ["node_title_1"]\n'
+        '      "evidence_refs": ["doc_name/node_title"]\n'
         "    }\n"
         "  },\n"
         '  "passed": true/false,\n'

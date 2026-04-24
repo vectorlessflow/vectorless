@@ -20,7 +20,7 @@ class DimensionScore:
     dimension: VerificationDimension
     score: float              # 0.0 - 1.0
     reasoning: str            # LLM explanation
-    evidence_refs: list[str] = field(default_factory=list)  # node_titles
+    evidence_refs: list[str] = field(default_factory=list)  # "doc_name/node_title" or "node_title"
 
 
 @dataclass

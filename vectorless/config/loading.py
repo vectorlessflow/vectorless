@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 from typing import Any, Optional
 
-from vectorless.config.models import EngineConfig, LlmConfig, RetrievalConfig, StorageConfig
+from vectorless.config.models import EngineConfig, LlmConfig, StorageConfig
 
 if sys.version_info >= (3, 11):
     import tomllib
@@ -27,13 +27,10 @@ def load_config_from_env(prefix: str = "VECTORLESS_") -> EngineConfig:
         VECTORLESS_MODEL           -> llm.model
         VECTORLESS_ENDPOINT        -> llm.endpoint
         VECTORLESS_WORKSPACE_DIR   -> storage.workspace_dir
-        VECTORLESS_TOP_K           -> retrieval.top_k
-        VECTORLESS_MAX_ITERATIONS  -> retrieval.max_iterations
         VECTORLESS_METRICS_ENABLED -> metrics.enabled
     """
     llm = LlmConfig()
     storage = StorageConfig()
-    retrieval = RetrievalConfig()
     metrics_enabled: Optional[bool] = None
 
     env_map = {
@@ -41,8 +38,6 @@ def load_config_from_env(prefix: str = "VECTORLESS_") -> EngineConfig:
         f"{prefix}MODEL": ("llm.model", str),
         f"{prefix}ENDPOINT": ("llm.endpoint", str),
         f"{prefix}WORKSPACE_DIR": ("storage.workspace_dir", str),
-        f"{prefix}TOP_K": ("retrieval.top_k", int),
-        f"{prefix}MAX_ITERATIONS": ("retrieval.max_iterations", int),
         f"{prefix}METRICS_ENABLED": ("metrics.enabled", bool),
     }
 
@@ -57,7 +52,7 @@ def load_config_from_env(prefix: str = "VECTORLESS_") -> EngineConfig:
                 kwargs[path] = type_fn(value)
 
     # Apply to sub-models
-    if f"llm.api_key" in kwargs:
+    if "llm.api_key" in kwargs:
         llm = LlmConfig(
             api_key=kwargs["llm.api_key"],
             model=kwargs.get("llm.model", llm.model),
@@ -72,12 +67,6 @@ def load_config_from_env(prefix: str = "VECTORLESS_") -> EngineConfig:
     if "storage.workspace_dir" in kwargs:
         storage = StorageConfig(workspace_dir=kwargs["storage.workspace_dir"])
 
-    if "retrieval.top_k" in kwargs or "retrieval.max_iterations" in kwargs:
-        retrieval = RetrievalConfig(
-            top_k=kwargs.get("retrieval.top_k", retrieval.top_k),
-            max_iterations=kwargs.get("retrieval.max_iterations", retrieval.max_iterations),
-        )
-
     if "metrics.enabled" in kwargs:
         from vectorless.config.models import MetricsConfig
 
@@ -87,7 +76,7 @@ def load_config_from_env(prefix: str = "VECTORLESS_") -> EngineConfig:
 
         metrics = MetricsConfig()
 
-    return EngineConfig(llm=llm, storage=storage, retrieval=retrieval, metrics=metrics)
+    return EngineConfig(llm=llm, storage=storage, metrics=metrics)
 
 
 def load_config_from_file(path: Path) -> EngineConfig:
@@ -103,10 +92,6 @@ def load_config_from_file(path: Path) -> EngineConfig:
         [llm.throttle]
         max_concurrent_requests = 10
         requests_per_minute = 500
-
-        [retrieval]
-        top_k = 5
-        max_iterations = 10
 
         [storage]
         workspace_dir = "~/.vectorless"
@@ -152,16 +137,12 @@ def load_config(
 
     # Layer 2: environment variables
     env_config = load_config_from_env(prefix=env_prefix)
-    # Merge: only override if env var was actually set
-    env_defaults = load_config_from_env.__wrapped__ if hasattr(load_config_from_env, "__wrapped__") else None  # noqa: E501
     base = EngineConfig()
     env_data: dict[str, Any] = {}
     if env_config.llm.api_key != base.llm.api_key or env_config.llm.model != base.llm.model:
         env_data["llm"] = env_config.llm.model_dump()
     if env_config.storage.workspace_dir != base.storage.workspace_dir:
         env_data["storage"] = env_config.storage.model_dump()
-    if env_config.retrieval != base.retrieval:
-        env_data["retrieval"] = env_config.retrieval.model_dump()
 
     config_data.update(env_data)
 

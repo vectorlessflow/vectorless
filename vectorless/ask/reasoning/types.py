@@ -101,6 +101,7 @@ class QueryAnalysis:
     iteration: int = 0
     additional_context: str = ""
     previous_evidence_summary: str = ""
+    analysis_complete: bool = True  # False if deep analysis stages failed
 
     def intent_context(self) -> str:
         """Format intent context string for prompts.

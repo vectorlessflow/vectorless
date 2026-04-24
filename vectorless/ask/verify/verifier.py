@@ -8,10 +8,10 @@ from __future__ import annotations
 
 import json
 import logging
-import re
 
 from vectorless.llm_client import LLMClient
 from vectorless.ask.types import Evidence
+from vectorless.ask.utils import parse_json_response
 from vectorless.ask.verify.types import (
     DimensionScore,
     VerificationDimension,
@@ -75,33 +75,6 @@ def _format_evidence(evidence: list[Evidence]) -> str:
     )
 
 
-def _parse_json_response(response: str) -> dict:
-    """Parse LLM response as JSON, handling markdown-wrapped output."""
-    trimmed = response.strip()
-
-    if trimmed.startswith("```"):
-        match = re.search(r"```(?:json)?\s*\n?(.*?)```", trimmed, re.DOTALL)
-        if match:
-            trimmed = match.group(1).strip()
-
-    start = trimmed.find("{")
-    if start != -1:
-        depth = 0
-        for i in range(start, len(trimmed)):
-            if trimmed[i] == "{":
-                depth += 1
-            elif trimmed[i] == "}":
-                depth -= 1
-                if depth == 0:
-                    candidate = trimmed[start : i + 1]
-                    try:
-                        return json.loads(candidate)
-                    except json.JSONDecodeError:
-                        break
-
-    return json.loads(trimmed)
-
-
 class VerifyPipeline:
     """Multi-dimensional evidence verification pipeline.
 
@@ -160,7 +133,7 @@ class VerifyPipeline:
             )
 
         try:
-            data = _parse_json_response(response)
+            data = parse_json_response(response)
         except (json.JSONDecodeError, ValueError) as e:
             logger.warning("Verification response parse failed: %s", e)
             return VerificationResult(
@@ -209,7 +182,10 @@ class VerifyPipeline:
                     gaps.append(f"[{dim.value}] {reasoning}")
 
         passed = len(low_dimensions) == 0
-        overall_confidence = max(0.0, min(1.0, float(data.get("overall_confidence", 0.5))))
+        # Compute confidence from dimension scores rather than LLM self-assessment
+        overall_confidence = (
+            sum(s.score for s in scores) / len(scores) if scores else 0.0
+        )
 
         # Synthesize re_retrieval_hints from gaps or explicit hints
         raw_hints = data.get("re_retrieval_hints", [])

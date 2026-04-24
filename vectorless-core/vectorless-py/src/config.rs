@@ -7,7 +7,7 @@ use pyo3::prelude::*;
 
 /// Advanced configuration for Engine internals.
 ///
-/// Create a Config to customize storage, retrieval, concurrency,
+/// Create a Config to customize storage, concurrency,
 /// and other engine parameters beyond the basic builder API.
 ///
 /// Example:
@@ -17,7 +17,6 @@ use pyo3::prelude::*;
 ///
 /// config = Config()
 /// config.set_workspace_dir("/data/vectorless")
-/// config.set_top_k(10)
 /// config.set_max_concurrent_requests(20)
 ///
 /// engine = Engine(api_key="sk-...", model="gpt-4o", config=config)
@@ -44,13 +43,6 @@ impl PyConfig {
         self.inner.storage.workspace_dir = std::path::PathBuf::from(dir);
     }
 
-    /// Set the number of top-k results to return from queries.
-    ///
-    /// Default: 3
-    fn set_top_k(&mut self, k: usize) {
-        self.inner.retrieval.top_k = k;
-    }
-
     /// Set the maximum concurrent LLM API calls.
     ///
     /// Default: 10
@@ -63,11 +55,6 @@ impl PyConfig {
     /// Default: 500
     fn set_requests_per_minute(&mut self, rpm: usize) {
         self.inner.llm.throttle.requests_per_minute = rpm;
-    }
-
-    /// Set the maximum iterations for retrieval search.
-    fn set_max_iterations(&mut self, max: usize) {
-        self.inner.retrieval.search.max_iterations = max;
     }
 
     /// Enable or disable metrics collection.

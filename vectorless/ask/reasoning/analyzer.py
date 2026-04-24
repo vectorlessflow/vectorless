@@ -13,6 +13,7 @@ import logging
 import re
 
 from vectorless.llm_client import LLMClient
+from vectorless.ask.utils import parse_json_response
 from vectorless.ask.reasoning.types import (
     Ambiguity,
     AmbiguityType,
@@ -49,36 +50,6 @@ def _extract_keywords(query: str) -> list[str]:
     }
     words = re.findall(r"\b\w+\b", query.lower())
     return list(dict.fromkeys(w for w in words if w not in stop_words and len(w) > 2))
-
-
-def _parse_json_response(response: str) -> dict:
-    """Parse LLM response as JSON, handling markdown-wrapped output."""
-    trimmed = response.strip()
-
-    # Try to extract JSON from markdown code blocks
-    if trimmed.startswith("```"):
-        match = re.search(r"```(?:json)?\s*\n?(.*?)```", trimmed, re.DOTALL)
-        if match:
-            trimmed = match.group(1).strip()
-
-    # Try to find a { ... } block
-    start = trimmed.find("{")
-    if start != -1:
-        depth = 0
-        for i in range(start, len(trimmed)):
-            if trimmed[i] == "{":
-                depth += 1
-            elif trimmed[i] == "}":
-                depth -= 1
-                if depth == 0:
-                    candidate = trimmed[start : i + 1]
-                    try:
-                        return json.loads(candidate)
-                    except json.JSONDecodeError:
-                        break
-
-    # Last resort
-    return json.loads(trimmed)
 
 
 def _parse_intent(raw: str) -> QueryIntent:
@@ -135,7 +106,7 @@ class QueryAnalyzer:
                 "Check your API key, model, and endpoint configuration."
             )
 
-        stage1 = _parse_json_response(response)
+        stage1 = parse_json_response(response)
         intent = _parse_intent(stage1.get("intent", "factual"))
         complexity = _parse_complexity(stage1.get("complexity", "simple"))
         key_concepts = stage1.get("key_concepts", [])
@@ -158,6 +129,8 @@ class QueryAnalyzer:
             )
 
         # Deep mode: Stage 2 + Stage 3
+        analysis_complete = True
+
         stage1_summary = {
             "intent": intent.value,
             "complexity": complexity.value,
@@ -174,7 +147,7 @@ class QueryAnalyzer:
         try:
             system2, user2 = stage2_deep_analysis_prompt(query, stage1_summary)
             response2 = await llm.complete(system2, user2)
-            stage2 = _parse_json_response(response2)
+            stage2 = parse_json_response(response2)
             entities = _parse_entities(stage2.get("entities", []))
             ambiguities = _parse_ambiguities(stage2.get("ambiguities", []))
             temporal_constraints = _parse_temporal(stage2.get("temporal_constraints", []))
@@ -183,6 +156,7 @@ class QueryAnalyzer:
                 key_concepts = stage2["key_concepts"]
         except Exception as e:
             logger.warning("Stage 2 (deep analysis) failed: %s — continuing with partial results", e)
+            analysis_complete = False
 
         # Stage 3: Strategy Formation
         strategy = RetrievalStrategy(
@@ -198,10 +172,11 @@ class QueryAnalyzer:
         try:
             system3, user3 = stage3_strategy_prompt(query, stage1_summary, stage2_summary)
             response3 = await llm.complete(system3, user3)
-            stage3 = _parse_json_response(response3)
+            stage3 = parse_json_response(response3)
             strategy = _parse_strategy(stage3)
         except Exception as e:
             logger.warning("Stage 3 (strategy formation) failed: %s — using default strategy", e)
+            analysis_complete = False
 
         return QueryAnalysis(
             original=query,
@@ -215,6 +190,7 @@ class QueryAnalyzer:
             temporal_constraints=temporal_constraints,
             sub_queries=sub_queries,
             strategy=strategy,
+            analysis_complete=analysis_complete,
         )
 
     async def re_analyze(
@@ -243,13 +219,15 @@ class QueryAnalyzer:
             evidence_summary=evidence_summary,
         )
 
+        strategy_ok = True
         try:
             response = await llm.complete(system, user)
-            stage3 = _parse_json_response(response)
+            stage3 = parse_json_response(response)
             new_strategy = _parse_strategy(stage3)
         except Exception as e:
             logger.warning("Re-analyze strategy update failed: %s — keeping current strategy", e)
             new_strategy = analysis.strategy
+            strategy_ok = False
 
         return QueryAnalysis(
             original=analysis.original,
@@ -266,6 +244,7 @@ class QueryAnalyzer:
             iteration=analysis.iteration + 1,
             additional_context="; ".join(gaps),
             previous_evidence_summary=evidence_summary,
+            analysis_complete=analysis.analysis_complete and strategy_ok,
         )
 
 
