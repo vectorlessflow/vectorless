@@ -12,7 +12,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from vectorless.ask.types import Evidence
-from vectorless.ask.plan import QueryIntent
+from vectorless.ask.reasoning.types import QueryIntent
 
 
 # ---------------------------------------------------------------------------

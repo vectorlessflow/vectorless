@@ -10,19 +10,19 @@ use pyo3_async_runtimes::tokio::future_into_py;
 use tokio::sync::Mutex;
 
 use vectorless_primitives::{
-    CollectedEvidence, ConceptInfo, DocCardInfo, DocumentNavigator, FindResult, MatchResult,
-    NodeInfo, NodeStats, SectionCardInfo, SectionSummaryInfo, SimilarResult, TocEntry,
-    TopicEntryInfo, WordCount,
+    ChainInfo, CollectedEvidence, ConceptInfo, ConceptRouteInfo, DocCardInfo, DocumentNavigator,
+    EvidenceScoreInfo, FindResult, MatchResult, NodeInfo, NodeStats, OverlapInfo, RouteTargetInfo,
+    SectionCardInfo, SectionSummaryInfo, SimilarResult, TocEntry, TopicEntryInfo, WordCount,
 };
 
 use super::error::VectorlessError;
 
 // =========================================================================
-// PyDocumentInfo (existing — returned by ingest)
+// PyDocumentInfo (existing — returned by compile)
 // =========================================================================
 
 /// Information about an understood document.
-#[pyclass(name = "DocumentInfo")]
+#[pyclass(name = "DocumentInfo", skip_from_py_object)]
 pub struct PyDocumentInfo {
     pub(crate) inner: vectorless_engine::DocumentInfo,
 }
@@ -81,7 +81,7 @@ impl PyDocumentInfo {
 }
 
 /// A key concept extracted from a document.
-#[pyclass(name = "Concept")]
+#[pyclass(name = "Concept", skip_from_py_object)]
 pub struct PyConcept {
     #[pyo3(get)]
     pub name: String,
@@ -106,7 +106,7 @@ pub struct PyConcept {
 /// print(await doc.pwd())
 /// print(await doc.cat(None))
 /// ```
-#[pyclass(name = "Document")]
+#[pyclass(name = "Document", skip_from_py_object)]
 pub struct PyDocument {
     inner: Arc<Mutex<DocumentNavigator>>,
 }
@@ -341,6 +341,108 @@ impl PyDocument {
                 .await
                 .into_iter()
                 .map(id_to_str)
+                .collect::<Vec<_>>())
+        })
+    }
+
+    // ── Agent acceleration ────────────────────────────────────────────────
+
+    /// Get all intent routes from the query routing table.
+    fn intent_routes<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        let nav = Arc::clone(&self.inner);
+        future_into_py(py, async move {
+            let nav = nav.lock().await;
+            Ok(nav
+                .intent_routes()
+                .await
+                .into_iter()
+                .map(PyRouteTarget::from)
+                .collect::<Vec<_>>())
+        })
+    }
+
+    /// Get concept routes matching a keyword.
+    fn concept_routes<'py>(&self, py: Python<'py>, keyword: String) -> PyResult<Bound<'py, PyAny>> {
+        let nav = Arc::clone(&self.inner);
+        future_into_py(py, async move {
+            let nav = nav.lock().await;
+            Ok(nav
+                .concept_routes(&keyword)
+                .await
+                .into_iter()
+                .map(PyConceptRoute::from)
+                .collect::<Vec<_>>())
+        })
+    }
+
+    /// Get reasoning chains involving a specific node.
+    fn chains_for<'py>(&self, py: Python<'py>, node_id: String) -> PyResult<Bound<'py, PyAny>> {
+        let nav = Arc::clone(&self.inner);
+        future_into_py(py, async move {
+            let num = node_id
+                .strip_prefix('n')
+                .ok_or_else(|| {
+                    VectorlessError::new("NodeId must start with 'n'".to_string(), "navigation")
+                })?
+                .parse::<u64>()
+                .map_err(|_| VectorlessError::new("Invalid NodeId".to_string(), "navigation"))?;
+            let nav = nav.lock().await;
+            Ok(nav
+                .chains_for(num)
+                .await
+                .into_iter()
+                .map(PyChainInfo::from)
+                .collect::<Vec<_>>())
+        })
+    }
+
+    /// Get overlapping nodes for a specific node.
+    fn overlaps_for<'py>(&self, py: Python<'py>, node_id: String) -> PyResult<Bound<'py, PyAny>> {
+        let nav = Arc::clone(&self.inner);
+        future_into_py(py, async move {
+            let num = node_id
+                .strip_prefix('n')
+                .ok_or_else(|| {
+                    VectorlessError::new("NodeId must start with 'n'".to_string(), "navigation")
+                })?
+                .parse::<u64>()
+                .map_err(|_| VectorlessError::new("Invalid NodeId".to_string(), "navigation"))?;
+            let nav = nav.lock().await;
+            Ok(nav
+                .overlaps_for(num)
+                .await
+                .into_iter()
+                .map(PyOverlapInfo::from)
+                .collect::<Vec<_>>())
+        })
+    }
+
+    /// Get evidence quality score for a specific node.
+    fn evidence_score<'py>(&self, py: Python<'py>, node_id: String) -> PyResult<Bound<'py, PyAny>> {
+        let nav = Arc::clone(&self.inner);
+        future_into_py(py, async move {
+            let num = node_id
+                .strip_prefix('n')
+                .ok_or_else(|| {
+                    VectorlessError::new("NodeId must start with 'n'".to_string(), "navigation")
+                })?
+                .parse::<u64>()
+                .map_err(|_| VectorlessError::new("Invalid NodeId".to_string(), "navigation"))?;
+            let nav = nav.lock().await;
+            Ok(nav.evidence_score_for(num).await.map(PyEvidenceScore::from))
+        })
+    }
+
+    /// Get all evidence scores ranked by composite score.
+    fn evidence_scores_ranked<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        let nav = Arc::clone(&self.inner);
+        future_into_py(py, async move {
+            let nav = nav.lock().await;
+            Ok(nav
+                .evidence_scores_ranked()
+                .await
+                .into_iter()
+                .map(PyEvidenceScore::from)
                 .collect::<Vec<_>>())
         })
     }
@@ -613,7 +715,7 @@ impl PyDocument {
 // =========================================================================
 
 /// Information about a node in the document tree.
-#[pyclass(name = "NodeInfo")]
+#[pyclass(name = "NodeInfo", skip_from_py_object)]
 #[derive(Clone)]
 pub struct PyNodeInfo {
     #[pyo3(get)]
@@ -647,7 +749,7 @@ impl From<NodeInfo> for PyNodeInfo {
 }
 
 /// A regex match within node content.
-#[pyclass(name = "MatchResult")]
+#[pyclass(name = "MatchResult", skip_from_py_object)]
 #[derive(Clone)]
 pub struct PyMatchResult {
     #[pyo3(get)]
@@ -672,7 +774,7 @@ impl From<MatchResult> for PyMatchResult {
 }
 
 /// A node found by search.
-#[pyclass(name = "FindResult")]
+#[pyclass(name = "FindResult", skip_from_py_object)]
 #[derive(Clone)]
 pub struct PyFindResult {
     #[pyo3(get)]
@@ -697,7 +799,7 @@ impl From<FindResult> for PyFindResult {
 }
 
 /// Word/line/character count.
-#[pyclass(name = "WordCount")]
+#[pyclass(name = "WordCount", skip_from_py_object)]
 #[derive(Clone)]
 pub struct PyWordCount {
     #[pyo3(get)]
@@ -719,7 +821,7 @@ impl From<WordCount> for PyWordCount {
 }
 
 /// Evidence collected during navigation.
-#[pyclass(name = "CollectedEvidence")]
+#[pyclass(name = "CollectedEvidence", skip_from_py_object)]
 #[derive(Clone)]
 pub struct PyCollectedEvidence {
     #[pyo3(get)]
@@ -744,7 +846,7 @@ impl From<CollectedEvidence> for PyCollectedEvidence {
 }
 
 /// A topic entry from the reasoning index.
-#[pyclass(name = "TopicEntry")]
+#[pyclass(name = "TopicEntry", skip_from_py_object)]
 #[derive(Clone)]
 pub struct PyTopicEntry {
     #[pyo3(get)]
@@ -766,7 +868,7 @@ impl From<TopicEntryInfo> for PyTopicEntry {
 }
 
 /// A section summary from the reasoning index.
-#[pyclass(name = "SectionSummary")]
+#[pyclass(name = "SectionSummary", skip_from_py_object)]
 #[derive(Clone)]
 pub struct PySectionSummary {
     #[pyo3(get)]
@@ -795,7 +897,7 @@ impl From<SectionSummaryInfo> for PySectionSummary {
 // =========================================================================
 
 /// A single entry in the table of contents.
-#[pyclass(name = "TocEntry")]
+#[pyclass(name = "TocEntry", skip_from_py_object)]
 #[derive(Clone)]
 pub struct PyTocEntry {
     #[pyo3(get)]
@@ -820,7 +922,7 @@ impl From<TocEntry> for PyTocEntry {
 }
 
 /// Statistics about a node.
-#[pyclass(name = "NodeStats")]
+#[pyclass(name = "NodeStats", skip_from_py_object)]
 #[derive(Clone)]
 pub struct PyNodeStats {
     #[pyo3(get)]
@@ -857,7 +959,7 @@ impl From<NodeStats> for PyNodeStats {
 }
 
 /// A node found by semantic similarity.
-#[pyclass(name = "SimilarResult")]
+#[pyclass(name = "SimilarResult", skip_from_py_object)]
 #[derive(Clone)]
 pub struct PySimilarResult {
     #[pyo3(get)]
@@ -882,7 +984,7 @@ impl From<SimilarResult> for PySimilarResult {
 }
 
 /// A top-level section in a document card.
-#[pyclass(name = "SectionCard")]
+#[pyclass(name = "SectionCard", skip_from_py_object)]
 #[derive(Clone)]
 pub struct PySectionCard {
     #[pyo3(get)]
@@ -904,7 +1006,7 @@ impl From<SectionCardInfo> for PySectionCard {
 }
 
 /// Document-level overview card.
-#[pyclass(name = "DocCard")]
+#[pyclass(name = "DocCard", skip_from_py_object)]
 #[derive(Clone)]
 pub struct PyDocCard {
     #[pyo3(get)]
@@ -935,7 +1037,7 @@ impl From<DocCardInfo> for PyDocCard {
 }
 
 /// A key concept extracted from the document.
-#[pyclass(name = "ConceptInfo")]
+#[pyclass(name = "ConceptInfo", skip_from_py_object)]
 #[derive(Clone)]
 pub struct PyConceptInfo {
     #[pyo3(get)]
@@ -952,6 +1054,133 @@ impl From<ConceptInfo> for PyConceptInfo {
             name: v.name,
             summary: v.summary,
             sections: v.sections,
+        }
+    }
+}
+
+// =========================================================================
+// Agent acceleration types
+// =========================================================================
+
+/// A scored target node from the query routing table.
+#[pyclass(name = "RouteTarget", skip_from_py_object)]
+#[derive(Clone)]
+pub struct PyRouteTarget {
+    #[pyo3(get)]
+    pub node_id: String,
+    #[pyo3(get)]
+    pub relevance: f64,
+    #[pyo3(get)]
+    pub reason: String,
+}
+
+impl From<RouteTargetInfo> for PyRouteTarget {
+    fn from(v: RouteTargetInfo) -> Self {
+        Self {
+            node_id: format!("n{}", v.node_id),
+            relevance: v.relevance,
+            reason: v.reason,
+        }
+    }
+}
+
+/// A concept-based route from the query routing table.
+#[pyclass(name = "ConceptRoute", skip_from_py_object)]
+#[derive(Clone)]
+pub struct PyConceptRoute {
+    #[pyo3(get)]
+    pub concept: String,
+    #[pyo3(get)]
+    pub targets: Vec<PyRouteTarget>,
+}
+
+impl From<ConceptRouteInfo> for PyConceptRoute {
+    fn from(v: ConceptRouteInfo) -> Self {
+        Self {
+            concept: v.concept,
+            targets: v.targets.into_iter().map(PyRouteTarget::from).collect(),
+        }
+    }
+}
+
+/// A reasoning chain connecting document sections.
+#[pyclass(name = "ChainInfo", skip_from_py_object)]
+#[derive(Clone)]
+pub struct PyChainInfo {
+    #[pyo3(get)]
+    pub premises: Vec<String>,
+    #[pyo3(get)]
+    pub conclusions: Vec<String>,
+    #[pyo3(get)]
+    pub chain_type: String,
+    #[pyo3(get)]
+    pub summary: String,
+}
+
+impl From<ChainInfo> for PyChainInfo {
+    fn from(v: ChainInfo) -> Self {
+        Self {
+            premises: v.premises.into_iter().map(|id| format!("n{id}")).collect(),
+            conclusions: v
+                .conclusions
+                .into_iter()
+                .map(|id| format!("n{id}"))
+                .collect(),
+            chain_type: v.chain_type,
+            summary: v.summary,
+        }
+    }
+}
+
+/// An overlap entry between two nodes.
+#[pyclass(name = "OverlapInfo", skip_from_py_object)]
+#[derive(Clone)]
+pub struct PyOverlapInfo {
+    #[pyo3(get)]
+    pub node_a: String,
+    #[pyo3(get)]
+    pub node_b: String,
+    #[pyo3(get)]
+    pub similarity: f64,
+    #[pyo3(get)]
+    pub overlap_type: String,
+}
+
+impl From<OverlapInfo> for PyOverlapInfo {
+    fn from(v: OverlapInfo) -> Self {
+        Self {
+            node_a: format!("n{}", v.node_a),
+            node_b: format!("n{}", v.node_b),
+            similarity: v.similarity,
+            overlap_type: v.overlap_type,
+        }
+    }
+}
+
+/// Evidence quality score for a node.
+#[pyclass(name = "EvidenceScore", skip_from_py_object)]
+#[derive(Clone)]
+pub struct PyEvidenceScore {
+    #[pyo3(get)]
+    pub node_id: String,
+    #[pyo3(get)]
+    pub density: f64,
+    #[pyo3(get)]
+    pub data_richness: f64,
+    #[pyo3(get)]
+    pub specificity: f64,
+    #[pyo3(get)]
+    pub composite: f64,
+}
+
+impl From<EvidenceScoreInfo> for PyEvidenceScore {
+    fn from(v: EvidenceScoreInfo) -> Self {
+        Self {
+            node_id: format!("n{}", v.node_id),
+            density: v.density,
+            data_richness: v.data_richness,
+            specificity: v.specificity,
+            composite: v.composite,
         }
     }
 }

@@ -8,11 +8,11 @@ from vectorless.types.graph import (
     WeightedKeyword,
 )
 from vectorless.types.results import (
+    CompileArtifact,
+    CompileOutput,
     Evidence,
     FailedItem,
-    IndexItemWrapper,
     IndexMetrics,
-    IndexResultWrapper,
     QueryMetrics,
     QueryResponse,
     QueryResult,
@@ -20,11 +20,11 @@ from vectorless.types.results import (
 
 __all__ = [
     # Results
+    "CompileArtifact",
+    "CompileOutput",
     "Evidence",
     "FailedItem",
-    "IndexItemWrapper",
     "IndexMetrics",
-    "IndexResultWrapper",
     "QueryMetrics",
     "QueryResponse",
     "QueryResult",

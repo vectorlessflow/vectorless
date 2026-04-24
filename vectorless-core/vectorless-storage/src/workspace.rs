@@ -655,15 +655,3 @@ impl Workspace {
         Ok(())
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use vectorless_document::DocumentTree;
-
-    fn create_test_doc(id: &str) -> PersistedDocument {
-        let meta = super::super::persistence::DocumentMeta::new(id, "Test Doc", "md");
-        let tree = DocumentTree::new("Root", "Content");
-        PersistedDocument::new(meta, tree)
-    }
-}

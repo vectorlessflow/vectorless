@@ -1,0 +1,125 @@
+---
+sidebar_position: 5
+---
+
+# Incremental Compilation
+
+Incremental compilation avoids reprocessing documents that haven't changed. This is analogous to incremental builds in traditional compilers — only the modified files are recompiled.
+
+## How It Works
+
+When a document is compiled, the engine stores two fingerprints alongside the persisted document:
+
+- **Content fingerprint**: SHA-256 hash of the source file bytes
+- **Logic fingerprint**: Hash of `PipelineOptions` configuration
+
+On subsequent compile calls, the engine compares these fingerprints to decide whether to recompile.
+
+## Action Resolution
+
+The `resolve_action` function determines what to do with each source:
+
+```rust
+pub enum IndexAction {
+    /// Content unchanged — skip entirely.
+    Skip(SkipInfo),
+
+    /// New file or logic changed — full recompilation.
+    FullIndex { existing_id: Option<String> },
+
+    /// Content changed but logic unchanged — incremental update.
+    IncrementalUpdate { old_tree: DocumentTree, existing_id: String },
+}
+```
+
+The decision flow:
+
+```text
+                   ┌─────────────────────┐
+                   │ Has the source file  │
+                   │ changed?             │
+                   └──────┬──────────────┘
+                          │
+              ┌──── No ───┤─── Yes ────┐
+              │           │            │
+     ┌────────▼─────┐    │   ┌────────▼─────────┐
+     │ Logic changed?│    │   │ Content FP match?│
+     └────┬────┬────┘    │   └────┬────┬────────┘
+          │    │         │        │    │
+     No   │  Yes         │   Yes  │  No
+          │    │         │        │    │
+       Skip  FullIndex  │    Incremental  FullIndex
+                       │    Update
+                       │
+                  (force mode: always FullIndex)
+```
+
+## Content Fingerprinting
+
+Content fingerprints are computed at multiple granularities:
+
+- **Document level**: SHA-256 of the entire source file
+- **Node level**: Fingerprint of each tree node's content
+
+Node-level fingerprints enable fine-grained change detection — the system can identify exactly which sections of a document changed and only reprocess those sections.
+
+## Reusable Summaries
+
+When a document is recompiled and only some sections changed, the EnhancePass can reuse summaries from unchanged nodes:
+
+```rust
+use vectorless_compiler::incremental;
+
+// Find summaries from unchanged nodes in old vs new tree
+let reusable = incremental::compute_reusable_summaries(&old_tree, &new_tree);
+
+// Apply them to the new tree (saves LLM calls)
+let count = incremental::apply_reusable_summaries(&mut new_tree, &reusable);
+```
+
+This dramatically reduces LLM cost for documents that change incrementally (e.g., living documents that are updated in-place).
+
+## ChangeDetector
+
+`ChangeDetector` tracks document state across compilations:
+
+```rust
+let mut detector = ChangeDetector::new()
+    .with_processing_version(2);
+
+// Record state after compilation
+detector.record_with_tree("doc-123", &content, Some(&tree), Some(&path));
+
+// Check if recompilation is needed
+if detector.needs_reindex_by_hash("doc-123", &new_content) {
+    // Content changed — recompile
+}
+
+// Detect which nodes changed
+let changeset = detector.detect_changes(&old_tree, &new_tree);
+```
+
+### ChangeSet
+
+```rust
+pub struct ChangeSet {
+    pub added: Vec<NodeChange>,
+    pub removed: Vec<NodeChange>,
+    pub modified: Vec<NodeChange>,
+    pub restructured: Vec<NodeChange>,
+}
+```
+
+Each `NodeChange` records the node title, change type, and fingerprint.
+
+## Processing Version
+
+The `processing_version` field in `PipelineOptions` acts like a compiler version — when it increments, all documents are forced to recompile even if their content hasn't changed. This is used when the compilation algorithm itself changes and existing artifacts are stale.
+
+## Logic Fingerprint
+
+`PipelineOptions::logic_fingerprint()` hashes the entire pipeline configuration into a single fingerprint. This is stored with each compiled document and compared on subsequent runs:
+
+- If the logic fingerprint matches and content fingerprint matches → **Skip**
+- If the logic fingerprint changed → **FullIndex** (regardless of content)
+- If only content changed → **IncrementalUpdate**

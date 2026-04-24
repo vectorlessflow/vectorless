@@ -5,7 +5,6 @@
 
 use pyo3::prelude::*;
 
-mod answer;
 mod config;
 mod document;
 mod engine;
@@ -13,12 +12,12 @@ mod error;
 mod graph;
 mod metrics;
 
-use answer::{PyAnswer, PyEvidence, PyReasoningTrace, PyTraceStep};
 use config::PyConfig;
 use document::{
-    PyCollectedEvidence, PyConcept, PyConceptInfo, PyDocCard, PyDocument, PyDocumentInfo,
-    PyFindResult, PyMatchResult, PyNodeInfo, PyNodeStats, PySectionCard, PySectionSummary,
-    PySimilarResult, PyTocEntry, PyTopicEntry, PyWordCount,
+    PyChainInfo, PyCollectedEvidence, PyConcept, PyConceptInfo, PyConceptRoute, PyDocCard,
+    PyDocument, PyDocumentInfo, PyEvidenceScore, PyFindResult, PyMatchResult, PyNodeInfo,
+    PyNodeStats, PyOverlapInfo, PyRouteTarget, PySectionCard, PySectionSummary, PySimilarResult,
+    PyTocEntry, PyTopicEntry, PyWordCount,
 };
 use engine::PyEngine;
 use error::VectorlessError;
@@ -26,15 +25,6 @@ use graph::{PyDocumentGraph, PyDocumentGraphNode, PyEdgeEvidence, PyGraphEdge, P
 use metrics::{PyLlmMetricsReport, PyMetricsReport, PyRetrievalMetricsReport};
 
 /// Vectorless — Document Understanding Engine for AI.
-///
-/// ```python
-/// from vectorless import Engine
-///
-/// engine = Engine(api_key="sk-...", model="gpt-4o")
-/// doc = await engine.ingest("./report.pdf")
-/// answer = await engine.ask("What is the revenue?", doc_ids=[doc.doc_id])
-/// print(answer.content)
-/// ```
 #[pymodule]
 fn _vectorless(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<VectorlessError>()?;
@@ -55,10 +45,11 @@ fn _vectorless(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PySectionCard>()?;
     m.add_class::<PyDocCard>()?;
     m.add_class::<PyConceptInfo>()?;
-    m.add_class::<PyAnswer>()?;
-    m.add_class::<PyEvidence>()?;
-    m.add_class::<PyReasoningTrace>()?;
-    m.add_class::<PyTraceStep>()?;
+    m.add_class::<PyRouteTarget>()?;
+    m.add_class::<PyConceptRoute>()?;
+    m.add_class::<PyChainInfo>()?;
+    m.add_class::<PyOverlapInfo>()?;
+    m.add_class::<PyEvidenceScore>()?;
     m.add_class::<PyDocumentGraphNode>()?;
     m.add_class::<PyDocumentGraph>()?;
     m.add_class::<PyGraphEdge>()?;

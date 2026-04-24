@@ -184,8 +184,8 @@ class IndexMetrics:
 
 
 @dataclass(frozen=True)
-class IndexItemWrapper:
-    """A single indexed document item."""
+class CompileArtifact:
+    """A single compiled document artifact."""
 
     doc_id: str
     name: str
@@ -196,7 +196,7 @@ class IndexItemWrapper:
     metrics: Optional[IndexMetrics] = None
 
     @classmethod
-    def from_rust(cls, item: object) -> IndexItemWrapper:
+    def from_rust(cls, item: object) -> CompileArtifact:
         metrics = IndexMetrics.from_rust(item.metrics) if item.metrics else None
         return cls(
             doc_id=item.doc_id,
@@ -210,17 +210,17 @@ class IndexItemWrapper:
 
 
 @dataclass(frozen=True)
-class IndexResultWrapper:
-    """Result of a document indexing operation."""
+class CompileOutput:
+    """Result of a document compilation operation."""
 
     doc_id: Optional[str] = None
-    items: List[IndexItemWrapper] = field(default_factory=list)
+    items: List[CompileArtifact] = field(default_factory=list)
     failed: List[FailedItem] = field(default_factory=list)
 
     @classmethod
-    def from_doc_info(cls, doc_info: object) -> IndexResultWrapper:
-        """Create from a single Rust PyDocumentInfo (returned by ingest)."""
-        item = IndexItemWrapper(
+    def from_doc_info(cls, doc_info: object) -> CompileOutput:
+        """Create from a single Rust PyDocumentInfo (returned by compile)."""
+        item = CompileArtifact(
             doc_id=doc_info.doc_id,
             name=doc_info.name,
             format=doc_info.format,
@@ -231,14 +231,14 @@ class IndexResultWrapper:
         return cls(doc_id=doc_info.doc_id, items=[item])
 
     @classmethod
-    def from_doc_infos(cls, doc_infos: list) -> IndexResultWrapper:
+    def from_doc_infos(cls, doc_infos: list) -> CompileOutput:
         """Create from a list of Rust PyDocumentInfo objects."""
         items = []
         first_doc_id = None
         for info in doc_infos:
             if first_doc_id is None:
                 first_doc_id = info.doc_id
-            items.append(IndexItemWrapper(
+            items.append(CompileArtifact(
                 doc_id=info.doc_id,
                 name=info.name,
                 format=info.format,
@@ -249,8 +249,8 @@ class IndexResultWrapper:
         return cls(doc_id=first_doc_id, items=items)
 
     @classmethod
-    def from_rust(cls, result: object) -> IndexResultWrapper:
-        items = [IndexItemWrapper.from_rust(i) for i in result.items]
+    def from_rust(cls, result: object) -> CompileOutput:
+        items = [CompileArtifact.from_rust(i) for i in result.items]
         failed = [FailedItem.from_rust(f) for f in result.failed]
         return cls(
             doc_id=result.doc_id,

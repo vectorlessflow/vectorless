@@ -1,24 +1,18 @@
-"""Query plan types — mirrors vectorless-query types."""
+"""Query plan types — kept for backward compatibility.
+
+New code should use vectorless.ask.reasoning.types directly.
+"""
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from enum import Enum
+from typing import TYPE_CHECKING
 
+# Re-export canonical enums from reasoning.types
+from vectorless.ask.reasoning.types import QueryIntent, Complexity
 
-class QueryIntent(str, Enum):
-    """Detected intent of a user query."""
-    FACTUAL = "factual"
-    ANALYTICAL = "analytical"
-    NAVIGATIONAL = "navigational"
-    SUMMARY = "summary"
-
-
-class Complexity(str, Enum):
-    """Estimated query complexity."""
-    SIMPLE = "simple"
-    MODERATE = "moderate"
-    COMPLEX = "complex"
+if TYPE_CHECKING:
+    from vectorless.ask.reasoning.types import QueryAnalysis
 
 
 @dataclass
@@ -54,3 +48,23 @@ class QueryPlan:
         if self.rewritten:
             parts.append(f"Rewritten queries for matching: {'; '.join(self.rewritten)}")
         return "\n" + "\n".join(parts)
+
+    def to_query_analysis(self) -> QueryAnalysis:
+        """Convert this QueryPlan to a QueryAnalysis for backward compatibility."""
+        from vectorless.ask.reasoning.types import (
+            QueryAnalysis as QA,
+            RetrievalStrategy,
+        )
+        return QA(
+            original=self.original,
+            rewritten=self.rewritten,
+            intent=QueryIntent(self.intent.value),
+            complexity=Complexity(self.complexity.value),
+            keywords=self.keywords,
+            key_concepts=self.key_concepts,
+            strategy=RetrievalStrategy(strategy_type=self.strategy_hint or "focused"),
+            sub_queries=[
+                SubQuery(query=sq.query, target_docs=sq.target_docs)
+                for sq in self.sub_queries
+            ],
+        )

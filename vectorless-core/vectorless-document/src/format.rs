@@ -1,10 +1,7 @@
 // Copyright (c) 2026 vectorless developers
 // SPDX-License-Identifier: Apache-2.0
 
-//! Document format and sufficiency types.
-//!
-//! These types are used across multiple modules and are defined here
-//! to avoid circular dependencies between crates.
+//! Document format types.
 
 use serde::{Deserialize, Serialize};
 
@@ -40,23 +37,4 @@ impl DocumentFormat {
     /// Single source of truth — used by directory scanning to
     /// discover indexable files.
     pub const SUPPORTED_EXTENSIONS: &'static [&'static str] = &["md", "pdf"];
-}
-
-/// Sufficiency level for incremental retrieval.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SufficiencyLevel {
-    /// Information is sufficient, stop retrieving.
-    Sufficient,
-
-    /// Partial information, can continue if needed.
-    PartialSufficient,
-
-    /// Information is insufficient, continue retrieving.
-    Insufficient,
-}
-
-impl Default for SufficiencyLevel {
-    fn default() -> Self {
-        Self::Insufficient
-    }
 }

@@ -3,7 +3,7 @@
 Mirrors vectorless-core/vectorless-agent/src/dispatcher.rs.
 
 All queries go through dispatch():
-1. Query understanding -> QueryPlan
+1. Query reasoning -> QueryAnalysis (via QueryAnalyzer)
 2. Scope resolution -> Specified | Workspace
 3. Orchestrator.run() (always)
 4. Return Output
@@ -12,11 +12,12 @@ All queries go through dispatch():
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable
 
+from vectorless.ask.protocols import DocLoader, EventCallback
+from vectorless.ask.errors import AskError
 from vectorless.ask.types import DocCard, Output, Specified, Workspace
 from vectorless.ask.orchestrator import Orchestrator
-from vectorless.ask.understand import understand
+from vectorless.ask.reasoning import QueryAnalysis, QueryAnalyzer
 from vectorless.llm_client import LLMClient
 
 logger = logging.getLogger(__name__)
@@ -26,8 +27,8 @@ async def dispatch(
     query: str,
     scope: Specified | Workspace,
     llm: LLMClient,
-    doc_loader: Callable[[str], Any],
-    event_callback: Any = None,
+    doc_loader: DocLoader,
+    event_callback: EventCallback | None = None,
 ) -> Output:
     """Unified entry point — mirrors Rust dispatcher::dispatch().
 
@@ -35,13 +36,20 @@ async def dispatch(
     - Specified -> skip_analysis=True -> spawn Workers directly
     - Workspace -> skip_analysis=False -> analyze -> dispatch -> evaluate -> replan
     """
-    # Step 1: Query understanding
-    logger.info("dispatch: query understanding started")
-    query_plan = await understand(query, llm)
+    # Step 1: Query reasoning (multi-stage analysis)
+    logger.info("dispatch: query reasoning started")
+    analyzer = QueryAnalyzer()
+    try:
+        query_analysis = await analyzer.analyze(query, llm)
+    except AskError:
+        raise
+    except Exception as e:
+        from vectorless.ask.errors import LLMFailureError
+        raise LLMFailureError(f"Query analysis failed: {e}") from e
     logger.info(
-        "dispatch: query understanding complete (intent=%s, complexity=%s)",
-        query_plan.intent.value,
-        query_plan.complexity.value,
+        "dispatch: query reasoning complete (intent=%s, complexity=%s)",
+        query_analysis.intent.value,
+        query_analysis.complexity.value,
     )
 
     # Step 2: Determine skip_analysis from scope
@@ -55,7 +63,7 @@ async def dispatch(
         doc_loader=doc_loader,
         llm_client=llm,
         skip_analysis=skip_analysis,
-        query_plan=query_plan,
+        query_analysis=query_analysis,
         event_callback=event_callback,
     )
     return await orchestrator.run()

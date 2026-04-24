@@ -5,73 +5,36 @@
 //!
 //! The Engine provides a unified API for the Document Understanding Engine:
 //!
-//! - [`ingest`](Engine::ingest) — Understand a document (parse, analyze, persist)
-//! - [`ask`](Engine::ask) — Ask a question (returns answer + evidence + trace)
+//! - [`compile`](Engine::compile) — Understand a document (parse, analyze, persist)
 //! - [`forget`](Engine::forget) — Remove a document
 //! - [`list_documents`](Engine::list_documents) — List all understood documents
-//!
-//! # Example
-//!
-//! ```rust,no_run
-//! use vectorless::{EngineBuilder, IngestInput};
-//!
-//! # #[tokio::main]
-//! # async fn main() -> Result<(), Box<dyn std::error::Error>> {
-//! let engine = EngineBuilder::new()
-//!     .with_key("sk-...")
-//!     .with_model("gpt-4o")
-//!     .with_endpoint("https://api.openai.com/v1")
-//!     .build()
-//!     .await?;
-//!
-//! // Understand a document
-//! let doc = engine.ingest(IngestInput::Path("./document.md".into())).await?;
-//! println!("{}: {}", doc.name, doc.summary);
-//!
-//! // Ask a question
-//! let answer = engine.ask("What is this?", &[doc.doc_id.clone()]).await?;
-//! println!("{}", answer.content);
-//!
-//! // List all understood documents
-//! let docs = engine.list_documents().await?;
-//! for d in &docs {
-//!     println!("{}: {}", d.name, d.summary);
-//! }
-//!
-//! // Forget a document
-//! engine.forget(&doc.doc_id).await?;
-//! # Ok(())
-//! # }
-//! ```
 
 use std::{collections::HashMap, sync::Arc};
 
 use futures::StreamExt;
 use tracing::{info, warn};
 
-use vectorless_config::Config;
-use vectorless_document::{
-    Answer, Document as UnderstandingDocument, DocumentTree, Evidence, IngestInput, ReasoningTrace,
-};
-use vectorless_error::{Error, Result};
-use vectorless_events::EventEmitter;
-use vectorless_index::{
+use vectorless_compiler::{
     PipelineOptions,
     incremental::{self, IndexAction},
 };
+use vectorless_config::Config;
+use vectorless_document::{Document as UnderstandingDocument, DocumentTree, IngestInput};
+use vectorless_error::{Error, Result};
+use vectorless_events::EventEmitter;
 use vectorless_metrics::MetricsHub;
 use vectorless_storage::{PersistedDocument, Workspace};
 
 use super::{
-    index_context::{IndexContext, IndexSource},
+    compile_input::{CompileInput, CompileSource},
     indexer::IndexerClient,
-    types::{FailedItem, IndexItem, IndexMode, IndexResult},
+    types::{CompileArtifact, CompileMode, CompileOutput, FailedItem},
     workspace::WorkspaceClient,
 };
 
 /// The main Engine client.
 ///
-/// Provides high-level operations for document indexing and retrieval.
+/// Provides high-level operations for document compilation and retrieval.
 /// Uses interior mutability to allow sharing across async tasks.
 ///
 /// # Cloning
@@ -86,7 +49,7 @@ pub struct Engine {
     /// Configuration (immutable, shared).
     config: Arc<Config>,
 
-    /// Indexer client for document indexing.
+    /// Indexer client for document compilation.
     indexer: IndexerClient,
 
     /// Workspace client for persistence.
@@ -128,16 +91,16 @@ impl Engine {
     }
 
     // ============================================================
-    // Ingest Pipeline (private — called by ingest())
+    // Compile Pipeline (private — called by compile())
     // ============================================================
 
-    /// Run the ingest pipeline: parse, compile, persist.
+    /// Run the compile pipeline: parse, compile, persist.
     ///
-    /// Accepts an [`IndexContext`] that specifies the source and options.
+    /// Accepts an [`CompileInput`] that specifies the source and options.
     /// Multiple sources are processed in parallel.
-    /// Returns an [`IndexResult`] containing the indexed document metadata.
+    /// Returns an [`CompileOutput`] containing the indexed document metadata.
     #[tracing::instrument(skip_all, fields(sources = ctx.sources.len()))]
-    async fn ingest_pipeline(&self, ctx: IndexContext) -> Result<IndexResult> {
+    async fn compile_pipeline(&self, ctx: CompileInput) -> Result<CompileOutput> {
         if ctx.is_empty() {
             return Err(Error::Config("No document sources provided".into()));
         }
@@ -179,7 +142,7 @@ impl Engine {
                 });
             }
 
-            Ok(IndexResult::with_partial(items, failed))
+            Ok(CompileOutput::with_partial(items, failed))
         })
         .await
     }
@@ -187,12 +150,12 @@ impl Engine {
     /// Process multiple sources in parallel.
     async fn process_sources(
         &self,
-        sources: &[IndexSource],
-        options: &super::types::IndexOptions,
+        sources: &[CompileSource],
+        options: &super::types::CompileOptions,
         name: Option<&str>,
         concurrency: usize,
-    ) -> (Vec<IndexItem>, Vec<FailedItem>) {
-        let results: Vec<(Vec<IndexItem>, Vec<FailedItem>)> =
+    ) -> (Vec<CompileArtifact>, Vec<FailedItem>) {
+        let results: Vec<(Vec<CompileArtifact>, Vec<FailedItem>)> =
             futures::stream::iter(sources.iter().cloned())
                 .map(|source| {
                     let options = options.clone();
@@ -224,17 +187,17 @@ impl Engine {
     /// Returns `(items, failed)`.
     async fn process_source(
         &self,
-        source: &IndexSource,
-        options: &super::types::IndexOptions,
+        source: &CompileSource,
+        options: &super::types::CompileOptions,
         name: Option<&str>,
-    ) -> (Vec<IndexItem>, Vec<FailedItem>) {
+    ) -> (Vec<CompileArtifact>, Vec<FailedItem>) {
         let source_label = source.to_string();
 
         match self.resolve_index_action(source, options).await {
             Ok(IndexAction::Skip(skip_info)) => {
                 info!("Skipped (unchanged): {}", source_label);
                 (
-                    vec![IndexItem::new(
+                    vec![CompileArtifact::new(
                         skip_info.doc_id,
                         skip_info.name,
                         skip_info.format,
@@ -309,11 +272,11 @@ impl Engine {
     /// is not retryable.
     async fn index_with_retry(
         &self,
-        source: &IndexSource,
+        source: &CompileSource,
         name: Option<&str>,
         pipeline_options: PipelineOptions,
         existing_tree: Option<&DocumentTree>,
-    ) -> Result<super::indexed_document::IndexedDocument> {
+    ) -> Result<super::compiled_document::CompiledDocument> {
         let retry = &self.config.llm.retry;
         let max_attempts = retry.max_attempts;
 
@@ -348,17 +311,17 @@ impl Engine {
         unreachable!()
     }
 
-    /// Convert an [`IndexedDocument`] to an [`IndexItem`] and persist it.
+    /// Convert an [`CompiledDocument`] to an [`CompileArtifact`] and persist it.
     ///
     /// If `old_id` is provided, the old document is removed after a
     /// successful save (atomic save-first, then remove old).
     async fn index_and_persist(
         &self,
-        doc: super::indexed_document::IndexedDocument,
+        doc: super::compiled_document::CompiledDocument,
         pipeline_options: &PipelineOptions,
         source_label: &str,
         old_id: Option<&str>,
-    ) -> (Vec<IndexItem>, Vec<FailedItem>) {
+    ) -> (Vec<CompileArtifact>, Vec<FailedItem>) {
         let item = Self::build_index_item(&doc);
 
         info!("[index] Persisting document '{}'...", doc.name,);
@@ -382,9 +345,9 @@ impl Engine {
         (vec![item], Vec::new())
     }
 
-    /// Build an [`IndexItem`] from an [`IndexedDocument`](super::indexed_document::IndexedDocument).
-    fn build_index_item(doc: &super::indexed_document::IndexedDocument) -> IndexItem {
-        IndexItem::new(
+    /// Build an [`CompileArtifact`] from an [`CompiledDocument`](super::compiled_document::CompiledDocument).
+    fn build_index_item(doc: &super::compiled_document::CompiledDocument) -> CompileArtifact {
+        CompileArtifact::new(
             doc.id.clone(),
             doc.name.clone(),
             doc.format.clone(),
@@ -409,23 +372,23 @@ impl Engine {
     /// Returns a [`vectorless_document::DocumentInfo`] with summary, structure, and concepts.
     /// The engine builds a full understanding including tree, navigation index,
     /// reasoning index, summary, and key concepts.
-    pub async fn ingest(&self, input: IngestInput) -> Result<vectorless_document::DocumentInfo> {
+    pub async fn compile(&self, input: IngestInput) -> Result<vectorless_document::DocumentInfo> {
         let ctx = match &input {
-            IngestInput::Path(path) => IndexContext::from_path(path),
+            IngestInput::Path(path) => CompileInput::from_path(path),
             IngestInput::Bytes { data, format, .. } => {
-                IndexContext::from_bytes(data.clone(), *format)
+                CompileInput::from_bytes(data.clone(), *format)
             }
-            IngestInput::Text { content, .. } => IndexContext::from_content(
+            IngestInput::Text { content, .. } => CompileInput::from_content(
                 content,
-                vectorless_index::parse::DocumentFormat::Markdown,
+                vectorless_compiler::parse::DocumentFormat::Markdown,
             ),
         };
 
-        let result = self.ingest_pipeline(ctx).await?;
+        let result = self.compile_pipeline(ctx).await?;
 
         let doc_id = result
             .doc_id()
-            .ok_or_else(|| Error::Config("ingest produced no results".into()))?
+            .ok_or_else(|| Error::Config("compile produced no results".into()))?
             .to_string();
 
         // Load the persisted document to build DocumentInfo
@@ -433,22 +396,10 @@ impl Engine {
             .workspace
             .load(&doc_id)
             .await?
-            .ok_or_else(|| Error::Config("Document not found after ingest".into()))?;
+            .ok_or_else(|| Error::Config("Document not found after compile".into()))?;
 
         let doc = Self::persisted_to_understanding_document(persisted);
         Ok(doc.info())
-    }
-
-    /// Ask a question — returns a reasoned answer with evidence and trace.
-    ///
-    /// Ask a question about the indexed documents.
-    ///
-    /// **Note**: Retrieval is now handled by the Python strategy layer.
-    /// This method returns an error — use Engine.ask() from the Python SDK.
-    pub async fn ask(&self, _input: &str, _ids: &[String]) -> Result<Answer> {
-        Err(Error::Config(
-            "Retrieval has been migrated to Python. Use Engine.ask() from the Python SDK.".into(),
-        ))
     }
 
     /// Remove a document from the workspace.
@@ -554,6 +505,10 @@ impl Engine {
             reasoning_index,
             summary: persisted.meta.description.unwrap_or_default(),
             concepts: persisted.concepts,
+            query_routes: persisted.query_routes,
+            chain_index: persisted.chain_index,
+            content_overlap: persisted.content_overlap,
+            evidence_scores: persisted.evidence_scores,
             page_count: persisted.meta.page_count,
             section_count,
         }
@@ -562,29 +517,6 @@ impl Engine {
     // ============================================================
     // Internal
     // ============================================================
-
-    /// Load documents by ID, returning loaded artifacts and failures.
-    async fn load_documents(
-        &self,
-        doc_ids: &[String],
-    ) -> Result<(Vec<vectorless_document::Document>, Vec<FailedItem>)> {
-        let mut documents = Vec::new();
-        let mut failed = Vec::new();
-        for doc_id in doc_ids {
-            match self.workspace.load(doc_id).await {
-                Ok(Some(doc)) => {
-                    documents.push(Self::persisted_to_understanding_document(doc));
-                }
-                Ok(None) => {
-                    failed.push(FailedItem::new(doc_id, "Document not found"));
-                }
-                Err(e) => {
-                    failed.push(FailedItem::new(doc_id, &e.to_string()));
-                }
-            }
-        }
-        Ok((documents, failed))
-    }
 
     /// Run a future with an optional timeout.
     /// If `timeout_secs` is `Some`, wraps the future in `tokio::time::timeout`.
@@ -608,26 +540,26 @@ impl Engine {
     /// This is the single source of truth for pipeline configuration.
     fn build_pipeline_options(
         &self,
-        options: &super::types::IndexOptions,
-        source: &IndexSource,
+        options: &super::types::CompileOptions,
+        source: &CompileSource,
     ) -> PipelineOptions {
-        use vectorless_index::{IndexMode, ReasoningIndexConfig, SummaryStrategy};
+        use vectorless_compiler::{ReasoningIndexConfig, SourceFormat, SummaryStrategy};
 
         let format = match source {
-            IndexSource::Path(path) => self
+            CompileSource::Path(path) => self
                 .indexer
                 .detect_format_from_path(path)
-                .unwrap_or(vectorless_index::parse::DocumentFormat::Markdown),
-            IndexSource::Content { format, .. } => *format,
-            IndexSource::Bytes { format, .. } => *format,
+                .unwrap_or(vectorless_compiler::parse::DocumentFormat::Markdown),
+            CompileSource::Content { format, .. } => *format,
+            CompileSource::Bytes { format, .. } => *format,
         };
 
         let checkpoint_dir = Some(self.config.storage.checkpoint_dir.clone());
 
         PipelineOptions {
             mode: match format {
-                vectorless_index::parse::DocumentFormat::Markdown => IndexMode::Markdown,
-                vectorless_index::parse::DocumentFormat::Pdf => IndexMode::Pdf,
+                vectorless_compiler::parse::DocumentFormat::Markdown => SourceFormat::Markdown,
+                vectorless_compiler::parse::DocumentFormat::Pdf => SourceFormat::Pdf,
             },
             generate_ids: options.generate_ids,
             summary_strategy: if options.generate_summaries {
@@ -651,19 +583,19 @@ impl Engine {
     /// Resolve what action to take for a source.
     async fn resolve_index_action(
         &self,
-        source: &IndexSource,
-        options: &super::types::IndexOptions,
+        source: &CompileSource,
+        options: &super::types::CompileOptions,
     ) -> Result<IndexAction> {
         let workspace = &self.workspace;
 
         // Force mode always re-indexes from scratch
-        if options.mode == IndexMode::Force {
+        if options.mode == CompileMode::Force {
             return Ok(IndexAction::FullIndex { existing_id: None });
         }
 
         // Only path sources support incremental indexing
         let path = match source {
-            IndexSource::Path(p) => p,
+            CompileSource::Path(p) => p,
             _ => return Ok(IndexAction::FullIndex { existing_id: None }),
         };
 
@@ -674,7 +606,7 @@ impl Engine {
         };
 
         // Default mode: skip if already indexed (no content check)
-        if options.mode == IndexMode::Default {
+        if options.mode == CompileMode::Default {
             let info = workspace.get_document_info(&existing_id).await?;
             let (name, format_str, desc, pages) = match info {
                 Some(i) => (i.name, i.format, i.description, i.page_count),
@@ -683,8 +615,8 @@ impl Engine {
             return Ok(IndexAction::Skip(incremental::SkipInfo {
                 doc_id: existing_id,
                 name,
-                format: vectorless_index::parse::DocumentFormat::from_extension(&format_str)
-                    .unwrap_or(vectorless_index::parse::DocumentFormat::Markdown),
+                format: vectorless_compiler::parse::DocumentFormat::from_extension(&format_str)
+                    .unwrap_or(vectorless_compiler::parse::DocumentFormat::Markdown),
                 description: desc,
                 page_count: pages,
             }));
@@ -702,8 +634,8 @@ impl Engine {
         };
 
         let format =
-            vectorless_index::parse::DocumentFormat::from_extension(&stored_doc.meta.format)
-                .unwrap_or(vectorless_index::parse::DocumentFormat::Markdown);
+            vectorless_compiler::parse::DocumentFormat::from_extension(&stored_doc.meta.format)
+                .unwrap_or(vectorless_compiler::parse::DocumentFormat::Markdown);
         let pipeline_options = self.build_pipeline_options(options, source);
 
         // If logic fingerprint changed, remove old doc before full reprocess
@@ -825,30 +757,33 @@ impl std::fmt::Debug for Engine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::IndexMode;
+    use crate::types::CompileMode;
 
     // -- resolve_index_action Default mode ----------------------------------------------
 
     // We can't call resolve_index_action without a workspace, but we can
-    // verify IndexMode equality logic used inside.
+    // verify CompileMode equality logic used inside.
     #[test]
     fn test_index_mode_force_skips_incremental() {
-        let mode = IndexMode::Force;
-        assert_eq!(mode, IndexMode::Force);
-        assert_ne!(mode, IndexMode::Default);
-        assert_ne!(mode, IndexMode::Incremental);
+        let mode = CompileMode::Force;
+        assert_eq!(mode, CompileMode::Force);
+        assert_ne!(mode, CompileMode::Default);
+        assert_ne!(mode, CompileMode::Incremental);
     }
 
     // -- build_index_item ----------------------------------------------------------------
 
     // Build_index_item only transforms data -- no I/O.
-    use crate::indexed_document::IndexedDocument;
+    use crate::compiled_document::CompiledDocument;
 
-    fn make_doc() -> IndexedDocument {
-        IndexedDocument::new("test-id", vectorless_index::parse::DocumentFormat::Markdown)
-            .with_name("test.md")
-            .with_description("test doc")
-            .with_source_path(std::path::PathBuf::from("/tmp/test.md"))
+    fn make_doc() -> CompiledDocument {
+        CompiledDocument::new(
+            "test-id",
+            vectorless_compiler::parse::DocumentFormat::Markdown,
+        )
+        .with_name("test.md")
+        .with_description("test doc")
+        .with_source_path(std::path::PathBuf::from("/tmp/test.md"))
     }
 
     #[test]
@@ -860,7 +795,7 @@ mod tests {
         assert_eq!(item.name, "test.md");
         assert_eq!(
             item.format,
-            vectorless_index::parse::DocumentFormat::Markdown
+            vectorless_compiler::parse::DocumentFormat::Markdown
         );
         assert_eq!(item.description, Some("test doc".to_string()));
         assert_eq!(item.source_path, Some("/tmp/test.md".to_string()));
@@ -869,10 +804,10 @@ mod tests {
 
     #[test]
     fn test_build_index_item_no_source_path() {
-        let doc = IndexedDocument::new("id", vectorless_index::parse::DocumentFormat::Pdf);
+        let doc = CompiledDocument::new("id", vectorless_compiler::parse::DocumentFormat::Pdf);
         let item = Engine::build_index_item(&doc);
 
         assert_eq!(item.source_path, Some(String::new())); // unwrap_or_default
-        assert_eq!(item.format, vectorless_index::parse::DocumentFormat::Pdf);
+        assert_eq!(item.format, vectorless_compiler::parse::DocumentFormat::Pdf);
     }
 }

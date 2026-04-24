@@ -19,7 +19,6 @@ use tracing::{debug, info};
 
 use super::types::{MemoEntry, MemoKey, MemoOpType, MemoStats, MemoValue};
 use vectorless_error::Result;
-use vectorless_utils::fingerprint::Fingerprint;
 
 /// Default TTL for cache entries (7 days).
 const DEFAULT_TTL: Duration = Duration::days(7);
@@ -458,88 +457,11 @@ impl Default for MemoStore {
     }
 }
 
-/// A helper for building memo keys with context.
-pub struct MemoKeyBuilder {
-    model_id: Option<String>,
-    version: u32,
-}
-
-impl MemoKeyBuilder {
-    /// Create a new key builder.
-    pub fn new() -> Self {
-        Self {
-            model_id: None,
-            version: 1,
-        }
-    }
-
-    /// Set the model identifier.
-    pub fn with_model(mut self, model_id: &str) -> Self {
-        self.model_id = Some(model_id.to_string());
-        self
-    }
-
-    /// Set the version.
-    pub fn with_version(mut self, version: u32) -> Self {
-        self.version = version;
-        self
-    }
-
-    /// Build a summary key.
-    pub fn summary_key(&self, content_fp: &Fingerprint) -> MemoKey {
-        MemoKey {
-            op_type: super::types::MemoOpType::Summary,
-            input_fp: *content_fp,
-            model_id: self.model_id.clone(),
-            version: self.version,
-            context_fp: Fingerprint::zero(),
-        }
-    }
-
-    /// Build a pilot decision key.
-    pub fn pilot_key(&self, context_fp: &Fingerprint, query_fp: &Fingerprint) -> MemoKey {
-        MemoKey {
-            op_type: super::types::MemoOpType::PilotDecision,
-            input_fp: *query_fp,
-            model_id: self.model_id.clone(),
-            version: self.version,
-            context_fp: *context_fp,
-        }
-    }
-
-    /// Build a query analysis key.
-    pub fn query_analysis_key(&self, query_fp: &Fingerprint) -> MemoKey {
-        MemoKey {
-            op_type: super::types::MemoOpType::QueryAnalysis,
-            input_fp: *query_fp,
-            model_id: self.model_id.clone(),
-            version: self.version,
-            context_fp: Fingerprint::zero(),
-        }
-    }
-
-    /// Build an extraction key.
-    pub fn extraction_key(&self, content_fp: &Fingerprint) -> MemoKey {
-        MemoKey {
-            op_type: super::types::MemoOpType::Extraction,
-            input_fp: *content_fp,
-            model_id: self.model_id.clone(),
-            version: self.version,
-            context_fp: Fingerprint::zero(),
-        }
-    }
-}
-
-impl Default for MemoKeyBuilder {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use tempfile::TempDir;
+    use vectorless_utils::fingerprint::Fingerprint;
 
     fn make_test_key() -> MemoKey {
         let fp = Fingerprint::from_str("test content");
@@ -666,16 +588,5 @@ mod tests {
         assert_eq!(stats.misses, 1);
         assert_eq!(stats.hits, 1);
         assert_eq!(stats.tokens_saved, 100);
-    }
-
-    #[test]
-    fn test_memo_key_builder() {
-        let builder = MemoKeyBuilder::new().with_model("gpt-4").with_version(2);
-
-        let fp = Fingerprint::from_str("content");
-        let key = builder.summary_key(&fp);
-
-        assert_eq!(key.model_id, Some("gpt-4".to_string()));
-        assert_eq!(key.version, 2);
     }
 }

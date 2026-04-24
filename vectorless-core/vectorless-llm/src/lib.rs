@@ -40,6 +40,3 @@ pub mod throttle;
 pub use client::LlmClient;
 pub use error::LlmResult;
 pub use pool::LlmPool;
-
-// Re-export vectorless_error types for internal use
-pub(crate) use vectorless_error::{Error, Result};

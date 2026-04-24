@@ -10,7 +10,7 @@ use ::vectorless_engine::{
 };
 
 /// A keyword with weight from document analysis.
-#[pyclass(name = "WeightedKeyword")]
+#[pyclass(name = "WeightedKeyword", skip_from_py_object)]
 pub struct PyWeightedKeyword {
     pub(crate) inner: WeightedKeyword,
 }
@@ -36,7 +36,7 @@ impl PyWeightedKeyword {
 }
 
 /// Evidence for a cross-document connection.
-#[pyclass(name = "EdgeEvidence")]
+#[pyclass(name = "EdgeEvidence", skip_from_py_object)]
 pub struct PyEdgeEvidence {
     pub(crate) inner: EdgeEvidence,
 }
@@ -74,7 +74,7 @@ impl PyEdgeEvidence {
 }
 
 /// An edge representing a relationship between two documents.
-#[pyclass(name = "GraphEdge")]
+#[pyclass(name = "GraphEdge", skip_from_py_object)]
 pub struct PyGraphEdge {
     pub(crate) inner: GraphEdge,
 }
@@ -110,7 +110,7 @@ impl PyGraphEdge {
 }
 
 /// A node in the document graph representing an indexed document.
-#[pyclass(name = "DocumentGraphNode")]
+#[pyclass(name = "DocumentGraphNode", skip_from_py_object)]
 pub struct PyDocumentGraphNode {
     pub(crate) inner: DocumentGraphNode,
 }
@@ -159,7 +159,7 @@ impl PyDocumentGraphNode {
 ///
 /// Automatically rebuilt after indexing. Connects documents
 /// that share keywords via Jaccard similarity.
-#[pyclass(name = "DocumentGraph")]
+#[pyclass(name = "DocumentGraph", skip_from_py_object)]
 pub struct PyDocumentGraph {
     pub(crate) inner: DocumentGraph,
 }

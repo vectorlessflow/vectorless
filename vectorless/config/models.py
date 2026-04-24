@@ -40,13 +40,6 @@ class MetricsConfig(BaseModel):
     enabled: bool = True
 
 
-class RetrievalConfig(BaseModel):
-    """Retrieval behavior configuration."""
-
-    top_k: int = Field(default=3, ge=1)
-    max_iterations: int = Field(default=10, ge=1)
-
-
 class StorageConfig(BaseModel):
     """Storage and workspace configuration."""
 
@@ -62,7 +55,6 @@ class EngineConfig(BaseModel):
 
         config = EngineConfig(
             llm=LlmConfig(model="gpt-4o", api_key="sk-..."),
-            retrieval=RetrievalConfig(top_k=5),
         )
 
         # Convert to Rust Config for Engine construction
@@ -71,7 +63,6 @@ class EngineConfig(BaseModel):
 
     llm: LlmConfig = LlmConfig()
     metrics: MetricsConfig = MetricsConfig()
-    retrieval: RetrievalConfig = RetrievalConfig()
     storage: StorageConfig = StorageConfig()
 
     def to_rust_config(self) -> RustConfig:
@@ -81,8 +72,6 @@ class EngineConfig(BaseModel):
         """
         cfg = RustConfig()
         cfg.set_workspace_dir(self.storage.workspace_dir)
-        cfg.set_top_k(self.retrieval.top_k)
-        cfg.set_max_iterations(self.retrieval.max_iterations)
         cfg.set_max_concurrent_requests(self.llm.throttle.max_concurrent_requests)
         cfg.set_requests_per_minute(self.llm.throttle.requests_per_minute)
         cfg.set_metrics_enabled(self.metrics.enabled)

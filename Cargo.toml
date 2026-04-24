@@ -14,8 +14,8 @@ members = [
     # "vectorless-core/vectorless-query",
     # "vectorless-core/vectorless-agent",
     # "vectorless-core/vectorless-retrieval",
-    "vectorless-core/vectorless-index",
-    "vectorless-core/vectorless-rerank",
+    # "vectorless-core/vectorless-rerank",
+    "vectorless-core/vectorless-compiler",
     "vectorless-core/vectorless-primitives",
     "vectorless-core/vectorless-engine",
     "vectorless-core/vectorless-py",
@@ -24,7 +24,7 @@ resolver = "2"
 
 [workspace.package]
 version = "0.1.12"
-description = "Document Understanding Engine for AI"
+description = "Knowing by reasoning, not vectors."
 edition = "2024"
 authors = ["zTgx <beautifularea@gmail.com>"]
 license = "Apache-2.0"

@@ -28,50 +28,6 @@ use vectorless_config::{
     FallbackBehavior, FallbackConfig as ConfigFallbackConfig, OnAllFailedBehavior,
 };
 
-/// Result from a fallback-aware LLM call.
-#[derive(Debug, Clone)]
-pub struct FallbackResult<T> {
-    /// The actual result.
-    pub result: T,
-    /// Whether the result came from a fallback model/endpoint.
-    pub degraded: bool,
-    /// The model that was ultimately used.
-    pub model: String,
-    /// The endpoint that was ultimately used.
-    pub endpoint: String,
-    /// History of fallback attempts (for debugging).
-    pub fallback_history: Vec<FallbackStep>,
-}
-
-impl<T> FallbackResult<T> {
-    /// Create a successful result without fallback.
-    pub fn success(result: T, model: String, endpoint: String) -> Self {
-        Self {
-            result,
-            degraded: false,
-            model,
-            endpoint,
-            fallback_history: Vec::new(),
-        }
-    }
-
-    /// Create a result from a fallback.
-    pub fn from_fallback(
-        result: T,
-        model: String,
-        endpoint: String,
-        history: Vec<FallbackStep>,
-    ) -> Self {
-        Self {
-            result,
-            degraded: true,
-            model,
-            endpoint,
-            fallback_history: history,
-        }
-    }
-}
-
 /// A single step in the fallback chain.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FallbackStep {

@@ -1,20 +1,20 @@
 // Copyright (c) 2026 vectorless developers
 // SPDX-License-Identifier: Apache-2.0
 
-//! Document indexing client.
+//! Document compile client.
 //!
-//! This module provides document indexing operations including
+//! This module provides document compilation operations including
 //! format detection, parsing, and tree building.
 //!
 //! # Example
 //!
 //! ```rust,ignore
-//! use vectorless::client::{IndexerClient, IndexContext};
+//! use vectorless::client::{IndexerClient, CompileInput};
 //!
 //! let indexer = IndexerClient::new(executor);
 //!
 //! let result = indexer
-//!     .index(IndexContext::from_path("./document.md"))
+//!     .index(CompileInput::from_path("./document.md"))
 //!     .await?;
 //!
 //! println!("Indexed: {} ({} nodes)", result.id, result.tree.as_ref().map(|t| t.node_count()).unwrap_or(0));
@@ -26,21 +26,21 @@ use std::sync::Arc;
 use tracing::info;
 use uuid::Uuid;
 
+use vectorless_compiler::{CompilerInput, PipelineExecutor, PipelineOptions, SourceFormat};
 use vectorless_document::DocumentFormat;
 use vectorless_error::{Error, Result};
-use vectorless_index::{IndexInput, IndexMode, PipelineExecutor, PipelineOptions};
 use vectorless_llm::LlmClient;
 use vectorless_storage::{DocumentMeta, PersistedDocument};
 
-use super::index_context::IndexSource;
-use super::indexed_document::IndexedDocument;
+use super::compile_input::CompileSource;
+use super::compiled_document::CompiledDocument;
 use vectorless_events::{EventEmitter, IndexEvent};
 
-/// Document indexing client.
+/// Document compile client.
 ///
-/// Provides operations for parsing and indexing documents.
-/// Each index operation creates a fresh pipeline executor, enabling
-/// true parallel document indexing without mutex contention.
+/// Provides operations for compiling documents.
+/// Each compile operation creates a fresh pipeline executor, enabling
+/// true parallel document compilation without mutex contention.
 pub(crate) struct IndexerClient {
     /// Factory for creating pipeline executors (one per index operation).
     executor_factory: Arc<dyn Fn() -> PipelineExecutor + Send + Sync>,
@@ -59,14 +59,6 @@ impl IndexerClient {
         }
     }
 
-    /// Create with a custom executor factory (for testing).
-    pub(crate) fn with_factory(factory: Arc<dyn Fn() -> PipelineExecutor + Send + Sync>) -> Self {
-        Self {
-            executor_factory: factory,
-            events: EventEmitter::new(),
-        }
-    }
-
     /// Create with event emitter.
     pub fn with_events(mut self, events: EventEmitter) -> Self {
         self.events = events;
@@ -79,10 +71,10 @@ impl IndexerClient {
     /// (including checkpoint dir, reasoning config, etc.).
     pub async fn index(
         &self,
-        source: &IndexSource,
+        source: &CompileSource,
         name: Option<&str>,
         pipeline_options: PipelineOptions,
-    ) -> Result<IndexedDocument> {
+    ) -> Result<CompiledDocument> {
         self.index_with_existing(source, name, pipeline_options, None)
             .await
     }
@@ -92,19 +84,19 @@ impl IndexerClient {
     /// The caller provides fully constructed [`PipelineOptions`].
     pub async fn index_with_existing(
         &self,
-        source: &IndexSource,
+        source: &CompileSource,
         name: Option<&str>,
         mut pipeline_options: PipelineOptions,
         existing_tree: Option<&vectorless_document::DocumentTree>,
-    ) -> Result<IndexedDocument> {
+    ) -> Result<CompiledDocument> {
         pipeline_options.existing_tree = existing_tree.cloned();
         match source {
-            IndexSource::Path(path) => self.index_from_path(path, name, pipeline_options).await,
-            IndexSource::Content { data, format } => {
+            CompileSource::Path(path) => self.index_from_path(path, name, pipeline_options).await,
+            CompileSource::Content { data, format } => {
                 self.index_from_content(data, *format, name, pipeline_options)
                     .await
             }
-            IndexSource::Bytes { data, format } => {
+            CompileSource::Bytes { data, format } => {
                 self.index_from_bytes(data, *format, name, pipeline_options)
                     .await
             }
@@ -119,7 +111,7 @@ impl IndexerClient {
         path: &Path,
         name: Option<&str>,
         pipeline_options: PipelineOptions,
-    ) -> Result<IndexedDocument> {
+    ) -> Result<CompiledDocument> {
         let path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
 
         // Validate file before indexing
@@ -140,7 +132,7 @@ impl IndexerClient {
         // Resolve format from pipeline options (set by Engine) — no re-detection
         let format = Self::format_from_mode(&pipeline_options.mode);
 
-        let input = IndexInput::file(&path);
+        let input = CompilerInput::file(&path);
         self.run_pipeline(
             input,
             format,
@@ -159,7 +151,7 @@ impl IndexerClient {
         format: DocumentFormat,
         name: Option<&str>,
         pipeline_options: PipelineOptions,
-    ) -> Result<IndexedDocument> {
+    ) -> Result<CompiledDocument> {
         // Validate content before indexing
         let validation = vectorless_utils::validate_content(content, format);
         if !validation.valid {
@@ -172,7 +164,7 @@ impl IndexerClient {
             ));
         }
 
-        let input = IndexInput::content(content);
+        let input = CompilerInput::content(content);
         self.run_pipeline(
             input,
             format,
@@ -191,7 +183,7 @@ impl IndexerClient {
         format: DocumentFormat,
         name: Option<&str>,
         pipeline_options: PipelineOptions,
-    ) -> Result<IndexedDocument> {
+    ) -> Result<CompiledDocument> {
         // Validate bytes before indexing
         let validation = vectorless_utils::validate_bytes(bytes, format);
         if !validation.valid {
@@ -210,7 +202,7 @@ impl IndexerClient {
             bytes.len()
         );
 
-        let input = IndexInput::bytes(bytes);
+        let input = CompilerInput::bytes(bytes);
         self.run_pipeline(
             input,
             format,
@@ -226,13 +218,13 @@ impl IndexerClient {
     #[tracing::instrument(skip_all, fields(format = ?format, source = %source_label))]
     async fn run_pipeline(
         &self,
-        input: IndexInput,
+        input: CompilerInput,
         format: DocumentFormat,
         source_label: &str,
         name: Option<&str>,
         path: Option<&Path>,
         pipeline_options: PipelineOptions,
-    ) -> Result<IndexedDocument> {
+    ) -> Result<CompiledDocument> {
         self.events.emit_index(IndexEvent::Started {
             path: source_label.to_string(),
         });
@@ -246,18 +238,18 @@ impl IndexerClient {
         let mut executor = (self.executor_factory)();
         let result = executor.execute(input, pipeline_options).await?;
 
-        self.build_indexed_document(doc_id, result, format, name, path)
+        self.build_compiled_document(doc_id, result, format, name, path)
     }
 
-    /// Build indexed document from pipeline result.
-    fn build_indexed_document(
+    /// Build compiled document from pipeline result.
+    fn build_compiled_document(
         &self,
         doc_id: String,
-        result: vectorless_index::PipelineResult,
+        result: vectorless_compiler::CompileResult,
         format: DocumentFormat,
         name: Option<&str>,
         path: Option<&Path>,
-    ) -> Result<IndexedDocument> {
+    ) -> Result<CompiledDocument> {
         let tree = result
             .tree
             .ok_or_else(|| Error::Parse("Document tree not generated".to_string()))?;
@@ -273,7 +265,7 @@ impl IndexerClient {
             })
             .unwrap_or_else(|| result.name.clone());
 
-        let mut doc = IndexedDocument::new(&doc_id, format)
+        let mut doc = CompiledDocument::new(&doc_id, format)
             .with_name(&doc_name)
             .with_tree(tree)
             .with_metrics(result.metrics);
@@ -281,6 +273,10 @@ impl IndexerClient {
         doc.reasoning_index = result.reasoning_index;
         doc.navigation_index = result.navigation_index;
         doc.concepts = result.concepts;
+        doc.query_routes = result.query_routes;
+        doc.chain_index = result.chain_index;
+        doc.content_overlap = result.content_overlap;
+        doc.evidence_scores = result.evidence_scores;
 
         if let Some(p) = path {
             doc = doc.with_source_path(p);
@@ -304,11 +300,11 @@ impl IndexerClient {
     ///
     /// Falls back to Markdown for `Auto` mode (the engine resolves
     /// `Auto` to a concrete format before calling the indexer).
-    fn format_from_mode(mode: &IndexMode) -> DocumentFormat {
+    fn format_from_mode(mode: &SourceFormat) -> DocumentFormat {
         match mode {
-            IndexMode::Markdown => DocumentFormat::Markdown,
-            IndexMode::Pdf => DocumentFormat::Pdf,
-            IndexMode::Auto => DocumentFormat::Markdown,
+            SourceFormat::Markdown => DocumentFormat::Markdown,
+            SourceFormat::Pdf => DocumentFormat::Pdf,
+            SourceFormat::Auto => DocumentFormat::Markdown,
         }
     }
 
@@ -319,14 +315,14 @@ impl IndexerClient {
             .ok_or_else(|| Error::Parse(format!("Unsupported format: {}", ext)))
     }
 
-    /// Convert [`IndexedDocument`] to [`PersistedDocument`].
+    /// Convert [`CompiledDocument`] to [`PersistedDocument`].
     ///
     /// This is an associated function — it does not depend on client state.
     /// Stores content and logic fingerprints from the pipeline options.
     ///
     /// Uses async file I/O to avoid blocking the tokio runtime.
     pub async fn to_persisted(
-        doc: IndexedDocument,
+        doc: CompiledDocument,
         pipeline_options: &PipelineOptions,
     ) -> PersistedDocument {
         let mut meta = DocumentMeta::new(&doc.id, &doc.name, doc.format.extension())
@@ -350,7 +346,7 @@ impl IndexerClient {
         let logic_fp = pipeline_options.logic_fingerprint();
         meta = meta.with_logic_fingerprint(logic_fp);
 
-        let tree = doc.tree.expect("IndexedDocument must have a tree");
+        let tree = doc.tree.expect("CompiledDocument must have a tree");
 
         // Extract stats from metrics
         let node_count = tree.node_count();
@@ -369,6 +365,10 @@ impl IndexerClient {
         persisted.reasoning_index = doc.reasoning_index;
         persisted.navigation_index = doc.navigation_index;
         persisted.concepts = doc.concepts;
+        persisted.query_routes = doc.query_routes;
+        persisted.chain_index = doc.chain_index;
+        persisted.content_overlap = doc.content_overlap;
+        persisted.evidence_scores = doc.evidence_scores;
         persisted
             .meta
             .update_processing_stats(node_count, summary_tokens, duration_ms);

@@ -17,42 +17,6 @@ use super::engine::Engine;
 ///
 /// `api_key`, `model` and `endpoint` are **required** for simple usage.
 /// Advanced users can provide a pre-built [`Config`] via [`with_config`](EngineBuilder::with_config).
-///
-/// # Example (simple)
-///
-/// ```rust,no_run
-/// use vectorless::client::EngineBuilder;
-///
-/// #[tokio::main]
-/// async fn main() -> Result<(), vectorless::BuildError> {
-///     let client = EngineBuilder::new()
-///         .with_key("sk-...")
-///         .with_model("gpt-4o")
-///         .with_endpoint("https://api.xxx.com/v1")
-///         .build()
-///         .await?;
-///    Ok(())
-/// }
-/// ```
-///
-/// # Example (advanced)
-///
-/// ```rust,ignore
-/// use vectorless::client::EngineBuilder;
-/// use vectorless::config::{Config, LlmConfig, SlotConfig};
-///
-/// let config = Config::new().with_llm(
-///     LlmConfig::new("gpt-4o")
-///         .with_api_key("sk-...")
-///         .with_endpoint("https://api.openai.com/v1")
-///         .with_index(SlotConfig::fast().with_model("gpt-4o-mini"))
-/// );
-///
-/// let engine = EngineBuilder::new()
-///     .with_config(config)
-///     .build()
-///     .await?;
-/// ```
 #[derive(Debug)]
 pub struct EngineBuilder {
     /// Custom configuration for advanced tuning.
@@ -143,22 +107,7 @@ impl EngineBuilder {
     /// - Workspace creation fails
     /// - Required `api_key` or `model` is missing
     ///
-    /// # Example
-    ///
-    /// ```rust,no_run
-    /// use vectorless::client::EngineBuilder;
-    ///
-    /// # #[tokio::main]
-    /// # async fn main() -> Result<(), vectorless::BuildError> {
-    /// let engine = EngineBuilder::new()
-    ///     .with_key("sk-...")
-    ///     .with_model("gpt-4o")
-    ///     .with_endpoint("https://api.openai.com/v1")
-    ///     .build()
-    ///     .await?;
-    /// # Ok(())
-    /// # }
-    /// ```
+    /// Build the Engine client.
     pub async fn build(self) -> Result<Engine, BuildError> {
         // Load user-provided or default configuration
         let mut config = self.config.unwrap_or_default();

@@ -4,27 +4,23 @@
 //! Understanding types — the core objects that define the Document Understanding Engine.
 //!
 //! These types form the stable public contract:
-//! - [`Document`] — the unified post-ingest artifact (internal first-class citizen)
-//! - [`DocumentInfo`] — what `ingest()` returns to users
+//! - [`Document`] — the unified post-compile artifact (internal first-class citizen)
+//! - [`DocumentInfo`] — what `compile()` returns to users
 //! - [`Concept`] — key concept extracted from a document
-//! - [`Answer`] — what `ask()` returns
-//! - [`Evidence`] — proof trail for an answer
-//! - [`ReasoningTrace`] / [`TraceStep`] — always-mandatory reasoning trace
 
 use serde::{Deserialize, Serialize};
 
 use super::toc::TocNode;
 
 // ---------------------------------------------------------------------------
-// Document — unified post-ingest artifact
+// Document — unified post-compile artifact
 // ---------------------------------------------------------------------------
 
-/// A understood document — the core artifact of the understand phase.
+/// A compiled document — the core artifact of the compile pipeline.
 ///
-/// This is what `ingest()` produces internally and what `ask()` consumes.
+/// This is what `compile()` produces internally.
 /// It unifies tree + navigation index + reasoning index + summary + concepts
-/// into a single first-class type, replacing the previous loose coupling of
-/// `DocContext { &tree, &nav, &reasoning }`.
+/// + agent acceleration data into a single first-class type.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Document {
     /// Unique document identifier.
@@ -33,11 +29,11 @@ pub struct Document {
     pub name: String,
     /// Document format ("pdf", "markdown", "docx").
     pub format: String,
-    /// Source file path (if indexed from a file).
+    /// Source file path (if compiled from a file).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source_path: Option<String>,
 
-    // ── Three indexes (engine internal) ──
+    // ── Indexes ──
     /// Hierarchical semantic tree.
     pub tree: super::tree::DocumentTree,
     /// Pre-computed navigation structure.
@@ -45,12 +41,26 @@ pub struct Document {
     /// Keyword / topic / section summaries.
     pub reasoning_index: super::reasoning::ReasoningIndex,
 
-    // ── Understanding results (ingest stage output) ──
+    // ── Compile results ──
     /// Document-level summary.
     pub summary: String,
     /// Key concepts the engine identified.
     #[serde(default)]
     pub concepts: Vec<Concept>,
+
+    // ── Agent acceleration data ──
+    /// Pre-computed query routing table.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub query_routes: Option<super::query_route::QueryRoutingTable>,
+    /// Reasoning chain index.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub chain_index: Option<super::chain::ChainIndex>,
+    /// Content overlap map.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub content_overlap: Option<super::overlap::ContentOverlapMap>,
+    /// Per-node evidence quality scores.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub evidence_scores: Option<super::evidence::EvidenceScoreMap>,
 
     // ── Metadata ──
     /// Page count (for PDFs).
@@ -158,89 +168,6 @@ pub struct Concept {
 }
 
 // ---------------------------------------------------------------------------
-// Answer — what ask() returns
-// ---------------------------------------------------------------------------
-
-/// The result of `ask()` — a reasoned answer with evidence and trace.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Answer {
-    /// The answer content.
-    pub content: String,
-    /// Evidence supporting the answer.
-    pub evidence: Vec<Evidence>,
-    /// Confidence score (0.0–1.0).
-    pub confidence: f32,
-    /// Reasoning trace — how the agent arrived at this answer. Always present.
-    pub trace: ReasoningTrace,
-}
-
-// ---------------------------------------------------------------------------
-// Evidence
-// ---------------------------------------------------------------------------
-
-/// A piece of evidence supporting an answer — with source attribution.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Evidence {
-    /// Original document text.
-    pub content: String,
-    /// Navigation path (e.g., "Root/Chapter 3/Section 3.2").
-    pub source_path: String,
-    /// Which document this evidence came from.
-    pub doc_name: String,
-    /// Relevance to the question (0.0–1.0).
-    pub relevance: f32,
-}
-
-// ---------------------------------------------------------------------------
-// ReasoningTrace — always mandatory
-// ---------------------------------------------------------------------------
-
-/// Reasoning trace — how the agent arrived at the answer. Always present.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ReasoningTrace {
-    /// The steps the agent took.
-    pub steps: Vec<TraceStep>,
-}
-
-impl ReasoningTrace {
-    /// Create an empty trace.
-    pub fn empty() -> Self {
-        Self { steps: Vec::new() }
-    }
-
-    /// Create a trace with a single step.
-    pub fn single(action: impl Into<String>, observation: impl Into<String>, round: u32) -> Self {
-        Self {
-            steps: vec![TraceStep {
-                action: action.into(),
-                observation: observation.into(),
-                round,
-            }],
-        }
-    }
-
-    /// Add a step to the trace.
-    pub fn push(&mut self, action: impl Into<String>, observation: impl Into<String>, round: u32) {
-        self.steps.push(TraceStep {
-            action: action.into(),
-            observation: observation.into(),
-            round,
-        });
-    }
-}
-
-/// A single step in the reasoning trace.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TraceStep {
-    /// What the agent did (e.g., "cd Chapter 3").
-    pub action: String,
-    /// What the agent observed (e.g., "Found 5 sections about...").
-    pub observation: String,
-    /// Which round this step was in.
-    pub round: u32,
-}
-
-// ---------------------------------------------------------------------------
 // IngestInput — what ingest() takes
 // ---------------------------------------------------------------------------
 
@@ -270,28 +197,6 @@ pub enum IngestInput {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_reasoning_trace_empty() {
-        let trace = ReasoningTrace::empty();
-        assert!(trace.steps.is_empty());
-    }
-
-    #[test]
-    fn test_reasoning_trace_single() {
-        let trace = ReasoningTrace::single("cd Chapter 3", "Found 5 sections", 1);
-        assert_eq!(trace.steps.len(), 1);
-        assert_eq!(trace.steps[0].action, "cd Chapter 3");
-        assert_eq!(trace.steps[0].round, 1);
-    }
-
-    #[test]
-    fn test_reasoning_trace_push() {
-        let mut trace = ReasoningTrace::empty();
-        trace.push("ls", "Root with 3 children", 0);
-        trace.push("cd Chapter 2", "Found target section", 1);
-        assert_eq!(trace.steps.len(), 2);
-    }
 
     #[test]
     fn test_concept_serialization() {

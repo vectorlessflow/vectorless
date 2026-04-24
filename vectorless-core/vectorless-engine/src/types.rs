@@ -8,7 +8,7 @@
 use serde::{Deserialize, Serialize};
 
 use vectorless_document::DocumentFormat;
-use vectorless_metrics::IndexMetrics;
+use vectorless_metrics::CompileMetrics;
 
 // ============================================================
 // Partial Success
@@ -41,7 +41,7 @@ impl FailedItem {
 ///
 /// Controls how the indexer handles existing documents and re-indexing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum IndexMode {
+pub enum CompileMode {
     /// Default mode - skip if already indexed.
     ///
     /// If a document with the same source has already been indexed,
@@ -58,15 +58,15 @@ pub enum IndexMode {
     /// Incremental mode - only re-index changed files.
     ///
     /// Re-index only if the file has been modified since the last index.
-    /// For content/bytes sources, this behaves like [`IndexMode::Default`].
+    /// For content/bytes sources, this behaves like [`CompileMode::Default`].
     Incremental,
 }
 
 /// Options for indexing a document.
 #[derive(Debug, Clone)]
-pub struct IndexOptions {
+pub struct CompileOptions {
     /// Indexing mode.
-    pub mode: IndexMode,
+    pub mode: CompileMode,
 
     /// Whether to generate summaries using LLM.
     pub generate_summaries: bool,
@@ -86,10 +86,10 @@ pub struct IndexOptions {
     pub timeout_secs: Option<u64>,
 }
 
-impl Default for IndexOptions {
+impl Default for CompileOptions {
     fn default() -> Self {
         Self {
-            mode: IndexMode::Default,
+            mode: CompileMode::Default,
             generate_summaries: true,
             generate_ids: true,
             generate_description: true,
@@ -99,7 +99,7 @@ impl Default for IndexOptions {
     }
 }
 
-impl IndexOptions {
+impl CompileOptions {
     /// Create new index options with defaults.
     pub fn new() -> Self {
         Self::default()
@@ -121,10 +121,10 @@ impl IndexOptions {
     ///
     /// # Modes
     ///
-    /// - [`IndexMode::Default`] - Skip if already indexed
-    /// - [`IndexMode::Force`] - Always re-index
-    /// - [`IndexMode::Incremental`] - Only re-index changed files
-    pub fn with_mode(mut self, mode: IndexMode) -> Self {
+    /// - [`CompileMode::Default`] - Skip if already indexed
+    /// - [`CompileMode::Force`] - Always re-index
+    /// - [`CompileMode::Incremental`] - Only re-index changed files
+    pub fn with_mode(mut self, mode: CompileMode) -> Self {
         self.mode = mode;
         self
     }
@@ -142,17 +142,17 @@ impl IndexOptions {
 
 /// Result of a document indexing operation.
 #[derive(Debug, Clone)]
-pub struct IndexResult {
+pub struct CompileOutput {
     /// Successfully indexed items.
-    pub items: Vec<IndexItem>,
+    pub items: Vec<CompileArtifact>,
 
     /// Items that failed to index (partial success).
     pub failed: Vec<FailedItem>,
 }
 
-impl IndexResult {
+impl CompileOutput {
     /// Create a new index result.
-    pub fn new(items: Vec<IndexItem>) -> Self {
+    pub fn new(items: Vec<CompileArtifact>) -> Self {
         Self {
             items,
             failed: Vec::new(),
@@ -160,7 +160,7 @@ impl IndexResult {
     }
 
     /// Create with both successes and failures.
-    pub fn with_partial(items: Vec<IndexItem>, failed: Vec<FailedItem>) -> Self {
+    pub fn with_partial(items: Vec<CompileArtifact>, failed: Vec<FailedItem>) -> Self {
         Self { items, failed }
     }
 
@@ -196,7 +196,7 @@ impl IndexResult {
 
 /// A single indexed document item.
 #[derive(Debug, Clone)]
-pub struct IndexItem {
+pub struct CompileArtifact {
     /// The unique document ID.
     pub doc_id: String,
     /// The document name.
@@ -210,10 +210,10 @@ pub struct IndexItem {
     /// Page count (for PDFs).
     pub page_count: Option<usize>,
     /// Indexing pipeline metrics (timing, LLM usage, node stats).
-    pub metrics: Option<IndexMetrics>,
+    pub metrics: Option<CompileMetrics>,
 }
 
-impl IndexItem {
+impl CompileArtifact {
     /// Create a new index item.
     pub fn new(
         doc_id: impl Into<String>,
@@ -240,149 +240,15 @@ impl IndexItem {
     }
 
     /// Set the indexing metrics.
-    pub fn with_metrics(mut self, metrics: IndexMetrics) -> Self {
+    pub fn with_metrics(mut self, metrics: CompileMetrics) -> Self {
         self.metrics = Some(metrics);
         self
     }
 
     /// Set the indexing metrics (optional).
-    pub fn with_metrics_opt(mut self, metrics: Option<IndexMetrics>) -> Self {
+    pub fn with_metrics_opt(mut self, metrics: Option<CompileMetrics>) -> Self {
         self.metrics = metrics;
         self
-    }
-}
-
-// ============================================================
-// Query Types — defined locally (strategy layer moved to Python)
-// ============================================================
-
-/// Confidence level of a query result.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Confidence(pub f64);
-
-impl Confidence {
-    /// Create a new confidence value (0.0 - 1.0).
-    pub fn new(value: f64) -> Self {
-        Self(value.clamp(0.0, 1.0))
-    }
-
-    /// Get the raw value.
-    pub fn value(&self) -> f64 {
-        self.0
-    }
-}
-
-/// A piece of evidence supporting a query result.
-#[derive(Debug, Clone)]
-pub struct EvidenceItem {
-    /// Title of the source section.
-    pub title: String,
-    /// Path within the document.
-    pub path: String,
-    /// Content of the evidence.
-    pub content: String,
-}
-
-/// Metrics for a single query result.
-#[derive(Debug, Clone, Default)]
-pub struct QueryMetrics {
-    /// Number of LLM calls made.
-    pub llm_calls: usize,
-    /// Number of navigation rounds used.
-    pub rounds_used: usize,
-    /// Number of document nodes visited.
-    pub nodes_visited: usize,
-    /// Number of evidence items collected.
-    pub evidence_count: usize,
-    /// Total characters in evidence.
-    pub evidence_chars: usize,
-}
-
-/// A single query result item.
-#[derive(Debug, Clone)]
-pub struct QueryResultItem {
-    /// Document ID.
-    pub doc_id: String,
-    /// Node IDs that contributed evidence.
-    pub node_ids: Vec<String>,
-    /// Result content.
-    pub content: String,
-    /// Supporting evidence.
-    pub evidence: Vec<EvidenceItem>,
-    /// Optional metrics.
-    pub metrics: Option<QueryMetrics>,
-    /// Confidence score.
-    pub confidence: f64,
-}
-
-/// Result of a document query.
-///
-/// Contains results from one or more documents. For single-document queries,
-/// `items` has one entry. For multi-document or workspace queries, it has
-/// one entry per document that matched.
-#[derive(Debug, Clone)]
-pub struct QueryResult {
-    /// Query results per document.
-    pub items: Vec<QueryResultItem>,
-
-    /// Documents that failed during multi-doc query.
-    pub failed: Vec<FailedItem>,
-}
-
-impl QueryResult {
-    /// Create a new query result (empty).
-    pub fn new() -> Self {
-        Self {
-            items: Vec::new(),
-            failed: Vec::new(),
-        }
-    }
-
-    /// Create a query result with items.
-    pub fn new_with_items(items: Vec<QueryResultItem>) -> Self {
-        Self {
-            items,
-            failed: Vec::new(),
-        }
-    }
-
-    /// Create a query result with a single item.
-    pub fn from_single(item: QueryResultItem) -> Self {
-        Self {
-            items: vec![item],
-            failed: Vec::new(),
-        }
-    }
-
-    /// Create with both successes and failures.
-    pub fn with_partial(items: Vec<QueryResultItem>, failed: Vec<FailedItem>) -> Self {
-        Self { items, failed }
-    }
-
-    /// Check if the result is empty.
-    pub fn is_empty(&self) -> bool {
-        self.items.is_empty()
-    }
-
-    /// Get the number of result items.
-    pub fn len(&self) -> usize {
-        self.items.len()
-    }
-
-    /// Get the first (single-doc) result item, if any.
-    pub fn single(&self) -> Option<&QueryResultItem> {
-        self.items.first()
-    }
-
-    /// Whether any documents failed.
-    pub fn has_failures(&self) -> bool {
-        !self.failed.is_empty()
-    }
-}
-
-impl Default for QueryResult {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
@@ -415,86 +281,33 @@ pub struct DocumentInfo {
     pub line_count: Option<usize>,
 }
 
-impl DocumentInfo {
-    /// Create a new document info.
-    pub fn new(id: impl Into<String>, name: impl Into<String>) -> Self {
-        Self {
-            id: id.into(),
-            name: name.into(),
-            format: String::new(),
-            description: None,
-            source_path: None,
-            page_count: None,
-            line_count: None,
-        }
-    }
-
-    /// Set the format.
-    pub fn with_format(mut self, format: impl Into<String>) -> Self {
-        self.format = format.into();
-        self
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn test_index_options() {
-        let options = IndexOptions::new()
+        let options = CompileOptions::new()
             .with_summaries()
-            .with_mode(IndexMode::Force);
+            .with_mode(CompileMode::Force);
 
         assert!(options.generate_summaries);
-        assert_eq!(options.mode, IndexMode::Force);
+        assert_eq!(options.mode, CompileMode::Force);
     }
 
     #[test]
     fn test_index_options_timeout() {
-        let opts = IndexOptions::new().with_timeout_secs(30);
+        let opts = CompileOptions::new().with_timeout_secs(30);
         assert_eq!(opts.timeout_secs, Some(30));
 
-        let default = IndexOptions::default();
+        let default = CompileOptions::default();
         assert_eq!(default.timeout_secs, None);
     }
 
     #[test]
-    fn test_query_result() {
-        let result = QueryResult::new();
-        assert!(result.is_empty());
-        assert_eq!(result.len(), 0);
-    }
-
-    #[test]
-    fn test_query_result_single() {
-        let item = QueryResultItem {
-            doc_id: "doc-1".into(),
-            node_ids: vec!["n1".into()],
-            content: "content".into(),
-            evidence: vec![],
-            metrics: None,
-            confidence: 0.9,
-        };
-        let result = QueryResult::from_single(item);
-        assert!(!result.is_empty());
-        assert_eq!(result.len(), 1);
-        assert!(result.single().is_some());
-        assert_eq!(result.single().unwrap().doc_id, "doc-1");
-    }
-
-    #[test]
-    fn test_document_info() {
-        let info = DocumentInfo::new("doc-1", "Test").with_format("markdown");
-
-        assert_eq!(info.id, "doc-1");
-        assert_eq!(info.format, "markdown");
-    }
-
-    #[test]
     fn test_index_result() {
-        let item = IndexItem::new("doc-1", "Test", DocumentFormat::Markdown, None, None);
-        let result = IndexResult::new(vec![item]);
+        let item = CompileArtifact::new("doc-1", "Test", DocumentFormat::Markdown, None, None);
+        let result = CompileOutput::new(vec![item]);
 
         assert_eq!(result.doc_id(), Some("doc-1"));
         assert_eq!(result.len(), 1);
@@ -503,7 +316,7 @@ mod tests {
 
     #[test]
     fn test_index_result_empty() {
-        let result = IndexResult::new(vec![]);
+        let result = CompileOutput::new(vec![]);
         assert!(result.is_empty());
         assert_eq!(result.doc_id(), None);
     }
@@ -511,17 +324,17 @@ mod tests {
     #[test]
     fn test_index_result_multiple() {
         let items = vec![
-            IndexItem::new("doc-1", "A", DocumentFormat::Markdown, None, None),
-            IndexItem::new("doc-2", "B", DocumentFormat::Pdf, None, None),
+            CompileArtifact::new("doc-1", "A", DocumentFormat::Markdown, None, None),
+            CompileArtifact::new("doc-2", "B", DocumentFormat::Pdf, None, None),
         ];
-        let result = IndexResult::new(items);
+        let result = CompileOutput::new(items);
         assert_eq!(result.len(), 2);
         assert_eq!(result.doc_id(), None);
     }
 
     #[test]
     fn test_partial_success() {
-        let items = vec![IndexItem::new(
+        let items = vec![CompileArtifact::new(
             "doc-1",
             "A",
             DocumentFormat::Markdown,
@@ -529,7 +342,7 @@ mod tests {
             None,
         )];
         let failed = vec![FailedItem::new("missing.pdf", "File not found")];
-        let result = IndexResult::with_partial(items, failed);
+        let result = CompileOutput::with_partial(items, failed);
 
         assert_eq!(result.len(), 1);
         assert!(result.has_failures());

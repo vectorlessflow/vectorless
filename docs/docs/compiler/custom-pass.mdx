@@ -1,0 +1,53 @@
+---
+sidebar_position: 7
+---
+
+# Writing a Custom Pass
+
+*🚧 This page is a work in progress. Content will be added soon.*
+
+## Overview
+
+The `CompilePass` trait is designed for extensibility. You can create custom passes and inject them into the pipeline using `PipelineExecutor::add_stage()` or by building a custom `PipelineOrchestrator`.
+
+## Topics to Cover
+
+- Implementing the `CompilePass` trait
+- Declaring dependencies with `depends_on()`
+- Setting the correct `AccessPattern` for parallel safety
+- Choosing a failure policy
+- Registering custom passes with the executor
+- Reading from and writing to `CompileContext`
+- Testing custom passes in isolation
+
+## Quick Start
+
+```rust
+use vectorless_compiler::passes::{CompilePass, AccessPattern};
+use vectorless_compiler::pipeline::{CompileContext, PassResult};
+
+struct MyCustomPass;
+
+#[async_trait::async_trait]
+impl CompilePass for MyCustomPass {
+    fn name(&self) -> &str { "my_custom_pass" }
+
+    async fn execute(&mut self, ctx: &mut CompileContext) -> Result<PassResult> {
+        // Your logic here
+        Ok(PassResult::success("my_custom_pass"))
+    }
+
+    fn depends_on(&self) -> Vec<&'static str> {
+        vec!["build"]
+    }
+
+    fn access_pattern(&self) -> AccessPattern {
+        AccessPattern {
+            reads_tree: true,
+            ..Default::default()
+        }
+    }
+}
+```
+
+{/* TODO: Full tutorial content */}

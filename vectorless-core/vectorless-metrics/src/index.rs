@@ -1,13 +1,13 @@
 // Copyright (c) 2026 vectorless developers
 // SPDX-License-Identifier: Apache-2.0
 
-//! Indexing pipeline metrics.
+//! Compile pipeline metrics.
 
 use serde::{Deserialize, Serialize};
 
-/// Performance metrics for the indexing pipeline.
+/// Performance metrics for the compile pipeline.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct IndexMetrics {
+pub struct CompileMetrics {
     /// Parse stage duration (ms).
     #[serde(default)]
     pub parse_time_ms: u64,
@@ -87,9 +87,46 @@ pub struct IndexMetrics {
     /// Number of nodes merged.
     #[serde(default)]
     pub nodes_merged: usize,
+
+    // ── Agent acceleration pass metrics ──
+    /// Route pass duration (ms).
+    #[serde(default)]
+    pub route_time_ms: u64,
+
+    /// Number of intent routes built.
+    #[serde(default)]
+    pub intent_routes: usize,
+
+    /// Number of concept routes built.
+    #[serde(default)]
+    pub concept_routes: usize,
+
+    /// Chain pass duration (ms).
+    #[serde(default)]
+    pub chain_time_ms: u64,
+
+    /// Number of reasoning chains indexed.
+    #[serde(default)]
+    pub chains_indexed: usize,
+
+    /// Overlap pass duration (ms).
+    #[serde(default)]
+    pub overlap_time_ms: u64,
+
+    /// Number of content overlap pairs detected.
+    #[serde(default)]
+    pub overlaps_detected: usize,
+
+    /// Score pass duration (ms).
+    #[serde(default)]
+    pub score_time_ms: u64,
+
+    /// Number of nodes scored for evidence quality.
+    #[serde(default)]
+    pub nodes_scored: usize,
 }
 
-impl IndexMetrics {
+impl CompileMetrics {
     /// Create new metrics with start time.
     pub fn new() -> Self {
         Self::default()
@@ -184,6 +221,31 @@ impl IndexMetrics {
         self.nodes_merged += 1;
     }
 
+    /// Record route pass time.
+    pub fn record_route(&mut self, duration_ms: u64, intent_routes: usize, concept_routes: usize) {
+        self.route_time_ms = duration_ms;
+        self.intent_routes = intent_routes;
+        self.concept_routes = concept_routes;
+    }
+
+    /// Record chain pass time.
+    pub fn record_chain(&mut self, duration_ms: u64, chains: usize) {
+        self.chain_time_ms = duration_ms;
+        self.chains_indexed = chains;
+    }
+
+    /// Record overlap pass time.
+    pub fn record_overlap(&mut self, duration_ms: u64, overlaps: usize) {
+        self.overlap_time_ms = duration_ms;
+        self.overlaps_detected = overlaps;
+    }
+
+    /// Record score pass time.
+    pub fn record_score(&mut self, duration_ms: u64, scored_nodes: usize) {
+        self.score_time_ms = duration_ms;
+        self.nodes_scored = scored_nodes;
+    }
+
     /// Get total time.
     pub fn total_time_ms(&self) -> u64 {
         self.parse_time_ms
@@ -194,6 +256,10 @@ impl IndexMetrics {
             + self.enrich_time_ms
             + self.reasoning_index_time_ms
             + self.navigation_index_time_ms
+            + self.route_time_ms
+            + self.chain_time_ms
+            + self.overlap_time_ms
+            + self.score_time_ms
             + self.optimize_time_ms
     }
 }

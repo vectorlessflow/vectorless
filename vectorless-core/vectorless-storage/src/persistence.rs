@@ -1,7 +1,7 @@
 // Copyright (c) 2026 vectorless developers
 // SPDX-License-Identifier: Apache-2.0
 
-//! Persistence utilities for saving and loading document indices.
+//! Persistence utilities for saving and loading compiled documents.
 //!
 //! # Features
 //!
@@ -11,11 +11,12 @@
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::fs::File;
-use std::io::{BufReader, BufWriter, Write};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
-use vectorless_document::{DocumentTree, NavigationIndex, ReasoningIndex};
+use vectorless_document::{
+    ChainIndex, ContentOverlapMap, DocumentTree, EvidenceScoreMap, NavigationIndex,
+    QueryRoutingTable, ReasoningIndex,
+};
 use vectorless_error::Error;
 use vectorless_error::Result;
 
@@ -27,7 +28,7 @@ const FORMAT_VERSION: u32 = 1;
 /// Increment this when the document structure changes in a
 /// backward-incompatible way (e.g. field renames, new required fields).
 /// Old documents will be detected and logged as stale on load.
-const SCHEMA_VERSION: u32 = 1;
+const SCHEMA_VERSION: u32 = 2;
 
 /// Metadata for a persisted document.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -210,7 +211,7 @@ impl DocumentMeta {
     }
 }
 
-/// A persisted document index containing tree and metadata.
+/// A persisted compiled document containing tree, indexes, and metadata.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PersistedDocument {
     /// Schema version — incremented on backward-incompatible changes.
@@ -239,6 +240,23 @@ pub struct PersistedDocument {
     /// Key concepts extracted from the document.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub concepts: Vec<vectorless_document::Concept>,
+
+    // ── Agent acceleration data ──
+    /// Pre-computed query routing table for Agent acceleration.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub query_routes: Option<QueryRoutingTable>,
+
+    /// Reasoning chain index for cross-section navigation.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub chain_index: Option<ChainIndex>,
+
+    /// Content overlap map to prevent duplicate visits.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub content_overlap: Option<ContentOverlapMap>,
+
+    /// Per-node evidence quality scores.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub evidence_scores: Option<EvidenceScoreMap>,
 }
 
 impl PersistedDocument {
@@ -252,6 +270,10 @@ impl PersistedDocument {
             reasoning_index: None,
             navigation_index: None,
             concepts: Vec::new(),
+            query_routes: None,
+            chain_index: None,
+            content_overlap: None,
+            evidence_scores: None,
         }
     }
 
@@ -285,306 +307,11 @@ struct PersistedWrapper {
     payload: serde_json::Value,
 }
 
-/// Options for save/load operations.
-#[derive(Debug, Clone)]
-pub struct PersistenceOptions {
-    /// Use atomic writes (temp file + rename).
-    pub atomic_writes: bool,
-    /// Verify checksums on load.
-    pub verify_checksum: bool,
-}
-
-impl Default for PersistenceOptions {
-    fn default() -> Self {
-        Self {
-            atomic_writes: true,
-            verify_checksum: true,
-        }
-    }
-}
-
-impl PersistenceOptions {
-    /// Create new options with defaults.
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Set atomic writes option.
-    pub fn with_atomic_writes(mut self, enabled: bool) -> Self {
-        self.atomic_writes = enabled;
-        self
-    }
-
-    /// Set checksum verification option.
-    pub fn with_verify_checksum(mut self, enabled: bool) -> Self {
-        self.verify_checksum = enabled;
-        self
-    }
-}
-
 /// Calculate SHA-256 checksum of data.
 fn calculate_checksum(data: &[u8]) -> String {
     let mut hasher = Sha256::new();
     hasher.update(data);
     format!("{:x}", hasher.finalize())
-}
-
-/// Save a document to a JSON file with atomic write and checksum.
-///
-/// # Atomic Write
-///
-/// When `atomic_writes` is enabled (default), this function:
-/// 1. Writes to a temporary file (`.tmp` suffix)
-/// 2. Renames temp file to target (atomic on most filesystems)
-///
-/// This prevents data corruption if the process crashes during write.
-///
-/// # Errors
-///
-/// Returns an error if:
-/// - Serialization fails
-/// - Cannot create temp file
-/// - Write fails
-/// - Rename fails
-pub fn save_document(path: &Path, doc: &PersistedDocument) -> Result<()> {
-    save_document_with_options(path, doc, &PersistenceOptions::default())
-}
-
-/// Save a document with custom options.
-pub fn save_document_with_options(
-    path: &Path,
-    doc: &PersistedDocument,
-    options: &PersistenceOptions,
-) -> Result<()> {
-    // Serialize to serde_json::Value first (avoids HashMap key ordering drift)
-    let payload_value =
-        serde_json::to_value(doc).map_err(|e| Error::Serialization(e.to_string()))?;
-
-    // Calculate checksum on the Value's canonical bytes
-    let payload_bytes =
-        serde_json::to_vec(&payload_value).map_err(|e| Error::Serialization(e.to_string()))?;
-    let checksum = calculate_checksum(&payload_bytes);
-
-    // Create wrapper
-    let wrapper = PersistedWrapper {
-        version: FORMAT_VERSION,
-        checksum,
-        payload: payload_value,
-    };
-
-    // Serialize wrapper
-    let json =
-        serde_json::to_string_pretty(&wrapper).map_err(|e| Error::Serialization(e.to_string()))?;
-
-    if options.atomic_writes {
-        // Atomic write: write to temp file, then rename
-        let temp_path = path.with_extension("tmp");
-
-        // Ensure parent directory exists
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent).map_err(Error::Io)?;
-        }
-
-        // Write to temp file
-        {
-            let file = File::create(&temp_path).map_err(Error::Io)?;
-            let mut writer = BufWriter::new(file);
-            writer.write_all(json.as_bytes()).map_err(Error::Io)?;
-            writer.flush().map_err(Error::Io)?;
-        }
-
-        // Atomic rename
-        std::fs::rename(&temp_path, path).map_err(Error::Io)?;
-    } else {
-        // Direct write (not atomic)
-        std::fs::write(path, json).map_err(Error::Io)?;
-    }
-
-    Ok(())
-}
-
-/// Load a document from a JSON file with checksum verification.
-///
-/// # Checksum Verification
-///
-/// When `verify_checksum` is enabled (default), this function:
-/// 1. Reads the file
-/// 2. Parses the wrapper
-/// 3. Re-serializes the payload
-/// 4. Verifies the checksum matches
-///
-/// # Errors
-///
-/// Returns an error if:
-/// - File doesn't exist
-/// - Parse fails
-/// - Checksum mismatch
-/// - Version mismatch (future: migration)
-pub fn load_document(path: &Path) -> Result<PersistedDocument> {
-    load_document_with_options(path, &PersistenceOptions::default())
-}
-
-/// Load a document with custom options.
-pub fn load_document_with_options(
-    path: &Path,
-    options: &PersistenceOptions,
-) -> Result<PersistedDocument> {
-    if !path.exists() {
-        return Err(Error::DocumentNotFound(path.display().to_string()));
-    }
-
-    let file = File::open(path).map_err(Error::Io)?;
-    let reader = BufReader::new(file);
-
-    // Parse wrapper (payload is serde_json::Value)
-    let wrapper: PersistedWrapper = serde_json::from_reader(reader)
-        .map_err(|e| Error::Parse(format!("Failed to parse document: {}", e)))?;
-
-    // Check version
-    if wrapper.version != FORMAT_VERSION {
-        return Err(Error::Parse(format!(
-            "Unsupported format version: {} (expected {})",
-            wrapper.version, FORMAT_VERSION
-        )));
-    }
-
-    // Verify checksum if enabled
-    if options.verify_checksum {
-        let payload_bytes = serde_json::to_vec(&wrapper.payload)
-            .map_err(|e| Error::Serialization(e.to_string()))?;
-
-        let expected_checksum = calculate_checksum(&payload_bytes);
-
-        if wrapper.checksum != expected_checksum {
-            return Err(Error::Parse(format!(
-                "Checksum mismatch: expected {}, got {}",
-                expected_checksum, wrapper.checksum
-            )));
-        }
-    }
-
-    // Deserialize Value to target type
-    let doc: PersistedDocument = serde_json::from_value(wrapper.payload)
-        .map_err(|e| Error::Parse(format!("Failed to deserialize document: {}", e)))?;
-
-    // Check schema version — warn on stale documents, fail on future versions
-    if doc.schema_version == 0 {
-        tracing::warn!(
-            doc_id = %doc.meta.id,
-            "Document was created before schema versioning — consider re-indexing"
-        );
-    } else if doc.schema_version > SCHEMA_VERSION {
-        return Err(Error::Parse(format!(
-            "Document schema version {} is newer than supported {} — please upgrade vectorless",
-            doc.schema_version, SCHEMA_VERSION
-        )));
-    }
-
-    Ok(doc)
-}
-
-/// Save the workspace index (metadata for all documents).
-pub fn save_index(path: &Path, entries: &[DocumentMeta]) -> Result<()> {
-    save_index_with_options(path, entries, &PersistenceOptions::default())
-}
-
-/// Save the workspace index with custom options.
-pub fn save_index_with_options(
-    path: &Path,
-    entries: &[DocumentMeta],
-    options: &PersistenceOptions,
-) -> Result<()> {
-    // Serialize to serde_json::Value first
-    let payload_value =
-        serde_json::to_value(entries).map_err(|e| Error::Serialization(e.to_string()))?;
-
-    let payload_bytes =
-        serde_json::to_vec(&payload_value).map_err(|e| Error::Serialization(e.to_string()))?;
-
-    let checksum = calculate_checksum(&payload_bytes);
-
-    let wrapper = PersistedWrapper {
-        version: FORMAT_VERSION,
-        checksum,
-        payload: payload_value,
-    };
-
-    let json =
-        serde_json::to_string_pretty(&wrapper).map_err(|e| Error::Serialization(e.to_string()))?;
-
-    if options.atomic_writes {
-        let temp_path = path.with_extension("tmp");
-
-        // Ensure parent directory exists
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent).map_err(Error::Io)?;
-        }
-
-        // Write to temp file
-        {
-            let file = File::create(&temp_path).map_err(Error::Io)?;
-            let mut writer = BufWriter::new(file);
-            writer.write_all(json.as_bytes()).map_err(Error::Io)?;
-            writer.flush().map_err(Error::Io)?;
-        }
-
-        // Atomic rename
-        std::fs::rename(&temp_path, path).map_err(Error::Io)?;
-    } else {
-        std::fs::write(path, json).map_err(Error::Io)?;
-    }
-
-    Ok(())
-}
-
-/// Load the workspace index.
-pub fn load_index(path: &Path) -> Result<Vec<DocumentMeta>> {
-    load_index_with_options(path, &PersistenceOptions::default())
-}
-
-/// Load the workspace index with custom options.
-pub fn load_index_with_options(
-    path: &Path,
-    options: &PersistenceOptions,
-) -> Result<Vec<DocumentMeta>> {
-    if !path.exists() {
-        return Ok(Vec::new());
-    }
-
-    let file = File::open(path).map_err(Error::Io)?;
-    let reader = BufReader::new(file);
-
-    let wrapper: PersistedWrapper = serde_json::from_reader(reader)
-        .map_err(|e| Error::Parse(format!("Failed to parse index: {}", e)))?;
-
-    // Check version
-    if wrapper.version != FORMAT_VERSION {
-        return Err(Error::Parse(format!(
-            "Unsupported format version: {} (expected {})",
-            wrapper.version, FORMAT_VERSION
-        )));
-    }
-
-    // Verify checksum if enabled
-    if options.verify_checksum {
-        let payload_bytes = serde_json::to_vec(&wrapper.payload)
-            .map_err(|e| Error::Serialization(e.to_string()))?;
-
-        let expected_checksum = calculate_checksum(&payload_bytes);
-
-        if wrapper.checksum != expected_checksum {
-            return Err(Error::Parse(format!(
-                "Checksum mismatch: expected {}, got {}",
-                expected_checksum, wrapper.checksum
-            )));
-        }
-    }
-
-    // Deserialize Value to target type
-    let entries: Vec<DocumentMeta> = serde_json::from_value(wrapper.payload)
-        .map_err(|e| Error::Parse(format!("Failed to deserialize index: {}", e)))?;
-
-    Ok(entries)
 }
 
 // ============================================================================
@@ -674,71 +401,9 @@ pub fn load_document_from_bytes_with_options(
     Ok(doc)
 }
 
-/// Serialize an index to bytes.
-pub fn save_index_to_bytes(entries: &[DocumentMeta]) -> Result<Vec<u8>> {
-    let payload_value =
-        serde_json::to_value(entries).map_err(|e| Error::Serialization(e.to_string()))?;
-
-    let payload_bytes =
-        serde_json::to_vec(&payload_value).map_err(|e| Error::Serialization(e.to_string()))?;
-    let checksum = calculate_checksum(&payload_bytes);
-
-    let wrapper = PersistedWrapper {
-        version: FORMAT_VERSION,
-        checksum,
-        payload: payload_value,
-    };
-
-    serde_json::to_vec(&wrapper).map_err(|e| Error::Serialization(e.to_string()))
-}
-
-/// Deserialize an index from bytes.
-pub fn load_index_from_bytes(data: &[u8]) -> Result<Vec<DocumentMeta>> {
-    load_index_from_bytes_with_options(data, true)
-}
-
-/// Deserialize an index from bytes with optional checksum verification.
-pub fn load_index_from_bytes_with_options(
-    data: &[u8],
-    verify_checksum: bool,
-) -> Result<Vec<DocumentMeta>> {
-    let wrapper: PersistedWrapper = serde_json::from_slice(data)
-        .map_err(|e| Error::Parse(format!("Failed to parse index: {}", e)))?;
-
-    // Check version
-    if wrapper.version != FORMAT_VERSION {
-        return Err(Error::VersionMismatch(format!(
-            "Expected version {}, got {}",
-            FORMAT_VERSION, wrapper.version
-        )));
-    }
-
-    // Verify checksum if enabled
-    if verify_checksum {
-        let payload_bytes = serde_json::to_vec(&wrapper.payload)
-            .map_err(|e| Error::Serialization(e.to_string()))?;
-
-        let expected_checksum = calculate_checksum(&payload_bytes);
-
-        if wrapper.checksum != expected_checksum {
-            return Err(Error::ChecksumMismatch(format!(
-                "Expected {}, got {}",
-                expected_checksum, wrapper.checksum
-            )));
-        }
-    }
-
-    // Deserialize Value to target type
-    let entries: Vec<DocumentMeta> = serde_json::from_value(wrapper.payload)
-        .map_err(|e| Error::Parse(format!("Failed to deserialize index: {}", e)))?;
-
-    Ok(entries)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::TempDir;
 
     fn create_test_doc(id: &str) -> PersistedDocument {
         let meta = DocumentMeta::new(id, "Test Doc", "md");
@@ -747,120 +412,35 @@ mod tests {
     }
 
     #[test]
-    fn test_save_and_load_document() {
-        let temp = TempDir::new().unwrap();
-        let path = temp.path().join("test.json");
-
+    fn test_save_and_load_bytes() {
         let doc = create_test_doc("doc-1");
-        save_document(&path, &doc).unwrap();
-
-        let loaded = load_document(&path).unwrap();
+        let bytes = save_document_to_bytes(&doc).unwrap();
+        let loaded = load_document_from_bytes(&bytes).unwrap();
         assert_eq!(loaded.meta.id, "doc-1");
         assert_eq!(loaded.meta.name, "Test Doc");
     }
 
     #[test]
-    fn test_atomic_write() {
-        let temp = TempDir::new().unwrap();
-        let path = temp.path().join("atomic.json");
+    fn test_checksum_verification_bytes() {
+        let doc = create_test_doc("doc-check");
+        let bytes = save_document_to_bytes(&doc).unwrap();
 
-        let doc = create_test_doc("doc-atomic");
-        let options = PersistenceOptions::new().with_atomic_writes(true);
-        save_document_with_options(&path, &doc, &options).unwrap();
+        // Corrupt a byte
+        let mut corrupted = bytes.clone();
+        corrupted[10] ^= 0xFF;
 
-        // Temp file should not exist after save
-        assert!(!path.with_extension("tmp").exists());
-
-        let loaded = load_document(&path).unwrap();
-        assert_eq!(loaded.meta.id, "doc-atomic");
-    }
-
-    #[test]
-    fn test_checksum_verification() {
-        let temp = TempDir::new().unwrap();
-        let path = temp.path().join("checksum.json");
-
-        let doc = create_test_doc("doc-checksum");
-        save_document(&path, &doc).unwrap();
-
-        // Corrupt the file
-        let content = std::fs::read_to_string(&path).unwrap();
-        let corrupted = content.replace("doc-checksum", "doc-corrupted");
-        std::fs::write(&path, corrupted).unwrap();
-
-        // Load should fail with checksum error
-        let result = load_document(&path);
+        let result = load_document_from_bytes(&corrupted);
         assert!(result.is_err());
-        let err = result.unwrap_err();
-        assert!(matches!(err, Error::Parse(_)));
     }
 
     #[test]
-    fn test_checksum_disabled() {
-        let temp = TempDir::new().unwrap();
-        let path = temp.path().join("no-checksum.json");
-
+    fn test_checksum_disabled_bytes() {
         let doc = create_test_doc("doc-no-check");
-        save_document(&path, &doc).unwrap();
+        let bytes = save_document_to_bytes(&doc).unwrap();
 
-        // Load with checksum disabled should succeed
-        let options = PersistenceOptions::new().with_verify_checksum(false);
-        let result = load_document_with_options(&path, &options);
+        // Load with checksum disabled should succeed even for raw bytes
+        let result = load_document_from_bytes_with_options(&bytes, false);
         assert!(result.is_ok());
-        let loaded = result.unwrap();
-        assert_eq!(loaded.meta.id, "doc-no-check");
-
-        // Now corrupt the checksum field specifically
-        let content = std::fs::read_to_string(&path).unwrap();
-        // Change the checksum value but keep the payload intact
-        let payload_value = serde_json::to_value(&doc).unwrap();
-        let corrupted = content.replace(
-            &calculate_checksum(&serde_json::to_vec(&payload_value).unwrap()),
-            "0000000000000000000000000000000000000000000000000000000000000000",
-        );
-        std::fs::write(&path, corrupted).unwrap();
-
-        // Load with checksum disabled should still succeed
-        let result = load_document_with_options(&path, &options);
-        assert!(result.is_ok());
-
-        // Load with checksum enabled should fail
-        let options_enabled = PersistenceOptions::new().with_verify_checksum(true);
-        let result = load_document_with_options(&path, &options_enabled);
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_load_nonexistent() {
-        let result = load_document(Path::new("/nonexistent/path.json"));
-        assert!(result.is_err());
-        assert!(result.unwrap_err().is_not_found());
-    }
-
-    #[test]
-    fn test_save_and_load_index() {
-        let temp = TempDir::new().unwrap();
-        let path = temp.path().join("meta.bin");
-
-        let mut entries = Vec::new();
-        entries.push(DocumentMeta::new("doc-1", "Doc 1", "md"));
-        entries.push(DocumentMeta::new("doc-2", "Doc 2", "pdf"));
-
-        save_index(&path, &entries).unwrap();
-
-        let loaded = load_index(&path).unwrap();
-        assert_eq!(loaded.len(), 2);
-        assert_eq!(loaded[0].id, "doc-1");
-        assert_eq!(loaded[1].format, "pdf");
-    }
-
-    #[test]
-    fn test_load_empty_index() {
-        let temp = TempDir::new().unwrap();
-        let path = temp.path().join("nonexistent.json");
-
-        let loaded = load_index(&path).unwrap();
-        assert!(loaded.is_empty());
     }
 
     #[test]
@@ -875,6 +455,6 @@ mod tests {
 
         assert_eq!(checksum1, checksum2);
         assert_ne!(checksum1, checksum3);
-        assert_eq!(checksum1.len(), 64); // SHA-256 produces 64 hex chars
+        assert_eq!(checksum1.len(), 64);
     }
 }
