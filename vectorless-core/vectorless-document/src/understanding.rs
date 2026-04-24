@@ -4,8 +4,8 @@
 //! Understanding types — the core objects that define the Document Understanding Engine.
 //!
 //! These types form the stable public contract:
-//! - [`Document`] — the unified post-ingest artifact (internal first-class citizen)
-//! - [`DocumentInfo`] — what `ingest()` returns to users
+//! - [`Document`] — the unified post-compile artifact (internal first-class citizen)
+//! - [`DocumentInfo`] — what `compile()` returns to users
 //! - [`Concept`] — key concept extracted from a document
 
 use serde::{Deserialize, Serialize};
@@ -13,14 +13,14 @@ use serde::{Deserialize, Serialize};
 use super::toc::TocNode;
 
 // ---------------------------------------------------------------------------
-// Document — unified post-ingest artifact
+// Document — unified post-compile artifact
 // ---------------------------------------------------------------------------
 
-/// A understood document — the core artifact of the understand phase.
+/// A compiled document — the core artifact of the compile pipeline.
 ///
-/// This is what `ingest()` produces internally.
+/// This is what `compile()` produces internally.
 /// It unifies tree + navigation index + reasoning index + summary + concepts
-/// into a single first-class type.
+/// + agent acceleration data into a single first-class type.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Document {
     /// Unique document identifier.
@@ -29,11 +29,11 @@ pub struct Document {
     pub name: String,
     /// Document format ("pdf", "markdown", "docx").
     pub format: String,
-    /// Source file path (if indexed from a file).
+    /// Source file path (if compiled from a file).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source_path: Option<String>,
 
-    // ── Three indexes (engine internal) ──
+    // ── Indexes ──
     /// Hierarchical semantic tree.
     pub tree: super::tree::DocumentTree,
     /// Pre-computed navigation structure.
@@ -41,12 +41,26 @@ pub struct Document {
     /// Keyword / topic / section summaries.
     pub reasoning_index: super::reasoning::ReasoningIndex,
 
-    // ── Understanding results (ingest stage output) ──
+    // ── Compile results ──
     /// Document-level summary.
     pub summary: String,
     /// Key concepts the engine identified.
     #[serde(default)]
     pub concepts: Vec<Concept>,
+
+    // ── Agent acceleration data ──
+    /// Pre-computed query routing table.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub query_routes: Option<super::query_route::QueryRoutingTable>,
+    /// Reasoning chain index.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub chain_index: Option<super::chain::ChainIndex>,
+    /// Content overlap map.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub content_overlap: Option<super::overlap::ContentOverlapMap>,
+    /// Per-node evidence quality scores.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub evidence_scores: Option<super::evidence::EvidenceScoreMap>,
 
     // ── Metadata ──
     /// Page count (for PDFs).

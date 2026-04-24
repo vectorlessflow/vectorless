@@ -507,6 +507,10 @@ impl Engine {
             reasoning_index,
             summary: persisted.meta.description.unwrap_or_default(),
             concepts: persisted.concepts,
+            query_routes: persisted.query_routes,
+            chain_index: persisted.chain_index,
+            content_overlap: persisted.content_overlap,
+            evidence_scores: persisted.evidence_scores,
             page_count: persisted.meta.page_count,
             section_count,
         }

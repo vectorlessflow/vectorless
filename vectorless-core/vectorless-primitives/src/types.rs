@@ -185,3 +185,68 @@ pub struct ConceptInfo {
     /// Which sections this concept appears in.
     pub sections: Vec<String>,
 }
+
+// ---------------------------------------------------------------------------
+// Agent acceleration types
+// ---------------------------------------------------------------------------
+
+/// A scored target node from the query routing table.
+#[derive(Debug, Clone)]
+pub struct RouteTargetInfo {
+    /// Target node ID.
+    pub node_id: u64,
+    /// Relevance score (0.0–1.0).
+    pub relevance: f64,
+    /// Human-readable reason for this route.
+    pub reason: String,
+}
+
+/// A concept-based route from the query routing table.
+#[derive(Debug, Clone)]
+pub struct ConceptRouteInfo {
+    /// Concept keyword.
+    pub concept: String,
+    /// Scored target nodes.
+    pub targets: Vec<RouteTargetInfo>,
+}
+
+/// A reasoning chain connecting document sections.
+#[derive(Debug, Clone)]
+pub struct ChainInfo {
+    /// Premise node IDs.
+    pub premises: Vec<u64>,
+    /// Conclusion node IDs.
+    pub conclusions: Vec<u64>,
+    /// Chain type label.
+    pub chain_type: String,
+    /// Human-readable summary.
+    pub summary: String,
+}
+
+/// An overlap entry between two nodes.
+#[derive(Debug, Clone)]
+pub struct OverlapInfo {
+    /// First node ID.
+    pub node_a: u64,
+    /// Second node ID.
+    pub node_b: u64,
+    /// Jaccard similarity score.
+    pub similarity: f64,
+    /// Overlap type label.
+    pub overlap_type: String,
+}
+
+/// Evidence quality score for a single node.
+#[derive(Debug, Clone)]
+pub struct EvidenceScoreInfo {
+    /// Node ID.
+    pub node_id: u64,
+    /// Information density (0.0–1.0).
+    pub density: f64,
+    /// Data richness (0.0–1.0).
+    pub data_richness: f64,
+    /// Topic specificity (0.0–1.0).
+    pub specificity: f64,
+    /// Weighted composite score.
+    pub composite: f64,
+}

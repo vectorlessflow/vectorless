@@ -130,6 +130,31 @@ class NavigableDocument(Protocol):
         """Return word count info for a node."""
         ...
 
+    # Agent acceleration (pre-computed from compile pipeline)
+    async def intent_routes(self) -> list[Any]:
+        """Get all intent routes from the query routing table."""
+        ...
+
+    async def concept_routes(self, keyword: str) -> list[Any]:
+        """Get concept routes matching a keyword."""
+        ...
+
+    async def chains_for(self, node_id: str) -> list[Any]:
+        """Get reasoning chains involving a specific node."""
+        ...
+
+    async def overlaps_for(self, node_id: str) -> list[Any]:
+        """Get overlapping nodes for a specific node."""
+        ...
+
+    async def evidence_score(self, node_id: str) -> Any:
+        """Get evidence quality score for a specific node."""
+        ...
+
+    async def evidence_scores_ranked(self) -> list[Any]:
+        """Get all evidence scores ranked by composite score."""
+        ...
+
 
 # ---------------------------------------------------------------------------
 # Callable protocols

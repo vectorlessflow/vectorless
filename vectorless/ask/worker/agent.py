@@ -212,28 +212,73 @@ class Worker:
         return state.into_worker_output(doc_name)
 
     async def _build_keyword_hints(self, doc: NavigableDocument, query: str) -> str:
-        """Build keyword hints from the document's reasoning index."""
+        """Build keyword hints from the document's reasoning index and acceleration data."""
         keywords = extract_keywords(query)
 
         if not keywords:
             return ""
 
         hints = []
-        for kw in keywords[:5]:  # limit keywords
+
+        # Keyword index matches
+        for kw in keywords[:5]:
             try:
                 entries = await doc.keyword_entries(kw)
                 for entry in entries[:3]:
                     title = await doc.node_title(entry.node_id)
                     hints.append(
-                        f"  - '{kw}' \u2192 {title} (weight {entry.weight:.2f})"
+                        f"  - '{kw}' → {title} (weight {entry.weight:.2f})"
                     )
             except Exception:
                 pass
 
-        if not hints:
+        # Concept routes (pre-computed by RoutePass)
+        route_hints = []
+        for kw in keywords[:5]:
+            try:
+                routes = await doc.concept_routes(kw)
+                for route in routes[:1]:
+                    for target in route.targets[:3]:
+                        title = await doc.node_title(target.node_id)
+                        route_hints.append(
+                            f"  - [{route.concept}] {title} "
+                            f"(relevance {target.relevance:.2f}: {target.reason})"
+                        )
+            except Exception:
+                pass
+
+        # Top evidence scores (pre-computed by ScorePass)
+        score_hints = []
+        try:
+            scores = await doc.evidence_scores_ranked()
+            for s in scores[:5]:
+                title = await doc.node_title(s.node_id)
+                score_hints.append(
+                    f"  - {title} (score {s.composite:.2f}: "
+                    f"density={s.density:.2f} richness={s.data_richness:.2f})"
+                )
+        except Exception:
+            pass
+
+        sections = []
+        if hints:
+            sections.append(
+                "Keyword matches (use find <keyword> to jump directly):\n"
+                + "\n".join(hints)
+            )
+        if route_hints:
+            sections.append(
+                "Pre-computed routes:\n" + "\n".join(route_hints)
+            )
+        if score_hints:
+            sections.append(
+                "High-value evidence nodes:\n" + "\n".join(score_hints)
+            )
+
+        if not sections:
             return ""
 
-        return "Keyword matches (use find <keyword> to jump directly):\n" + "\n".join(hints) + "\n"
+        return "\n\n".join(sections) + "\n"
 
     async def _generate_plan(
         self,

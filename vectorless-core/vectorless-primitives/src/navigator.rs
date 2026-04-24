@@ -78,6 +78,10 @@ impl DocumentNavigator {
         usize::from(id.0) as u64
     }
 
+    fn u64_to_id(&self, num: u64) -> Option<NodeId> {
+        self.node_id_map.get(&num).copied()
+    }
+
     fn resolve_optional_id(&self, opt: Option<&str>) -> Result<NodeId> {
         match opt {
             Some(s) => self.parse_id(s),

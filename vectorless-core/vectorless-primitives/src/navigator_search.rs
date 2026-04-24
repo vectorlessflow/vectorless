@@ -248,4 +248,142 @@ impl DocumentNavigator {
         }
         result
     }
+
+    // -----------------------------------------------------------------------
+    // Agent acceleration queries
+    // -----------------------------------------------------------------------
+
+    /// Get all intent routes from the query routing table.
+    pub async fn intent_routes(&self) -> Vec<RouteTargetInfo> {
+        self.doc
+            .query_routes
+            .as_ref()
+            .map(|table| {
+                table
+                    .intent_routes()
+                    .values()
+                    .flat_map(|targets| {
+                        targets.iter().map(|t| RouteTargetInfo {
+                            node_id: self.id_to_u64(t.node_id),
+                            relevance: t.relevance,
+                            reason: t.reason.clone(),
+                        })
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// Get concept routes matching a keyword.
+    pub async fn concept_routes(&self, keyword: &str) -> Vec<ConceptRouteInfo> {
+        self.doc
+            .query_routes
+            .as_ref()
+            .map(|table| {
+                table
+                    .routes_for_concept(keyword)
+                    .into_iter()
+                    .map(|t| RouteTargetInfo {
+                        node_id: self.id_to_u64(t.node_id),
+                        relevance: t.relevance,
+                        reason: t.reason.clone(),
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default()
+            .into_iter()
+            .map(|targets| ConceptRouteInfo {
+                concept: keyword.to_string(),
+                targets,
+            })
+            .collect()
+            .into_iter()
+            .take(1)
+            .collect()
+    }
+
+    /// Get reasoning chains involving a specific node.
+    pub async fn chains_for(&self, node_id: u64) -> Vec<ChainInfo> {
+        let nid = match self.u64_to_id(node_id) {
+            Some(id) => id,
+            None => return Vec::new(),
+        };
+        self.doc
+            .chain_index
+            .as_ref()
+            .map(|idx| {
+                idx.chains_for(nid)
+                    .into_iter()
+                    .map(|c| ChainInfo {
+                        premises: c.premises.iter().map(|&id| self.id_to_u64(id)).collect(),
+                        conclusions: c.conclusions.iter().map(|&id| self.id_to_u64(id)).collect(),
+                        chain_type: c.chain_type.as_str().to_string(),
+                        summary: c.summary.clone(),
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// Get overlapping nodes for a specific node.
+    pub async fn overlaps_for(&self, node_id: u64) -> Vec<OverlapInfo> {
+        let nid = match self.u64_to_id(node_id) {
+            Some(id) => id,
+            None => return Vec::new(),
+        };
+        self.doc
+            .content_overlap
+            .as_ref()
+            .map(|map| {
+                map.overlapping_nodes(nid)
+                    .into_iter()
+                    .map(|(id, sim, ot)| OverlapInfo {
+                        node_a: node_id,
+                        node_b: self.id_to_u64(id),
+                        similarity: sim,
+                        overlap_type: match ot {
+                            vectorless_document::OverlapType::Duplicate => "duplicate",
+                            vectorless_document::OverlapType::Subset => "subset",
+                            vectorless_document::OverlapType::Summary => "summary",
+                        }
+                        .to_string(),
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// Get evidence quality score for a specific node.
+    pub async fn evidence_score_for(&self, node_id: u64) -> Option<EvidenceScoreInfo> {
+        let nid = self.u64_to_id(node_id)?;
+        self.doc.evidence_scores.as_ref()?.get(nid).map(|s| EvidenceScoreInfo {
+            node_id,
+            density: s.density,
+            data_richness: s.data_richness,
+            specificity: s.specificity,
+            composite: s.composite(),
+        })
+    }
+
+    /// Get all evidence scores, sorted by composite descending.
+    pub async fn evidence_scores_ranked(&self) -> Vec<EvidenceScoreInfo> {
+        self.doc
+            .evidence_scores
+            .as_ref()
+            .map(|map| {
+                map.ranked_nodes()
+                    .into_iter()
+                    .filter_map(|(nid, composite)| {
+                        map.get(nid).map(|s| EvidenceScoreInfo {
+                            node_id: self.id_to_u64(nid),
+                            density: s.density,
+                            data_richness: s.data_richness,
+                            specificity: s.specificity,
+                            composite,
+                        })
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
 }
