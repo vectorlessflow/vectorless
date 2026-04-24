@@ -2,28 +2,82 @@ import type {ReactNode} from 'react';
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
 import Layout from '@theme/Layout';
 import Link from '@docusaurus/Link';
+import CodeBlock from '@theme/CodeBlock';
 
 import styles from './index.module.css';
 
-function HomepageHeader() {
+const CODE_EXAMPLE = `import asyncio
+from vectorless import Engine
+
+async def main():
+    engine = Engine(api_key="sk-...", model="gpt-4o", endpoint="https://api.openai.com/v1")
+
+    # Compile a document
+    result = await engine.compile(path="./report.pdf")
+    doc_id = result.doc_id
+
+    # Ask a question
+    response = await engine.ask("What is the total revenue?", doc_ids=[doc_id])
+    print(response.single().content)
+
+asyncio.run(main())`;
+
+export default function Home(): ReactNode {
+  const {siteConfig} = useDocusaurusContext();
   return (
-    <header className={styles.heroBanner}>
-      <div className={styles.hero}>
-        {/* Left: Brand + Tagline + CTA */}
+    <Layout
+      title={`${siteConfig.title}`}
+      description="Document understanding engine for AI. Agents reason through your documents — navigating structure, reading passages, cross-referencing across sections.">
+      <header className={styles.heroBanner}>
         <div className={styles.heroContent}>
           <h1 className={styles.mainTitle}>Vectorless</h1>
+          <div className={styles.badges}>
+            <Link href="https://pypi.org/project/vectorless/">
+              <img src="https://img.shields.io/pypi/v/vectorless.svg" alt="PyPI" />
+            </Link>
+            <Link href="https://pepy.tech/projects/vectorless">
+              <img src="https://static.pepy.tech/badge/vectorless/month" alt="PyPI Downloads" />
+            </Link>
+          </div>
           <p className={styles.tagline}>Knowing by reasoning, not vectors.</p>
           <p className={styles.subTitle}>
             Deep and reliable. Vectorless plays nicely with your documents.
             Ask questions in plain language; get answers by reasoning with Vectorless.
           </p>
 
+          <h2 className={styles.sectionTitle}>Installation</h2>
+          <p className={styles.paragraph}>
+            Install using <code>pip install -U vectorless</code>. For more details,
+            see the{' '}
+            <Link to="/docs/installation">Installation</Link> section in the
+            documentation.
+          </p>
+
+          <h2 className={styles.sectionTitle}>A Simple Example</h2>
+          <div className={styles.codeSection}>
+            <CodeBlock language="python">{CODE_EXAMPLE}</CodeBlock>
+          </div>
+
+          <h2 className={styles.sectionTitle}>Help</h2>
+          <p className={styles.paragraph}>
+            See{' '}
+            <Link to="/docs/getting-started">documentation</Link> for more
+            details.
+          </p>
+
+          <h2 className={styles.sectionTitle}>Contributing</h2>
+          <p className={styles.paragraph}>
+            Contributions welcome! See{' '}
+            <Link href="https://github.com/vectorlessflow/vectorless/blob/main/CONTRIBUTING.md">
+              Contributing
+            </Link>{' '}
+            for setup and guidelines.
+          </p>
+
+          <h2 className={styles.sectionTitle}>License</h2>
+          <p className={styles.paragraph}>Apache License 2.0</p>
+
           <div className={styles.heroActions}>
-            <Link
-              className={styles.primaryButton}
-              to="/docs/getting-started">
-              Get Started
-            </Link>
             <Link
               className={styles.secondaryButton}
               href="https://github.com/vectorlessflow/vectorless"
@@ -34,54 +88,7 @@ function HomepageHeader() {
             </Link>
           </div>
         </div>
-
-        {/* Right: Code Preview */}
-        <div className={styles.codeCard}>
-          <div className={styles.codeHeader}>
-            <span className={styles.codeDot} style={{background: '#FF5F57'}} />
-            <span className={styles.codeDot} style={{background: '#FEBC2E'}} />
-            <span className={styles.codeDot} style={{background: '#28C840'}} />
-            <span className={styles.codeTitle}>quick_start.py</span>
-          </div>
-          <pre className={styles.codeBlock}><code dangerouslySetInnerHTML={{__html: CODE_HTML}} /></pre>
-        </div>
-      </div>
-    </header>
-  );
-}
-
-const CODE_HTML = [
-  `<span class="kw">import</span> asyncio`,
-  `<span class="kw">from</span> vectorless <span class="kw">import</span> Engine`,
-  ``,
-  `<span class="kw">async def</span> <span class="fn">main</span>():`,
-  `    engine = <span class="fn">Engine</span>(`,
-  `        api_key=<span class="str">"sk-..."</span>,`,
-  `        model=<span class="str">"gpt-4o"</span>,`,
-  `    )`,
-  ``,
-  `    <span class="cmt"># Compile a document</span>`,
-  `    result = <span class="kw">await</span> engine.<span class="fn">compile</span>(`,
-  `        path=<span class="str">"./report.pdf"</span>`,
-  `    )`,
-  ``,
-  `    <span class="cmt"># Ask a question</span>`,
-  `    response = <span class="kw">await</span> engine.<span class="fn">ask</span>(`,
-  `        <span class="str">"What is the total revenue?"</span>,`,
-  `        doc_ids=[result.doc_id],`,
-  `    )`,
-  `    <span class="fn">print</span>(response.<span class="fn">single</span>().content)`,
-  ``,
-  `asyncio.<span class="fn">run</span>(<span class="fn">main</span>())`,
-].join('\n');
-
-export default function Home(): ReactNode {
-  const {siteConfig} = useDocusaurusContext();
-  return (
-    <Layout
-      title={`${siteConfig.title}`}
-      description="Document understanding engine for AI. Agents reason through your documents — navigating structure, reading passages, cross-referencing across sections.">
-      <HomepageHeader />
+      </header>
       <main />
     </Layout>
   );

@@ -5,221 +5,200 @@
 /* ===== Hero Banner ===== */
 .heroBanner {
   margin: 0;
-  padding: 0;
+  padding: 40px 24px 32px;
   min-height: calc(100vh - 68px);
   overflow: hidden;
   position: relative;
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
-  gap: 48px;
   background-color: var(--bg);
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: 'Inter', sans-serif;
   color: var(--text);
-  line-height: 1.5;
-  padding: 40px 24px;
+  line-height: 1.4;
 }
 
-/* ===== Stats widget (top-right corner) ===== */
-.statsCorner {
+/* Dot-grid background */
+.heroBanner::before {
+  content: '';
   position: absolute;
-  top: 20px;
-  right: 32px;
-  z-index: 2;
+  inset: 0;
+  background-image: radial-gradient(circle, var(--border) 1px, transparent 1px);
+  background-size: 28px 28px;
+  opacity: 0.5;
+  pointer-events: none;
+  z-index: 0;
 }
 
-/* ===== Hero Container ===== */
-.hero {
-  max-width: 1120px;
+/* Radial glow */
+.heroBanner::after {
+  content: '';
+  position: absolute;
+  top: 20%;
+  left: 35%;
+  transform: translateX(-50%);
+  width: 600px;
+  height: 600px;
+  background: radial-gradient(
+    circle,
+    rgba(175, 120, 139, 0.10) 0%,
+    transparent 70%
+  );
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ===== Left-aligned Content ===== */
+.heroContent {
+  position: relative;
+  z-index: 1;
+  text-align: left;
+  max-width: 960px;
   width: 100%;
   margin: 0 auto;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 48px;
-}
-
-/* ===== Left: Brand + CTA ===== */
-.heroContent {
-  flex: 1.1;
-  min-width: 300px;
 }
 
 .mainTitle {
-  font-size: 4rem;
-  font-weight: 800;
-  letter-spacing: -0.04em;
-  background: linear-gradient(135deg, var(--text) 0%, var(--text-light) 80%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  margin-bottom: 12px;
-  line-height: 1.05;
+  font-size: clamp(1.6rem, 4vw, 2.4rem);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: var(--text);
+  margin-bottom: 6px;
+  line-height: 1;
+}
+
+.badges {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.badges img {
+  height: 20px;
 }
 
 .tagline {
-  font-size: 1.2rem;
+  font-size: 1rem;
   font-weight: 600;
   color: var(--primary);
-  margin-bottom: 16px;
+  margin-bottom: 4px;
   font-style: italic;
 }
 
 .subTitle {
-  font-size: 1rem;
+  font-size: 0.88rem;
   font-weight: 400;
   color: var(--text-light);
-  margin-bottom: 32px;
+  margin-bottom: 20px;
   line-height: 1.6;
-  max-width: 480px;
+  max-width: none;
+}
+
+/* ===== Section titles & paragraphs ===== */
+.sectionTitle {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text);
+  margin-top: 16px;
+  margin-bottom: 4px;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.paragraph {
+  font-size: 0.85rem;
+  font-weight: 400;
+  color: var(--text-light);
+  line-height: 1.5;
+  margin-bottom: 2px;
+}
+
+.paragraph code {
+  background-color: var(--primary-soft);
+  color: var(--text);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 0.85em;
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+}
+
+/* ===== Code Section ===== */
+.codeSection {
+  margin-top: 4px;
+  margin-bottom: 0;
+  max-width: none;
+}
+
+.codeSection pre {
+  border-radius: 6px !important;
+  font-size: 0.75rem !important;
+  line-height: 1.5 !important;
+  padding: 12px !important;
 }
 
 /* ===== Buttons ===== */
 .heroActions {
   display: flex;
-  gap: 12px;
+  gap: 10px;
   align-items: center;
   flex-wrap: wrap;
-}
-
-.primaryButton {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.85rem 2rem;
-  font-size: 0.95rem;
-  font-weight: 600;
-  border-radius: 999px;
-  background-color: var(--primary);
-  color: #fff;
-  text-decoration: none;
-  transition: transform 0.15s, box-shadow 0.15s;
-  font-family: 'Space Grotesk', sans-serif;
-}
-
-.primaryButton:hover {
-  color: #fff;
-  text-decoration: none;
-  transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(175, 120, 139, 0.35);
+  margin-top: 20px;
 }
 
 .secondaryButton {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.85rem 1.8rem;
-  font-size: 0.95rem;
+  gap: 0.4rem;
+  padding: 0.55rem 1.2rem;
+  font-size: 0.85rem;
   font-weight: 600;
-  border-radius: 999px;
+  border-radius: 6px;
   background-color: transparent;
   color: var(--text);
   border: 1px solid var(--border);
   text-decoration: none;
-  transition: transform 0.15s, border-color 0.15s;
-  font-family: 'Space Grotesk', sans-serif;
+  transition: border-color 0.15s;
+  font-family: 'Inter', sans-serif;
 }
 
 .secondaryButton:hover {
   color: var(--text);
   text-decoration: none;
   border-color: var(--primary);
-  transform: translateY(-2px);
 }
-
-/* ===== Right: Code Card ===== */
-.codeCard {
-  flex: 0.9;
-  min-width: 340px;
-  background: #0D1117 !important;
-  border-radius: 12px;
-  overflow: hidden;
-  border: 1px solid #30363D;
-  box-shadow: 0 16px 48px -8px rgba(0, 0, 0, 0.4);
-}
-
-.codeHeader {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 16px;
-  background: #161B22;
-  border-bottom: 1px solid #30363D;
-}
-
-.codeDot {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-}
-
-.codeTitle {
-  margin-left: 8px;
-  font-size: 0.78rem;
-  color: #8B949E;
-  font-family: 'Space Grotesk', sans-serif;
-}
-
-.codeBlock {
-  margin: 0;
-  padding: 20px;
-  font-size: 0.82rem;
-  line-height: 1.75;
-  color: #E6EDF3 !important;
-  background: transparent !important;
-  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
-  overflow-x: auto;
-  white-space: pre;
-}
-
 
 /* ===== Responsive ===== */
-@media (max-width: 960px) {
-  .hero {
-    flex-direction: column;
-    align-items: center;
+@media (max-width: 640px) {
+  .heroBanner {
+    padding: 32px 16px 24px;
   }
 
-  .heroContent {
-    text-align: center;
+  .mainTitle {
+    font-size: 2rem;
+  }
+
+  .tagline {
+    font-size: 0.92rem;
   }
 
   .subTitle {
+    font-size: 0.82rem;
+    max-width: 100%;
+  }
+
+  .codeSection {
     max-width: 100%;
   }
 
   .heroActions {
-    justify-content: center;
-  }
-
-  .mainTitle {
-    font-size: 3rem;
-  }
-
-  .codeCard {
-    min-width: 0;
+    flex-direction: column;
     width: 100%;
   }
-}
 
-@media (max-width: 640px) {
-  .principles {
-    flex-direction: column;
-    align-items: center;
-    gap: 24px;
-  }
-
-  .mainTitle {
-    font-size: 2.4rem;
-  }
-
-  .tagline {
-    font-size: 1.05rem;
-  }
-
-  .heroBanner {
-    padding: 32px 16px;
-    gap: 32px;
+  .primaryButton,
+  .secondaryButton {
+    width: 100%;
+    justify-content: center;
   }
 }
