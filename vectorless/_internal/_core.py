@@ -6,7 +6,6 @@ Here ``Engine`` refers to the raw Rust engine used internally for compile/docume
 """
 
 from vectorless._vectorless import (
-    Answer,
     CollectedEvidence,
     Concept,
     Config,
@@ -15,17 +14,14 @@ from vectorless._vectorless import (
     DocumentInfo,
     EdgeEvidence,
     Engine,
-    Evidence,
     FindResult,
     GraphEdge,
     LlmMetricsReport,
     MatchResult,
     MetricsReport,
     NodeInfo,
-    ReasoningTrace,
     RetrievalMetricsReport,
     SectionSummary,
-    TraceStep,
     TopicEntry,
     VectorlessError,
     WeightedKeyword,
@@ -34,7 +30,6 @@ from vectorless._vectorless import (
 )
 
 __all__ = [
-    "Answer",
     "CollectedEvidence",
     "Concept",
     "Config",
@@ -43,17 +38,14 @@ __all__ = [
     "DocumentInfo",
     "EdgeEvidence",
     "Engine",
-    "Evidence",
     "FindResult",
     "GraphEdge",
     "LlmMetricsReport",
     "MatchResult",
     "MetricsReport",
     "NodeInfo",
-    "ReasoningTrace",
     "RetrievalMetricsReport",
     "SectionSummary",
-    "TraceStep",
     "TopicEntry",
     "VectorlessError",
     "WeightedKeyword",

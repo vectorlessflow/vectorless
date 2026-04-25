@@ -17,6 +17,7 @@ pub struct Frontmatter {
 impl Frontmatter {
     /// Create an empty frontmatter.
     #[must_use]
+    #[allow(dead_code)]
     pub fn new() -> Self {
         Self {
             fields: HashMap::new(),
@@ -90,18 +91,21 @@ impl Frontmatter {
 
     /// Check if a field exists.
     #[must_use]
+    #[allow(dead_code)]
     pub fn contains(&self, key: &str) -> bool {
         self.fields.contains_key(key)
     }
 
     /// Get the title field.
     #[must_use]
+    #[allow(dead_code)]
     pub fn title(&self) -> Option<&String> {
         self.get("title")
     }
 
     /// Get the description field.
     #[must_use]
+    #[allow(dead_code)]
     pub fn description(&self) -> Option<&String> {
         self.get("description")
     }

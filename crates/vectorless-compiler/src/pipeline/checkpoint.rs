@@ -128,6 +128,7 @@ impl CheckpointManager {
     }
 
     /// Check if a checkpoint exists for the given document.
+    #[allow(dead_code)]
     pub fn exists(&self, doc_id: &str) -> bool {
         self.checkpoint_path(doc_id).exists()
     }
@@ -158,6 +159,7 @@ impl CheckpointManager {
     }
 
     /// List all checkpoint files in the directory.
+    #[allow(dead_code)]
     pub fn list_checkpoints(&self) -> Vec<String> {
         let mut result = Vec::new();
         if let Ok(entries) = std::fs::read_dir(&self.checkpoint_dir) {

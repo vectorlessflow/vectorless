@@ -29,21 +29,12 @@ use crate::pipeline::CompileContext;
 /// - Topic-to-path mappings from titles and summaries
 /// - Summary shortcuts for high-frequency "overview" queries
 /// - Section map for fast ToC lookup
-pub struct ReasoningPass {
-    config: ReasoningIndexConfig,
-}
+pub struct ReasoningPass;
 
 impl ReasoningPass {
     /// Create a new reasoning index stage with default config.
     pub fn new() -> Self {
-        Self {
-            config: ReasoningIndexConfig::default(),
-        }
-    }
-
-    /// Create with custom config.
-    pub fn with_config(config: ReasoningIndexConfig) -> Self {
-        Self { config }
+        Self
     }
 
     /// Extract keywords from a text, filtering by minimum length.

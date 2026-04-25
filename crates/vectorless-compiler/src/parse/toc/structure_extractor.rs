@@ -74,6 +74,7 @@ impl StructureExtractor {
     }
 
     /// Create an extractor with default configuration.
+    #[allow(dead_code)]
     pub fn with_defaults() -> Self {
         Self::new(StructureExtractorConfig::default())
     }
@@ -262,6 +263,7 @@ Rules:
     }
 
     /// Continue structure extraction for a subsequent group.
+    #[allow(dead_code)]
     ///
     /// Passes previously extracted entries as context so the LLM can
     /// continue the structure rather than restart.

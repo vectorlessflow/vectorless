@@ -59,6 +59,7 @@ impl IndexVerifier {
     }
 
     /// Create a verifier with default configuration.
+    #[allow(dead_code)]
     pub fn with_defaults() -> Self {
         Self::new(VerifierConfig::default())
     }
@@ -215,6 +216,7 @@ Reply in JSON format:
     }
 
     /// Check if a title appears at the start of a page.
+    #[allow(dead_code)]
     pub async fn check_title_at_start(&self, title: &str, page_text: &str) -> Result<bool> {
         let system = "You are a document analysis assistant. Determine if a section title appears at the START of the given page text.";
 

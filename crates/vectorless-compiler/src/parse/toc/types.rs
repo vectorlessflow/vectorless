@@ -142,6 +142,7 @@ pub struct PageOffset {
     pub offset: i32,
 
     /// Number of samples used for calculation.
+    #[allow(dead_code)]
     pub sample_count: usize,
 
     /// Confidence in the offset calculation.
@@ -177,6 +178,7 @@ pub struct VerificationError {
     pub expected_page: usize,
 
     /// Type of error.
+    #[allow(dead_code)]
     pub error_type: ErrorType,
 }
 
@@ -203,6 +205,7 @@ pub enum ErrorType {
     /// Title not found on the expected page.
     TitleNotFound,
     /// Title found but not at page start.
+    #[allow(dead_code)]
     NotAtPageStart,
     /// Page number out of document range.
     PageOutOfRange,
@@ -256,11 +259,13 @@ impl VerificationReport {
     }
 
     /// Check if the accuracy meets a threshold.
+    #[allow(dead_code)]
     pub fn meets_threshold(&self, threshold: f32) -> bool {
         self.accuracy >= threshold
     }
 
     /// Check if there are any errors.
+    #[allow(dead_code)]
     pub fn has_errors(&self) -> bool {
         !self.errors.is_empty()
     }

@@ -7,7 +7,6 @@
 //! enabling precise identification of changed nodes without full reprocessing.
 
 use std::collections::HashMap;
-use std::hash::{Hash, Hasher};
 use std::path::Path;
 use std::time::SystemTime;
 
@@ -206,13 +205,6 @@ impl ChangeDetector {
     pub fn with_processing_version(mut self, version: u32) -> Self {
         self.current_processing_version = version;
         self
-    }
-
-    /// Compute hash of content (simple u64 hash).
-    fn hash_content(content: &str) -> u64 {
-        let mut hasher = std::collections::hash_map::DefaultHasher::new();
-        content.hash(&mut hasher);
-        hasher.finish()
     }
 
     /// Check if a file needs recompilation based on mtime.
@@ -499,20 +491,6 @@ pub struct ChangeDetectorState {
 pub fn compute_tree_fingerprint(tree: &DocumentTree) -> Fingerprint {
     let root_fp = compute_node_fingerprint(tree, tree.root());
     root_fp.subtree
-}
-
-/// Compute content fingerprint for a single node.
-fn compute_node_content_fp(tree: &DocumentTree, node_id: NodeId) -> Fingerprint {
-    let node = match tree.get(node_id) {
-        Some(n) => n,
-        None => return Fingerprint::zero(),
-    };
-
-    Fingerprinter::new()
-        .with_str(&node.title)
-        .with_str(&node.content)
-        .with_option_str(node.node_id.as_deref())
-        .into_fingerprint()
 }
 
 /// Compute fingerprint for a node and its subtree.
