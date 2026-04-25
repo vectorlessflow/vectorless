@@ -3,7 +3,7 @@
 
 """Single-document reasoning challenge.
 
-Indexes a realistic technical document and asks questions that require
+Compiles a realistic technical document and asks questions that require
 the engine to navigate deep into the tree, cross-reference details
 across distant sections, and extract information buried in nested
 structures — not surface-level keyword matches.
@@ -179,21 +179,18 @@ async def main() -> None:
 
     doc_name = "qc_report_2025"
 
-    # Check if already indexed
+    # Check if already compiled
     doc_id = None
     docs = await engine.list_documents()
     for doc in docs:
         if doc.name == doc_name:
             doc_id = doc.doc_id
-            print(f"Document already indexed, reusing: {doc_id}\n")
+            print(f"Document already compiled, reusing: {doc_id}\n")
             break
 
     if doc_id is None:
-        print("Indexing research report...")
-        from vectorless._core import IndexContext
-
-        ctx = IndexContext.from_content(REPORT, "markdown").with_name(doc_name)
-        result = await engine.index(ctx)
+        print("Compiling research report...")
+        result = await engine.compile(content=REPORT, format="markdown", name=doc_name)
         doc_id = result.doc_id
         print(f"  doc_id: {doc_id}\n")
 
