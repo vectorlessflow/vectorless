@@ -3,7 +3,7 @@
 
 //! Pre-computed reasoning index for fast retrieval path resolution.
 //!
-//! Built at index time from TOC and summaries, the reasoning index provides
+//! Built at compile time from TOC and summaries, the reasoning index provides
 //! topic-to-path mappings, summary shortcuts, and hot node tracking that
 //! accelerate query-time retrieval by bypassing expensive tree traversal.
 
@@ -14,11 +14,11 @@ use serde::{Deserialize, Serialize};
 use super::node::NodeId;
 
 /// A pre-computed reasoning index that maps topics and query patterns
-/// to optimal tree paths, built at index time for query-time acceleration.
+/// to optimal tree paths, built at compile time for query-time acceleration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReasoningIndex {
     /// Keyword → list of (NodeId, weight) entries.
-    /// Built from titles and summaries at index time.
+    /// Built from titles and summaries at compile time.
     /// Key = lowercased keyword token.
     topic_paths: HashMap<String, Vec<TopicEntry>>,
 
@@ -270,7 +270,7 @@ pub struct ReasoningIndexConfig {
     /// Whether to build the summary shortcut.
     pub build_summary_shortcut: bool,
     /// Whether to expand keywords with LLM-generated synonyms.
-    /// When enabled, the indexing stage calls the LLM to generate
+    /// When enabled, the compile stage calls the LLM to generate
     /// synonym terms for each keyword, improving recall for queries
     /// that use different wording than the document.
     pub enable_synonym_expansion: bool,

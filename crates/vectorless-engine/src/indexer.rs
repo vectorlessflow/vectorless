@@ -27,14 +27,15 @@ use tracing::info;
 use uuid::Uuid;
 
 use vectorless_compiler::{CompilerInput, PipelineExecutor, PipelineOptions, SourceFormat};
-use vectorless_document::DocumentFormat;
+use vectorless_document::{
+    Document, DocumentFormat, DocumentMeta, CURRENT_SCHEMA_VERSION,
+};
 use vectorless_error::{Error, Result};
 use vectorless_llm::LlmClient;
-use vectorless_storage::{DocumentMeta, PersistedDocument};
+use vectorless_utils::fingerprint::Fingerprint;
 
 use super::compile_input::CompileSource;
-use super::compiled_document::CompiledDocument;
-use vectorless_events::{EventEmitter, IndexEvent};
+use vectorless_events::{EventEmitter, CompileEvent};
 
 /// Document compile client.
 ///
@@ -42,7 +43,7 @@ use vectorless_events::{EventEmitter, IndexEvent};
 /// Each compile operation creates a fresh pipeline executor, enabling
 /// true parallel document compilation without mutex contention.
 pub(crate) struct IndexerClient {
-    /// Factory for creating pipeline executors (one per index operation).
+    /// Factory for creating pipeline executors (one per compile operation).
     executor_factory: Arc<dyn Fn() -> PipelineExecutor + Send + Sync>,
 
     /// Event emitter.
@@ -74,7 +75,7 @@ impl IndexerClient {
         source: &CompileSource,
         name: Option<&str>,
         pipeline_options: PipelineOptions,
-    ) -> Result<CompiledDocument> {
+    ) -> Result<Document> {
         self.index_with_existing(source, name, pipeline_options, None)
             .await
     }
@@ -88,7 +89,7 @@ impl IndexerClient {
         name: Option<&str>,
         mut pipeline_options: PipelineOptions,
         existing_tree: Option<&vectorless_document::DocumentTree>,
-    ) -> Result<CompiledDocument> {
+    ) -> Result<Document> {
         pipeline_options.existing_tree = existing_tree.cloned();
         match source {
             CompileSource::Path(path) => self.index_from_path(path, name, pipeline_options).await,
@@ -111,10 +112,10 @@ impl IndexerClient {
         path: &Path,
         name: Option<&str>,
         pipeline_options: PipelineOptions,
-    ) -> Result<CompiledDocument> {
+    ) -> Result<Document> {
         let path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
 
-        // Validate file before indexing
+        // Validate file before compiling
         let validation = vectorless_utils::validate_file(&path)?;
         if !validation.valid {
             return Err(Error::Parse(
@@ -151,8 +152,8 @@ impl IndexerClient {
         format: DocumentFormat,
         name: Option<&str>,
         pipeline_options: PipelineOptions,
-    ) -> Result<CompiledDocument> {
-        // Validate content before indexing
+    ) -> Result<Document> {
+        // Validate content before compiling
         let validation = vectorless_utils::validate_content(content, format);
         if !validation.valid {
             return Err(Error::Parse(
@@ -183,8 +184,8 @@ impl IndexerClient {
         format: DocumentFormat,
         name: Option<&str>,
         pipeline_options: PipelineOptions,
-    ) -> Result<CompiledDocument> {
-        // Validate bytes before indexing
+    ) -> Result<Document> {
+        // Validate bytes before compiling
         let validation = vectorless_utils::validate_bytes(bytes, format);
         if !validation.valid {
             return Err(Error::Parse(
@@ -197,7 +198,7 @@ impl IndexerClient {
         }
 
         info!(
-            "Indexing {:?} document from bytes ({} bytes)",
+            "Compiling {:?} document from bytes ({} bytes)",
             format,
             bytes.len()
         );
@@ -224,38 +225,39 @@ impl IndexerClient {
         name: Option<&str>,
         path: Option<&Path>,
         pipeline_options: PipelineOptions,
-    ) -> Result<CompiledDocument> {
-        self.events.emit_index(IndexEvent::Started {
+    ) -> Result<Document> {
+        self.events.emit_compile(CompileEvent::Started {
             path: source_label.to_string(),
         });
 
         let doc_id = Uuid::new_v4().to_string();
         self.events
-            .emit_index(IndexEvent::FormatDetected { format });
+            .emit_compile(CompileEvent::FormatDetected { format });
 
-        info!("Indexing {:?} document: {}", format, source_label);
+        info!("Compiling {:?} document: {}", format, source_label);
 
         let mut executor = (self.executor_factory)();
-        let result = executor.execute(input, pipeline_options).await?;
+        let result = executor.execute(input, pipeline_options.clone()).await?;
 
-        self.build_compiled_document(doc_id, result, format, name, path)
+        self.build_document(doc_id, result, format, name, path, &pipeline_options)
     }
 
-    /// Build compiled document from pipeline result.
-    fn build_compiled_document(
+    /// Build a Document from pipeline result.
+    fn build_document(
         &self,
         doc_id: String,
         result: vectorless_compiler::CompileResult,
         format: DocumentFormat,
         name: Option<&str>,
         path: Option<&Path>,
-    ) -> Result<CompiledDocument> {
+        pipeline_options: &PipelineOptions,
+    ) -> Result<Document> {
         let tree = result
             .tree
             .ok_or_else(|| Error::Parse("Document tree not generated".to_string()))?;
 
         let node_count = tree.node_count();
-        self.events.emit_index(IndexEvent::TreeBuilt { node_count });
+        self.events.emit_compile(CompileEvent::TreeBuilt { node_count });
 
         let doc_name = name
             .map(str::to_string)
@@ -265,33 +267,48 @@ impl IndexerClient {
             })
             .unwrap_or_else(|| result.name.clone());
 
-        let mut doc = CompiledDocument::new(&doc_id, format)
-            .with_name(&doc_name)
-            .with_tree(tree)
-            .with_metrics(result.metrics);
+        // Build DocumentMeta with fingerprints
+        let mut meta = DocumentMeta::new();
 
-        doc.reasoning_index = result.reasoning_index;
-        doc.navigation_index = result.navigation_index;
-        doc.concepts = result.concepts;
-        doc.query_routes = result.query_routes;
-        doc.chain_index = result.chain_index;
-        doc.content_overlap = result.content_overlap;
-        doc.evidence_scores = result.evidence_scores;
+        // Compute content fingerprint for incremental compilation (async I/O would be done
+        // in the caller; here we just store the pipeline's logic fingerprint)
+        let logic_fp = pipeline_options.logic_fingerprint();
+        meta = meta.with_logic_fingerprint(logic_fp.to_string());
 
+        // Extract stats from metrics
+        let (summary_tokens, duration_ms) =
+            (result.metrics.total_tokens_generated, result.metrics.total_time_ms());
+        meta.update_processing_stats(node_count, summary_tokens, duration_ms);
+
+        // Compute content fingerprint from source file if available
         if let Some(p) = path {
-            doc = doc.with_source_path(p);
+            if let Ok(bytes) = std::fs::read(p) {
+                let fp = Fingerprint::from_bytes(&bytes);
+                meta = meta.with_content_fingerprint(fp.to_string());
+            }
         }
 
-        if let Some(desc) = &result.description {
-            doc = doc.with_description(desc);
-        }
+        let doc = Document {
+            schema_version: CURRENT_SCHEMA_VERSION,
+            doc_id,
+            name: doc_name,
+            format: format.extension().to_string(),
+            source_path: path.map(|p| p.display().to_string()),
+            tree,
+            nav_index: result.navigation_index.unwrap_or_default(),
+            reasoning_index: result.reasoning_index.unwrap_or_default(),
+            summary: result.description.unwrap_or_default(),
+            concepts: result.concepts,
+            query_routes: result.query_routes,
+            chain_index: result.chain_index,
+            content_overlap: result.content_overlap,
+            evidence_scores: result.evidence_scores,
+            page_count: result.page_count,
+            meta: Some(meta),
+        };
 
-        if let Some(page_count) = result.page_count {
-            doc = doc.with_page_count(page_count);
-        }
-
-        info!("Indexing complete: {} ({} nodes)", doc_id, node_count);
-        self.events.emit_index(IndexEvent::Complete { doc_id });
+        info!("Compiling complete: {} ({} nodes)", doc.doc_id, node_count);
+        self.events.emit_compile(CompileEvent::Complete { doc_id: doc.doc_id.clone() });
 
         Ok(doc)
     }
@@ -313,67 +330,6 @@ impl IndexerClient {
         let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
         DocumentFormat::from_extension(ext)
             .ok_or_else(|| Error::Parse(format!("Unsupported format: {}", ext)))
-    }
-
-    /// Convert [`CompiledDocument`] to [`PersistedDocument`].
-    ///
-    /// This is an associated function — it does not depend on client state.
-    /// Stores content and logic fingerprints from the pipeline options.
-    ///
-    /// Uses async file I/O to avoid blocking the tokio runtime.
-    pub async fn to_persisted(
-        doc: CompiledDocument,
-        pipeline_options: &PipelineOptions,
-    ) -> PersistedDocument {
-        let mut meta = DocumentMeta::new(&doc.id, &doc.name, doc.format.extension())
-            .with_source_path(
-                doc.source_path
-                    .as_ref()
-                    .map(|p| p.to_string_lossy().to_string())
-                    .unwrap_or_default(),
-            )
-            .with_description(doc.description.clone().unwrap_or_default());
-
-        // Compute content fingerprint for incremental indexing (async I/O)
-        if let Some(ref path) = doc.source_path {
-            if let Ok(bytes) = tokio::fs::read(path).await {
-                let fp = vectorless_utils::fingerprint::Fingerprint::from_bytes(&bytes);
-                meta = meta.with_fingerprint(fp);
-            }
-        }
-
-        // Store logic fingerprint (pipeline configuration hash)
-        let logic_fp = pipeline_options.logic_fingerprint();
-        meta = meta.with_logic_fingerprint(logic_fp);
-
-        let tree = doc.tree.expect("CompiledDocument must have a tree");
-
-        // Extract stats from metrics
-        let node_count = tree.node_count();
-        let (summary_tokens, duration_ms) = if let Some(ref m) = doc.metrics {
-            (m.total_tokens_generated, m.total_time_ms())
-        } else {
-            (0, 0)
-        };
-
-        let mut persisted = PersistedDocument::new(meta, tree);
-
-        for page in doc.pages {
-            persisted.add_page(page.page, &page.content);
-        }
-
-        persisted.reasoning_index = doc.reasoning_index;
-        persisted.navigation_index = doc.navigation_index;
-        persisted.concepts = doc.concepts;
-        persisted.query_routes = doc.query_routes;
-        persisted.chain_index = doc.chain_index;
-        persisted.content_overlap = doc.content_overlap;
-        persisted.evidence_scores = doc.evidence_scores;
-        persisted
-            .meta
-            .update_processing_stats(node_count, summary_tokens, duration_ms);
-
-        persisted
     }
 }
 

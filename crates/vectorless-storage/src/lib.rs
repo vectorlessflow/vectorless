@@ -19,5 +19,5 @@ mod persistence;
 pub mod workspace;
 
 // Re-export main types
-pub use persistence::{DocumentMeta, PageContent, PersistedDocument};
+pub use persistence::PageContent;
 pub use workspace::Workspace;

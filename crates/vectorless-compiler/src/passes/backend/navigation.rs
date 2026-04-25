@@ -31,7 +31,7 @@ use crate::pipeline::CompileContext;
 /// - A list of [`ChildRoute`] entries, one per child, with title, description, and leaf count.
 ///
 /// The resulting [`NavigationIndex`] is stored in `ctx.navigation_index` and
-/// serialized as part of [`PersistedDocument`](vectorless_storage::persistence::PersistedDocument).
+/// serialized as part of [`Document`](vectorless_document::Document).
 pub struct NavigationPass;
 
 impl NavigationPass {

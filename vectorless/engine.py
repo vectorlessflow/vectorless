@@ -17,9 +17,9 @@ from vectorless.ask.dispatcher import dispatch
 from vectorless.ask.types import DocCard, Output, Specified, Workspace
 from vectorless.config import EngineConfig, load_config, load_config_from_env, load_config_from_file
 from vectorless.events import (
+    CompileEventData,
+    CompileEventType,
     EventEmitter,
-    IndexEventData,
-    IndexEventType,
     QueryEventData,
     QueryEventType,
 )
@@ -157,20 +157,20 @@ class Engine:
         # For single file, delegate to Rust compile
         if path is not None:
             source_desc = str(path)
-            self._events.emit_index(
-                IndexEventData(event_type=IndexEventType.STARTED, path=source_desc)
+            self._events.emit_compile(
+                CompileEventData(event_type=CompileEventType.STARTED, path=source_desc)
             )
             doc_info = await self._rust.compile(str(path))
-            self._events.emit_index(
-                IndexEventData(
-                    event_type=IndexEventType.COMPLETE,
+            self._events.emit_compile(
+                CompileEventData(
+                    event_type=CompileEventType.COMPLETE,
                     doc_id=doc_info.doc_id,
-                    message=f"Indexed {doc_info.doc_id}",
+                    message=f"Compiled {doc_info.doc_id}",
                 )
             )
             return CompileOutput.from_doc_info(doc_info)
 
-        # For multiple files, index them sequentially
+        # For multiple files, compile them sequentially
         if paths is not None:
             return await self.compile_batch(
                 paths, mode="force" if force else mode,
@@ -229,24 +229,24 @@ class Engine:
         """Compile multiple files with optional concurrency.
 
         Args:
-            paths: List of file paths to index.
-            mode: Indexing mode ("default", "force", "incremental").
-            jobs: Max concurrent indexing jobs.
-            force: Force re-index existing documents.
+            paths: List of file paths to compile.
+            mode: Compilation mode ("default", "force", "incremental").
+            jobs: Max concurrent compilation jobs.
+            force: Force re-compile existing documents.
             progress: Emit progress events.
         """
         semaphore = asyncio.Semaphore(jobs)
 
         async def _index_one(p: str | Path) -> object:
             async with semaphore:
-                self._events.emit_index(
-                    IndexEventData(event_type=IndexEventType.STARTED, path=str(p))
+                self._events.emit_compile(
+                    CompileEventData(event_type=CompileEventType.STARTED, path=str(p))
                 )
                 doc_info = await self._rust.compile(str(p))
                 if progress:
-                    self._events.emit_index(
-                        IndexEventData(
-                            event_type=IndexEventType.COMPLETE,
+                    self._events.emit_compile(
+                        CompileEventData(
+                            event_type=CompileEventType.COMPLETE,
                             path=str(p),
                             doc_id=doc_info.doc_id,
                         )
@@ -393,7 +393,7 @@ class Engine:
     # ── Document Management (Rust) ──────────────────────────────
 
     async def list_documents(self) -> list:
-        """List all indexed documents."""
+        """List all compiled documents."""
         return await self._rust.list_documents()
 
     async def remove_document(self, doc_id: str) -> bool:
@@ -406,7 +406,7 @@ class Engine:
         return await self._rust.exists(doc_id)
 
     async def clear_all(self) -> int:
-        """Remove all indexed documents. Returns count removed."""
+        """Remove all compiled documents. Returns count removed."""
         return await self._rust.clear()
 
     # ── Graph (Rust) ────────────────────────────────────────────
@@ -447,4 +447,4 @@ class DocumentNotFoundError(Exception):
 
 
 class EmptyWorkspaceError(Exception):
-    """Raised when no documents are indexed in the workspace."""
+    """Raised when no documents are compiled in the workspace."""

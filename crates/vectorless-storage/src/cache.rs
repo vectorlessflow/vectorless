@@ -20,7 +20,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use lru::LruCache;
 
-use super::persistence::PersistedDocument;
+use vectorless_document::Document;
 use vectorless_error::Error;
 use vectorless_error::Result;
 
@@ -41,7 +41,7 @@ const DEFAULT_CACHE_SIZE: usize = 100;
 #[derive(Debug)]
 pub struct DocumentCache {
     /// Inner cache protected by Mutex.
-    inner: Mutex<LruCache<String, PersistedDocument>>,
+    inner: Mutex<LruCache<String, Document>>,
     /// Maximum capacity.
     capacity: usize,
     /// Number of cache hits.
@@ -87,7 +87,7 @@ impl DocumentCache {
     /// # Errors
     ///
     /// Returns an error if the cache lock is poisoned.
-    pub fn get(&self, id: &str) -> Result<Option<PersistedDocument>> {
+    pub fn get(&self, id: &str) -> Result<Option<Document>> {
         let mut cache = self.lock()?;
         let result = cache.get(id).cloned();
 
@@ -114,7 +114,7 @@ impl DocumentCache {
     /// # Errors
     ///
     /// Returns an error if the cache lock is poisoned.
-    pub fn put(&self, id: String, doc: PersistedDocument) -> Result<Option<PersistedDocument>> {
+    pub fn put(&self, id: String, doc: Document) -> Result<Option<Document>> {
         let mut cache = self.lock()?;
 
         // Track capacity before put to detect eviction
@@ -137,7 +137,7 @@ impl DocumentCache {
     /// # Errors
     ///
     /// Returns an error if the cache lock is poisoned.
-    pub fn remove(&self, id: &str) -> Result<Option<PersistedDocument>> {
+    pub fn remove(&self, id: &str) -> Result<Option<Document>> {
         let mut cache = self.lock()?;
         Ok(cache.pop(id))
     }
@@ -234,7 +234,7 @@ impl DocumentCache {
     }
 
     /// Lock the inner cache.
-    fn lock(&self) -> Result<std::sync::MutexGuard<'_, LruCache<String, PersistedDocument>>> {
+    fn lock(&self) -> Result<std::sync::MutexGuard<'_, LruCache<String, Document>>> {
         self.inner
             .lock()
             .map_err(|_| Error::Cache("Cache lock poisoned".to_string()))
@@ -267,13 +267,27 @@ pub struct CacheStats {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{DocumentMeta, PersistedDocument};
     use vectorless_document::DocumentTree;
 
-    fn create_test_doc(id: &str) -> PersistedDocument {
-        let meta = DocumentMeta::new(id, "Test Doc", "md");
-        let tree = DocumentTree::new("Root", "Content");
-        PersistedDocument::new(meta, tree)
+    fn create_test_doc(id: &str) -> Document {
+        Document {
+            schema_version: 0,
+            doc_id: id.to_string(),
+            name: "Test Doc".to_string(),
+            format: "md".to_string(),
+            source_path: None,
+            tree: DocumentTree::new("Root", "Content"),
+            nav_index: Default::default(),
+            reasoning_index: Default::default(),
+            summary: String::new(),
+            concepts: Vec::new(),
+            query_routes: None,
+            chain_index: None,
+            content_overlap: None,
+            evidence_scores: None,
+            page_count: None,
+            meta: None,
+        }
     }
 
     #[test]
@@ -301,7 +315,7 @@ mod tests {
 
         let retrieved = cache.get("doc1").unwrap();
         assert!(retrieved.is_some());
-        assert_eq!(retrieved.unwrap().meta.id, "doc1");
+        assert_eq!(retrieved.unwrap().doc_id, "doc1");
 
         let missing = cache.get("missing").unwrap();
         assert!(missing.is_none());

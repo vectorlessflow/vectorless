@@ -16,6 +16,7 @@ const sidebars: SidebarsConfig = {
       label: 'Vectorless Compiler',
       items: [
         'compiler/overview',
+        'compiler/ir-spec',
         'compiler/pipeline',
         'compiler/passes',
         'compiler/configuration',

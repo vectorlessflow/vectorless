@@ -34,38 +34,38 @@ impl FailedItem {
 }
 
 // ============================================================
-// Index Types
+// Compile Types
 // ============================================================
 
-/// Document indexing behavior mode.
+/// Document compilation behavior mode.
 ///
-/// Controls how the indexer handles existing documents and re-indexing.
+/// Controls how the compiler handles existing documents and re-compilation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum CompileMode {
-    /// Default mode - skip if already indexed.
+    /// Default mode - skip if already compiled.
     ///
-    /// If a document with the same source has already been indexed,
+    /// If a document with the same source has already been compiled,
     /// the operation is skipped and the existing document ID is returned.
     #[default]
     Default,
 
-    /// Force re-indexing.
+    /// Force re-compiling.
     ///
-    /// Always re-index the document, even if it has been indexed before.
+    /// Always re-compile the document, even if it has been compiled before.
     /// A new document ID is generated.
     Force,
 
-    /// Incremental mode - only re-index changed files.
+    /// Incremental mode - only re-compile changed files.
     ///
-    /// Re-index only if the file has been modified since the last index.
+    /// Re-compile only if the file has been modified since the last compilation.
     /// For content/bytes sources, this behaves like [`CompileMode::Default`].
     Incremental,
 }
 
-/// Options for indexing a document.
+/// Options for compiling a document.
 #[derive(Debug, Clone)]
 pub struct CompileOptions {
-    /// Indexing mode.
+    /// Compilation mode.
     pub mode: CompileMode,
 
     /// Whether to generate summaries using LLM.
@@ -100,7 +100,7 @@ impl Default for CompileOptions {
 }
 
 impl CompileOptions {
-    /// Create new index options with defaults.
+    /// Create new compile options with defaults.
     pub fn new() -> Self {
         Self::default()
     }
@@ -117,13 +117,13 @@ impl CompileOptions {
         self
     }
 
-    /// Set the indexing mode.
+    /// Set the compilation mode.
     ///
     /// # Modes
     ///
-    /// - [`CompileMode::Default`] - Skip if already indexed
-    /// - [`CompileMode::Force`] - Always re-index
-    /// - [`CompileMode::Incremental`] - Only re-index changed files
+    /// - [`CompileMode::Default`] - Skip if already compiled
+    /// - [`CompileMode::Force`] - Always re-compile
+    /// - [`CompileMode::Incremental`] - Only re-compile changed files
     pub fn with_mode(mut self, mode: CompileMode) -> Self {
         self.mode = mode;
         self
@@ -137,13 +137,13 @@ impl CompileOptions {
 }
 
 // ============================================================
-// Index Result Types
+// Compile Result Types
 // ============================================================
 
-/// Result of a document indexing operation.
+/// Result of a document compilation operation.
 #[derive(Debug, Clone)]
 pub struct CompileOutput {
-    /// Successfully indexed items.
+    /// Successfully compiled items.
     pub items: Vec<CompileArtifact>,
 
     /// Items that failed to index (partial success).
@@ -151,7 +151,7 @@ pub struct CompileOutput {
 }
 
 impl CompileOutput {
-    /// Create a new index result.
+    /// Create a new compile result.
     pub fn new(items: Vec<CompileArtifact>) -> Self {
         Self {
             items,
@@ -164,7 +164,7 @@ impl CompileOutput {
         Self { items, failed }
     }
 
-    /// Get the single document ID (convenience for single-document indexing).
+    /// Get the single document ID (convenience for single-document compilation).
     pub fn doc_id(&self) -> Option<&str> {
         if self.items.len() == 1 {
             Some(&self.items[0].doc_id)
@@ -178,7 +178,7 @@ impl CompileOutput {
         self.items.is_empty()
     }
 
-    /// Get the number of indexed items.
+    /// Get the number of compiled items.
     pub fn len(&self) -> usize {
         self.items.len()
     }
@@ -194,7 +194,7 @@ impl CompileOutput {
     }
 }
 
-/// A single indexed document item.
+/// A single compiled document item.
 #[derive(Debug, Clone)]
 pub struct CompileArtifact {
     /// The unique document ID.
@@ -205,16 +205,16 @@ pub struct CompileArtifact {
     pub format: DocumentFormat,
     /// Document description (from root summary).
     pub description: Option<String>,
-    /// Source file path (if indexed from a file).
+    /// Source file path (if compiled from a file).
     pub source_path: Option<String>,
     /// Page count (for PDFs).
     pub page_count: Option<usize>,
-    /// Indexing pipeline metrics (timing, LLM usage, node stats).
+    /// Compilation pipeline metrics (timing, LLM usage, node stats).
     pub metrics: Option<CompileMetrics>,
 }
 
 impl CompileArtifact {
-    /// Create a new index item.
+    /// Create a new compile artifact.
     pub fn new(
         doc_id: impl Into<String>,
         name: impl Into<String>,
@@ -239,13 +239,13 @@ impl CompileArtifact {
         self
     }
 
-    /// Set the indexing metrics.
+    /// Set the compilation metrics.
     pub fn with_metrics(mut self, metrics: CompileMetrics) -> Self {
         self.metrics = Some(metrics);
         self
     }
 
-    /// Set the indexing metrics (optional).
+    /// Set the compilation metrics (optional).
     pub fn with_metrics_opt(mut self, metrics: Option<CompileMetrics>) -> Self {
         self.metrics = metrics;
         self
@@ -286,7 +286,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_index_options() {
+    fn test_compile_options() {
         let options = CompileOptions::new()
             .with_summaries()
             .with_mode(CompileMode::Force);
@@ -296,7 +296,7 @@ mod tests {
     }
 
     #[test]
-    fn test_index_options_timeout() {
+    fn test_compile_options_timeout() {
         let opts = CompileOptions::new().with_timeout_secs(30);
         assert_eq!(opts.timeout_secs, Some(30));
 
@@ -305,7 +305,7 @@ mod tests {
     }
 
     #[test]
-    fn test_index_result() {
+    fn test_compile_result() {
         let item = CompileArtifact::new("doc-1", "Test", DocumentFormat::Markdown, None, None);
         let result = CompileOutput::new(vec![item]);
 
@@ -315,14 +315,14 @@ mod tests {
     }
 
     #[test]
-    fn test_index_result_empty() {
+    fn test_compile_result_empty() {
         let result = CompileOutput::new(vec![]);
         assert!(result.is_empty());
         assert_eq!(result.doc_id(), None);
     }
 
     #[test]
-    fn test_index_result_multiple() {
+    fn test_compile_result_multiple() {
         let items = vec![
             CompileArtifact::new("doc-1", "A", DocumentFormat::Markdown, None, None),
             CompileArtifact::new("doc-2", "B", DocumentFormat::Pdf, None, None),

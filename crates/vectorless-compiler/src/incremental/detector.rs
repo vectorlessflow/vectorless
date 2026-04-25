@@ -215,10 +215,10 @@ impl ChangeDetector {
         hasher.finish()
     }
 
-    /// Check if a file needs reindexing based on mtime.
-    pub fn needs_reindex_by_mtime(&self, doc_id: &str, path: &Path) -> bool {
+    /// Check if a file needs recompilation based on mtime.
+    pub fn needs_recompile_by_mtime(&self, doc_id: &str, path: &Path) -> bool {
         let Some(recorded_mtime) = self.mtimes.get(doc_id) else {
-            return true; // Never indexed
+            return true; // Never compiled
         };
 
         let Ok(metadata) = std::fs::metadata(path) else {
@@ -232,8 +232,8 @@ impl ChangeDetector {
         current_mtime > *recorded_mtime
     }
 
-    /// Check if content needs reindexing based on fingerprint.
-    pub fn needs_reindex_by_hash(&self, doc_id: &str, content: &str) -> bool {
+    /// Check if content needs recompilation based on fingerprint.
+    pub fn needs_recompile_by_hash(&self, doc_id: &str, content: &str) -> bool {
         let current_fp = Fingerprint::from_str(content);
 
         match self.content_fps.get(doc_id) {
@@ -242,8 +242,8 @@ impl ChangeDetector {
         }
     }
 
-    /// Check if document needs reindexing based on fingerprint.
-    pub fn needs_reindex_by_fingerprint(&self, doc_id: &str, new_fp: &Fingerprint) -> bool {
+    /// Check if document needs recompilation based on fingerprint.
+    pub fn needs_recompile_by_fingerprint(&self, doc_id: &str, new_fp: &Fingerprint) -> bool {
         match self.content_fps.get(doc_id) {
             Some(recorded_fp) => recorded_fp != new_fp,
             None => true,
@@ -251,14 +251,14 @@ impl ChangeDetector {
     }
 
     /// Check if processing version has changed.
-    pub fn needs_reindex_by_version(&self, doc_id: &str) -> bool {
+    pub fn needs_recompile_by_version(&self, doc_id: &str) -> bool {
         match self.processing_versions.get(doc_id) {
             Some(recorded_version) => *recorded_version < self.current_processing_version,
             None => true,
         }
     }
 
-    /// Record document state after indexing.
+    /// Record document state after compiling.
     pub fn record(&mut self, doc_id: &str, content: &str, path: Option<&Path>) {
         self.record_with_tree(doc_id, content, None, path);
     }
@@ -415,7 +415,7 @@ impl ChangeDetector {
         let mut needs_reprocess = Vec::new();
 
         // If processing version changed, all nodes need reprocessing
-        if self.needs_reindex_by_version(doc_id) {
+        if self.needs_recompile_by_version(doc_id) {
             return Some(new_fps.keys().cloned().collect());
         }
 
@@ -578,20 +578,20 @@ mod tests {
     }
 
     #[test]
-    fn test_needs_reindex_by_hash() {
+    fn test_needs_recompile_by_hash() {
         let mut detector = ChangeDetector::new();
 
-        // First time: always needs reindex
-        assert!(detector.needs_reindex_by_hash("doc1", "content"));
+        // First time: always needs recompilation
+        assert!(detector.needs_recompile_by_hash("doc1", "content"));
 
         // Record the content
         detector.record("doc1", "content", None);
 
-        // Same content: no reindex needed
-        assert!(!detector.needs_reindex_by_hash("doc1", "content"));
+        // Same content: no recompilation needed
+        assert!(!detector.needs_recompile_by_hash("doc1", "content"));
 
-        // Different content: needs reindex
-        assert!(detector.needs_reindex_by_hash("doc1", "new content"));
+        // Different content: needs recompilation
+        assert!(detector.needs_recompile_by_hash("doc1", "new content"));
     }
 
     #[test]
@@ -614,12 +614,12 @@ mod tests {
         let mut detector = ChangeDetector::new().with_processing_version(2);
         detector.record("doc1", "content", None);
 
-        // Version matches, no reindex needed
-        assert!(!detector.needs_reindex_by_version("doc1"));
+        // Version matches, no recompilation needed
+        assert!(!detector.needs_recompile_by_version("doc1"));
 
         // Create new detector with higher version
         let detector2 = ChangeDetector::new().with_processing_version(3);
-        assert!(detector2.needs_reindex_by_version("doc1"));
+        assert!(detector2.needs_recompile_by_version("doc1"));
     }
 
     #[test]

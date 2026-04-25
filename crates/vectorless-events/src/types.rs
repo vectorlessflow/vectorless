@@ -3,17 +3,17 @@
 
 //! Event types for client operations.
 //!
-//! Provides enums for indexing and workspace events
+//! Provides enums for compilation and workspace events
 //! that can be observed via [`EventEmitter`](super::EventEmitter).
 
 use vectorless_document::DocumentFormat;
 
-/// Indexing operation events.
+/// Compilation operation events.
 #[derive(Debug, Clone)]
-pub enum IndexEvent {
-    /// Started indexing a document.
+pub enum CompileEvent {
+    /// Started compiling a document.
     Started {
-        /// File path being indexed.
+        /// File path being compiled.
         path: String,
     },
 
@@ -43,13 +43,13 @@ pub enum IndexEvent {
         total: usize,
     },
 
-    /// Indexing completed successfully.
+    /// Compilation completed successfully.
     Complete {
         /// Generated document ID.
         doc_id: String,
     },
 
-    /// Error occurred during indexing.
+    /// Error occurred during compilation.
     Error {
         /// Error message.
         message: String,

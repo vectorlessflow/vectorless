@@ -289,7 +289,7 @@ impl DocumentNavigator {
 
     /// Number of sections in the tree.
     pub async fn section_count(&self) -> usize {
-        self.doc.section_count
+        self.doc.section_count()
     }
 
     /// Document ID.

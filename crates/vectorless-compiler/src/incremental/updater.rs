@@ -1,7 +1,7 @@
 // Copyright (c) 2026 vectorless developers
 // SPDX-License-Identifier: Apache-2.0
 
-//! Partial tree updater for incremental indexing.
+//! Partial tree updater for incremental compilation.
 
 use tracing::info;
 
@@ -159,12 +159,12 @@ impl PartialUpdater {
         Ok(tree)
     }
 
-    /// Check if reindexing is needed.
-    pub fn needs_reindex(&self, doc_id: &str, content: &str) -> bool {
-        self.detector.needs_reindex_by_hash(doc_id, content)
+    /// Check if recompilation is needed.
+    pub fn needs_recompile(&self, doc_id: &str, content: &str) -> bool {
+        self.detector.needs_recompile_by_hash(doc_id, content)
     }
 
-    /// Record document state after indexing.
+    /// Record document state after compiling.
     pub fn record(&mut self, doc_id: &str, content: &str) {
         self.detector.record(doc_id, content, None);
     }
