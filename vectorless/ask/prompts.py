@@ -1,9 +1,5 @@
 """Prompt templates for the retrieval agent.
 
-Extracted from vectorless-core/vectorless-agent/src/prompts.rs,
-vectorless-core/vectorless-agent/src/worker/planning.rs, and
-vectorless-core/vectorless-agent/src/orchestrator/replan.rs.
-
 Templates:
 1. worker_navigation   — Worker nav loop, every round
 2. worker_dispatch     — Worker first round (when Orchestrator dispatches)

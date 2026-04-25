@@ -68,7 +68,7 @@ Documentation = "https://www.vectorless.dev/docs/intro"
 [tool.maturin]
 python-source = "."
 module-name = "vectorless._vectorless"
-manifest-path = "vectorless-core/vectorless-py/Cargo.toml"
+manifest-path = "crates/vectorless-py/Cargo.toml"
 features = ["pyo3/extension-module"]
 
 [tool.pytest.ini_options]

@@ -1,6 +1,5 @@
 """Evidence deduplication and answer formatting.
 
-Mirrors vectorless-core/vectorless-rerank/src/.
 Dedup is pure compute (no LLM). Answer formatting is intent-aware.
 
 The Rust rerank principle: "Find what you find, return what you find."

@@ -1,7 +1,5 @@
 """Dispatcher — unified entry point for retrieval.
 
-Mirrors vectorless-core/vectorless-agent/src/dispatcher.rs.
-
 All queries go through dispatch():
 1. Query reasoning -> QueryAnalysis (via QueryAnalyzer)
 2. Scope resolution -> Specified | Workspace

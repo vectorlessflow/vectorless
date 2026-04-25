@@ -1,7 +1,5 @@
 """Query understanding — LLM-driven analysis of user queries.
 
-Mirrors vectorless-core/vectorless-query/src/understand.rs.
-
 This module is now a thin wrapper around the multi-stage QueryAnalyzer.
 Kept for backward compatibility — new code should use QueryAnalyzer directly.
 """
