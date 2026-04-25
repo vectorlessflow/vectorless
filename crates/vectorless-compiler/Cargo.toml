@@ -14,7 +14,6 @@ vectorless-document = { path = "../vectorless-document" }
 vectorless-error = { path = "../vectorless-error" }
 vectorless-llm = { path = "../vectorless-llm" }
 vectorless-metrics = { path = "../vectorless-metrics" }
-vectorless-scoring = { path = "../vectorless-scoring" }
 vectorless-storage = { path = "../vectorless-storage" }
 vectorless-utils = { path = "../vectorless-utils" }
 tokio = { workspace = true }

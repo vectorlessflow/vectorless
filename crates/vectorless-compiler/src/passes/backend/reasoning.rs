@@ -17,7 +17,7 @@ use vectorless_document::{
 };
 use vectorless_error::Result;
 use vectorless_llm::LlmClient;
-use vectorless_scoring::extract_keywords;
+use vectorless_utils::extract_keywords;
 
 use crate::passes::async_trait;
 use crate::passes::{AccessPattern, CompilePass, PassResult};
