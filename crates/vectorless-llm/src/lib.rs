@@ -4,7 +4,7 @@
 //! Unified LLM client module.
 //!
 //! This module provides a unified interface for all LLM operations across the codebase:
-//! - **Index** — Document indexing and summarization
+//! - **Compile** — Document compilation and summarization
 //! - **Retrieval** — Document tree navigation
 //! - **Pilot** — Navigation guidance
 //!
@@ -15,7 +15,7 @@
 //! │                        LlmPool                                   │
 //! │                                                                  │
 //! │   ┌─────────────┐  ┌─────────────┐  ┌─────────────┐            │
-//! │   │    index    │  │  retrieval  │  │    pilot    │            │
+//! │   │   compile   │  │  retrieval  │  │    pilot    │            │
 //! │   │  LlmClient  │  │  LlmClient  │  │  LlmClient  │            │
 //! │   └──────┬──────┘  └──────┬──────┘  └──────┬──────┘            │
 //! │          │                │                │                   │

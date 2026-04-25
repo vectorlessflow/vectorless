@@ -10,18 +10,18 @@ use std::sync::Arc;
 
 use parking_lot::RwLock;
 
-use super::types::{IndexEvent, WorkspaceEvent};
+use super::types::{CompileEvent, WorkspaceEvent};
 
-/// Type alias for sync index handler.
-pub(crate) type IndexHandler = Box<dyn Fn(&IndexEvent) + Send + Sync>;
+/// Type alias for sync compile handler.
+pub(crate) type CompileHandler = Box<dyn Fn(&CompileEvent) + Send + Sync>;
 
 /// Type alias for sync workspace handler.
 pub(crate) type WorkspaceHandler = Box<dyn Fn(&WorkspaceEvent) + Send + Sync>;
 
 /// Inner state shared via `Arc<RwLock<...>>`.
 struct EventEmitterInner {
-    /// Index event handlers.
-    index_handlers: Vec<IndexHandler>,
+    /// Compile event handlers.
+    compile_handlers: Vec<CompileHandler>,
 
     /// Workspace event handlers.
     workspace_handlers: Vec<WorkspaceHandler>,
@@ -30,7 +30,7 @@ struct EventEmitterInner {
 impl Default for EventEmitterInner {
     fn default() -> Self {
         Self {
-            index_handlers: Vec::new(),
+            compile_handlers: Vec::new(),
             workspace_handlers: Vec::new(),
         }
     }
@@ -46,8 +46,8 @@ impl Default for EventEmitterInner {
 ///
 /// ```rust,ignore
 /// let emitter = EventEmitter::new()
-///     .on_index(|e| match e {
-///         IndexEvent::Complete { doc_id } => println!("Indexed: {}", doc_id),
+///     .on_compile(|e| match e {
+///         CompileEvent::Complete { doc_id } => println!("Compiled: {}", doc_id),
 ///         _ => {}
 ///     });
 ///
@@ -64,12 +64,12 @@ impl EventEmitter {
         Self::default()
     }
 
-    /// Add an index event handler.
-    pub fn on_index<F>(self, handler: F) -> Self
+    /// Add a compile event handler.
+    pub fn on_compile<F>(self, handler: F) -> Self
     where
-        F: Fn(&IndexEvent) + Send + Sync + 'static,
+        F: Fn(&CompileEvent) + Send + Sync + 'static,
     {
-        self.inner.write().index_handlers.push(Box::new(handler));
+        self.inner.write().compile_handlers.push(Box::new(handler));
         self
     }
 
@@ -85,10 +85,10 @@ impl EventEmitter {
         self
     }
 
-    /// Emit an index event.
-    pub fn emit_index(&self, event: IndexEvent) {
+    /// Emit a compile event.
+    pub fn emit_compile(&self, event: CompileEvent) {
         let inner = self.inner.read();
-        for handler in &inner.index_handlers {
+        for handler in &inner.compile_handlers {
             handler(&event);
         }
     }
@@ -104,7 +104,7 @@ impl EventEmitter {
     /// Check if there are any handlers registered.
     pub fn has_handlers(&self) -> bool {
         let inner = self.inner.read();
-        !inner.index_handlers.is_empty() || !inner.workspace_handlers.is_empty()
+        !inner.compile_handlers.is_empty() || !inner.workspace_handlers.is_empty()
     }
 
     /// Merge another emitter into this one.
@@ -112,8 +112,8 @@ impl EventEmitter {
         let mut other_inner = other.inner.write();
         let mut inner = self.inner.write();
         inner
-            .index_handlers
-            .extend(other_inner.index_handlers.drain(..));
+            .compile_handlers
+            .extend(other_inner.compile_handlers.drain(..));
         inner
             .workspace_handlers
             .extend(other_inner.workspace_handlers.drain(..));
@@ -143,7 +143,7 @@ impl std::fmt::Debug for EventEmitter {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let inner = self.inner.read();
         f.debug_struct("EventEmitter")
-            .field("index_handlers", &inner.index_handlers.len())
+            .field("compile_handlers", &inner.compile_handlers.len())
             .field("workspace_handlers", &inner.workspace_handlers.len())
             .finish()
     }
@@ -155,18 +155,18 @@ mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     #[test]
-    fn test_event_emitter_index() {
+    fn test_event_emitter_compile() {
         let counter = Arc::new(AtomicUsize::new(0));
         let counter_clone = counter.clone();
 
-        let emitter = EventEmitter::new().on_index(move |_e| {
+        let emitter = EventEmitter::new().on_compile(move |_e| {
             counter_clone.fetch_add(1, Ordering::SeqCst);
         });
 
-        emitter.emit_index(IndexEvent::Started {
+        emitter.emit_compile(CompileEvent::Started {
             path: "test.md".to_string(),
         });
-        emitter.emit_index(IndexEvent::Complete {
+        emitter.emit_compile(CompileEvent::Complete {
             doc_id: "123".to_string(),
         });
 
@@ -178,7 +178,7 @@ mod tests {
         let empty = EventEmitter::new();
         assert!(!empty.has_handlers());
 
-        let with_handler = EventEmitter::new().on_index(|_| {});
+        let with_handler = EventEmitter::new().on_compile(|_| {});
         assert!(with_handler.has_handlers());
     }
 
@@ -187,21 +187,21 @@ mod tests {
         let counter = Arc::new(AtomicUsize::new(0));
         let counter_clone = counter.clone();
 
-        let emitter = EventEmitter::new().on_index(move |_e| {
+        let emitter = EventEmitter::new().on_compile(move |_e| {
             counter_clone.fetch_add(1, Ordering::SeqCst);
         });
 
         let cloned = emitter.clone();
 
         // Emit on the clone — original's handler should fire
-        cloned.emit_index(IndexEvent::Started {
+        cloned.emit_compile(CompileEvent::Started {
             path: "test.md".to_string(),
         });
 
         assert_eq!(counter.load(Ordering::SeqCst), 1);
 
         // Emit on the original too
-        emitter.emit_index(IndexEvent::Complete {
+        emitter.emit_compile(CompileEvent::Complete {
             doc_id: "123".to_string(),
         });
 

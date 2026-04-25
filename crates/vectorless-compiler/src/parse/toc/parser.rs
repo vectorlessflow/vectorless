@@ -56,6 +56,7 @@ impl TocParser {
     }
 
     /// Create a parser with default configuration.
+    #[allow(dead_code)]
     pub fn with_defaults() -> Self {
         Self::new(TocParserConfig::default())
     }

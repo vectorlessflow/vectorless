@@ -135,7 +135,7 @@ impl Default for DocumentGraph {
 /// A document node in the graph.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DocumentGraphNode {
-    /// Document ID (matches `PersistedDocument.meta.id`).
+    /// Document ID (matches `Document.doc_id`).
     pub doc_id: String,
     /// Document title/name.
     pub title: String,

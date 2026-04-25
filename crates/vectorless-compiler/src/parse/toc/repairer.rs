@@ -59,6 +59,7 @@ impl IndexRepairer {
     }
 
     /// Create a repairer with default configuration.
+    #[allow(dead_code)]
     pub fn with_defaults() -> Self {
         Self::new(RepairerConfig::default())
     }
@@ -195,6 +196,7 @@ Reply in JSON format:
     }
 
     /// Repair with verification loop.
+    #[allow(dead_code)]
     pub async fn repair_with_verification(
         &self,
         entries: &mut [TocEntry],

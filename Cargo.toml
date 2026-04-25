@@ -4,7 +4,6 @@ members = [
     "crates/vectorless-document",
     "crates/vectorless-config",
     "crates/vectorless-utils",
-    "crates/vectorless-scoring",
     "crates/vectorless-graph",
     "crates/vectorless-events",
     "crates/vectorless-metrics",
@@ -18,7 +17,7 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version = "0.1.12"
+version = "0.1.13"
 description = "Knowing by reasoning, not vectors."
 edition = "2024"
 authors = ["zTgx <beautifularea@gmail.com>"]
@@ -32,7 +31,6 @@ documentation = "https://docs.rs/vectorless"
 tokio = { version = "1", features = ["full"] }
 async-trait = "0.1"
 futures = "0.3"
-
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

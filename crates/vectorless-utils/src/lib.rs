@@ -10,8 +10,10 @@
 //! - **Validation** — Pre-index source validation (file, content, bytes)
 
 pub mod fingerprint;
+pub mod keywords;
 mod token;
 pub mod validation;
 
+pub use keywords::extract_keywords;
 pub use token::estimate_tokens;
 pub use validation::{validate_bytes, validate_content, validate_file};

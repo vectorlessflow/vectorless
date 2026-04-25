@@ -17,7 +17,7 @@ use vectorless_document::{
 };
 use vectorless_error::Result;
 use vectorless_llm::LlmClient;
-use vectorless_scoring::extract_keywords;
+use vectorless_utils::extract_keywords;
 
 use crate::passes::async_trait;
 use crate::passes::{AccessPattern, CompilePass, PassResult};
@@ -29,21 +29,12 @@ use crate::pipeline::CompileContext;
 /// - Topic-to-path mappings from titles and summaries
 /// - Summary shortcuts for high-frequency "overview" queries
 /// - Section map for fast ToC lookup
-pub struct ReasoningPass {
-    config: ReasoningIndexConfig,
-}
+pub struct ReasoningPass;
 
 impl ReasoningPass {
     /// Create a new reasoning index stage with default config.
     pub fn new() -> Self {
-        Self {
-            config: ReasoningIndexConfig::default(),
-        }
-    }
-
-    /// Create with custom config.
-    pub fn with_config(config: ReasoningIndexConfig) -> Self {
-        Self { config }
+        Self
     }
 
     /// Extract keywords from a text, filtering by minimum length.
@@ -463,15 +454,6 @@ mod tests {
         assert!(!keywords.contains(&"a".to_string()));
         assert!(!keywords.contains(&"b".to_string()));
         assert!(keywords.contains(&"cd".to_string()));
-    }
-
-    #[test]
-    fn test_stage_config_default() {
-        let stage = ReasoningPass::new();
-        assert!(stage.config.enabled);
-        assert_eq!(stage.name(), "reasoning_index");
-        assert!(stage.is_optional());
-        assert_eq!(stage.depends_on(), vec!["enrich"]);
     }
 
     #[test]

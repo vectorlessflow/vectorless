@@ -4,31 +4,50 @@
 //! Understanding types — the core objects that define the Document Understanding Engine.
 //!
 //! These types form the stable public contract:
-//! - [`Document`] — the unified post-compile artifact (internal first-class citizen)
+//! - [`Document`] — the unified IR artifact (the single intermediate representation)
 //! - [`DocumentInfo`] — what `compile()` returns to users
 //! - [`Concept`] — key concept extracted from a document
+//! - [`DocumentMeta`] — storage metadata (timestamps, fingerprints, processing stats)
 
 use serde::{Deserialize, Serialize};
 
 use super::toc::TocNode;
 
 // ---------------------------------------------------------------------------
-// Document — unified post-compile artifact
+// Constants
 // ---------------------------------------------------------------------------
 
-/// A compiled document — the core artifact of the compile pipeline.
+/// Current IR schema version.
 ///
-/// This is what `compile()` produces internally.
-/// It unifies tree + navigation index + reasoning index + summary + concepts
-/// + agent acceleration data into a single first-class type.
+/// Increment when the serialized structure changes in a backward-incompatible way.
+/// Old IRs will be detected via `schema_version < CURRENT_SCHEMA_VERSION`.
+pub const CURRENT_SCHEMA_VERSION: u32 = 3;
+
+// ---------------------------------------------------------------------------
+// Document — unified IR artifact
+// ---------------------------------------------------------------------------
+
+/// A compiled document — the single Intermediate Representation (IR) artifact.
+///
+/// Produced by the compile pipeline, persisted to disk, and consumed by the agent
+/// during retrieval. This is the authoritative data structure: no other intermediate
+/// types exist between the pipeline output and the navigator.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Document {
+    // ── Identity ──
+    /// Schema version for IR format compatibility.
+    #[serde(default)]
+    pub schema_version: u32,
+
     /// Unique document identifier.
     pub doc_id: String,
+
     /// Document name/title.
     pub name: String,
+
     /// Document format ("pdf", "markdown", "docx").
     pub format: String,
+
     /// Source file path (if compiled from a file).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source_path: Option<String>,
@@ -36,14 +55,17 @@ pub struct Document {
     // ── Indexes ──
     /// Hierarchical semantic tree.
     pub tree: super::tree::DocumentTree,
+
     /// Pre-computed navigation structure.
     pub nav_index: super::navigation::NavigationIndex,
+
     /// Keyword / topic / section summaries.
     pub reasoning_index: super::reasoning::ReasoningIndex,
 
     // ── Compile results ──
     /// Document-level summary.
     pub summary: String,
+
     /// Key concepts the engine identified.
     #[serde(default)]
     pub concepts: Vec<Concept>,
@@ -52,12 +74,15 @@ pub struct Document {
     /// Pre-computed query routing table.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub query_routes: Option<super::query_route::QueryRoutingTable>,
+
     /// Reasoning chain index.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub chain_index: Option<super::chain::ChainIndex>,
+
     /// Content overlap map.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub content_overlap: Option<super::overlap::ContentOverlapMap>,
+
     /// Per-node evidence quality scores.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub evidence_scores: Option<super::evidence::EvidenceScoreMap>,
@@ -66,16 +91,148 @@ pub struct Document {
     /// Page count (for PDFs).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub page_count: Option<usize>,
-    /// Number of sections in the tree.
-    #[serde(default)]
-    pub section_count: usize,
+
+    /// Storage metadata (timestamps, fingerprints, processing stats).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub meta: Option<DocumentMeta>,
 }
 
 // ---------------------------------------------------------------------------
-// DocumentInfo — what ingest() returns to users
+// DocumentMeta — storage metadata embedded in IR
 // ---------------------------------------------------------------------------
 
-/// The engine's understanding of a document — returned by `ingest()`.
+/// Metadata for a compiled document IR file.
+///
+/// Holds timestamps, content fingerprints, and processing statistics.
+/// Used for incremental recompilation and diagnostic purposes.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DocumentMeta {
+    /// Creation timestamp.
+    #[serde(default = "default_now")]
+    pub created_at: chrono::DateTime<chrono::Utc>,
+
+    /// Last modified timestamp.
+    #[serde(default = "default_now")]
+    pub modified_at: chrono::DateTime<chrono::Utc>,
+
+    /// Content fingerprint for change detection (hex-encoded BLAKE2b hash).
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub content_fingerprint: String,
+
+    /// Logic fingerprint (hash of pipeline configuration).
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub logic_fingerprint: String,
+
+    /// Processing version (incremented when algorithm changes).
+    #[serde(default)]
+    pub processing_version: u32,
+
+    /// Node count in the tree.
+    #[serde(default)]
+    pub node_count: usize,
+
+    /// Total tokens in summaries.
+    #[serde(default)]
+    pub total_summary_tokens: usize,
+
+    /// LLM model used for processing.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub processing_model: Option<String>,
+
+    /// Last processing duration in milliseconds.
+    #[serde(default)]
+    pub processing_duration_ms: u64,
+
+    /// Line count (for text files).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub line_count: Option<usize>,
+}
+
+fn default_now() -> chrono::DateTime<chrono::Utc> {
+    chrono::Utc::now()
+}
+
+impl DocumentMeta {
+    /// Create new metadata with current timestamps.
+    pub fn new() -> Self {
+        let now = chrono::Utc::now();
+        Self {
+            created_at: now,
+            modified_at: now,
+            content_fingerprint: String::new(),
+            logic_fingerprint: String::new(),
+            processing_version: 0,
+            node_count: 0,
+            total_summary_tokens: 0,
+            processing_model: None,
+            processing_duration_ms: 0,
+            line_count: None,
+        }
+    }
+
+    /// Set the content fingerprint.
+    pub fn with_content_fingerprint(mut self, fp: impl Into<String>) -> Self {
+        self.content_fingerprint = fp.into();
+        self
+    }
+
+    /// Set the logic fingerprint.
+    pub fn with_logic_fingerprint(mut self, fp: impl Into<String>) -> Self {
+        self.logic_fingerprint = fp.into();
+        self
+    }
+
+    /// Set the processing version.
+    pub fn with_processing_version(mut self, version: u32) -> Self {
+        self.processing_version = version;
+        self
+    }
+
+    /// Set the processing model.
+    pub fn with_processing_model(mut self, model: impl Into<String>) -> Self {
+        self.processing_model = Some(model.into());
+        self
+    }
+
+    /// Update processing statistics.
+    pub fn update_processing_stats(
+        &mut self,
+        node_count: usize,
+        summary_tokens: usize,
+        duration_ms: u64,
+    ) {
+        self.node_count = node_count;
+        self.total_summary_tokens = summary_tokens;
+        self.processing_duration_ms = duration_ms;
+        self.modified_at = chrono::Utc::now();
+    }
+
+    /// Check if the document needs reprocessing.
+    pub fn needs_reprocessing(&self, current_fp: &str, current_version: u32) -> bool {
+        if self.processing_version == 0 {
+            return true;
+        }
+        if self.processing_version < current_version {
+            return true;
+        }
+        if self.content_fingerprint != current_fp {
+            return true;
+        }
+        false
+    }
+}
+
+impl Default for DocumentMeta {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// ---------------------------------------------------------------------------
+// DocumentInfo — what compile() returns to users
+// ---------------------------------------------------------------------------
+
+/// The engine's understanding of a document — returned by `compile()`.
 ///
 /// Rich enough for users to confirm the engine "got it right":
 /// summary, structure (TOC), and key concepts.
@@ -98,6 +255,10 @@ pub struct DocumentInfo {
     /// Page count (for PDFs).
     pub page_count: Option<usize>,
 }
+
+// ---------------------------------------------------------------------------
+// Document impl
+// ---------------------------------------------------------------------------
 
 impl Document {
     /// Get node content by ID (Agent `cat` command).
@@ -131,7 +292,7 @@ impl Document {
 
     /// Number of sections in the tree.
     pub fn section_count(&self) -> usize {
-        self.section_count
+        self.tree.node_count()
     }
 
     /// Produce the public DocumentInfo view of this document.
@@ -144,7 +305,7 @@ impl Document {
             summary: self.summary.clone(),
             structure: toc,
             concepts: self.concepts.clone(),
-            section_count: self.section_count,
+            section_count: self.section_count(),
             page_count: self.page_count,
         }
     }
@@ -156,7 +317,7 @@ impl Document {
 
 /// A key concept extracted from a document.
 ///
-/// Produced during the ingest pipeline's final concept extraction step.
+/// Produced during the compile pipeline's concept extraction step.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Concept {
     /// Concept name (e.g., "capacitor derating").
@@ -168,15 +329,15 @@ pub struct Concept {
 }
 
 // ---------------------------------------------------------------------------
-// IngestInput — what ingest() takes
+// IngestInput — what compile() takes
 // ---------------------------------------------------------------------------
 
-/// Input to `ingest()` — the document to be understood.
+/// Input to `compile()` — the document to be understood.
 #[derive(Debug, Clone)]
 pub enum IngestInput {
-    /// Index from a file path.
+    /// Compile from a file path.
     Path(std::path::PathBuf),
-    /// Index from raw bytes.
+    /// Compile from raw bytes.
     Bytes {
         /// Document name.
         name: String,
@@ -185,7 +346,7 @@ pub enum IngestInput {
         /// Document format.
         format: super::format::DocumentFormat,
     },
-    /// Index from a text string.
+    /// Compile from a text string.
     Text {
         /// Document name.
         name: String,
@@ -207,5 +368,25 @@ mod tests {
         };
         let json = serde_json::to_string(&concept).unwrap();
         assert!(json.contains("capacitor derating"));
+    }
+
+    #[test]
+    fn test_document_meta_default() {
+        let meta = DocumentMeta::new();
+        assert_eq!(meta.processing_version, 0);
+        assert!(meta.content_fingerprint.is_empty());
+    }
+
+    #[test]
+    fn test_document_meta_needs_reprocessing() {
+        let meta = DocumentMeta::new();
+        assert!(meta.needs_reprocessing("abc", 1));
+
+        let meta = DocumentMeta::new()
+            .with_content_fingerprint("abc")
+            .with_processing_version(1);
+        assert!(!meta.needs_reprocessing("abc", 1));
+        assert!(meta.needs_reprocessing("def", 1));
+        assert!(meta.needs_reprocessing("abc", 2));
     }
 }

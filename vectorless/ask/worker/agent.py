@@ -75,6 +75,12 @@ class Worker:
         # Phase 0: initial ls to observe environment
         root_id = await doc.root_id()
         state.visited.add(root_id)
+        doc_name = ""
+        try:
+            doc_name = await doc.doc_name()
+        except Exception:
+            pass
+        logger.info("Worker starting: doc=%s max_rounds=%d", doc_name, max_rounds)
 
         try:
             children = await doc.ls()
@@ -99,7 +105,10 @@ class Worker:
             pass
 
         if keyword_hints:
+            logger.info("Phase 1.5: keyword hints available, generating plan")
             await self._generate_plan(doc, query, task, state, keyword_hints, llm)
+            if state.plan:
+                logger.info("Phase 1.5: plan generated — %s", state.plan[:150])
 
         # Phase 2: main navigation loop
         use_dispatch = task is not None
@@ -154,6 +163,7 @@ class Worker:
             is_failure = _is_parse_failure(command, llm_output)
 
             if is_failure:
+                logger.warning("round %d: parse failure — %s", round_num, llm_output.strip()[:100])
                 raw_preview = llm_output.strip()[:200]
                 if len(llm_output.strip()) > 200:
                     raw_preview += "..."
@@ -172,6 +182,18 @@ class Worker:
 
             # Execute via command registry
             step = await execute_command(command, doc, state, query, llm)
+
+            # Log tool call and response
+            cmd_str = command.kind
+            if command.target:
+                cmd_str += f" {command.target}"
+            feedback_preview = state.last_feedback
+            if len(feedback_preview) > 200:
+                feedback_preview = feedback_preview[:200] + "..."
+            logger.info(
+                "round %d: %s → %s",
+                round_num, cmd_str, feedback_preview,
+            )
 
             # Re-plan after insufficient check
             if is_check:
@@ -208,6 +230,12 @@ class Worker:
             doc_name = await doc.doc_name()
         except Exception:
             pass
+
+        logger.info(
+            "Worker done: doc=%s rounds=%d/%d evidence=%d llm_calls=%d",
+            doc_name, max_rounds - state.remaining, max_rounds,
+            len(state.evidence), state.llm_calls,
+        )
 
         return state.into_worker_output(doc_name)
 

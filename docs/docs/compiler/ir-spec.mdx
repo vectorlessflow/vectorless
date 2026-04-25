@@ -1,0 +1,122 @@
+---
+sidebar_position: 2
+---
+
+# IR Specification
+
+The Vectorless IR (Intermediate Representation) is the single artifact produced by the [compile pipeline](./pipeline.mdx). It is a self-contained, serializable document that encodes everything an agent needs to reason about a document — tree structure, indexes, acceleration data, and metadata.
+
+## Overview
+
+```text
+Document (PDF/MD)
+    ↓ compile pipeline
+Document IR (.bin)
+    ↓ load
+DocumentNavigator → agent traversal → evidence → answer
+```
+
+The IR is produced once at compile time and consumed many times at query time. Agents never re-compile — they only read and navigate.
+
+## Schema Versioning
+
+| Field | Description |
+|-------|-------------|
+| `schema_version` | `u32` — incremented on backward-incompatible changes |
+| `CURRENT_SCHEMA_VERSION` | Currently `3` |
+
+Old IRs are detected via `schema_version < CURRENT_SCHEMA_VERSION`. All new fields use `#[serde(default)]` for forward compatibility.
+
+### Version History
+
+| Version | Changes |
+|---------|---------|
+| 0 | Pre-versioning (no `schema_version` field) |
+| 1 | Initial persisted format with `PersistedWrapper` envelope |
+| 2 | Added `query_routes`, `chain_index`, `content_overlap`, `evidence_scores` |
+| 3 | Unified IR: single `Document` type, embedded `DocumentMeta`, `schema_version` field |
+
+## Field Specification
+
+### Identity
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `schema_version` | `u32` | IR format version |
+| `doc_id` | `String` | Unique document identifier (UUID) |
+| `name` | `String` | Document name/title |
+| `format` | `String` | Source format: `"pdf"`, `"markdown"`, `"docx"` |
+| `source_path` | `Option<String>` | Original file path (if compiled from file) |
+
+### Indexes
+
+| Field | Type | Built by | Description |
+|-------|------|----------|-------------|
+| `tree` | `DocumentTree` | Build pass | Arena-based hierarchical tree with titled nodes |
+| `nav_index` | `NavigationIndex` | Navigation pass | Child routes, overviews, doc cards for agent navigation |
+| `reasoning_index` | `ReasoningIndex` | Reasoning pass | Keyword-to-node mappings, topic entries, section summaries |
+
+### Compile Results
+
+| Field | Type | Built by | Description |
+|-------|------|----------|-------------|
+| `summary` | `String` | Enhance pass | Document-level summary |
+| `concepts` | `Vec<Concept>` | Concept pass | Key concepts with section associations |
+
+### Agent Acceleration Data
+
+| Field | Type | Built by | Description |
+|-------|------|----------|-------------|
+| `query_routes` | `Option<QueryRoutingTable>` | Route pass | Intent routes and concept routes for fast agent targeting |
+| `chain_index` | `Option<ChainIndex>` | Chain pass | Reasoning chains connecting sections (elaboration, supporting) |
+| `content_overlap` | `Option<ContentOverlapMap>` | Overlap pass | Jaccard similarity between overlapping nodes |
+| `evidence_scores` | `Option<EvidenceScoreMap>` | Score pass | Per-node quality scores (density, richness, specificity) |
+
+All acceleration fields are `Option<_>` with `#[serde(default)]` — they are absent in fast compilation mode (no LLM).
+
+### Metadata
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `page_count` | `Option<usize>` | Page count (PDF only) |
+| `meta` | `Option<DocumentMeta>` | Processing metadata (see below) |
+
+## DocumentMeta
+
+Processing metadata for incremental recompilation and diagnostics:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `created_at` | `DateTime<Utc>` | IR creation timestamp |
+| `modified_at` | `DateTime<Utc>` | Last modification timestamp |
+| `content_fingerprint` | `String` | BLAKE2b hash of source content (hex-encoded) |
+| `logic_fingerprint` | `String` | Hash of pipeline configuration |
+| `processing_version` | `u32` | Incremented when algorithm changes |
+| `node_count` | `usize` | Number of nodes in tree |
+| `total_summary_tokens` | `usize` | Total tokens in generated summaries |
+| `processing_model` | `Option<String>` | LLM model used for processing |
+| `processing_duration_ms` | `u64` | Total compile time in milliseconds |
+| `line_count` | `Option<usize>` | Line count (for text files) |
+
+## Serialization Format
+
+IR files use a JSON envelope with checksum verification:
+
+```text
+PersistedWrapper
+├── version: u32        (FORMAT_VERSION = 2)
+├── checksum: String    (SHA-256 of payload)
+└── payload: Value      (serialized Document as JSON)
+```
+
+The checksum ensures data integrity. On load, the wrapper verifies the checksum before deserializing the payload into `Document`.
+
+## Compilation Modes
+
+| Mode | Passes | LLM Calls | Output |
+|------|--------|-----------|--------|
+| **Fast** | Parse → Build → Validate → Split → Navigation | 0 | Tree + nav index, no summaries or acceleration data |
+| **Standard** | Fast + Enhance(selective) + Reasoning + Route + Score | Limited | Full IR with selective summaries |
+| **Deep** | All 15 passes | Full | Complete IR with all acceleration data |
+
+In all modes, the IR is a valid `Document` — agents can navigate any IR regardless of compilation depth.

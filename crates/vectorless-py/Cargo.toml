@@ -16,6 +16,7 @@ crate-type = ["cdylib"]
 pyo3 = { workspace = true }
 pyo3-async-runtimes = { workspace = true }
 tokio = { version = "1", features = ["rt-multi-thread", "sync"] }
+tracing-subscriber = { workspace = true }
 vectorless-document = { path = "../vectorless-document" }
 vectorless-engine = { path = "../vectorless-engine" }
 vectorless-primitives = { path = "../vectorless-primitives" }

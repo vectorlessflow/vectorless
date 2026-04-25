@@ -85,6 +85,7 @@ impl TocDetector {
     }
 
     /// Create a detector with default configuration.
+    #[allow(dead_code)]
     pub fn with_defaults() -> Self {
         Self::new(TocDetectorConfig::default())
     }

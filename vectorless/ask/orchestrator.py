@@ -556,8 +556,6 @@ class Orchestrator:
             })
             return (idx, result)
 
-        tasks = [run_worker(d) for d in dispatches]
-
         # Use TaskGroup with per-task exception wrapping and a semaphore
         # to bound concurrency (default 5 workers in parallel).
         task_results: list[tuple[int, WorkerOutput] | Exception] = []

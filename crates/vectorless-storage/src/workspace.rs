@@ -42,7 +42,8 @@ use tracing::{debug, info, warn};
 
 use super::backend::{FileBackend, StorageBackend};
 use super::cache::DocumentCache;
-use super::persistence::{PersistedDocument, load_document_from_bytes, save_document_to_bytes};
+use super::persistence::{load_document_from_bytes, save_document_to_bytes};
+use vectorless_document::Document;
 use vectorless_error::Error;
 use vectorless_error::Result;
 
@@ -229,10 +230,10 @@ impl Workspace {
     }
 
     /// Add a document to the workspace.
-    pub async fn add(&self, doc: &PersistedDocument) -> Result<()> {
+    pub async fn add(&self, doc: &Document) -> Result<()> {
         let mut inner = self.inner.write().await;
 
-        let doc_id = doc.meta.id.clone();
+        let doc_id = doc.doc_id.clone();
         let key = Self::doc_key(&doc_id);
 
         // Serialize and save via backend
@@ -242,20 +243,16 @@ impl Workspace {
         // Update meta index
         let meta_entry = DocumentMetaEntry {
             id: doc_id.clone(),
-            doc_name: doc.meta.name.clone(),
-            doc_description: doc.meta.description.clone(),
-            doc_type: doc.meta.format.clone(),
-            path: doc
-                .meta
-                .source_path
-                .as_ref()
-                .map(|p| p.to_string_lossy().to_string()),
-            page_count: if doc.pages.is_empty() {
+            doc_name: doc.name.clone(),
+            doc_description: if doc.summary.is_empty() {
                 None
             } else {
-                Some(doc.pages.len())
+                Some(doc.summary.clone())
             },
-            line_count: doc.meta.line_count,
+            doc_type: doc.format.clone(),
+            path: doc.source_path.clone(),
+            page_count: doc.page_count,
+            line_count: doc.meta.as_ref().and_then(|m| m.line_count),
         };
 
         inner.meta_index.insert(doc_id.clone(), meta_entry);
@@ -263,9 +260,9 @@ impl Workspace {
 
         // Update catalog with DocCard
         if let Some(card) = doc
-            .navigation_index
-            .as_ref()
-            .and_then(|nav| nav.doc_card().cloned())
+            .nav_index
+            .doc_card()
+            .cloned()
         {
             inner.catalog.insert(doc_id.clone(), card);
             Self::save_catalog_index(&inner)?;
@@ -286,7 +283,7 @@ impl Workspace {
     ///
     /// Uses LRU cache: returns cached version if available,
     /// otherwise loads from backend and caches it.
-    pub async fn load(&self, id: &str) -> Result<Option<PersistedDocument>> {
+    pub async fn load(&self, id: &str) -> Result<Option<Document>> {
         // First check if document exists (read lock)
         {
             let inner = self.inner.read().await;
@@ -324,7 +321,7 @@ impl Workspace {
     }
 
     /// Load a document and cache it (requires write lock for caching).
-    pub async fn load_and_cache(&self, id: &str) -> Result<Option<PersistedDocument>> {
+    pub async fn load_and_cache(&self, id: &str) -> Result<Option<Document>> {
         // First check if document exists (read lock)
         {
             let inner = self.inner.read().await;
@@ -575,11 +572,11 @@ impl Workspace {
             if let Some(bytes) = inner.backend.get(key)? {
                 if let Ok(doc) = load_document_from_bytes(&bytes) {
                     if let Some(card) = doc
-                        .navigation_index
-                        .as_ref()
-                        .and_then(|nav| nav.doc_card().cloned())
+                        .nav_index
+                        .doc_card()
+                        .cloned()
                     {
-                        inner.catalog.insert(doc.meta.id.clone(), card);
+                        inner.catalog.insert(doc.doc_id.clone(), card);
                     }
                 }
             }
@@ -621,23 +618,19 @@ impl Workspace {
         for key in doc_keys {
             if let Some(bytes) = inner.backend.get(key)? {
                 if let Ok(doc) = load_document_from_bytes(&bytes) {
-                    let doc_id = doc.meta.id.clone();
+                    let doc_id = doc.doc_id.clone();
                     let meta_entry = DocumentMetaEntry {
                         id: doc_id.clone(),
-                        doc_name: doc.meta.name,
-                        doc_description: doc.meta.description,
-                        doc_type: doc.meta.format,
-                        path: doc
-                            .meta
-                            .source_path
-                            .as_ref()
-                            .map(|p| p.to_string_lossy().to_string()),
-                        page_count: if doc.pages.is_empty() {
+                        doc_name: doc.name,
+                        doc_description: if doc.summary.is_empty() {
                             None
                         } else {
-                            Some(doc.pages.len())
+                            Some(doc.summary)
                         },
-                        line_count: doc.meta.line_count,
+                        doc_type: doc.format,
+                        path: doc.source_path,
+                        page_count: doc.page_count,
+                        line_count: doc.meta.and_then(|m| m.line_count),
                     };
                     inner.meta_index.insert(doc_id, meta_entry);
                 }

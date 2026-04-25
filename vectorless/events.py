@@ -12,7 +12,7 @@ from enum import Enum
 from typing import Any, Callable, List, Optional
 
 
-class IndexEventType(str, Enum):
+class CompileEventType(str, Enum):
     STARTED = "started"
     FORMAT_DETECTED = "format_detected"
     PARSING_PROGRESS = "parsing_progress"
@@ -32,10 +32,10 @@ class QueryEventType(str, Enum):
 
 
 @dataclass
-class IndexEventData:
-    """Data payload for index events."""
+class CompileEventData:
+    """Data payload for compile events."""
 
-    event_type: IndexEventType
+    event_type: CompileEventType
     path: Optional[str] = None
     format: Optional[str] = None
     percent: Optional[int] = None
@@ -61,7 +61,7 @@ class QueryEventData:
     message: Optional[str] = None
 
 
-IndexEventHandler = Callable[[IndexEventData], None]
+CompileEventHandler = Callable[[CompileEventData], None]
 QueryEventHandler = Callable[[QueryEventData], None]
 WorkspaceEventHandler = Callable[[dict], None]
 
@@ -83,13 +83,13 @@ class EventEmitter:
     """
 
     def __init__(self) -> None:
-        self._index_handlers: List[IndexEventHandler] = []
+        self._compile_handlers: List[CompileEventHandler] = []
         self._query_handlers: List[QueryEventHandler] = []
         self._workspace_handlers: List[WorkspaceEventHandler] = []
 
-    def on_index(self, handler: IndexEventHandler) -> "EventEmitter":
-        """Register an index event handler. Can be used as decorator."""
-        self._index_handlers.append(handler)
+    def on_compile(self, handler: CompileEventHandler) -> "EventEmitter":
+        """Register a compile event handler. Can be used as decorator."""
+        self._compile_handlers.append(handler)
         return self
 
     def on_query(self, handler: QueryEventHandler) -> "EventEmitter":
@@ -102,9 +102,9 @@ class EventEmitter:
         self._workspace_handlers.append(handler)
         return self
 
-    def emit_index(self, event: IndexEventData) -> None:
-        """Emit an index event to all registered handlers."""
-        for handler in self._index_handlers:
+    def emit_compile(self, event: CompileEventData) -> None:
+        """Emit a compile event to all registered handlers."""
+        for handler in self._compile_handlers:
             handler(event)
 
     def emit_query(self, event: QueryEventData) -> None:

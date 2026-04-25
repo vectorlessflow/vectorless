@@ -27,8 +27,9 @@ use std::sync::Arc;
 
 use tracing::{debug, info};
 
+use vectorless_document::Document;
 use vectorless_error::Result;
-use vectorless_storage::{PersistedDocument, Workspace};
+use vectorless_storage::Workspace;
 
 use super::types::DocumentInfo;
 use vectorless_events::{EventEmitter, WorkspaceEvent};
@@ -69,18 +70,18 @@ impl WorkspaceClient {
     /// Save a document to the workspace.
     ///
     /// If a document with the same ID already exists, logs a warning
-    /// (this can happen during concurrent indexing of the same source).
+    /// (this can happen during concurrent compilation of the same source).
     ///
     /// # Errors
     ///
     /// Returns an error if the workspace write fails.
-    pub async fn save(&self, doc: &PersistedDocument) -> Result<()> {
-        let doc_id = doc.meta.id.clone();
+    pub async fn save(&self, doc: &Document) -> Result<()> {
+        let doc_id = doc.doc_id.clone();
 
         if self.workspace.contains(&doc_id).await {
             tracing::warn!(
                 doc_id,
-                name = %doc.meta.name,
+                name = %doc.name,
                 "Overwriting existing document — possible concurrent index of the same source"
             );
         }
@@ -100,7 +101,7 @@ impl WorkspaceClient {
     /// # Errors
     ///
     /// Returns an error if the workspace read fails.
-    pub async fn load(&self, doc_id: &str) -> Result<Option<PersistedDocument>> {
+    pub async fn load(&self, doc_id: &str) -> Result<Option<Document>> {
         let doc = self.workspace.load_and_cache(doc_id).await?;
 
         if let Some(ref _d) = doc {
@@ -200,7 +201,7 @@ impl WorkspaceClient {
 
     /// Find a document ID by its source file path.
     ///
-    /// Used for incremental indexing to check if a file has already been indexed.
+    /// Used for incremental compilation to check if a file has already been compiled.
     pub async fn find_by_source_path(&self, path: &std::path::Path) -> Option<String> {
         self.workspace.find_by_source_path(path).await
     }

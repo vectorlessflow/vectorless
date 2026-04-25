@@ -4,7 +4,7 @@
 //! Document types - pure data structures for document tree representation.
 //!
 //! This module contains the core types that represent hierarchical documents.
-//! These types have no dependencies on indexing or retrieval logic.
+//! These types have no dependencies on compile or retrieval logic.
 //!
 //! # Types
 //!
@@ -44,7 +44,9 @@ pub use reference::{NodeReference, RefType, ReferenceExtractor};
 pub use structure::{DocumentStructure, StructureNode};
 pub use toc::{TocConfig, TocEntry, TocNode, TocView};
 pub use tree::{DocumentTree, RetrievalIndex};
-pub use understanding::{Concept, Document, DocumentInfo, IngestInput};
+pub use understanding::{
+    Concept, Document, DocumentInfo, DocumentMeta, IngestInput, CURRENT_SCHEMA_VERSION,
+};
 
 // Re-export agent acceleration types
 pub use chain::{ChainIndex, ChainType, ReasoningChain};

@@ -16,7 +16,6 @@
 
 mod detector;
 mod resolver;
-mod updater;
 
 pub use detector::ChangeDetector;
 pub use resolver::{IndexAction, SkipInfo, resolve_action};

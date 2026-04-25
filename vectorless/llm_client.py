@@ -253,6 +253,10 @@ class LLMClient:
         last_error: Exception | None = None
         for attempt in range(1 + self._max_retries):
             try:
+                logger.info(
+                    "LLM call: model=%s endpoint=%s attempt=%d timeout=%.0fs",
+                    self._model, self._endpoint, attempt + 1, timeout,
+                )
                 response = await litellm.acompletion(
                     model=self._model,
                     messages=messages,
@@ -261,6 +265,7 @@ class LLMClient:
                     api_key=self._api_key,
                     api_base=self._endpoint,
                 )
+                logger.info("LLM call: response received (%d chars)", len(response.choices[0].message.content or ""))
                 return response.choices[0].message.content or ""
             except litellm.RateLimitError as e:
                 last_error = e

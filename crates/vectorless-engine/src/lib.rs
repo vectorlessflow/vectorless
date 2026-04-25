@@ -12,7 +12,6 @@
 
 mod builder;
 mod compile_input;
-mod compiled_document;
 mod engine;
 mod indexer;
 mod types;
@@ -51,7 +50,7 @@ pub use vectorless_config::Config;
 pub use vectorless_document::DocumentTree;
 pub use vectorless_document::{Concept, DocumentInfo, IngestInput};
 pub use vectorless_error::{Error, Result};
-pub use vectorless_events::{EventEmitter, IndexEvent, WorkspaceEvent};
+pub use vectorless_events::{CompileEvent, EventEmitter, WorkspaceEvent};
 pub use vectorless_graph::{
     DocumentGraph, DocumentGraphNode, EdgeEvidence, GraphEdge, WeightedKeyword,
 };

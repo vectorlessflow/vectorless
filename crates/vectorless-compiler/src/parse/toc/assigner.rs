@@ -59,6 +59,7 @@ impl PageAssigner {
     }
 
     /// Create an assigner with default configuration.
+    #[allow(dead_code)]
     pub fn with_defaults() -> Self {
         Self::new(PageAssignerConfig::default())
     }
@@ -196,6 +197,7 @@ impl PageAssigner {
     }
 
     /// Calculate mode of offset values.
+    #[allow(dead_code)]
     fn calculate_mode(&self, values: &[i32]) -> i32 {
         Self::calculate_mode_static(values)
     }

@@ -19,11 +19,11 @@ use vectorless_compiler::{
     incremental::{self, IndexAction},
 };
 use vectorless_config::Config;
-use vectorless_document::{Document as UnderstandingDocument, DocumentTree, IngestInput};
+use vectorless_document::{Document, DocumentTree, IngestInput};
 use vectorless_error::{Error, Result};
 use vectorless_events::EventEmitter;
 use vectorless_metrics::MetricsHub;
-use vectorless_storage::{PersistedDocument, Workspace};
+use vectorless_storage::Workspace;
 
 use super::{
     compile_input::{CompileInput, CompileSource},
@@ -242,7 +242,7 @@ impl Engine {
                     .await
                 {
                     Ok(mut doc) => {
-                        doc.id = existing_id.clone();
+                        doc.doc_id = existing_id.clone();
                         self.index_and_persist(doc, &pipeline_options, &source_label, None)
                             .await
                     }
@@ -276,7 +276,7 @@ impl Engine {
         name: Option<&str>,
         pipeline_options: PipelineOptions,
         existing_tree: Option<&DocumentTree>,
-    ) -> Result<super::compiled_document::CompiledDocument> {
+    ) -> Result<Document> {
         let retry = &self.config.llm.retry;
         let max_attempts = retry.max_attempts;
 
@@ -311,23 +311,22 @@ impl Engine {
         unreachable!()
     }
 
-    /// Convert an [`CompiledDocument`] to an [`CompileArtifact`] and persist it.
+    /// Convert a [`Document`] to a [`CompileArtifact`] and persist it.
     ///
     /// If `old_id` is provided, the old document is removed after a
     /// successful save (atomic save-first, then remove old).
     async fn index_and_persist(
         &self,
-        doc: super::compiled_document::CompiledDocument,
-        pipeline_options: &PipelineOptions,
+        doc: Document,
+        _pipeline_options: &PipelineOptions,
         source_label: &str,
         old_id: Option<&str>,
     ) -> (Vec<CompileArtifact>, Vec<FailedItem>) {
         let item = Self::build_index_item(&doc);
 
         info!("[index] Persisting document '{}'...", doc.name,);
-        let persisted = IndexerClient::to_persisted(doc, pipeline_options).await;
 
-        if let Err(e) = self.workspace.save(&persisted).await {
+        if let Err(e) = self.workspace.save(&doc).await {
             warn!("[index] Failed to save document: {}", e);
             return (
                 Vec::new(),
@@ -345,22 +344,24 @@ impl Engine {
         (vec![item], Vec::new())
     }
 
-    /// Build an [`CompileArtifact`] from an [`CompiledDocument`](super::compiled_document::CompiledDocument).
-    fn build_index_item(doc: &super::compiled_document::CompiledDocument) -> CompileArtifact {
+    /// Build a [`CompileArtifact`] from a [`Document`].
+    fn build_index_item(doc: &Document) -> CompileArtifact {
+        use vectorless_document::DocumentFormat;
+        let format = DocumentFormat::from_extension(&doc.format)
+            .unwrap_or(DocumentFormat::Markdown);
+
         CompileArtifact::new(
-            doc.id.clone(),
+            doc.doc_id.clone(),
             doc.name.clone(),
-            doc.format.clone(),
-            doc.description.clone(),
+            format,
+            if doc.summary.is_empty() { None } else { Some(doc.summary.clone()) },
             doc.page_count,
         )
         .with_source_path(
             doc.source_path
-                .as_ref()
-                .map(|p| p.to_string_lossy().to_string())
+                .clone()
                 .unwrap_or_default(),
         )
-        .with_metrics_opt(doc.metrics.clone())
     }
 
     // ============================================================
@@ -392,13 +393,12 @@ impl Engine {
             .to_string();
 
         // Load the persisted document to build DocumentInfo
-        let persisted = self
+        let doc = self
             .workspace
             .load(&doc_id)
             .await?
             .ok_or_else(|| Error::Config("Document not found after compile".into()))?;
 
-        let doc = Self::persisted_to_understanding_document(persisted);
         Ok(doc.info())
     }
 
@@ -417,8 +417,8 @@ impl Engine {
         let mut result = Vec::new();
         for id in ids {
             match self.workspace.load(&id).await {
-                Ok(Some(persisted)) => {
-                    result.push(Self::persisted_to_understanding_document(persisted).info());
+                Ok(Some(doc)) => {
+                    result.push(doc.info());
                 }
                 Ok(None) => {
                     tracing::warn!(doc_id = %id, "Document in index but not in storage");
@@ -444,11 +444,8 @@ impl Engine {
     pub async fn load_document(
         &self,
         doc_id: &str,
-    ) -> Result<Option<vectorless_document::Document>> {
-        match self.workspace.load(doc_id).await? {
-            Some(persisted) => Ok(Some(Self::persisted_to_understanding_document(persisted))),
-            None => Ok(None),
-        }
+    ) -> Result<Option<Document>> {
+        self.workspace.load(doc_id).await
     }
 
     /// List all document IDs in the workspace.
@@ -477,41 +474,6 @@ impl Engine {
     /// LLM usage and retrieval operation metrics.
     pub fn metrics_report(&self) -> vectorless_metrics::MetricsReport {
         self.metrics_hub.generate_report()
-    }
-
-    // ============================================================
-    // Internal: type conversions
-    // ============================================================
-
-    /// Convert a PersistedDocument to a Document (understanding type).
-    fn persisted_to_understanding_document(persisted: PersistedDocument) -> UnderstandingDocument {
-        let nav_index = persisted.navigation_index.unwrap_or_default();
-        let reasoning_index = persisted.reasoning_index.unwrap_or_default();
-        let tree = persisted.tree;
-
-        let section_count = tree.node_count();
-
-        UnderstandingDocument {
-            doc_id: persisted.meta.id,
-            name: persisted.meta.name,
-            format: persisted.meta.format,
-            source_path: persisted
-                .meta
-                .source_path
-                .as_ref()
-                .map(|p| p.to_string_lossy().to_string()),
-            tree,
-            nav_index,
-            reasoning_index,
-            summary: persisted.meta.description.unwrap_or_default(),
-            concepts: persisted.concepts,
-            query_routes: persisted.query_routes,
-            chain_index: persisted.chain_index,
-            content_overlap: persisted.content_overlap,
-            evidence_scores: persisted.evidence_scores,
-            page_count: persisted.meta.page_count,
-            section_count,
-        }
     }
 
     // ============================================================
@@ -634,7 +596,7 @@ impl Engine {
         };
 
         let format =
-            vectorless_compiler::parse::DocumentFormat::from_extension(&stored_doc.meta.format)
+            vectorless_compiler::parse::DocumentFormat::from_extension(&stored_doc.format)
                 .unwrap_or(vectorless_compiler::parse::DocumentFormat::Markdown);
         let pipeline_options = self.build_pipeline_options(options, source);
 
@@ -663,7 +625,7 @@ impl Engine {
         let concurrency = self.config.llm.throttle.max_concurrent_requests;
 
         let doc_ids_clone: Vec<String> = doc_ids.iter().cloned().collect();
-        let loaded: Vec<(String, Result<Option<PersistedDocument>>)> =
+        let loaded: Vec<(String, Result<Option<Document>>)> =
             futures::stream::iter(doc_ids_clone.into_iter())
                 .map(|doc_id| {
                     let ws = self.workspace.clone();
@@ -677,7 +639,7 @@ impl Engine {
                 .await;
 
         let mut failed_count = 0usize;
-        let mut loaded_docs: Vec<PersistedDocument> = Vec::new();
+        let mut loaded_docs: Vec<Document> = Vec::new();
         for (doc_id, result) in loaded {
             match result {
                 Ok(Some(doc)) => loaded_docs.push(doc),
@@ -703,12 +665,13 @@ impl Engine {
 
         let mut builder = vectorless_graph::DocumentGraphBuilder::new(self.config.graph.clone());
         for doc in &loaded_docs {
-            let keywords = Self::extract_keywords_from_doc(&doc);
+            let keywords = Self::extract_keywords_from_doc(doc);
+            let node_count = doc.meta.as_ref().map(|m| m.node_count).unwrap_or(0);
             builder.add_document(
-                &doc.meta.id,
-                &doc.meta.name,
-                &doc.meta.format,
-                doc.meta.node_count,
+                &doc.doc_id,
+                &doc.name,
+                &doc.format,
+                node_count,
                 keywords,
             );
         }
@@ -723,15 +686,14 @@ impl Engine {
         Ok(())
     }
 
-    /// Extract keyword -> weight map from a persisted document's ReasoningIndex.
-    fn extract_keywords_from_doc(doc: &PersistedDocument) -> HashMap<String, f32> {
+    /// Extract keyword -> weight map from a document's ReasoningIndex.
+    fn extract_keywords_from_doc(doc: &Document) -> HashMap<String, f32> {
         let mut keywords = HashMap::new();
-        if let Some(ref ri) = doc.reasoning_index {
-            for (kw, entries) in ri.all_topic_entries() {
-                let weight: f32 =
-                    entries.iter().map(|e| e.weight).sum::<f32>() / entries.len().max(1) as f32;
-                keywords.insert(kw.clone(), weight);
-            }
+        let ri = &doc.reasoning_index;
+        for (kw, entries) in ri.all_topic_entries() {
+            let weight: f32 =
+                entries.iter().map(|e| e.weight).sum::<f32>() / entries.len().max(1) as f32;
+            keywords.insert(kw.clone(), weight);
         }
         keywords
     }
@@ -774,16 +736,25 @@ mod tests {
     // -- build_index_item ----------------------------------------------------------------
 
     // Build_index_item only transforms data -- no I/O.
-    use crate::compiled_document::CompiledDocument;
-
-    fn make_doc() -> CompiledDocument {
-        CompiledDocument::new(
-            "test-id",
-            vectorless_compiler::parse::DocumentFormat::Markdown,
-        )
-        .with_name("test.md")
-        .with_description("test doc")
-        .with_source_path(std::path::PathBuf::from("/tmp/test.md"))
+    fn make_doc() -> Document {
+        Document {
+            schema_version: 3,
+            doc_id: "test-id".to_string(),
+            name: "test.md".to_string(),
+            format: "md".to_string(),
+            source_path: Some("/tmp/test.md".to_string()),
+            tree: vectorless_document::DocumentTree::new("Root", "Content"),
+            nav_index: Default::default(),
+            reasoning_index: Default::default(),
+            summary: "test doc".to_string(),
+            concepts: Vec::new(),
+            query_routes: None,
+            chain_index: None,
+            content_overlap: None,
+            evidence_scores: None,
+            page_count: None,
+            meta: None,
+        }
     }
 
     #[test]
@@ -799,15 +770,21 @@ mod tests {
         );
         assert_eq!(item.description, Some("test doc".to_string()));
         assert_eq!(item.source_path, Some("/tmp/test.md".to_string()));
-        assert!(item.metrics.is_none());
     }
 
     #[test]
     fn test_build_index_item_no_source_path() {
-        let doc = CompiledDocument::new("id", vectorless_compiler::parse::DocumentFormat::Pdf);
+        let mut doc = make_doc();
+        doc.doc_id = "id".to_string();
+        doc.format = "pdf".to_string();
+        doc.source_path = None;
+        doc.summary = String::new();
         let item = Engine::build_index_item(&doc);
 
         assert_eq!(item.source_path, Some(String::new())); // unwrap_or_default
-        assert_eq!(item.format, vectorless_compiler::parse::DocumentFormat::Pdf);
+        assert_eq!(
+            item.format,
+            vectorless_compiler::parse::DocumentFormat::Pdf
+        );
     }
 }

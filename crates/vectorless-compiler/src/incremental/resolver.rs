@@ -11,9 +11,7 @@
 use tracing::info;
 
 use crate::config::PipelineOptions;
-use vectorless_document::DocumentFormat;
-use vectorless_document::DocumentTree;
-use vectorless_storage::PersistedDocument;
+use vectorless_document::{Document, DocumentFormat, DocumentTree};
 use vectorless_utils::fingerprint::Fingerprint;
 
 /// Action to take for a source during indexing.
@@ -64,35 +62,48 @@ pub struct SkipInfo {
 ///    with the old tree for partial reprocessing.
 pub fn resolve_action(
     file_bytes: &[u8],
-    stored_doc: &PersistedDocument,
+    stored_doc: &Document,
     pipeline_options: &PipelineOptions,
     format: DocumentFormat,
 ) -> IndexAction {
     let current_fp = Fingerprint::from_bytes(file_bytes);
+    let current_fp_hex = current_fp.to_string();
+
+    // Get the stored DocumentMeta (if present)
+    let stored_meta = match stored_doc.meta.as_ref() {
+        Some(m) => m,
+        None => {
+            // No meta → must be a very old format, full reprocess
+            return IndexAction::FullIndex {
+                existing_id: Some(stored_doc.doc_id.clone()),
+            };
+        }
+    };
 
     // Layer 1: File-level content fingerprint
-    if !stored_doc
-        .meta
-        .needs_reprocessing(&current_fp, pipeline_options.processing_version)
-    {
+    if !stored_meta.needs_reprocessing(&current_fp_hex, pipeline_options.processing_version) {
         info!("File fingerprint unchanged, skipping");
         return IndexAction::Skip(SkipInfo {
-            doc_id: stored_doc.meta.id.clone(),
-            name: stored_doc.meta.name.clone(),
+            doc_id: stored_doc.doc_id.clone(),
+            name: stored_doc.name.clone(),
             format,
-            description: stored_doc.meta.description.clone(),
-            page_count: stored_doc.meta.page_count,
+            description: if stored_doc.summary.is_empty() {
+                None
+            } else {
+                Some(stored_doc.summary.clone())
+            },
+            page_count: stored_doc.page_count,
         });
     }
 
     // Layer 2: Logic fingerprint (pipeline config changed?)
     let current_logic_fp = pipeline_options.logic_fingerprint();
-    if stored_doc.meta.logic_fingerprint != current_logic_fp
-        && !stored_doc.meta.logic_fingerprint.is_zero()
+    if stored_meta.logic_fingerprint != current_logic_fp.to_string()
+        && !stored_meta.logic_fingerprint.is_empty()
     {
         info!("Logic fingerprint changed, full reprocess required");
         return IndexAction::FullIndex {
-            existing_id: Some(stored_doc.meta.id.clone()),
+            existing_id: Some(stored_doc.doc_id.clone()),
         };
     }
 
@@ -100,6 +111,6 @@ pub fn resolve_action(
     info!("Content changed, pipeline unchanged → incremental update");
     IndexAction::IncrementalUpdate {
         old_tree: stored_doc.tree.clone(),
-        existing_id: stored_doc.meta.id.clone(),
+        existing_id: stored_doc.doc_id.clone(),
     }
 }

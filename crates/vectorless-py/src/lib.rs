@@ -27,6 +27,18 @@ use metrics::{PyLlmMetricsReport, PyMetricsReport, PyRetrievalMetricsReport};
 /// Vectorless — Document Understanding Engine for AI.
 #[pymodule]
 fn _vectorless(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    // Initialize tracing subscriber from RUST_LOG env var (once).
+    use std::sync::Once;
+    static INIT: Once = Once::new();
+    INIT.call_once(|| {
+        tracing_subscriber::fmt()
+            .with_env_filter(
+                tracing_subscriber::EnvFilter::from_default_env()
+                    .add_directive("vectorless=info".parse().unwrap()),
+            )
+            .init();
+    });
+
     m.add_class::<VectorlessError>()?;
     m.add_class::<PyEngine>()?;
     m.add_class::<PyDocument>()?;
