@@ -259,11 +259,7 @@ impl Workspace {
         Self::save_meta_index(&inner)?;
 
         // Update catalog with DocCard
-        if let Some(card) = doc
-            .nav_index
-            .doc_card()
-            .cloned()
-        {
+        if let Some(card) = doc.nav_index.doc_card().cloned() {
             inner.catalog.insert(doc_id.clone(), card);
             Self::save_catalog_index(&inner)?;
         }
@@ -571,11 +567,7 @@ impl Workspace {
         for key in doc_keys {
             if let Some(bytes) = inner.backend.get(key)? {
                 if let Ok(doc) = load_document_from_bytes(&bytes) {
-                    if let Some(card) = doc
-                        .nav_index
-                        .doc_card()
-                        .cloned()
-                    {
+                    if let Some(card) = doc.nav_index.doc_card().cloned() {
                         inner.catalog.insert(doc.doc_id.clone(), card);
                     }
                 }
