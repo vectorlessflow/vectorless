@@ -49,7 +49,6 @@ export default function Home(): ReactNode {
                   <code>pip install vectorless</code>
                 </div>
                 <div className={styles.productLinks}>
-                  <Link to="/docs/getting-started">Documentation</Link>
                   <Link href="https://github.com/vectorlessflow/vectorless">GitHub</Link>
                 </div>
               </div>
@@ -69,7 +68,6 @@ export default function Home(): ReactNode {
                   <code>pip install vectorless-code</code>
                 </div>
                 <div className={styles.productLinks}>
-                  <Link to="/docs/vectorless-code">Learn more</Link>
                   <Link href="https://github.com/vectorlessflow/vectorless-code">GitHub</Link>
                 </div>
               </div>
