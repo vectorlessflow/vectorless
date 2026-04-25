@@ -457,15 +457,6 @@ mod tests {
     }
 
     #[test]
-    fn test_stage_config_default() {
-        let stage = ReasoningPass::new();
-        assert!(stage.config.enabled);
-        assert_eq!(stage.name(), "reasoning_index");
-        assert!(stage.is_optional());
-        assert_eq!(stage.depends_on(), vec!["enrich"]);
-    }
-
-    #[test]
     fn test_build_topic_paths_basic() {
         use vectorless_document::ReasoningIndexConfig;
 

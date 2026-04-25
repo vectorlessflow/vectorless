@@ -328,7 +328,7 @@ mod tests {
         assert!(table.concept_route_count() > 0);
 
         // Verify metrics recorded
-        assert!(ctx.metrics.route_time_ms > 0 || pass_result.duration_ms >= 0);
+        assert!(ctx.metrics.route_time_ms > 0);
     }
 
     #[tokio::test]
