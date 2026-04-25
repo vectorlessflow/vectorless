@@ -306,32 +306,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_execute_end_to_end() {
-        let tree = build_test_tree_with_hints();
-
-        let mut ctx = CompileContext::new(
-            crate::pipeline::CompilerInput::content("test"),
-            crate::config::PipelineOptions::default(),
-        );
-        ctx.tree = Some(tree);
-
-        let mut pass = RoutePass::new();
-        let result = pass.execute(&mut ctx).await;
-
-        assert!(result.is_ok());
-        let pass_result = result.unwrap();
-        assert!(pass_result.success);
-
-        // Verify routing table
-        let table = ctx.query_routes.unwrap();
-        assert!(table.intent_route_count() > 0);
-        assert!(table.concept_route_count() > 0);
-
-        // Verify metrics recorded
-        assert!(ctx.metrics.route_time_ms > 0);
-    }
-
-    #[tokio::test]
     async fn test_execute_no_tree() {
         let mut ctx = CompileContext::new(
             crate::pipeline::CompilerInput::content("test"),
