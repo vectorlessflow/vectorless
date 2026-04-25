@@ -5,7 +5,7 @@
 /* ===== Hero Banner ===== */
 .heroBanner {
   margin: 0;
-  padding: 40px 24px 32px;
+  padding: 60px 24px 48px;
   min-height: calc(100vh - 68px);
   overflow: hidden;
   position: relative;
@@ -35,14 +35,14 @@
 .heroBanner::after {
   content: '';
   position: absolute;
-  top: 20%;
-  left: 35%;
+  top: 10%;
+  left: 30%;
   transform: translateX(-50%);
-  width: 600px;
-  height: 600px;
+  width: 700px;
+  height: 700px;
   background: radial-gradient(
     circle,
-    rgba(175, 120, 139, 0.10) 0%,
+    rgba(175, 120, 139, 0.08) 0%,
     transparent 70%
   );
   pointer-events: none;
@@ -54,64 +54,54 @@
   position: relative;
   z-index: 1;
   text-align: left;
-  max-width: 960px;
+  max-width: 860px;
   width: 100%;
   margin: 0 auto;
 }
 
+/* ===== Manifesto ===== */
+.manifesto {
+  margin-bottom: 36px;
+}
+
 .mainTitle {
-  font-size: clamp(1.6rem, 4vw, 2.4rem);
-  font-weight: 700;
-  letter-spacing: -0.03em;
+  font-size: clamp(2rem, 5vw, 3rem);
+  font-weight: 800;
+  letter-spacing: -0.04em;
   color: var(--text);
-  margin-bottom: 6px;
-  line-height: 1;
-}
-
-.badges {
-  display: flex;
-  gap: 6px;
-  margin-bottom: 10px;
-}
-
-.badges img {
-  height: 20px;
+  margin-bottom: 8px;
+  line-height: 1.1;
 }
 
 .tagline {
-  font-size: 1rem;
-  font-weight: 600;
-  color: var(--primary);
-  margin-bottom: 4px;
-  font-style: italic;
-}
-
-.subTitle {
-  font-size: 0.88rem;
-  font-weight: 400;
+  font-size: 1.05rem;
+  font-weight: 500;
   color: var(--text-light);
-  margin-bottom: 20px;
-  line-height: 1.6;
-  max-width: none;
+  line-height: 1.5;
+  max-width: 600px;
 }
 
-/* ===== Section titles & paragraphs ===== */
+/* ===== Sections ===== */
+.section {
+  margin-bottom: 36px;
+}
+
 .sectionTitle {
-  font-size: 1rem;
+  font-size: 0.95rem;
   font-weight: 700;
   color: var(--text);
-  margin-top: 16px;
-  margin-bottom: 4px;
+  margin-top: 0;
+  margin-bottom: 8px;
   padding-bottom: 0;
   border-bottom: none;
 }
 
 .paragraph {
-  font-size: 0.85rem;
+  font-size: 0.88rem;
   font-weight: 400;
   color: var(--text-light);
-  line-height: 1.5;
-  margin-bottom: 2px;
+  line-height: 1.65;
+  margin-bottom: 6px;
 }
 
 .paragraph code {
@@ -123,18 +113,128 @@
   font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
 }
 
-/* ===== Code Section ===== */
-.codeSection {
-  margin-top: 4px;
-  margin-bottom: 0;
-  max-width: none;
+/* ===== Product Grid ===== */
+.productGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 8px;
 }
 
-.codeSection pre {
-  border-radius: 6px !important;
-  font-size: 0.75rem !important;
-  line-height: 1.5 !important;
-  padding: 12px !important;
+.productCard {
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background-color: rgba(255, 255, 255, 0.02);
+}
+
+.productBadge {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--primary);
+  margin-bottom: 8px;
+}
+
+.productBadgeCode {
+  color: #6ee7b7;
+}
+
+.productName {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0 0 8px 0;
+}
+
+.productDesc {
+  font-size: 0.84rem;
+  color: var(--text-light);
+  line-height: 1.6;
+  margin-bottom: 6px;
+}
+
+.productAudience {
+  font-size: 0.8rem;
+  color: var(--text-light);
+  font-style: italic;
+  margin-bottom: 12px;
+}
+
+.productInstall {
+  margin-bottom: 10px;
+}
+
+.productInstall code {
+  background-color: var(--primary-soft);
+  color: var(--text);
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 0.82rem;
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+}
+
+.productLinks {
+  display: flex;
+  gap: 16px;
+}
+
+.productLinks a {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--primary);
+  text-decoration: none;
+}
+
+.productLinks a:hover {
+  text-decoration: underline;
+}
+
+/* ===== Steps ===== */
+.steps {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.step {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  font-size: 0.86rem;
+  color: var(--text-light);
+  line-height: 1.6;
+}
+
+.step strong {
+  color: var(--text);
+}
+
+.step code {
+  background-color: var(--primary-soft);
+  color: var(--text);
+  padding: 0px 5px;
+  border-radius: 3px;
+  font-size: 0.84em;
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+}
+
+.stepNumber {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1.5px solid var(--border);
+  color: var(--primary);
+  font-size: 0.8rem;
+  font-weight: 700;
+  margin-top: 1px;
 }
 
 /* ===== Buttons ===== */
@@ -143,7 +243,7 @@
   gap: 10px;
   align-items: center;
   flex-wrap: wrap;
-  margin-top: 20px;
+  margin-top: 8px;
 }
 
 .secondaryButton {
@@ -169,9 +269,15 @@
 }
 
 /* ===== Responsive ===== */
+@media (max-width: 768px) {
+  .productGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 640px) {
   .heroBanner {
-    padding: 32px 16px 24px;
+    padding: 36px 16px 28px;
   }
 
   .mainTitle {
@@ -182,21 +288,11 @@
     font-size: 0.92rem;
   }
 
-  .subTitle {
-    font-size: 0.82rem;
-    max-width: 100%;
-  }
-
-  .codeSection {
-    max-width: 100%;
-  }
-
   .heroActions {
     flex-direction: column;
     width: 100%;
   }
 
-  .primaryButton,
   .secondaryButton {
     width: 100%;
     justify-content: center;
