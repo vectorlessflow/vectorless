@@ -13,7 +13,7 @@ Vectorless is a Document Understanding Engine for AI written in Rust.
 Cargo workspace with 17 fine-grained Rust crates + pure Python SDK:
 
 ```
-vectorless-core/
+crates/
 ├── vectorless-error/       # Error types (Result, Error enum)
 ├── vectorless-document/    # Document types (Document, Tree, NavigationIndex, ReasoningIndex)
 ├── vectorless-config/      # Configuration hub (aggregates all config types)
@@ -25,7 +25,7 @@ vectorless-core/
 ├── vectorless-llm/         # LLM client (pool, memo/cache, throttle, fallback)
 ├── vectorless-storage/     # Persistence (Workspace, LRU cache, file/memory backends)
 ├── vectorless-query/       # Query understanding (intent classification, rewrite)
-├── vectorless-index/       # Compile pipeline (10-stage, checkpointing, incremental update)
+├── vectorless-compiler/    # Compile pipeline (15-pass, checkpointing, incremental update)
 ├── vectorless-agent/       # Retrieval execution (Worker navigation + Orchestrator fusion)
 ├── vectorless-retrieval/   # Retrieval dispatch layer (dispatcher, cache, streaming)
 ├── vectorless-rerank/      # Result reranking (dedup, BM25 scoring, fusion)
@@ -44,7 +44,7 @@ Layer 0:  error · document · utils · scoring          (no workspace deps)
 Layer 1:  graph · events · config · metrics            (depends on Layer 0)
 Layer 2:  llm · storage                                 (depends on Layer 0–1)
 Layer 3:  query                                         (depends on Layer 0–2)
-Layer 4:  index · agent                                 (depends on Layer 0–3)
+Layer 4:  compiler · agent                               (depends on Layer 0–3)
 Layer 5:  retrieval · rerank                            (depends on Layer 0–4)
 Layer 6:  engine (facade) · vectorless-py (bindings)    (depends on all)
 ```
@@ -170,9 +170,9 @@ When uncertain whether an operation is safe, **default to asking user confirmati
 
 ## Common Development Workflow
 
-1. **Adding features**: Implement in the appropriate `vectorless-core/vectorless-*/` crate, add tests
+1. **Adding features**: Implement in the appropriate `crates/vectorless-*/` crate, add tests
 2. **Fixing bugs**: Add failing test case first, fix and ensure tests pass
-3. **Adding crates**: New modules get their own crate under `vectorless-core/`, add to workspace Cargo.toml
-4. **Python bindings**: Update `vectorless-core/vectorless-py/src/lib.rs` (PyO3) when Rust APIs change
+3. **Adding crates**: New modules get their own crate under `crates/`, add to workspace Cargo.toml
+4. **Python bindings**: Update `crates/vectorless-py/src/lib.rs` (PyO3) when Rust APIs change
 5. **Python SDK**: Update `vectorless/` when API surface changes
 6. **Committing code**: Use semantic commit messages, format: `type(scope): description`

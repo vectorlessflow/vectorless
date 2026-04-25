@@ -1,7 +1,5 @@
 """Orchestrator agent — coordinates multi-document retrieval.
 
-Mirrors vectorless-core/vectorless-agent/src/orchestrator/.
-
 The Orchestrator is always the entry point for retrieval:
 - User specified doc_ids → skip_analysis=True → spawn Workers directly
 - Workspace (unspecified) → analyze DocCards → select docs → spawn Workers
