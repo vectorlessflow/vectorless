@@ -66,6 +66,13 @@ class Engine:
     ) -> None:
         self._events = events or EventEmitter()
 
+        # Configure Python logging when RUST_LOG is set
+        import os
+        rust_log = os.environ.get("RUST_LOG", "").lower()
+        if rust_log and rust_log != "off":
+            level = logging.DEBUG if "debug" in rust_log else logging.INFO
+            logging.basicConfig(level=level, format="%(name)s: %(message)s")
+
         # Resolve config: constructor > env > file > defaults
         if config is not None:
             self._config = config
@@ -280,9 +287,12 @@ class Engine:
             QueryEventData(event_type=QueryEventType.STARTED, query=question)
         )
 
+        logger.info("ask: started question=%r doc_ids=%s", question, doc_ids)
+
         try:
             result = await self._ask_python(question, doc_ids)
         except Exception as e:
+            logger.error("ask: failed question=%r error=%s", question, e)
             self._events.emit_query(
                 QueryEventData(
                     event_type=QueryEventType.ERROR,
@@ -300,6 +310,7 @@ class Engine:
             )
         )
 
+        logger.info("ask: complete question=%r evidence=%d", question, len(result.evidence))
         return result
 
     async def query_stream(
@@ -339,6 +350,7 @@ class Engine:
         emit = event_queue.put if event_queue else lambda _: asyncio.ensure_future(asyncio.sleep(0))
 
         # 1. Resolve target documents
+        logger.info("_ask_python: resolving target documents")
         all_doc_infos = await self._rust.list_documents()
 
         if doc_ids is not None:
@@ -370,6 +382,8 @@ class Engine:
                 section_count=info.section_count,
                 concepts=concepts,
             ))
+
+        logger.info("_ask_python: built %d DocCards, dispatching", len(doc_cards))
 
         # 3. Determine scope: doc_ids specified → Specified, else → Workspace
         if doc_ids is not None:

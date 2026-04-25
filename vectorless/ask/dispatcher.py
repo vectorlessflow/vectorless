@@ -53,8 +53,15 @@ async def dispatch(
     # Step 2: Determine skip_analysis from scope
     skip_analysis = isinstance(scope, Specified)
     doc_cards = scope.docs
+    logger.info(
+        "dispatch: scope=%s docs=%d skip_analysis=%s",
+        "specified" if skip_analysis else "workspace",
+        len(doc_cards),
+        skip_analysis,
+    )
 
     # Step 3: Orchestrator (always)
+    logger.info("dispatch: starting orchestrator")
     orchestrator = Orchestrator(
         query=query,
         doc_cards=doc_cards,
@@ -64,4 +71,6 @@ async def dispatch(
         query_analysis=query_analysis,
         event_callback=event_callback,
     )
-    return await orchestrator.run()
+    result = await orchestrator.run()
+    logger.info("dispatch: orchestrator complete answer_len=%d", len(result.answer) if result.answer else 0)
+    return result
