@@ -10,11 +10,6 @@ members = [
     "crates/vectorless-metrics",
     "crates/vectorless-llm",
     "crates/vectorless-storage",
-    # Strategy layer moved to Python — crates kept but not compiled:
-    # "crates/vectorless-query",
-    # "crates/vectorless-agent",
-    # "crates/vectorless-retrieval",
-    # "crates/vectorless-rerank",
     "crates/vectorless-compiler",
     "crates/vectorless-primitives",
     "crates/vectorless-engine",
