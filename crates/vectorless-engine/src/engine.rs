@@ -347,21 +347,21 @@ impl Engine {
     /// Build a [`CompileArtifact`] from a [`Document`].
     fn build_index_item(doc: &Document) -> CompileArtifact {
         use vectorless_document::DocumentFormat;
-        let format = DocumentFormat::from_extension(&doc.format)
-            .unwrap_or(DocumentFormat::Markdown);
+        let format =
+            DocumentFormat::from_extension(&doc.format).unwrap_or(DocumentFormat::Markdown);
 
         CompileArtifact::new(
             doc.doc_id.clone(),
             doc.name.clone(),
             format,
-            if doc.summary.is_empty() { None } else { Some(doc.summary.clone()) },
+            if doc.summary.is_empty() {
+                None
+            } else {
+                Some(doc.summary.clone())
+            },
             doc.page_count,
         )
-        .with_source_path(
-            doc.source_path
-                .clone()
-                .unwrap_or_default(),
-        )
+        .with_source_path(doc.source_path.clone().unwrap_or_default())
     }
 
     // ============================================================
@@ -441,10 +441,7 @@ impl Engine {
     }
 
     /// Load a full Document by ID (for navigation via primitives).
-    pub async fn load_document(
-        &self,
-        doc_id: &str,
-    ) -> Result<Option<Document>> {
+    pub async fn load_document(&self, doc_id: &str) -> Result<Option<Document>> {
         self.workspace.load(doc_id).await
     }
 
@@ -595,9 +592,8 @@ impl Engine {
             None => return Ok(IndexAction::FullIndex { existing_id: None }),
         };
 
-        let format =
-            vectorless_compiler::parse::DocumentFormat::from_extension(&stored_doc.format)
-                .unwrap_or(vectorless_compiler::parse::DocumentFormat::Markdown);
+        let format = vectorless_compiler::parse::DocumentFormat::from_extension(&stored_doc.format)
+            .unwrap_or(vectorless_compiler::parse::DocumentFormat::Markdown);
         let pipeline_options = self.build_pipeline_options(options, source);
 
         // If logic fingerprint changed, remove old doc before full reprocess
@@ -667,13 +663,7 @@ impl Engine {
         for doc in &loaded_docs {
             let keywords = Self::extract_keywords_from_doc(doc);
             let node_count = doc.meta.as_ref().map(|m| m.node_count).unwrap_or(0);
-            builder.add_document(
-                &doc.doc_id,
-                &doc.name,
-                &doc.format,
-                node_count,
-                keywords,
-            );
+            builder.add_document(&doc.doc_id, &doc.name, &doc.format, node_count, keywords);
         }
 
         let graph = builder.build();
@@ -782,9 +772,6 @@ mod tests {
         let item = Engine::build_index_item(&doc);
 
         assert_eq!(item.source_path, Some(String::new())); // unwrap_or_default
-        assert_eq!(
-            item.format,
-            vectorless_compiler::parse::DocumentFormat::Pdf
-        );
+        assert_eq!(item.format, vectorless_compiler::parse::DocumentFormat::Pdf);
     }
 }

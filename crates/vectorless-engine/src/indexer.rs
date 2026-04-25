@@ -27,15 +27,13 @@ use tracing::info;
 use uuid::Uuid;
 
 use vectorless_compiler::{CompilerInput, PipelineExecutor, PipelineOptions, SourceFormat};
-use vectorless_document::{
-    Document, DocumentFormat, DocumentMeta, CURRENT_SCHEMA_VERSION,
-};
+use vectorless_document::{CURRENT_SCHEMA_VERSION, Document, DocumentFormat, DocumentMeta};
 use vectorless_error::{Error, Result};
 use vectorless_llm::LlmClient;
 use vectorless_utils::fingerprint::Fingerprint;
 
 use super::compile_input::CompileSource;
-use vectorless_events::{EventEmitter, CompileEvent};
+use vectorless_events::{CompileEvent, EventEmitter};
 
 /// Document compile client.
 ///
@@ -257,7 +255,8 @@ impl IndexerClient {
             .ok_or_else(|| Error::Parse("Document tree not generated".to_string()))?;
 
         let node_count = tree.node_count();
-        self.events.emit_compile(CompileEvent::TreeBuilt { node_count });
+        self.events
+            .emit_compile(CompileEvent::TreeBuilt { node_count });
 
         let doc_name = name
             .map(str::to_string)
@@ -276,8 +275,10 @@ impl IndexerClient {
         meta = meta.with_logic_fingerprint(logic_fp.to_string());
 
         // Extract stats from metrics
-        let (summary_tokens, duration_ms) =
-            (result.metrics.total_tokens_generated, result.metrics.total_time_ms());
+        let (summary_tokens, duration_ms) = (
+            result.metrics.total_tokens_generated,
+            result.metrics.total_time_ms(),
+        );
         meta.update_processing_stats(node_count, summary_tokens, duration_ms);
 
         // Compute content fingerprint from source file if available
@@ -308,7 +309,9 @@ impl IndexerClient {
         };
 
         info!("Compiling complete: {} ({} nodes)", doc.doc_id, node_count);
-        self.events.emit_compile(CompileEvent::Complete { doc_id: doc.doc_id.clone() });
+        self.events.emit_compile(CompileEvent::Complete {
+            doc_id: doc.doc_id.clone(),
+        });
 
         Ok(doc)
     }

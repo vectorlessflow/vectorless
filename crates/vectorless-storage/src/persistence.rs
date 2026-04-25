@@ -12,7 +12,7 @@
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-use vectorless_document::{Document, CURRENT_SCHEMA_VERSION};
+use vectorless_document::{CURRENT_SCHEMA_VERSION, Document};
 use vectorless_error::Error;
 use vectorless_error::Result;
 
