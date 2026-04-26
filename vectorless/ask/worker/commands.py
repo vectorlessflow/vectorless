@@ -202,6 +202,23 @@ async def handle_cat(
 
         preview = content[:500] + "..." if len(content) > 500 else content
         state.last_feedback = f"[{title}] collected as evidence:\n{preview}"
+
+        # Mark overlapping nodes as visited to avoid redundant reads
+        try:
+            overlaps = await doc.overlaps_for(node_id)
+            if overlaps:
+                for overlap in overlaps[:5]:
+                    overlap_id = getattr(overlap, "node_id", None)
+                    if overlap_id and overlap_id not in state.collected_nodes:
+                        state.visited.add(overlap_id)
+                        overlap_title = await doc.node_title(overlap_id)
+                        logger.info(
+                            "Overlap dedup: marking '%s' as visited (overlap of '%s')",
+                            overlap_title, title,
+                        )
+        except Exception:
+            pass
+
         return Step(kind="continue")
     except Exception as e:
         state.last_feedback = f"Error reading node: {e}"
@@ -688,6 +705,45 @@ async def handle_find_section(
     return Step(kind="continue")
 
 
+async def handle_chain(
+    command: Any, doc: NavigableDocument, state: WorkerState, query: str, llm: LLMClient,
+) -> Step:
+    """Follow reasoning chains from a node — uses pre-computed ChainIndex."""
+    target = command.target
+    node_id = await _resolve_target(doc, target if target else ".", state)
+    if node_id is None:
+        state.last_feedback = f"Node '{target}' not found."
+        return Step(kind="continue")
+    try:
+        chains = await doc.chains_for(node_id)
+        if not chains:
+            title = await doc.node_title(node_id)
+            state.last_feedback = f"No reasoning chains found for '{title}'."
+            return Step(kind="continue")
+        lines = ["Reasoning chains:"]
+        for chain in chains[:5]:
+            chain_title = getattr(chain, "title", "")
+            chain_summary = getattr(chain, "summary", "")
+            nodes = getattr(chain, "nodes", [])
+            if nodes:
+                node_titles = []
+                for n in nodes[:6]:
+                    n_title = getattr(n, "title", "?")
+                    node_titles.append(n_title)
+                more = f" (+{len(nodes) - 6} more)" if len(nodes) > 6 else ""
+                path = " → ".join(node_titles)
+                lines.append(f"  - {chain_title}: {path}{more}")
+                if chain_summary:
+                    lines.append(f"    {chain_summary[:120]}")
+            else:
+                desc = chain_summary or chain_title or "(unnamed chain)"
+                lines.append(f"  - {desc}")
+        state.last_feedback = "\n".join(lines)
+    except Exception as e:
+        state.last_feedback = f"chain error: {e}"
+    return Step(kind="continue")
+
+
 async def handle_check(
     command: Any, doc: NavigableDocument, state: WorkerState, query: str, llm: LLMClient,
 ) -> Step:
@@ -758,6 +814,7 @@ _REGISTRY: dict[str, CommandHandler] = {
     "doc_card": handle_doc_card,
     "concepts": handle_concepts,
     "find_section": handle_find_section,
+    "chain": handle_chain,
     "check": handle_check,
     "done": handle_done,
 }

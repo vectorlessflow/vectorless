@@ -64,6 +64,7 @@ Available commands:
 - doc_card          Show document-level overview (title, summary, sections)
 - concepts          List key concepts extracted from the document
 - find_section <title>  Find a section by exact title (case-insensitive)
+- chain <name>      Follow reasoning chains from a node (pre-computed links)
 - compare <a> <b>   Compare two nodes using LLM analysis (use node IDs)
 - trace <name>      Trace reasoning chain from a node using LLM
 - summarize <name>  Generate dynamic LLM summary of a node
@@ -202,7 +203,7 @@ def worker_dispatch(params: WorkerDispatchParams) -> tuple[str, str]:
         f"cd .., back, cat, cat <name>, head <name>, find <keyword>, findtree <pattern>, grep <regex>, "
         f"toc [depth], stats <name>, grep_node <node> <pattern>, similar <name>, overview <name>, "
         f"siblings <name>, ancestors <name>, doc_card, concepts, find_section <title>, "
-        f"compare <a> <b>, trace <name>, summarize <name>, "
+        f"chain <name>, compare <a> <b>, trace <name>, summarize <name>, "
         f"wc <name>, pwd, check, done\n"
         f"\n"
         f"SEARCH STRATEGY:\n"
