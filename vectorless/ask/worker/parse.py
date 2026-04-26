@@ -138,6 +138,9 @@ def parse_command(llm_output: str) -> Command:
     elif cmd == "find_section":
         target = _strip_quotes(" ".join(parts[1:])) if len(parts) > 1 else ""
         return Command(kind="find_section", target=target)
+    elif cmd == "chain":
+        target = _strip_quotes(" ".join(parts[1:])) if len(parts) > 1 else ""
+        return Command(kind="chain", target=target)
     else:
         return Command(kind="ls")  # fallback: re-observe
 

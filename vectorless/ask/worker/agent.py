@@ -82,6 +82,13 @@ class Worker:
             pass
         logger.info("Worker starting: doc=%s max_rounds=%d", doc_name, max_rounds)
 
+        # Phase 0.5: try intent routes for direct jump
+        intent_hint = ""
+        try:
+            intent_hint = await self._build_intent_hint(doc, query)
+        except Exception:
+            pass
+
         try:
             children = await doc.ls()
             if children:
@@ -104,9 +111,15 @@ class Worker:
         except Exception:
             pass
 
+        combined_hints = ""
+        if intent_hint:
+            combined_hints += intent_hint
         if keyword_hints:
-            logger.info("Phase 1.5: keyword hints available, generating plan")
-            await self._generate_plan(doc, query, task, state, keyword_hints, llm)
+            combined_hints += keyword_hints
+
+        if combined_hints:
+            logger.info("Phase 1.5: hints available, generating plan")
+            await self._generate_plan(doc, query, task, state, combined_hints, llm)
             if state.plan:
                 logger.info("Phase 1.5: plan generated — %s", state.plan[:150])
 
@@ -142,7 +155,7 @@ class Worker:
                     visited_titles=visited_titles,
                     plan=state.plan,
                     intent_context=intent_context,
-                    keyword_hints=keyword_hints,
+                    keyword_hints=combined_hints,
                     shared_context=shared_context,
                 ))
 
@@ -172,7 +185,7 @@ class Worker:
                     f'"{raw_preview}"\n\n'
                     f"Please output exactly one command "
                     f"(ls, cd, cat, head, find, grep, toc, stats, similar, overview, "
-                    f"siblings, ancestors, doc_card, concepts, find_section, "
+                    f"siblings, ancestors, doc_card, concepts, find_section, chain, "
                     f"compare, trace, summarize, wc, pwd, check, or done)."
                 )
                 state.push_history("(unrecognized) \u2192 parse failure")
@@ -239,6 +252,39 @@ class Worker:
 
         return state.into_worker_output(doc_name)
 
+    async def _build_intent_hint(self, doc: NavigableDocument, query: str) -> str:
+        """Build navigation hints from pre-computed intent routes.
+
+        If the query routing table has routes for this document's structure,
+        we can suggest direct jumps instead of root-level exploration.
+        """
+        try:
+            routes = await doc.intent_routes()
+        except Exception:
+            return ""
+
+        if not routes:
+            return ""
+
+        lines = ["Intent routes (pre-computed shortcuts — use cd to jump directly):"]
+        for route in routes[:5]:
+            targets = getattr(route, "targets", [])
+            if not targets:
+                continue
+            for target in targets[:3]:
+                title = await doc.node_title(target.node_id)
+                relevance = getattr(target, "relevance", 0.0)
+                reason = getattr(target, "reason", "")
+                lines.append(
+                    f"  - {title} (relevance {relevance:.2f}: {reason})"
+                )
+
+        if len(lines) == 1:
+            return ""
+
+        logger.info("Intent routes: %d routes found", len(routes))
+        return "\n".join(lines) + "\n"
+
     async def _build_keyword_hints(self, doc: NavigableDocument, query: str) -> str:
         """Build keyword hints from the document's reasoning index and acceleration data."""
         keywords = extract_keywords(query)
@@ -276,15 +322,23 @@ class Worker:
                 pass
 
         # Top evidence scores (pre-computed by ScorePass)
+        # Filter to nodes whose titles overlap with query keywords for relevance
         score_hints = []
         try:
             scores = await doc.evidence_scores_ranked()
-            for s in scores[:5]:
+            kw_lower = {kw.lower() for kw in keywords}
+            for s in scores[:20]:
                 title = await doc.node_title(s.node_id)
-                score_hints.append(
-                    f"  - {title} (score {s.composite:.2f}: "
-                    f"density={s.density:.2f} richness={s.data_richness:.2f})"
-                )
+                title_lower = title.lower()
+                # Include if title contains any query keyword or is top-3 by score
+                is_keyword_match = any(kw in title_lower for kw in kw_lower)
+                if is_keyword_match or len(score_hints) < 3:
+                    score_hints.append(
+                        f"  - {title} (score {s.composite:.2f}: "
+                        f"density={s.density:.2f} richness={s.data_richness:.2f})"
+                    )
+                if len(score_hints) >= 8:
+                    break
         except Exception:
             pass
 
