@@ -12,6 +12,7 @@ use vectorless_error::Result;
 use vectorless_llm::LlmClient;
 
 use super::super::PipelineOptions;
+use super::super::parse::{Parser, ParserRegistry};
 use super::super::passes::{
     BuildPass, ChainPass, CompilePass, ConceptPass, EnhancePass, EnrichPass, NavigationPass,
     OptimizePass, OverlapPass, ParsePass, ReasoningPass, RoutePass, ScorePass, SplitPass,
@@ -136,6 +137,37 @@ impl PipelineExecutor {
     /// ```
     pub fn from_orchestrator(orchestrator: PipelineOrchestrator) -> Self {
         Self { orchestrator }
+    }
+
+    /// Create with a custom parser registry.
+    ///
+    /// Use this to register custom format parsers alongside the built-in
+    /// Markdown and PDF parsers.
+    pub fn with_registry(registry: ParserRegistry) -> Self {
+        let orchestrator = PipelineOrchestrator::new()
+            .stage_with_priority(ParsePass::with_registry(registry), 10)
+            .stage_with_priority(BuildPass::new(), 20)
+            .stage_with_priority(ValidatePass::new(), 22)
+            .stage_with_priority(SplitPass::new(), 25)
+            .stage_with_priority(EnrichPass::new(), 40)
+            .stage_with_priority(ReasoningPass::new(), 45)
+            .stage_with_priority(ConceptPass::new(), 47)
+            .stage_with_priority(NavigationPass::new(), 50)
+            .stage_with_priority(RoutePass::new(), 52)
+            .stage_with_priority(ChainPass::new(), 54)
+            .stage_with_priority(OverlapPass::new(), 56)
+            .stage_with_priority(ScorePass::new(), 58)
+            .stage_with_priority(VerifyPass, 55)
+            .stage_with_priority(OptimizePass::new(), 60);
+        Self { orchestrator }
+    }
+
+    /// Add a single custom parser.
+    ///
+    /// Creates a default registry with built-in parsers plus the provided one.
+    pub fn with_parser(parser: impl Parser + 'static) -> Self {
+        let registry = ParserRegistry::default_parsers(None).with(parser);
+        Self::with_registry(registry)
     }
 
     /// Add a stage with default priority.

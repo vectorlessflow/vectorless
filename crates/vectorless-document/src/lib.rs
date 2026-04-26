@@ -46,6 +46,7 @@ pub use toc::{TocConfig, TocEntry, TocNode, TocView};
 pub use tree::{DocumentTree, RetrievalIndex};
 pub use understanding::{
     CURRENT_SCHEMA_VERSION, Concept, Document, DocumentInfo, DocumentMeta, IngestInput,
+    RawNodeInput,
 };
 
 // Re-export agent acceleration types

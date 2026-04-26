@@ -41,6 +41,17 @@ pub enum CompilerInput {
         /// Document format.
         format: DocumentFormat,
     },
+
+    /// Pre-parsed raw nodes — skip ParsePass entirely.
+    ///
+    /// Use this when the caller (e.g., a Python plugin) has already parsed
+    /// the document into structured nodes. The pipeline starts from BuildPass.
+    PreParsed {
+        /// Pre-parsed raw nodes.
+        nodes: Vec<crate::parse::RawNode>,
+        /// Document name.
+        name: String,
+    },
 }
 
 impl CompilerInput {
@@ -93,6 +104,19 @@ impl CompilerInput {
         }
     }
 
+    /// Create input from pre-parsed raw nodes.
+    ///
+    /// Skips ParsePass — the pipeline starts from BuildPass.
+    pub fn pre_parsed(
+        nodes: Vec<crate::parse::RawNode>,
+        name: impl Into<String>,
+    ) -> Self {
+        Self::PreParsed {
+            nodes,
+            name: name.into(),
+        }
+    }
+
     /// Check if this is a file input.
     pub fn is_file(&self) -> bool {
         matches!(self, Self::File(_))
@@ -108,12 +132,18 @@ impl CompilerInput {
         matches!(self, Self::Bytes { .. })
     }
 
+    /// Check if this is a pre-parsed input.
+    pub fn is_pre_parsed(&self) -> bool {
+        matches!(self, Self::PreParsed { .. })
+    }
+
     /// Get the format if available.
     pub fn format(&self) -> Option<DocumentFormat> {
         match self {
             Self::File(_) => None,
-            Self::Content { format, .. } => Some(*format),
-            Self::Bytes { format, .. } => Some(*format),
+            Self::Content { format, .. } => Some(format.clone()),
+            Self::Bytes { format, .. } => Some(format.clone()),
+            Self::PreParsed { .. } => None,
         }
     }
 }
@@ -327,13 +357,19 @@ impl CompileContext {
         use sha2::{Digest, Sha256};
         let hash = match input {
             CompilerInput::File(path) => {
-                // Hash the file path as proxy — actual content may not be readable yet
-                // (the parse stage reads it). This is sufficient for checkpoint invalidation
-                // since a different file path implies different content.
                 Sha256::digest(path.to_string_lossy().as_bytes())
             }
             CompilerInput::Content { content, .. } => Sha256::digest(content.as_bytes()),
             CompilerInput::Bytes { data, .. } => Sha256::digest(data),
+            CompilerInput::PreParsed { nodes, .. } => {
+                // Hash a summary of the nodes: count + first titles
+                let mut hasher = Sha256::new();
+                hasher.update(nodes.len().to_le_bytes());
+                for node in nodes.iter().take(10) {
+                    hasher.update(node.title.as_bytes());
+                }
+                hasher.finalize()
+            }
         };
         format!("{:x}", hash)
     }

@@ -18,7 +18,7 @@ use vectorless_utils::fingerprint::{Fingerprint, Fingerprinter};
 use std::path::PathBuf;
 
 /// Index mode for document processing.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SourceFormat {
     /// Auto-detect format from file extension.
     Auto,
@@ -26,6 +26,8 @@ pub enum SourceFormat {
     Markdown,
     /// Force PDF format.
     Pdf,
+    /// Custom format resolved via [`ParserRegistry`](crate::parse::ParserRegistry).
+    Custom(String),
 }
 
 impl Default for SourceFormat {

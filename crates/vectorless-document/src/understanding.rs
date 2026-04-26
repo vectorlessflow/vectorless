@@ -353,6 +353,30 @@ pub enum IngestInput {
         /// Document content.
         content: String,
     },
+    /// Compile from pre-parsed raw nodes.
+    ///
+    /// Skips the parse stage — the pipeline starts from tree building.
+    /// Use this when the caller has already structured the document.
+    PreParsed {
+        /// Document name.
+        name: String,
+        /// Pre-parsed raw nodes.
+        nodes: Vec<RawNodeInput>,
+    },
+}
+
+/// A raw node for [`IngestInput::PreParsed`].
+///
+/// Simplified version of `RawNode` for external API — callers construct
+/// these from Python or other languages.
+#[derive(Debug, Clone)]
+pub struct RawNodeInput {
+    /// Node title (e.g., section heading or file path).
+    pub title: String,
+    /// Node content.
+    pub content: String,
+    /// Hierarchy level (0 = root, 1 = top-level, etc.).
+    pub level: usize,
 }
 
 #[cfg(test)]

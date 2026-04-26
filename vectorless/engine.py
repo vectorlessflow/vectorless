@@ -143,6 +143,7 @@ class Engine:
         directory: str | Path | None = None,
         content: str | None = None,
         bytes_data: bytes | None = None,
+        raw_nodes: list[dict[str, Any]] | None = None,
         format: str = "markdown",
         name: str | None = None,
         mode: str = "default",
@@ -151,14 +152,27 @@ class Engine:
         """Compile a document from various sources.
 
         Exactly one source must be provided: path, paths, directory,
-        content, or bytes_data.
+        content, bytes_data, or raw_nodes.
+
+        ``raw_nodes`` accepts a list of dicts with keys ``title``, ``content``,
+        and ``level``.  This skips the parse stage — the pipeline starts from
+        tree building.  Use this when the caller has already structured the
+        document (e.g., a Python plugin that parses code files).
+
+        Example::
+
+            nodes = [
+                {"title": "src/main.py", "content": file_content, "level": 1},
+                {"title": "src/lib.rs", "content": file_content, "level": 1},
+            ]
+            result = await engine.compile(raw_nodes=nodes, name="my-project")
         """
         sources_provided = sum(
-            x is not None for x in [path, paths, directory, content, bytes_data]
+            x is not None for x in [path, paths, directory, content, bytes_data, raw_nodes]
         )
         if sources_provided != 1:
             raise ValueError(
-                "Provide exactly one source: path, paths, directory, content, or bytes_data"
+                "Provide exactly one source: path, paths, directory, content, bytes_data, or raw_nodes"
             )
 
         # For single file, delegate to Rust compile
@@ -221,6 +235,16 @@ class Engine:
             finally:
                 import os
                 os.unlink(tmp_path)
+
+        if raw_nodes is not None:
+            doc_name = name or "pre-parsed"
+            # Convert dicts to (title, content, level) tuples
+            node_tuples = [
+                (n.get("title", ""), n.get("content", ""), n.get("level", 1))
+                for n in raw_nodes
+            ]
+            doc_info = await self._rust.compile_raw(doc_name, node_tuples)
+            return CompileOutput.from_doc_info(doc_info)
 
         raise ValueError("No source provided")
 

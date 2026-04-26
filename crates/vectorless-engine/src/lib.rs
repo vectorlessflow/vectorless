@@ -48,7 +48,7 @@ pub use vectorless_document::DocumentFormat;
 
 pub use vectorless_config::Config;
 pub use vectorless_document::DocumentTree;
-pub use vectorless_document::{Concept, DocumentInfo, IngestInput};
+pub use vectorless_document::{Concept, DocumentInfo, IngestInput, RawNodeInput};
 pub use vectorless_error::{Error, Result};
 pub use vectorless_events::{CompileEvent, EventEmitter, WorkspaceEvent};
 pub use vectorless_graph::{
