@@ -24,7 +24,7 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
     "Topic :: Text Processing :: Linguistic",
 ]
-keywords = ["document", "understanding", "ai", "reasoning", "document-intelligence"]
+keywords = ["rag", "vectorless", "reasoning", "document-intelligence", "agentic-rag", "no-embeddings"]
 
 dependencies = [
     "pydantic>=2.0",
@@ -62,8 +62,9 @@ vectorless = "vectorless.cli.main:app"
 
 [project.urls]
 Homepage = "https://vectorless.dev"
+Documentation = "https://vectorless.dev/docs/getting-started"
 Repository = "https://github.com/vectorlessflow/vectorless"
-Documentation = "https://www.vectorless.dev/docs/intro"
+"Bug Tracker" = "https://github.com/vectorlessflow/vectorless/issues"
 
 [tool.maturin]
 python-source = "."
