@@ -374,15 +374,21 @@ impl Engine {
     /// The engine builds a full understanding including tree, navigation index,
     /// reasoning index, summary, and key concepts.
     pub async fn compile(&self, input: IngestInput) -> Result<vectorless_document::DocumentInfo> {
+        // Handle PreParsed input directly — bypass CompileSource routing
+        if let IngestInput::PreParsed { nodes, name } = &input {
+            return self.compile_pre_parsed(nodes, name).await;
+        }
+
         let ctx = match &input {
             IngestInput::Path(path) => CompileInput::from_path(path),
             IngestInput::Bytes { data, format, .. } => {
-                CompileInput::from_bytes(data.clone(), *format)
+                CompileInput::from_bytes(data.clone(), format.clone())
             }
             IngestInput::Text { content, .. } => CompileInput::from_content(
                 content,
                 vectorless_compiler::parse::DocumentFormat::Markdown,
             ),
+            IngestInput::PreParsed { .. } => unreachable!(),
         };
 
         let result = self.compile_pipeline(ctx).await?;
@@ -400,6 +406,75 @@ impl Engine {
             .ok_or_else(|| Error::Config("Document not found after compile".into()))?;
 
         Ok(doc.info())
+    }
+
+    /// Compile from pre-parsed raw nodes — skips the parse stage.
+    async fn compile_pre_parsed(
+        &self,
+        nodes: &[vectorless_document::RawNodeInput],
+        name: &str,
+    ) -> Result<vectorless_document::DocumentInfo> {
+        use vectorless_compiler::parse::RawNode;
+        use vectorless_document::{CURRENT_SCHEMA_VERSION, DocumentMeta};
+
+        let raw_nodes: Vec<RawNode> = nodes
+            .iter()
+            .map(|n| {
+                RawNode::new(&n.title)
+                    .with_content(&n.content)
+                    .with_level(n.level)
+            })
+            .collect();
+
+        let compiler_input =
+            vectorless_compiler::CompilerInput::pre_parsed(raw_nodes, name.to_string());
+        let pipeline_options = vectorless_compiler::PipelineOptions::default();
+
+        let mut executor = (self.indexer.executor_factory)();
+        let result = executor.execute(compiler_input, pipeline_options).await?;
+
+        let tree = result
+            .tree
+            .ok_or_else(|| Error::Parse("Document tree not generated".to_string()))?;
+
+        let node_count = tree.node_count();
+        let doc_id = uuid::Uuid::new_v4().to_string();
+
+        let mut meta = DocumentMeta::new();
+        meta.update_processing_stats(
+            node_count,
+            result.metrics.total_tokens_generated,
+            result.metrics.total_time_ms(),
+        );
+
+        let doc = vectorless_document::Document {
+            schema_version: CURRENT_SCHEMA_VERSION,
+            doc_id: doc_id.clone(),
+            name: name.to_string(),
+            format: "pre-parsed".to_string(),
+            source_path: None,
+            tree,
+            nav_index: result.navigation_index.unwrap_or_default(),
+            reasoning_index: result.reasoning_index.unwrap_or_default(),
+            summary: result.description.unwrap_or_default(),
+            concepts: result.concepts,
+            query_routes: result.query_routes,
+            chain_index: result.chain_index,
+            content_overlap: result.content_overlap,
+            evidence_scores: result.evidence_scores,
+            page_count: result.page_count,
+            meta: Some(meta),
+        };
+
+        self.workspace.save(&doc).await?;
+
+        let loaded = self
+            .workspace
+            .load(&doc_id)
+            .await?
+            .ok_or_else(|| Error::Config("Document not found after compile".into()))?;
+
+        Ok(loaded.info())
     }
 
     /// Remove a document from the workspace.
@@ -509,8 +584,8 @@ impl Engine {
                 .indexer
                 .detect_format_from_path(path)
                 .unwrap_or(vectorless_compiler::parse::DocumentFormat::Markdown),
-            CompileSource::Content { format, .. } => *format,
-            CompileSource::Bytes { format, .. } => *format,
+            CompileSource::Content { format, .. } => format.clone(),
+            CompileSource::Bytes { format, .. } => format.clone(),
         };
 
         let checkpoint_dir = Some(self.config.storage.checkpoint_dir.clone());
@@ -519,6 +594,9 @@ impl Engine {
             mode: match format {
                 vectorless_compiler::parse::DocumentFormat::Markdown => SourceFormat::Markdown,
                 vectorless_compiler::parse::DocumentFormat::Pdf => SourceFormat::Pdf,
+                vectorless_compiler::parse::DocumentFormat::Custom(ref name) => {
+                    SourceFormat::Custom(name.clone())
+                }
             },
             generate_ids: options.generate_ids,
             summary_strategy: if options.generate_summaries {

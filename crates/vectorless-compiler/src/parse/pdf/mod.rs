@@ -27,3 +27,49 @@ mod types;
 
 pub use parser::PdfParser;
 pub use types::PdfPage;
+
+use crate::parse::{ParseResult, Parser};
+use std::path::Path;
+use vectorless_error::Result;
+use vectorless_llm::LlmClient;
+
+/// [`Parser`] trait adapter for [`PdfParser`].
+pub struct PdfParserAdapter {
+    inner: PdfParser,
+}
+
+impl PdfParserAdapter {
+    /// Create a PDF parser adapter, optionally with LLM support.
+    pub fn new(llm_client: Option<LlmClient>) -> Self {
+        let inner = match llm_client {
+            Some(client) => PdfParser::with_llm_client(client),
+            None => PdfParser::new(),
+        };
+        Self { inner }
+    }
+}
+
+#[async_trait::async_trait]
+impl Parser for PdfParserAdapter {
+    fn name(&self) -> &str {
+        "pdf"
+    }
+
+    fn extensions(&self) -> &[&str] {
+        &["pdf"]
+    }
+
+    async fn parse_content(&self, _content: &str) -> Result<ParseResult> {
+        Err(vectorless_error::Error::Parse(
+            "PDF requires bytes, not string content".into(),
+        ))
+    }
+
+    async fn parse_file(&self, path: &Path) -> Result<ParseResult> {
+        self.inner.parse_file(path).await
+    }
+
+    async fn parse_bytes(&self, data: &[u8]) -> Result<ParseResult> {
+        self.inner.parse_bytes_async(data, None).await
+    }
+}

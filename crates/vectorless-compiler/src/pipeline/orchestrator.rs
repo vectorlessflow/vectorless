@@ -576,7 +576,7 @@ impl PipelineOrchestrator {
                         clone.existing_tree = ctx.existing_tree.clone();
                         clone.doc_id = ctx.doc_id.clone();
                         clone.name = ctx.name.clone();
-                        clone.format = ctx.format;
+                        clone.format = ctx.format.clone();
                         clone.source_path = ctx.source_path.clone();
                         if let Some(ref llm) = ctx.llm_client {
                             clone.llm_client = Some(llm.clone());

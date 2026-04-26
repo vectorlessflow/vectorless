@@ -42,7 +42,7 @@ use vectorless_events::{CompileEvent, EventEmitter};
 /// true parallel document compilation without mutex contention.
 pub(crate) struct IndexerClient {
     /// Factory for creating pipeline executors (one per compile operation).
-    executor_factory: Arc<dyn Fn() -> PipelineExecutor + Send + Sync>,
+    pub(crate) executor_factory: Arc<dyn Fn() -> PipelineExecutor + Send + Sync>,
 
     /// Event emitter.
     events: EventEmitter,
@@ -92,11 +92,11 @@ impl IndexerClient {
         match source {
             CompileSource::Path(path) => self.index_from_path(path, name, pipeline_options).await,
             CompileSource::Content { data, format } => {
-                self.index_from_content(data, *format, name, pipeline_options)
+                self.index_from_content(data, format.clone(), name, pipeline_options)
                     .await
             }
             CompileSource::Bytes { data, format } => {
-                self.index_from_bytes(data, *format, name, pipeline_options)
+                self.index_from_bytes(data, format.clone(), name, pipeline_options)
                     .await
             }
         }
@@ -152,7 +152,7 @@ impl IndexerClient {
         pipeline_options: PipelineOptions,
     ) -> Result<Document> {
         // Validate content before compiling
-        let validation = vectorless_utils::validate_content(content, format);
+        let validation = vectorless_utils::validate_content(content, format.clone());
         if !validation.valid {
             return Err(Error::Parse(
                 validation
@@ -184,7 +184,7 @@ impl IndexerClient {
         pipeline_options: PipelineOptions,
     ) -> Result<Document> {
         // Validate bytes before compiling
-        let validation = vectorless_utils::validate_bytes(bytes, format);
+        let validation = vectorless_utils::validate_bytes(bytes, format.clone());
         if !validation.valid {
             return Err(Error::Parse(
                 validation
@@ -229,8 +229,9 @@ impl IndexerClient {
         });
 
         let doc_id = Uuid::new_v4().to_string();
-        self.events
-            .emit_compile(CompileEvent::FormatDetected { format });
+        self.events.emit_compile(CompileEvent::FormatDetected {
+            format: format.clone(),
+        });
 
         info!("Compiling {:?} document: {}", format, source_label);
 
@@ -325,6 +326,7 @@ impl IndexerClient {
             SourceFormat::Markdown => DocumentFormat::Markdown,
             SourceFormat::Pdf => DocumentFormat::Pdf,
             SourceFormat::Auto => DocumentFormat::Markdown,
+            SourceFormat::Custom(name) => DocumentFormat::Custom(name.clone()),
         }
     }
 

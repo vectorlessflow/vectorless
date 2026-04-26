@@ -8,7 +8,7 @@ use pyo3_async_runtimes::tokio::future_into_py;
 use std::sync::Arc;
 use tokio::runtime::Runtime;
 
-use ::vectorless_engine::{Engine, EngineBuilder, IngestInput};
+use ::vectorless_engine::{Engine, EngineBuilder, IngestInput, RawNodeInput};
 
 use super::document::{PyDocument, PyDocumentInfo};
 use super::error::VectorlessError;
@@ -21,6 +21,27 @@ use super::metrics::PyMetricsReport;
 // ============================================================
 
 async fn run_compile(engine: Arc<Engine>, input: IngestInput) -> PyResult<PyDocumentInfo> {
+    let doc = engine.compile(input).await.map_err(to_py_err)?;
+    Ok(PyDocumentInfo { inner: doc })
+}
+
+async fn run_compile_raw(
+    engine: Arc<Engine>,
+    name: String,
+    nodes: Vec<(String, String, usize)>,
+) -> PyResult<PyDocumentInfo> {
+    let raw_nodes: Vec<RawNodeInput> = nodes
+        .into_iter()
+        .map(|(title, content, level)| RawNodeInput {
+            title,
+            content,
+            level,
+        })
+        .collect();
+    let input = IngestInput::PreParsed {
+        name,
+        nodes: raw_nodes,
+    };
     let doc = engine.compile(input).await.map_err(to_py_err)?;
     Ok(PyDocumentInfo { inner: doc })
 }
@@ -177,6 +198,30 @@ impl PyEngine {
         let engine = Arc::clone(&self.inner);
         let input = IngestInput::Path(path.into());
         future_into_py(py, run_compile(engine, input))
+    }
+
+    /// Compile from pre-parsed raw nodes — skips the parse stage.
+    ///
+    /// Use this when you have already structured the document into nodes
+    /// (e.g., a Python plugin that parses code files into sections).
+    ///
+    /// Args:
+    ///     name: Document name.
+    ///     raw_nodes: List of (title, content, level) tuples.
+    ///
+    /// Returns:
+    ///     DocumentInfo with doc_id, summary, structure, concepts.
+    ///
+    /// Raises:
+    ///     VectorlessError: If compilation fails.
+    fn compile_raw<'py>(
+        &self,
+        py: Python<'py>,
+        name: String,
+        raw_nodes: Vec<(String, String, usize)>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let engine = Arc::clone(&self.inner);
+        future_into_py(py, run_compile_raw(engine, name, raw_nodes))
     }
 
     /// Remove a document by ID.

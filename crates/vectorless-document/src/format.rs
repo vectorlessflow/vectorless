@@ -6,12 +6,35 @@
 use serde::{Deserialize, Serialize};
 
 /// Supported document formats.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum DocumentFormat {
     /// Markdown files (.md, .markdown)
     Markdown,
     /// PDF files (.pdf)
     Pdf,
+    /// Custom format identified by name (for parser plugins).
+    Custom(String),
+}
+
+impl Serialize for DocumentFormat {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        match self {
+            Self::Markdown => serializer.serialize_str("markdown"),
+            Self::Pdf => serializer.serialize_str("pdf"),
+            Self::Custom(name) => serializer.serialize_str(name),
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for DocumentFormat {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let s = String::deserialize(deserializer)?;
+        match s.as_str() {
+            "markdown" => Ok(Self::Markdown),
+            "pdf" => Ok(Self::Pdf),
+            _ => Ok(Self::Custom(s)),
+        }
+    }
 }
 
 impl DocumentFormat {
@@ -25,10 +48,11 @@ impl DocumentFormat {
     }
 
     /// Get the file extension for this format.
-    pub fn extension(&self) -> &'static str {
+    pub fn extension(&self) -> &str {
         match self {
             Self::Markdown => "md",
             Self::Pdf => "pdf",
+            Self::Custom(name) => name,
         }
     }
 

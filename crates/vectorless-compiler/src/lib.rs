@@ -67,6 +67,9 @@ pub mod summary;
 // Re-export main types from pipeline
 pub use pipeline::{CompileMetrics, CompileResult, CompilerInput, PipelineExecutor};
 
+// Re-export parser plugin types
+pub use parse::{Parser, ParserRegistry};
+
 // Re-export config types
 pub use config::{PipelineOptions, SourceFormat, ThinningConfig};
 pub use vectorless_document::ReasoningIndexConfig;

@@ -13,6 +13,15 @@ const sidebars: SidebarsConfig = {
     'architecture',
     {
       type: 'category',
+      label: 'vectorless-code',
+      items: [
+        'vectorless-code/getting-started',
+        'vectorless-code/ast-parsing',
+        'vectorless-code/incremental',
+      ],
+    },
+    {
+      type: 'category',
       label: 'Vectorless Compiler',
       items: [
         'compiler/overview',
