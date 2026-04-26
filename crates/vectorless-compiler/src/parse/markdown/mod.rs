@@ -27,7 +27,7 @@ mod parser;
 
 pub use parser::MarkdownParser;
 
-use crate::parse::{Parser, ParseResult};
+use crate::parse::{ParseResult, Parser};
 use std::path::Path;
 use vectorless_error::Result;
 
@@ -39,15 +39,21 @@ pub struct MarkdownParserAdapter {
 impl MarkdownParserAdapter {
     /// Create a new Markdown parser adapter.
     pub fn new() -> Self {
-        Self { inner: MarkdownParser::new() }
+        Self {
+            inner: MarkdownParser::new(),
+        }
     }
 }
 
 #[async_trait::async_trait]
 impl Parser for MarkdownParserAdapter {
-    fn name(&self) -> &str { "markdown" }
+    fn name(&self) -> &str {
+        "markdown"
+    }
 
-    fn extensions(&self) -> &[&str] { &["md", "markdown"] }
+    fn extensions(&self) -> &[&str] {
+        &["md", "markdown"]
+    }
 
     async fn parse_content(&self, content: &str) -> Result<ParseResult> {
         self.inner.parse(content).await
@@ -58,9 +64,8 @@ impl Parser for MarkdownParserAdapter {
     }
 
     async fn parse_bytes(&self, data: &[u8]) -> Result<ParseResult> {
-        let content = std::str::from_utf8(data).map_err(|e| {
-            vectorless_error::Error::Parse(format!("Invalid UTF-8: {}", e))
-        })?;
+        let content = std::str::from_utf8(data)
+            .map_err(|e| vectorless_error::Error::Parse(format!("Invalid UTF-8: {}", e)))?;
         self.inner.parse(content).await
     }
 }

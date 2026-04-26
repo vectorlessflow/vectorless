@@ -174,9 +174,10 @@ pub async fn parse_content(
         DocumentFormat::Pdf => Err(vectorless_error::Error::Parse(
             "PDF requires bytes, not string content".to_string(),
         )),
-        _ => Err(vectorless_error::Error::Parse(
-            format!("Unsupported format for content parsing: {:?}", format),
-        )),
+        _ => Err(vectorless_error::Error::Parse(format!(
+            "Unsupported format for content parsing: {:?}",
+            format
+        ))),
     }
 }
 
@@ -198,9 +199,10 @@ pub async fn parse_file(
             };
             parser.parse_file(path).await
         }
-        _ => Err(vectorless_error::Error::Parse(
-            format!("Unsupported format for file parsing: {:?}", format),
-        )),
+        _ => Err(vectorless_error::Error::Parse(format!(
+            "Unsupported format for file parsing: {:?}",
+            format
+        ))),
     }
 }
 
@@ -225,9 +227,10 @@ pub async fn parse_bytes(
             };
             parser.parse_bytes_async(bytes, None).await
         }
-        _ => Err(vectorless_error::Error::Parse(
-            format!("Unsupported format for bytes parsing: {:?}", format),
-        )),
+        _ => Err(vectorless_error::Error::Parse(format!(
+            "Unsupported format for bytes parsing: {:?}",
+            format
+        ))),
     }
 }
 

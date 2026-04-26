@@ -1,0 +1,156 @@
+---
+sidebar_position: 2
+---
+
+# AST-Level Code Parsing
+
+vectorless-code uses tree-sitter to parse source code into semantic nodes — functions, classes, methods — instead of treating files as flat text. This produces a structured tree that the vectorless engine can navigate with precision.
+
+## Why AST Parsing Matters
+
+Naive code indexing treats each file as a single block of text. When you ask "how does authentication work", the engine has to scan entire files hoping to find relevant snippets. There's no understanding of what a function is, what a class contains, or how methods relate to their parent class.
+
+AST parsing changes this. The engine receives a tree like:
+
+```
+src/auth.py
+├── class_definition: AuthService
+│   ├── function_definition: __init__
+│   ├── function_definition: login
+│   └── function_definition: verify_token
+└── function_definition: create_session
+```
+
+Now the Orchestrator can `cd` into `AuthService`, `ls` to see its methods, and `cat login` to read the authentication logic. This is the same navigation model that works for documents — applied to code with structural precision.
+
+## How It Works
+
+### Per-Language Node Types
+
+Each language defines which AST node types represent semantic units worth indexing:
+
+```python
+SPLITTABLE_NODE_TYPES = {
+    "python": {
+        "function_definition",
+        "class_definition",
+        "decorated_definition",
+        "async_function_definition",
+    },
+    "rust": {
+        "function_item",
+        "impl_item",
+        "struct_item",
+        "enum_item",
+        "trait_item",
+        "mod_item",
+    },
+    # ... 12 languages total
+}
+```
+
+tree-sitter parses the source into an AST, then vectorless-code walks the tree extracting nodes whose type matches this set. Each extracted node becomes a `CodeNode` with:
+
+- `name` — the symbol name (e.g. `AuthService`, `login`)
+- `node_type` — the AST node type (e.g. `class_definition`)
+- `content` — the full source code of the node
+- `children` — nested definitions (methods inside classes)
+
+### Nested Extraction
+
+When a class is extracted, its methods are extracted as children — not as separate top-level nodes. This preserves the parent-child relationship:
+
+```python
+# Input: Python source
+class AuthService:
+    def login(self, username, password):
+        token = self._create_token(username)
+        return token
+
+    def verify_token(self, token):
+        return self._decode(token)
+
+# Output: CodeNode tree
+CodeNode(
+    name="AuthService",
+    node_type="class_definition",
+    children=[
+        CodeNode(name="login", node_type="function_definition", ...),
+        CodeNode(name="verify_token", node_type="function_definition", ...),
+    ],
+)
+```
+
+This nesting produces the raw_node tree that vectorless builds into a navigable Document. Level 1 = file, Level 2 = top-level definitions, Level 3 = nested definitions.
+
+### Name Extraction
+
+The parser extracts human-readable names from AST nodes by finding identifier children:
+
+- `function_definition` → looks for `identifier` child → `"login"`
+- `class_definition` → looks for `identifier` child → `"AuthService"`
+- `decorated_definition` → recurses into the decorated node
+- `impl_item` → looks for `type_identifier` → `"impl UserService"`
+
+## Fallback Strategy
+
+When tree-sitter is unavailable (unsupported language, grammar not installed, parse error), vectorless-code falls back to line-based splitting — splitting on blank-line boundaries into blocks. This produces flat `block` nodes without nesting, but still provides functional indexing.
+
+The fallback is transparent. The same `parse_file()` function handles both paths:
+
+```python
+def parse_file(file_path, content, language):
+    parser = _get_parser(language)  # cached per language
+    if parser is None:
+        return fallback_split(content, file_path, language)
+
+    nodes = ast_extract(parser, content, language)
+    if not nodes:
+        return fallback_split(content, file_path, language)
+    return nodes
+```
+
+## Performance Considerations
+
+### Parser Caching
+
+tree-sitter `Parser` instances are cached per language. A 10,000-file Python project creates exactly one Python parser, reused for every `.py` file. This avoids repeated memory allocation and grammar loading.
+
+### Single-Pass File Scan
+
+Files are read exactly once. A single pass computes:
+
+1. File hash (SHA-256 for incremental detection)
+2. Stats (line count, byte size, language distribution)
+3. Content for parsing
+
+### Incremental Parsing
+
+On subsequent compiles, only files whose hash changed are re-parsed. Unchanged files reuse cached raw_nodes directly. See [Incremental Compilation](./incremental.mdx).
+
+## Adding a New Language
+
+To add support for a new language:
+
+1. Add the language to `SPLITTABLE_NODE_TYPES` with the relevant AST node types
+2. Add the tree-sitter grammar package to `pyproject.toml` dependencies
+3. Add the package mapping to `_LANG_PACKAGE_MAP`
+
+For example, to add Zig:
+
+```python
+# ast_parser.py
+SPLITTABLE_NODE_TYPES["zig"] = {
+    "FunctionDecl",
+    "TopLevelDecl",
+}
+
+_LANG_PACKAGE_MAP["zig"] = "tree_sitter_zig"
+```
+
+```toml
+# pyproject.toml
+"tree-sitter-zig>=0.21",
+```
+
+No other code changes needed. The parser, cache, fallback, and incremental systems handle it automatically.

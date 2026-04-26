@@ -419,7 +419,11 @@ impl Engine {
 
         let raw_nodes: Vec<RawNode> = nodes
             .iter()
-            .map(|n| RawNode::new(&n.title).with_content(&n.content).with_level(n.level))
+            .map(|n| {
+                RawNode::new(&n.title)
+                    .with_content(&n.content)
+                    .with_level(n.level)
+            })
             .collect();
 
         let compiler_input =
@@ -437,7 +441,11 @@ impl Engine {
         let doc_id = uuid::Uuid::new_v4().to_string();
 
         let mut meta = DocumentMeta::new();
-        meta.update_processing_stats(node_count, result.metrics.total_tokens_generated, result.metrics.total_time_ms());
+        meta.update_processing_stats(
+            node_count,
+            result.metrics.total_tokens_generated,
+            result.metrics.total_time_ms(),
+        );
 
         let doc = vectorless_document::Document {
             schema_version: CURRENT_SCHEMA_VERSION,

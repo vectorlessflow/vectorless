@@ -107,10 +107,7 @@ impl CompilerInput {
     /// Create input from pre-parsed raw nodes.
     ///
     /// Skips ParsePass — the pipeline starts from BuildPass.
-    pub fn pre_parsed(
-        nodes: Vec<crate::parse::RawNode>,
-        name: impl Into<String>,
-    ) -> Self {
+    pub fn pre_parsed(nodes: Vec<crate::parse::RawNode>, name: impl Into<String>) -> Self {
         Self::PreParsed {
             nodes,
             name: name.into(),
@@ -356,9 +353,7 @@ impl CompileContext {
     fn compute_source_hash(input: &CompilerInput) -> String {
         use sha2::{Digest, Sha256};
         let hash = match input {
-            CompilerInput::File(path) => {
-                Sha256::digest(path.to_string_lossy().as_bytes())
-            }
+            CompilerInput::File(path) => Sha256::digest(path.to_string_lossy().as_bytes()),
             CompilerInput::Content { content, .. } => Sha256::digest(content.as_bytes()),
             CompilerInput::Bytes { data, .. } => Sha256::digest(data),
             CompilerInput::PreParsed { nodes, .. } => {

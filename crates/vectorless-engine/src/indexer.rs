@@ -229,8 +229,9 @@ impl IndexerClient {
         });
 
         let doc_id = Uuid::new_v4().to_string();
-        self.events
-            .emit_compile(CompileEvent::FormatDetected { format: format.clone() });
+        self.events.emit_compile(CompileEvent::FormatDetected {
+            format: format.clone(),
+        });
 
         info!("Compiling {:?} document: {}", format, source_label);
 

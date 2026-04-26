@@ -116,10 +116,9 @@ impl CompilePass for ParsePass {
                 "node_count".to_string(),
                 serde_json::json!(ctx.raw_nodes.len()),
             );
-            stage_result.metadata.insert(
-                "source".to_string(),
-                serde_json::json!("pre-parsed"),
-            );
+            stage_result
+                .metadata
+                .insert("source".to_string(), serde_json::json!("pre-parsed"));
             return Ok(stage_result);
         }
 

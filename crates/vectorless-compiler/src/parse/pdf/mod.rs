@@ -28,7 +28,7 @@ mod types;
 pub use parser::PdfParser;
 pub use types::PdfPage;
 
-use crate::parse::{Parser, ParseResult};
+use crate::parse::{ParseResult, Parser};
 use std::path::Path;
 use vectorless_error::Result;
 use vectorless_llm::LlmClient;
@@ -51,9 +51,13 @@ impl PdfParserAdapter {
 
 #[async_trait::async_trait]
 impl Parser for PdfParserAdapter {
-    fn name(&self) -> &str { "pdf" }
+    fn name(&self) -> &str {
+        "pdf"
+    }
 
-    fn extensions(&self) -> &[&str] { &["pdf"] }
+    fn extensions(&self) -> &[&str] {
+        &["pdf"]
+    }
 
     async fn parse_content(&self, _content: &str) -> Result<ParseResult> {
         Err(vectorless_error::Error::Parse(

@@ -1,0 +1,111 @@
+---
+sidebar_position: 1
+---
+
+# Getting Started
+
+**vectorless-code** is a code-aware search engine built on vectorless. It indexes your codebase using tree-sitter AST parsing and answers questions via LLM reasoning — no embeddings, no vector database.
+
+## Install
+
+```bash
+pip install vectorless-code
+```
+
+## Quick Start
+
+```bash
+# Initialize in your project directory
+cd your-project
+vcc init
+```
+
+This creates `.vectorless_code/settings.yml` with default include/exclude patterns.
+
+```bash
+# Compile the codebase
+vcc compile
+```
+
+This discovers code files, parses them with tree-sitter into semantic nodes (functions, classes, methods), and feeds them to the vectorless engine.
+
+```bash
+# Ask a question
+vcc ask "where is the authentication logic"
+```
+
+## How It Works
+
+```
+vcc compile
+  │
+  ├─ File Discovery (gitignore-aware)
+  │
+  ├─ AST Parsing (tree-sitter)
+  │   ├─ Per-language SPLITTABLE_NODE_TYPES
+  │   └─ Fallback: line-based splitting
+  │
+  ├─ Incremental (SHA-256 per-file hashing)
+  │   ├─ Changed/new → re-parse
+  │   └─ Unchanged → reuse cached raw_nodes
+  │
+  └─ Engine.compile(raw_nodes=...)
+       └─ BuildPass → EnrichPass → ReasoningPass → NavigationPass
+```
+
+## Configuration
+
+### Project Settings
+
+`.vectorless_code/settings.yml`:
+
+```yaml
+# File patterns to include
+include_patterns:
+  - "**/*.py"
+  - "**/*.rs"
+  - "**/*.ts"
+
+# File patterns to exclude
+exclude_patterns:
+  - "**/.*"
+  - "**/node_modules"
+  - "**/target"
+```
+
+### API Key
+
+```bash
+# Option 1: Environment variable
+export VECTORLESS_API_KEY="sk-..."
+
+# Option 2: Prompted during vcc init
+vcc init
+```
+
+### Supported Languages
+
+| Language | Extensions | AST Parsing |
+|----------|-----------|-------------|
+| Python | `.py`, `.pyi` | Yes |
+| Rust | `.rs` | Yes |
+| Go | `.go` | Yes |
+| JavaScript | `.js`, `.jsx`, `.mjs` | Yes |
+| TypeScript | `.ts`, `.tsx` | Yes |
+| Java | `.java` | Yes |
+| C | `.c`, `.h` | Yes |
+| C++ | `.cpp`, `.hpp`, `.cc` | Yes |
+| Ruby | `.rb` | Yes |
+| Swift | `.swift` | Yes |
+| Kotlin | `.kt` | Yes |
+| Scala | `.scala` | Yes |
+| Others | `.sql`, `.sh`, `.lua`, etc. | Fallback (line-based) |
+
+## CLI Reference
+
+| Command | Description |
+|---------|-------------|
+| `vcc init` | Initialize project settings |
+| `vcc compile` | Compile codebase into searchable index |
+| `vcc ask <question>` | Ask a question about the codebase |
+| `vcc status` | Show compilation status and statistics |

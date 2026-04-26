@@ -1,0 +1,109 @@
+---
+sidebar_position: 3
+---
+
+# Incremental Compilation
+
+For large codebases, re-parsing every file on each compile is wasteful. vectorless-code uses per-file SHA-256 hashing and a two-tier cache to skip unchanged files entirely.
+
+## The Problem
+
+A mid-size project might have 5,000 source files. Full AST parsing at ~10ms per file takes ~50 seconds. But in a typical edit session, maybe 5 files changed. Re-parsing all 5,000 files to index 5 changes is 1,000x more work than necessary.
+
+## Solution: Hash + Cache
+
+```
+First compile:
+  scan all files → hash → parse all → build raw_nodes → compile
+
+Subsequent compiles:
+  scan all files → hash → detect changes
+    ├─ 5 changed files → parse → build raw_nodes (fresh)
+    └─ 4,995 unchanged files → reuse cached raw_nodes
+  merge → compile
+```
+
+### Hash Computation
+
+Each file's content is SHA-256 hashed during the scan pass. The hash is deterministic — same content always produces the same hash, regardless of file metadata.
+
+```python
+current_hashes[rel] = hashlib.sha256(content.encode("utf-8")).hexdigest()
+```
+
+### Change Detection
+
+Comparing current hashes against the previous compile's hashes produces three sets:
+
+- **Changed or new** — hash differs or file didn't exist before → needs parsing
+- **Unchanged** — hash matches → reuse cached raw_nodes
+- **Removed** — file existed before but not now → exclude from output
+
+### Two-Tier Cache
+
+The cache stores two files in `.vectorless_code/cache/`:
+
+| File | Content | Purpose |
+|------|---------|---------|
+| `hashes.json` | `{rel_path: sha256_hex}` | Change detection |
+| `parsed_nodes.json` | `{rel_path: [raw_nodes]}` | Skip re-parsing unchanged files |
+
+On incremental compile:
+
+1. Load `hashes.json` and `parsed_nodes.json` from previous run
+2. Scan all files, compute current hashes
+3. For changed files: parse with AST, build fresh raw_nodes
+4. For unchanged files: load raw_nodes from `parsed_nodes.json`
+5. Merge, sort by path, compile
+
+## Performance Impact
+
+| Scenario | Files | Changed | Parsing Time |
+|----------|-------|---------|-------------|
+| First compile | 5,000 | 5,000 | ~50s |
+| Incremental (5 changes) | 5,000 | 5 | ~0.5s |
+| Incremental (0 changes) | 5,000 | 0 | ~0s |
+
+The scan pass (read + hash) still touches every file, but this is I/O-bound and fast compared to AST parsing. The expensive work — tree-sitter parsing — only runs on changed files.
+
+## Cache Consistency
+
+### When is cache invalidated?
+
+- **File content changes** — hash mismatch triggers re-parse
+- **File removed** — excluded from merged output
+- **New file added** — no previous hash, treated as changed
+
+### What about parser upgrades?
+
+If `SPLITTABLE_NODE_TYPES` changes (e.g., adding a new node type to extract), the cache still contains raw_nodes built with the old configuration. To force a full re-parse:
+
+```bash
+rm -rf .vectorless_code/cache/
+vcc compile
+```
+
+### When does cache get saved?
+
+Cache is written after a successful compile. If the compile fails (e.g., API error), the cache is not updated — the next compile will retry with the same cache state.
+
+## Implementation Detail
+
+The scan-then-parse separation is intentional:
+
+```python
+# Step 1: Scan (cheap, I/O-bound)
+current_hashes, stats, content_map = _scan_files(files, root)
+
+# Step 2: Parse only changed files (expensive, CPU-bound)
+changed = [p for p, h in current_hashes.items() if prev_hashes.get(p) != h]
+for rel in changed:
+    nodes = parse_file(rel, content_map[rel], lang)
+    fresh_raw[rel] = build_raw_nodes([(rel, lang, nodes)])
+
+# Step 3: Merge with cached
+for rel in unchanged:
+    merged_raw[rel] = cached_raw[rel]
+```
+
+`content_map` holds file contents in memory during the scan pass and is released (`del content_map`) after parsing completes. For large codebases, this means peak memory is roughly the sum of all file contents — acceptable because file contents are strings that Python can manage efficiently, and they're freed before the compile step which has its own memory profile.

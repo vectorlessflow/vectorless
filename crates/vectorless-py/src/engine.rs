@@ -32,9 +32,16 @@ async fn run_compile_raw(
 ) -> PyResult<PyDocumentInfo> {
     let raw_nodes: Vec<RawNodeInput> = nodes
         .into_iter()
-        .map(|(title, content, level)| RawNodeInput { title, content, level })
+        .map(|(title, content, level)| RawNodeInput {
+            title,
+            content,
+            level,
+        })
         .collect();
-    let input = IngestInput::PreParsed { name, nodes: raw_nodes };
+    let input = IngestInput::PreParsed {
+        name,
+        nodes: raw_nodes,
+    };
     let doc = engine.compile(input).await.map_err(to_py_err)?;
     Ok(PyDocumentInfo { inner: doc })
 }
