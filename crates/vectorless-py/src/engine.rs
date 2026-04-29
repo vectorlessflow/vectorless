@@ -3,8 +3,8 @@
 
 //! Engine Python wrapper — async compile/forget/list_documents.
 
-use pyo3::prelude::*;
 use pyo3::exceptions::PyRuntimeError;
+use pyo3::prelude::*;
 use pyo3_async_runtimes::tokio::future_into_py;
 use std::sync::Arc;
 use tokio::runtime::Runtime;
@@ -73,7 +73,9 @@ async fn run_load_document(engine: Arc<Engine>, doc_id: String) -> PyResult<PyDo
             let navigator = vectorless_primitives::DocumentNavigator::new(d);
             Ok(PyDocument::from_navigator(navigator))
         }
-        None => Err(PyRuntimeError::new_err(format!("Document not found: {doc_id}"))),
+        None => Err(PyRuntimeError::new_err(format!(
+            "Document not found: {doc_id}"
+        ))),
     }
 }
 
@@ -166,9 +168,8 @@ impl PyEngine {
             builder.build().await
         });
 
-        let engine = engine.map_err(|e| {
-            PyRuntimeError::new_err(format!("Failed to create engine: {}", e))
-        })?;
+        let engine = engine
+            .map_err(|e| PyRuntimeError::new_err(format!("Failed to create engine: {}", e)))?;
 
         Ok(Self {
             inner: Arc::new(engine),
