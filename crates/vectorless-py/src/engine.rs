@@ -4,6 +4,7 @@
 //! Engine Python wrapper — async compile/forget/list_documents.
 
 use pyo3::prelude::*;
+use pyo3::exceptions::PyRuntimeError;
 use pyo3_async_runtimes::tokio::future_into_py;
 use std::sync::Arc;
 use tokio::runtime::Runtime;
@@ -11,7 +12,6 @@ use tokio::runtime::Runtime;
 use ::vectorless_engine::{Engine, EngineBuilder, IngestInput, RawNodeInput};
 
 use super::document::{PyDocument, PyDocumentInfo};
-use super::error::VectorlessError;
 use super::error::to_py_err;
 use super::graph::PyDocumentGraph;
 use super::metrics::PyMetricsReport;
@@ -73,10 +73,7 @@ async fn run_load_document(engine: Arc<Engine>, doc_id: String) -> PyResult<PyDo
             let navigator = vectorless_primitives::DocumentNavigator::new(d);
             Ok(PyDocument::from_navigator(navigator))
         }
-        None => Err(PyErr::from(VectorlessError::new(
-            format!("Document not found: {doc_id}"),
-            "navigation",
-        ))),
+        None => Err(PyRuntimeError::new_err(format!("Document not found: {doc_id}"))),
     }
 }
 
@@ -144,10 +141,7 @@ impl PyEngine {
         config: Option<PyRef<super::config::PyConfig>>,
     ) -> PyResult<Self> {
         let rt = Runtime::new().map_err(|e| {
-            PyErr::from(VectorlessError::new(
-                format!("Failed to create tokio runtime: {}", e),
-                "config",
-            ))
+            PyRuntimeError::new_err(format!("Failed to create tokio runtime: {}", e))
         })?;
 
         let rust_config = config.map(|c| c.inner.clone());
@@ -173,10 +167,7 @@ impl PyEngine {
         });
 
         let engine = engine.map_err(|e| {
-            PyErr::from(VectorlessError::new(
-                format!("Failed to create engine: {}", e),
-                "config",
-            ))
+            PyRuntimeError::new_err(format!("Failed to create engine: {}", e))
         })?;
 
         Ok(Self {

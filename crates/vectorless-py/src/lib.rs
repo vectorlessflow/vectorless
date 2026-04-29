@@ -20,7 +20,6 @@ use document::{
     PyTocEntry, PyTopicEntry, PyWordCount,
 };
 use engine::PyEngine;
-use error::VectorlessError;
 use graph::{PyDocumentGraph, PyDocumentGraphNode, PyEdgeEvidence, PyGraphEdge, PyWeightedKeyword};
 use metrics::{PyLlmMetricsReport, PyMetricsReport, PyRetrievalMetricsReport};
 
@@ -39,7 +38,7 @@ fn _vectorless(m: &Bound<'_, PyModule>) -> PyResult<()> {
             .init();
     });
 
-    m.add_class::<VectorlessError>()?;
+    // VectorlessError is just PyRuntimeError, no need to register
     m.add_class::<PyEngine>()?;
     m.add_class::<PyDocument>()?;
     m.add_class::<PyDocumentInfo>()?;

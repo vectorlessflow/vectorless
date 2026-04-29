@@ -1,5 +1,11 @@
 # HISTORY
 
+## 0.1.15 (2026-04-29)
+
+- **Python bindings**: enabled PyO3 abi3 for cross-version compatibility
+- Single wheel now supports Python 3.11, 3.12, and 3.13+
+- Simplified exception type using `create_exception!` macro
+
 ## 0.1.14 (2026-04-29)
 
 - Homepage redesign with product showcase and improved UX
