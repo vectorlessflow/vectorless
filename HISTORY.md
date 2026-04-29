@@ -1,5 +1,24 @@
 # HISTORY
 
+## 0.1.14 (2026-04-29)
+
+- Homepage redesign with product showcase and improved UX
+- Chain command and intent-based navigation hints for agent navigation
+- Parser registry and custom format support
+- Standardized import order and code formatting across modules
+- Updated package metadata and documentation links
+- Single-document reasoning challenge example with README
+- Removed redundant documentation links and unused test
+
+## 0.1.13 (2026-04-26)
+
+- **Compiler terminology**: renamed `index` to `compile`, `reindexing` to `recompilation`
+- Removed unused incremental updater and summary strategies
+- Moved keyword extraction from scoring to utils module
+- Added tracing and logging for better debugging experience
+- Workspace restructuring: renamed `vectorless-core` to `crates`
+- Removed commented-out strategy layer crates from Cargo.toml
+
 ## 0.1.12 (2026-04-24)
 
 - **Compile pipeline**: renamed index pipeline to compile pipeline with passes-based architecture
