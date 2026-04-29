@@ -7,12 +7,6 @@ Compiles a realistic technical document and asks questions that require
 the engine to navigate deep into the tree, cross-reference details
 across distant sections, and extract information buried in nested
 structures — not surface-level keyword matches.
-
-```bash
-LLM_API_KEY=sk-xxx LLM_MODEL=gpt-4o \
-  LLM_ENDPOINT=https://api.openai.com/v1 \
-  python examples/single_doc_challenge.py
-```
 """
 
 import asyncio
