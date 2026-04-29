@@ -5,8 +5,8 @@
 
 use std::sync::Arc;
 
-use pyo3::prelude::*;
 use pyo3::exceptions::PyRuntimeError;
+use pyo3::prelude::*;
 use pyo3_async_runtimes::tokio::future_into_py;
 use tokio::sync::Mutex;
 
@@ -380,9 +380,7 @@ impl PyDocument {
         future_into_py(py, async move {
             let num = node_id
                 .strip_prefix('n')
-                .ok_or_else(|| {
-                    PyRuntimeError::new_err("NodeId must start with 'n'")
-                })?
+                .ok_or_else(|| PyRuntimeError::new_err("NodeId must start with 'n'"))?
                 .parse::<u64>()
                 .map_err(|_| PyRuntimeError::new_err("Invalid NodeId"))?;
             let nav = nav.lock().await;
@@ -401,9 +399,7 @@ impl PyDocument {
         future_into_py(py, async move {
             let num = node_id
                 .strip_prefix('n')
-                .ok_or_else(|| {
-                    PyRuntimeError::new_err("NodeId must start with 'n'")
-                })?
+                .ok_or_else(|| PyRuntimeError::new_err("NodeId must start with 'n'"))?
                 .parse::<u64>()
                 .map_err(|_| PyRuntimeError::new_err("Invalid NodeId"))?;
             let nav = nav.lock().await;
@@ -422,9 +418,7 @@ impl PyDocument {
         future_into_py(py, async move {
             let num = node_id
                 .strip_prefix('n')
-                .ok_or_else(|| {
-                    PyRuntimeError::new_err("NodeId must start with 'n'")
-                })?
+                .ok_or_else(|| PyRuntimeError::new_err("NodeId must start with 'n'"))?
                 .parse::<u64>()
                 .map_err(|_| PyRuntimeError::new_err("Invalid NodeId"))?;
             let nav = nav.lock().await;
