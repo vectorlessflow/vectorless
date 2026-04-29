@@ -6,6 +6,7 @@
 use std::sync::Arc;
 
 use pyo3::prelude::*;
+use pyo3::exceptions::PyRuntimeError;
 use pyo3_async_runtimes::tokio::future_into_py;
 use tokio::sync::Mutex;
 
@@ -14,8 +15,6 @@ use vectorless_primitives::{
     EvidenceScoreInfo, FindResult, MatchResult, NodeInfo, NodeStats, OverlapInfo, RouteTargetInfo,
     SectionCardInfo, SectionSummaryInfo, SimilarResult, TocEntry, TopicEntryInfo, WordCount,
 };
-
-use super::error::VectorlessError;
 
 // =========================================================================
 // PyDocumentInfo (existing — returned by compile)
@@ -126,7 +125,7 @@ fn id_to_str(id: u64) -> String {
 }
 
 fn to_py_err(e: impl std::fmt::Display) -> PyErr {
-    PyErr::from(VectorlessError::new(e.to_string(), "navigation"))
+    PyRuntimeError::new_err(e.to_string())
 }
 
 #[pymethods]
@@ -382,10 +381,10 @@ impl PyDocument {
             let num = node_id
                 .strip_prefix('n')
                 .ok_or_else(|| {
-                    VectorlessError::new("NodeId must start with 'n'".to_string(), "navigation")
+                    PyRuntimeError::new_err("NodeId must start with 'n'")
                 })?
                 .parse::<u64>()
-                .map_err(|_| VectorlessError::new("Invalid NodeId".to_string(), "navigation"))?;
+                .map_err(|_| PyRuntimeError::new_err("Invalid NodeId"))?;
             let nav = nav.lock().await;
             Ok(nav
                 .chains_for(num)
@@ -403,10 +402,10 @@ impl PyDocument {
             let num = node_id
                 .strip_prefix('n')
                 .ok_or_else(|| {
-                    VectorlessError::new("NodeId must start with 'n'".to_string(), "navigation")
+                    PyRuntimeError::new_err("NodeId must start with 'n'")
                 })?
                 .parse::<u64>()
-                .map_err(|_| VectorlessError::new("Invalid NodeId".to_string(), "navigation"))?;
+                .map_err(|_| PyRuntimeError::new_err("Invalid NodeId"))?;
             let nav = nav.lock().await;
             Ok(nav
                 .overlaps_for(num)
@@ -424,10 +423,10 @@ impl PyDocument {
             let num = node_id
                 .strip_prefix('n')
                 .ok_or_else(|| {
-                    VectorlessError::new("NodeId must start with 'n'".to_string(), "navigation")
+                    PyRuntimeError::new_err("NodeId must start with 'n'")
                 })?
                 .parse::<u64>()
-                .map_err(|_| VectorlessError::new("Invalid NodeId".to_string(), "navigation"))?;
+                .map_err(|_| PyRuntimeError::new_err("Invalid NodeId"))?;
             let nav = nav.lock().await;
             Ok(nav.evidence_score_for(num).await.map(PyEvidenceScore::from))
         })
