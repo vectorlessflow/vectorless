@@ -5,9 +5,8 @@
 
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
-use pyo3_async_runtimes::tokio::future_into_py;
+use pyo3_async_runtimes::tokio::{future_into_py, get_runtime};
 use std::sync::Arc;
-use tokio::runtime::Runtime;
 
 use ::vectorless_engine::{Engine, EngineBuilder, IngestInput, RawNodeInput};
 
@@ -142,9 +141,7 @@ impl PyEngine {
         endpoint: Option<String>,
         config: Option<PyRef<super::config::PyConfig>>,
     ) -> PyResult<Self> {
-        let rt = Runtime::new().map_err(|e| {
-            PyRuntimeError::new_err(format!("Failed to create tokio runtime: {}", e))
-        })?;
+        let rt = get_runtime();
 
         let rust_config = config.map(|c| c.inner.clone());
 
