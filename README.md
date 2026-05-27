@@ -4,7 +4,7 @@
 [![PyPI Downloads](https://static.pepy.tech/badge/vectorless/month)](https://pepy.tech/projects/vectorless)
 
 <p>Knowing by reasoning, not vectors.</p>
-<p>Deep and reliable. Vectorless plays nicely with your documents. Ask questions in plain language; get answers by reasoning with Vectorless.</p>
+<p>Deep and reliable. Vectorless plays nicely with your documents. Ask questions in plain language; Get answers by reasoning with Vectorless.</p>
 
 ## Installation
 
@@ -29,6 +29,13 @@ async def main():
 
 asyncio.run(main())
 ```
+
+## How it works
+
+Vectorless splits document understanding into two layers:
+
+- **Compile (Rust).** Documents are parsed and run through a multi-pass compile pipeline (`crates/vectorless-compiler/`) that builds a navigable tree plus retrieval-acceleration artifacts (concepts, navigation hints, reasoning chains, overlap maps). The output is a `DocumentNavigator` (`crates/vectorless-primitives/`) exposed to Python over PyO3.
+- **Ask (Python).** Queries are answered by an LLM-driven reasoning loop (`vectorless/ask/`) — a Query Plan, an Orchestrator running Worker agents that issue shell-style navigation commands (`ls`, `cd`, `cat`, `grep`, `find`, `head`, `wc`, `chain`) against the compiled document, evidence evaluation with replanning, and a rerank+synthesize step.
 
 ## Help
 

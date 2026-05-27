@@ -1,102 +1,131 @@
 # CLAUDE.md
 
-Vectorless is a Document Understanding Engine for AI written in Rust.
-
-## Principles
-
-- **Reason, don't vector.** Retrieval is a reasoning act, not a similarity computation.
-- **Model fails, we fail.** No heuristic fallbacks, no silent degradation.
-- **No thought, no answer.** Only reasoned output counts as an answer.
+Vectorless is a Document Understanding Engine for AI. Compile pipeline is written in Rust; the reasoning/retrieval (ask) layer is written in Python on top of LLM tool-use. See `README.md` for the project's public positioning.
 
 ## Project Structure
 
-Cargo workspace with 17 fine-grained Rust crates + pure Python SDK:
+Cargo workspace with **13 Rust crates** (compile pipeline + bindings) plus a **Python package** (`vectorless/`) that owns the ask/reasoning loop.
+
+### Rust crates (`crates/`)
 
 ```
 crates/
-├── vectorless-error/       # Error types (Result, Error enum)
-├── vectorless-document/    # Document types (Document, Tree, NavigationIndex, ReasoningIndex)
-├── vectorless-config/      # Configuration hub (aggregates all config types)
-├── vectorless-utils/       # Utilities (fingerprinting, token counting, validation)
-├── vectorless-scoring/     # Scoring (BM25, keyword extraction)
-├── vectorless-graph/       # Cross-document relationship graph
-├── vectorless-events/      # Event system for progress monitoring
-├── vectorless-metrics/     # Metrics collection and reporting
-├── vectorless-llm/         # LLM client (pool, memo/cache, throttle, fallback)
-├── vectorless-storage/     # Persistence (Workspace, LRU cache, file/memory backends)
-├── vectorless-query/       # Query understanding (intent classification, rewrite)
-├── vectorless-compiler/    # Compile pipeline (15-pass, checkpointing, incremental update)
-├── vectorless-agent/       # Retrieval execution (Worker navigation + Orchestrator fusion)
-├── vectorless-retrieval/   # Retrieval dispatch layer (dispatcher, cache, streaming)
-├── vectorless-rerank/      # Result reranking (dedup, BM25 scoring, fusion)
-├── vectorless-engine/      # Facade (Engine, EngineBuilder) — re-exports public API
-└── vectorless-py/          # PyO3 bindings (compiled into Python native module)
+├── vectorless-error/        # Error types (Result, Error enum)
+├── vectorless-document/     # Document types (Document, Tree, NavigationIndex)
+├── vectorless-config/       # Configuration hub (aggregates all config types)
+├── vectorless-utils/        # Utilities (fingerprinting, token counting, keyword extraction)
+├── vectorless-graph/        # Cross-document relationship graph
+├── vectorless-events/       # Event system for progress monitoring
+├── vectorless-metrics/      # Metrics collection and reporting
+├── vectorless-llm/          # LLM client (pool, memo/cache, throttle)
+├── vectorless-storage/      # Persistence (Workspace, LRU cache, file backend)
+├── vectorless-compiler/     # Compile pipeline (frontend → transform → analysis → backend)
+├── vectorless-primitives/   # Document navigation primitives (DocumentNavigator)
+├── vectorless-engine/       # Facade (Engine, EngineBuilder) — re-exports public API
+└── vectorless-py/           # PyO3 bindings (compiled into Python native module)
 ```
 
-- `vectorless/` - Pure Python SDK (high-level wrappers, CLI, config loading, integrations)
-- `examples/` - Python examples (primary, for Python ecosystem)
-- `docs/` - Docusaurus documentation site
-
-### Dependency Layers
+### Python package (`vectorless/`)
 
 ```
-Layer 0:  error · document · utils · scoring          (no workspace deps)
-Layer 1:  graph · events · config · metrics            (depends on Layer 0)
-Layer 2:  llm · storage                                 (depends on Layer 0–1)
-Layer 3:  query                                         (depends on Layer 0–2)
-Layer 4:  compiler · agent                               (depends on Layer 0–3)
-Layer 5:  retrieval · rerank                            (depends on Layer 0–4)
-Layer 6:  engine (facade) · vectorless-py (bindings)    (depends on all)
+vectorless/
+├── ask/                     # Reasoning loop (Orchestrator + Workers + supervisor)
+│   ├── orchestrator.py      # Top-level coordinator
+│   ├── worker/              # Navigation Worker (ls/cd/cat/grep/find/head/wc/chain)
+│   ├── dispatcher.py        # Worker dispatch
+│   ├── plan.py              # Replanning
+│   ├── understand.py        # Query understanding → QueryPlan
+│   ├── reasoning/           # Reasoning chain analyzer
+│   ├── evaluate.py          # Evidence sufficiency evaluation
+│   ├── verify/              # Answer verifier
+│   ├── blackboard.py        # Shared evidence state
+│   └── prompts.py
+├── rerank/                  # Dedup + quality scoring + synthesis
+├── _internal/               # Wrappers around the PyO3 native module
+├── engine.py                # User-facing Engine class
+└── cli/                     # CLI entrypoint
+```
+
+- `examples/` — Python examples (primary, for Python ecosystem)
+- `docs/` — Docusaurus documentation site
+
+### Dependency Layers (Rust)
+
+```
+Layer 0:  error · document                              (no workspace deps)
+Layer 1:  utils · graph · events                        (depends on Layer 0)
+Layer 2:  config · metrics                              (depends on Layer 0–1)
+Layer 3:  llm · storage · primitives                    (depends on Layer 0–2)
+Layer 4:  compiler                                      (depends on Layer 0–3)
+Layer 5:  engine                                        (depends on Layer 0–4)
+Layer 6:  vectorless-py (PyO3 bindings)                 (depends on engine + primitives)
+```
+
+### Compile Pipeline
+
+The compiler runs documents through four stage groups (`crates/vectorless-compiler/src/passes/`):
+
+```
+frontend  (parse, build)              ← raw bytes → DocumentTree
+transform (split, enrich)             ← chunking + section enrichment
+analysis  (validate, enhance)         ← structure checks + augmentation
+backend   (route, concept, navigation,
+           chain, overlap, reasoning,
+           score, optimize, verify)   ← retrieval-acceleration artifacts
 ```
 
 ### Compilation Isolation
 
 改一个模块只重编译该 crate + 上游 facade：
-- 改 `agent` → agent, retrieval, rerank, engine, py 重编译；index/llm/storage 不动
-- 改 `llm` → llm 及其上层重编译；index/agent/stage 不重编译
+- 改 `llm` → llm, compiler, engine, py 重编译；storage/graph 不动
+- 改 `compiler` → compiler, engine, py 重编译；llm/storage 不动
 - 改 `document` → 全部重编译（核心类型，预期行为）
+- 改 Python `ask/`、`rerank/` → 不触发 Rust 重编译
 
-### Retrieval Call Flow
+### Ask Call Flow
 
 ```
-Engine.ask()
-  → retrieval/dispatcher
-    → query/understand() → QueryPlan (LLM intent + concepts + strategy)
-    → Orchestrator (always, single or multi-doc)
-      → analyze(QueryPlan) → dispatch plan
-      → supervisor loop:
-          dispatch Workers → evaluate() →
-          if insufficient → replan() → loop
-      → rerank/ (dedup → BM25 score → synthesis/fusion)
+engine.ask()  [Python]
+  → ask/understand()        → QueryPlan (intent + concepts + strategy, LLM-driven)
+  → ask/orchestrator
+      ├── analyze(QueryPlan)            → dispatch plan
+      └── supervisor loop:
+          dispatch Workers (Rust DocumentNavigator via PyO3)
+            → execute nav commands (ls/cd/cat/grep/find/head/wc/chain)
+          → evaluate(blackboard)        → sufficiency check
+          → if insufficient: plan.replan() → loop
+      → rerank/ (dedup → quality score → synthesize)
+  → verify/                  → final answer check
 ```
+
+The Rust side exposes `DocumentNavigator` (`vectorless-primitives`) and compiled artifacts; the Python orchestrator drives the LLM reasoning loop and calls back into Rust for fast document operations.
 
 ## Build Commands
 
 ```bash
-# Build (workspace)
+# Rust workspace
 cargo build          # Build all crates
-cargo test           # Run tests (488 tests across all crates)
+cargo test           # Run workspace tests
 cargo clippy         # Lint
 cargo fmt            # Format code
 
-# Build specific crate (fast — only that crate + dependents)
-cargo build -p vectorless-agent
+# Build a single crate (fast — only that crate + dependents)
+cargo build -p vectorless-compiler
 
-# Python SDK
-pip install -e .     # Install in editable mode (from project root, uses maturin)
+# Python SDK (uses maturin under the hood)
+pip install -e .     # Editable install from project root
 
 # Docs site
 cd docs
-pnpm install         # Install dependencies
-pnpm build           # Build static site
+pnpm install
+pnpm build
 ```
 
 ## Code Conventions
 
-- Follow Rust standard naming (snake_case for functions/variables, PascalCase for types)
-- Use `thiserror` for error handling
-- Use `tracing` for logging
-- Public APIs require documentation comments
+- Rust: snake_case for functions/variables, PascalCase for types; `thiserror` for errors; `tracing` for logging; doc comments on public APIs.
+- Python: type-annotated; `pydantic` for models; `litellm` + `instructor` for LLM calls.
+- Commit messages: `type(scope): description` (Conventional Commits).
 
 ---
 
@@ -170,9 +199,10 @@ When uncertain whether an operation is safe, **default to asking user confirmati
 
 ## Common Development Workflow
 
-1. **Adding features**: Implement in the appropriate `crates/vectorless-*/` crate, add tests
-2. **Fixing bugs**: Add failing test case first, fix and ensure tests pass
-3. **Adding crates**: New modules get their own crate under `crates/`, add to workspace Cargo.toml
-4. **Python bindings**: Update `crates/vectorless-py/src/lib.rs` (PyO3) when Rust APIs change
-5. **Python SDK**: Update `vectorless/` when API surface changes
-6. **Committing code**: Use semantic commit messages, format: `type(scope): description`
+1. **Adding compile-pipeline features**: implement under `crates/vectorless-compiler/src/passes/` (frontend/transform/analysis/backend), add tests in the same module.
+2. **Adding reasoning/ask features**: implement under `vectorless/ask/` (Python), add prompts in `prompts.py`.
+3. **Fixing bugs**: write a failing test first, then fix.
+4. **Adding crates**: new modules get their own crate under `crates/`, registered in workspace `Cargo.toml`.
+5. **Python bindings**: update `crates/vectorless-py/src/lib.rs` (PyO3) when Rust APIs cross the FFI boundary; corresponding wrappers go in `vectorless/_internal/`.
+6. **Python SDK surface**: update `vectorless/engine.py` and related modules when the public API changes.
+7. **Committing**: use Conventional Commits — `feat(compiler): ...`, `fix(ask): ...`, `refactor(engine): ...`.
