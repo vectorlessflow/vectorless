@@ -82,12 +82,12 @@ Every backend pass attaches an optional acceleration field to the `Document`. Th
 
 ### Compilation Isolation
 
-改一个模块只重编译该 crate + 上游 facade：
+Changing one module only recompiles that crate + upstream facades:
 
-- 改 `llm` → llm, compiler, engine, py 重编译；storage/graph 不动
-- 改 `compiler` → compiler, engine, py 重编译；llm/storage 不动
-- 改 `document` 或 `primitives` → 全部重编译（标准变更，预期行为）
-- 改 Python `ask/` / `rerank/` → 不触发 Rust 重编译
+- Change `llm` → recompiles llm, compiler, engine, py; storage/graph untouched
+- Change `compiler` → recompiles compiler, engine, py; llm/storage untouched
+- Change `document` or `primitives` → recompiles everything (standard surface change, expected)
+- Change Python `ask/` / `rerank/` → no Rust recompile
 
 ### How third parties consume the standard
 
