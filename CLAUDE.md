@@ -1,102 +1,137 @@
 # CLAUDE.md
 
-Vectorless is a Document Understanding Engine for AI written in Rust.
+Vectorless is a Document Understanding Engine for AI. See `README.md` for the project's public positioning.
 
-## Principles
+## Positioning: a standard + a reference implementation
 
-- **Reason, don't vector.** Retrieval is a reasoning act, not a similarity computation.
-- **Model fails, we fail.** No heuristic fallbacks, no silent degradation.
-- **No thought, no answer.** Only reasoned output counts as an answer.
+Vectorless is split into two layers that are **independently consumable**:
+
+1. **The Rust side defines two standards.**
+   - **The IR** (`vectorless-document::Document`) — a single, versioned, serializable artifact that fully represents an understood document. Produced by the compile pipeline; can be persisted, transmitted, and re-loaded.
+   - **The navigation primitives** (`vectorless-primitives::DocumentNavigator`) — a fixed set of shell-style operations (`ls`, `cd`, `cat`, `grep`, `find`, `head`, `wc`, `pwd`, `back`, plus inspection and reasoning-index queries) that any agent uses to read an IR. Exposed to Python via PyO3.
+
+   These two together are **the standard**. Anything that produces a valid `Document` and consumes it via `DocumentNavigator` is a conforming participant.
+
+2. **The Python side is one reference agent implementation.** `vectorless/ask/` is a multi-agent system (Orchestrator + Workers + reasoning + verify) that ships in the box. It is the default `engine.ask()` — but it is not load-bearing for the standard. Developers can:
+   - Replace `ask/` entirely with their own Python agent built on the same `Document` / `DocumentNavigator` primitives.
+   - Skip Python and consume the IR + primitives directly from Rust.
+   - Produce IRs from a non-Rust source (the IR is serializable JSON) and feed them into any compatible navigator/agent.
+
+The reason this matters: the value of Vectorless is the **IR + primitives contract**, not the bundled reasoning loop. The reference implementation is a courtesy, not a lock-in.
 
 ## Project Structure
 
-Cargo workspace with 17 fine-grained Rust crates + pure Python SDK:
+```
+crates/                       Rust — the standard
+├── vectorless-error/         Result / Error
+├── vectorless-document/      ★ IR types: Document, DocumentTree, NavigationIndex, ReasoningIndex,
+│                              QueryRoutingTable, ChainIndex, ContentOverlapMap, EvidenceScoreMap
+├── vectorless-primitives/    ★ DocumentNavigator (the navigation API)
+├── vectorless-config/        Configuration hub
+├── vectorless-utils/         Fingerprinting, token counting, keyword extraction
+├── vectorless-graph/         Cross-document relationship graph
+├── vectorless-events/        Progress event bus
+├── vectorless-metrics/       Metrics collection
+├── vectorless-llm/           LLM client (pool, throttle, retry)
+├── vectorless-storage/       Workspace persistence (file backend, LRU cache)
+├── vectorless-compiler/      Compile pipeline (frontend → transform → analysis → backend)
+├── vectorless-engine/        Facade: Engine, EngineBuilder, compile() / forget() / load_document()
+└── vectorless-py/            PyO3 bindings → produces the `_vectorless` native module
+
+vectorless/                   Python — the reference multi-agent implementation
+├── ask/                      Orchestrator + Worker + reasoning + verify (the default agent)
+├── rerank/                   Dedup + quality scoring + synthesis
+├── _internal/                Wrappers around the PyO3 native module
+├── engine.py                 User-facing Engine (delegates compile to Rust, ask to ask/)
+└── cli/                      CLI entrypoint
+
+examples/                     Python examples
+docs/                         Docusaurus documentation site
+```
+
+The two crates marked ★ are the **standard surface**. Everything else in `crates/` is implementation detail that produces and serves that standard.
+
+### Dependency Layers (Rust)
 
 ```
-crates/
-├── vectorless-error/       # Error types (Result, Error enum)
-├── vectorless-document/    # Document types (Document, Tree, NavigationIndex, ReasoningIndex)
-├── vectorless-config/      # Configuration hub (aggregates all config types)
-├── vectorless-utils/       # Utilities (fingerprinting, token counting, validation)
-├── vectorless-scoring/     # Scoring (BM25, keyword extraction)
-├── vectorless-graph/       # Cross-document relationship graph
-├── vectorless-events/      # Event system for progress monitoring
-├── vectorless-metrics/     # Metrics collection and reporting
-├── vectorless-llm/         # LLM client (pool, memo/cache, throttle, fallback)
-├── vectorless-storage/     # Persistence (Workspace, LRU cache, file/memory backends)
-├── vectorless-query/       # Query understanding (intent classification, rewrite)
-├── vectorless-compiler/    # Compile pipeline (15-pass, checkpointing, incremental update)
-├── vectorless-agent/       # Retrieval execution (Worker navigation + Orchestrator fusion)
-├── vectorless-retrieval/   # Retrieval dispatch layer (dispatcher, cache, streaming)
-├── vectorless-rerank/      # Result reranking (dedup, BM25 scoring, fusion)
-├── vectorless-engine/      # Facade (Engine, EngineBuilder) — re-exports public API
-└── vectorless-py/          # PyO3 bindings (compiled into Python native module)
+Layer 0:  error · document                              (no workspace deps)
+Layer 1:  utils · graph · events                        (depends on Layer 0)
+Layer 2:  config · metrics                              (depends on Layer 0–1)
+Layer 3:  llm · storage · primitives                    (depends on Layer 0–2)
+Layer 4:  compiler                                      (depends on Layer 0–3)
+Layer 5:  engine                                        (depends on Layer 0–4)
+Layer 6:  vectorless-py (PyO3 bindings)                 (engine + document + primitives)
 ```
 
-- `vectorless/` - Pure Python SDK (high-level wrappers, CLI, config loading, integrations)
-- `examples/` - Python examples (primary, for Python ecosystem)
-- `docs/` - Docusaurus documentation site
+`vectorless-document` and `vectorless-primitives` have no dependency on `compiler`, `llm`, `storage`, or `engine` — by design, so the standard can be consumed without dragging in the pipeline.
 
-### Dependency Layers
+### Compile Pipeline (the IR producer)
+
+The compiler runs documents through four stage groups (`crates/vectorless-compiler/src/passes/`):
 
 ```
-Layer 0:  error · document · utils · scoring          (no workspace deps)
-Layer 1:  graph · events · config · metrics            (depends on Layer 0)
-Layer 2:  llm · storage                                 (depends on Layer 0–1)
-Layer 3:  query                                         (depends on Layer 0–2)
-Layer 4:  compiler · agent                               (depends on Layer 0–3)
-Layer 5:  retrieval · rerank                            (depends on Layer 0–4)
-Layer 6:  engine (facade) · vectorless-py (bindings)    (depends on all)
+frontend  (parse, build)              raw bytes → DocumentTree
+transform (split, enrich)             chunking + section enrichment
+analysis  (validate, enhance)         structure checks + augmentation
+backend   (route, concept, navigation,
+           chain, overlap, reasoning,
+           score, optimize, verify)   retrieval-acceleration artifacts
 ```
+
+Every backend pass attaches an optional acceleration field to the `Document`. The IR is valid without any of them (an agent can navigate using only `tree` + `nav_index`); the acceleration fields exist so well-equipped agents can short-circuit reasoning.
 
 ### Compilation Isolation
 
-改一个模块只重编译该 crate + 上游 facade：
-- 改 `agent` → agent, retrieval, rerank, engine, py 重编译；index/llm/storage 不动
-- 改 `llm` → llm 及其上层重编译；index/agent/stage 不重编译
-- 改 `document` → 全部重编译（核心类型，预期行为）
+Changing one module only recompiles that crate + upstream facades:
 
-### Retrieval Call Flow
+- Change `llm` → recompiles llm, compiler, engine, py; storage/graph untouched
+- Change `compiler` → recompiles compiler, engine, py; llm/storage untouched
+- Change `document` or `primitives` → recompiles everything (standard surface change, expected)
+- Change Python `ask/` / `rerank/` → no Rust recompile
 
+### How third parties consume the standard
+
+Anyone building a custom agent works against two types and two crates only:
+
+```rust
+use vectorless_document::Document;             // The IR
+use vectorless_primitives::DocumentNavigator;  // The primitive API
+
+let doc: Document = load_ir_from_disk()?;       // produced by our compiler, or yours
+let mut nav = DocumentNavigator::new(doc);
+let children = nav.ls().await;
+nav.cd("n3").await?;
+let body = nav.cat(None).await?;
 ```
-Engine.ask()
-  → retrieval/dispatcher
-    → query/understand() → QueryPlan (LLM intent + concepts + strategy)
-    → Orchestrator (always, single or multi-doc)
-      → analyze(QueryPlan) → dispatch plan
-      → supervisor loop:
-          dispatch Workers → evaluate() →
-          if insufficient → replan() → loop
-      → rerank/ (dedup → BM25 score → synthesis/fusion)
-```
+
+The Python reference agent (`vectorless/ask/`) is just one consumer of this same surface.
 
 ## Build Commands
 
 ```bash
-# Build (workspace)
+# Rust workspace
 cargo build          # Build all crates
-cargo test           # Run tests (488 tests across all crates)
+cargo test           # Run workspace tests
 cargo clippy         # Lint
-cargo fmt            # Format code
+cargo fmt            # Format
 
-# Build specific crate (fast — only that crate + dependents)
-cargo build -p vectorless-agent
+# Build a single crate (fast — only that crate + dependents)
+cargo build -p vectorless-compiler
 
-# Python SDK
-pip install -e .     # Install in editable mode (from project root, uses maturin)
+# Python SDK (uses maturin under the hood)
+pip install -e .     # Editable install from project root
 
 # Docs site
 cd docs
-pnpm install         # Install dependencies
-pnpm build           # Build static site
+pnpm install
+pnpm build
 ```
 
 ## Code Conventions
 
-- Follow Rust standard naming (snake_case for functions/variables, PascalCase for types)
-- Use `thiserror` for error handling
-- Use `tracing` for logging
-- Public APIs require documentation comments
+- Rust: snake_case for functions/variables, PascalCase for types; `thiserror` for errors; `tracing` for logging; doc comments on public APIs.
+- Python: type-annotated; `pydantic` for models; `litellm` + `instructor` for LLM calls.
+- Commit messages: `type(scope): description` (Conventional Commits).
 
 ---
 
@@ -170,9 +205,10 @@ When uncertain whether an operation is safe, **default to asking user confirmati
 
 ## Common Development Workflow
 
-1. **Adding features**: Implement in the appropriate `crates/vectorless-*/` crate, add tests
-2. **Fixing bugs**: Add failing test case first, fix and ensure tests pass
-3. **Adding crates**: New modules get their own crate under `crates/`, add to workspace Cargo.toml
-4. **Python bindings**: Update `crates/vectorless-py/src/lib.rs` (PyO3) when Rust APIs change
-5. **Python SDK**: Update `vectorless/` when API surface changes
-6. **Committing code**: Use semantic commit messages, format: `type(scope): description`
+1. **Touching the standard (`document` or `primitives`):** this is a public-contract change. Bump `CURRENT_SCHEMA_VERSION` if the IR's serialized shape changes; document the new field; add tests.
+2. **Adding a compile-pipeline pass:** implement under `crates/vectorless-compiler/src/passes/` (frontend/transform/analysis/backend), wire into the pipeline, attach output to `Document` as an `Option<...>` so old IRs still load.
+3. **Adding/modifying reasoning behavior:** implement under `vectorless/ask/` (Python). This is reference-implementation work, not standard work — it should not require Rust changes.
+4. **Fixing bugs:** write a failing test first, then fix.
+5. **Adding crates:** new modules get their own crate under `crates/`, registered in workspace `Cargo.toml`.
+6. **PyO3 bindings:** update `crates/vectorless-py/src/lib.rs` when Rust types cross the FFI boundary; corresponding Python wrappers in `vectorless/_internal/`.
+7. **Committing:** Conventional Commits — `feat(compiler): ...`, `fix(ask): ...`, `refactor(primitives): ...`.
