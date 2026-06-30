@@ -62,8 +62,8 @@ const config: Config = {
   themeConfig: {
     image: 'img/theme-logo.png',
     colorMode: {
-      defaultMode: 'dark',
-      respectPrefersColorScheme: true,
+      defaultMode: 'light',
+      respectPrefersColorScheme: false,
     },
     navbar: {
       title: 'Vectorless',
@@ -81,7 +81,7 @@ const config: Config = {
     prism: {
       theme: prismThemes.github,
       darkTheme: prismThemes.dracula,
-      additionalLanguages: ['rust', 'toml', 'python'],
+      additionalLanguages: ['rust', 'toml', 'python', 'bash'],
     },
   } satisfies Preset.ThemeConfig,
 };

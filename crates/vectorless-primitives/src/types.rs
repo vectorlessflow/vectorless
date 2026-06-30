@@ -260,6 +260,8 @@ pub struct EvidenceScoreInfo {
 pub struct NodeRoutingInfo {
     /// Node ID.
     pub node_id: u64,
+    /// Section title.
+    pub title: String,
     /// Generated summary of this section.
     pub summary: String,
     /// Routing keywords (topic tags).

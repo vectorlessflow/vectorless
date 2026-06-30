@@ -525,6 +525,7 @@ impl DocumentNavigator {
         let node = self.doc.tree.get(nid)?;
         Some(NodeRoutingInfo {
             node_id,
+            title: node.title.clone(),
             summary: node.summary.clone(),
             keywords: node.routing_keywords.clone(),
             questions: node.question_hints.clone(),

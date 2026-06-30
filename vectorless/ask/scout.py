@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from pydantic import BaseModel, Field
 
@@ -52,6 +52,8 @@ class _Cand:
     score: float
     why: str               # provenance, e.g. "intent", "kw:revenue", "score:0.82"
     hits: int = 1          # how many distinct indexes proposed this node (corroboration)
+    questions: list[str] = field(default_factory=list)  # compile-time question hints
+    summary: str = ""      # compile-time section summary
 
     @property
     def key(self) -> str:
@@ -329,17 +331,28 @@ class Scout:
             if nid is None:
                 return
             key = str(nid)
-            title = await _safe(doc.node_title(nid), "")
-            if not title:
-                return
             existing = pool.get(key)
-            if existing is None:
-                pool[key] = _Cand(nid=key, title=_clamp(title), score=score, why=why, hits=1)
-            else:
+            if existing is not None:  # dedup first — no FFI for a node we already have
                 existing.hits += 1
                 if score > existing.score:
                     existing.score = score
                     existing.why = why
+                return
+            # One FFI per unique node: routing carries title + questions + summary.
+            r = await _safe(doc.node_routing(key), None)
+            title = (getattr(r, "title", "") or "") if r is not None else ""
+            if not title:
+                title = await _safe(doc.node_title(key), "")
+            if not title:
+                return
+            pool[key] = _Cand(
+                nid=key,
+                title=_clamp(title),
+                score=score,
+                why=why,
+                questions=list(getattr(r, "questions", []) or []) if r is not None else [],
+                summary=(getattr(r, "summary", "") or "") if r is not None else "",
+            )
 
         # ranked full-text search (BM25) — the locate-after-understanding signal
         for i, h in enumerate(await _safe(doc.search(self._query, 12), []) or []):
@@ -405,16 +418,11 @@ class Scout:
     # -- pick (the single LLM call per round) ------------------------------
 
     async def _pick(self, doc_name: str, cands: list[_Cand]) -> ScoutPick | None:
-        # Enrich each candidate with its compile-time routing signal (what the
-        # section can answer) so the picker decides from coverage, not just titles.
-        routings = await asyncio.gather(*(
-            _safe(self._doc.node_routing(c.nid), None) for c in cands
-        ))
-        lines = []
-        for c, r in zip(cands, routings):
-            extra = _routing_hint(r)
-            lines.append(f"  {c.key}  {c.title}  · {c.why}{extra}")
-        listing = "\n".join(lines)
+        # Candidates already carry their routing signal (questions/summary) from
+        # gather, so the picker decides from coverage with zero extra lookups.
+        listing = "\n".join(
+            f"  {c.key}  {c.title}  · {c.why}{_routing_hint(c)}" for c in cands
+        )
         task_line = f"Sub-task: {self._task}\n" if self._task else ""
         ctx = ""
         if self._intent_context:
@@ -565,16 +573,14 @@ def _clamp_preview(text: str) -> str:
     return text if len(text) <= 120 else text[:120] + "…"
 
 
-def _routing_hint(routing: object | None) -> str:
+def _routing_hint(cand: _Cand) -> str:
     """Render a candidate's compile-time routing signal (questions / summary) for the picker."""
-    if routing is None:
-        return ""
-    questions = list(getattr(routing, "questions", None) or [])
-    if questions:
-        return "  ⟨answers: " + "; ".join(q for q in questions[:2] if q) + "⟩"
-    summary = (getattr(routing, "summary", "") or "").strip()
-    if summary:
-        return "  ⟨" + _clamp_preview(summary) + "⟩"
+    if cand.questions:
+        qs = "; ".join(q for q in cand.questions[:2] if q)
+        if qs:
+            return f"  ⟨answers: {qs}⟩"
+    if cand.summary.strip():
+        return "  ⟨" + _clamp_preview(cand.summary) + "⟩"
     return ""
 
 

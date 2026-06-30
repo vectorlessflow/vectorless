@@ -1213,6 +1213,8 @@ pub struct PyNodeRouting {
     #[pyo3(get)]
     pub node_id: String,
     #[pyo3(get)]
+    pub title: String,
+    #[pyo3(get)]
     pub summary: String,
     #[pyo3(get)]
     pub keywords: Vec<String>,
@@ -1224,6 +1226,7 @@ impl From<NodeRoutingInfo> for PyNodeRouting {
     fn from(v: NodeRoutingInfo) -> Self {
         Self {
             node_id: format!("n{}", v.node_id),
+            title: v.title,
             summary: v.summary,
             keywords: v.keywords,
             questions: v.questions,

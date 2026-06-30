@@ -28,6 +28,14 @@
   --code-comment: #6B7689;
   --code-keyword: #C77B4A;
 
+  /* Theme-aware code surface (flips with light/dark) */
+  --code-surface: #F6F8FA;
+  --code-surface-text: #1E293B;
+  --code-surface-border: #E2E8F0;
+  --code-surface-head: #EDF1F5;
+  --cn-node: #FFFFFF;
+  --cn-node-root: #FBEFE6;
+
   --ifm-color-primary: #B5613A;
   --ifm-color-primary-dark: #9C5230;
   --ifm-color-primary-darker: #8A4929;
@@ -57,6 +65,14 @@
   --code-text: #ECEFF4;
   --code-comment: #6B7689;
   --code-keyword: #E0975E;
+
+  /* Theme-aware code surface (flips with light/dark) */
+  --code-surface: #0E1014;
+  --code-surface-text: #ECEFF4;
+  --code-surface-border: #20262E;
+  --code-surface-head: rgba(255, 255, 255, 0.03);
+  --cn-node: #11151b;
+  --cn-node-root: #15110e;
 
   --ifm-color-primary: #C77B4A;
   --ifm-color-primary-dark: #B5613A;

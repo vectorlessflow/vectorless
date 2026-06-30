@@ -214,11 +214,11 @@
   width: 100%;
   display: flex;
   flex-direction: column;
-  border: 1px solid var(--border);
+  border: 1px solid #20262e;
   border-radius: 18px;
-  background: var(--code-bg);
+  background: #080a0d;          /* always dark — a live terminal, like iTerm */
   overflow: hidden;
-  box-shadow: 0 40px 100px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(199, 123, 74, 0.10);
+  box-shadow: 0 40px 100px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(199, 123, 74, 0.10);
 }
 
 .termBar {
@@ -277,6 +277,107 @@
 @keyframes blink {
   0%, 50% { opacity: 1; }
   50.01%, 100% { opacity: 0; }
+}
+
+/* ===== Compile → Navigate hero animation ===== */
+.cnHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.cnHeadLeft {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.cnPhase {
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 0.8rem;
+  color: #8a95a5;
+}
+
+.cnCmd {
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 0.78rem;
+  color: var(--primary);
+  background: rgba(199, 123, 74, 0.14);
+  border: 1px solid rgba(199, 123, 74, 0.35);
+  padding: 3px 10px;
+  border-radius: 999px;
+  transition: opacity 0.25s;
+}
+
+.cnPasses {
+  display: flex;
+  gap: 8px;
+  padding: 12px 18px 6px;
+  flex-wrap: wrap;
+}
+
+.cnPass {
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 0.7rem;
+  color: #8a95a5;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  padding: 3px 9px;
+  opacity: 0.4;
+  transition: all 0.3s;
+}
+
+.cnPassDone {
+  opacity: 1;
+  color: #6fcf97;
+  border-color: rgba(111, 207, 151, 0.4);
+}
+
+.cnSvg {
+  display: block;
+  width: 100%;
+  height: 340px;
+}
+
+.cnAnswer {
+  margin: 0 18px 18px;
+  padding: 11px 15px;
+  border-radius: 10px;
+  border: 1px solid rgba(111, 207, 151, 0.4);
+  background: rgba(111, 207, 151, 0.08);
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 0.82rem;
+  color: #6fcf97;
+  transition: opacity 0.4s, transform 0.4s;
+}
+
+.cnAnswer b { color: var(--primary); }
+.cnAnswer span { color: var(--text-light); }
+
+.cnRipple {
+  fill: none;
+  stroke: var(--primary);
+  stroke-width: 2;
+  animation: cnRipple 1s ease-out;
+}
+
+@keyframes cnRipple {
+  0% { opacity: 0.7; r: 6; }
+  100% { opacity: 0; r: 70; }
+}
+
+.cnRing {
+  fill: none;
+  stroke: var(--primary);
+  stroke-width: 2;
+  animation: cnPulse 1.4s ease-out infinite;
+}
+
+@keyframes cnPulse {
+  0% { r: 8; opacity: 0.8; }
+  100% { r: 20; opacity: 0; }
 }
 
 /* ===== Sections ===== */
@@ -351,6 +452,51 @@
   height: auto;
 }
 
+/* ===== Quickstart: code + CLI ===== */
+.codeGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+/* Code cards are always dark — like a terminal — in both light and dark modes. */
+.codeCard {
+  border: 1px solid #20262e;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #080a0d;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.3);
+}
+
+/* macOS-style window title bar */
+.codeBar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 13px 16px;
+  border-bottom: 1px solid #20262e;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.codeBarTitle {
+  margin-left: 8px;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 0.76rem;
+  color: #8a95a5;
+}
+
+.codeBlock {
+  margin: 0;
+  padding: 22px 24px;
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 0.86rem;
+  line-height: 1.75;
+  background: transparent;
+  color: #c8d3e6;
+  overflow-x: auto;
+  white-space: pre;
+}
+
 /* ===== Architecture ===== */
 .archFrame {
   padding: 28px;
@@ -421,6 +567,9 @@
   }
   .section {
     margin-bottom: 88px;
+  }
+  .codeGrid {
+    grid-template-columns: 1fr;
   }
 }
 
