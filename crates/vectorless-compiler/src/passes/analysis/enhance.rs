@@ -201,15 +201,17 @@ impl CompilePass for EnhancePass {
         let node_ids: Vec<NodeId> = tree.traverse();
         let total_nodes = node_ids.len();
 
-        // === Incremental: reuse summaries from existing tree for unchanged nodes ===
+        // === Incremental: reuse enrichment (summary + keywords + question hints)
+        // from the previous tree for nodes whose content is unchanged. Matched by
+        // content fingerprint, so it's correct even with duplicate symbol names. ===
         if let Some(ref old_tree) = ctx.existing_tree {
-            let reusable = incremental::compute_reusable_summaries(old_tree, tree);
-            let applied = incremental::apply_reusable_summaries(tree, &reusable);
+            let index = incremental::build_enrichment_index(old_tree);
+            let applied = incremental::apply_enrichment_index(tree, &index);
             for _ in 0..applied {
                 ctx.metrics.increment_summaries();
             }
             info!(
-                "[enhance] Incremental: {} of {} nodes unchanged, reusing summaries",
+                "[enhance] Incremental: reused enrichment for {} of {} nodes",
                 applied, total_nodes,
             );
         }

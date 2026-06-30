@@ -148,6 +148,8 @@ class Engine:
         name: str | None = None,
         mode: str = "default",
         force: bool = False,
+        doc_id: str | None = None,
+        reuse: bool = True,
     ) -> CompileOutput:
         """Compile a document from various sources.
 
@@ -243,7 +245,7 @@ class Engine:
                 (n.get("title", ""), n.get("content", ""), n.get("level", 1))
                 for n in raw_nodes
             ]
-            doc_info = await self._rust.compile_raw(doc_name, node_tuples)
+            doc_info = await self._rust.compile_raw(doc_name, node_tuples, doc_id, reuse)
             return CompileOutput.from_doc_info(doc_info)
 
         raise ValueError("No source provided")

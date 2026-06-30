@@ -28,6 +28,8 @@ async fn run_compile_raw(
     engine: Arc<Engine>,
     name: String,
     nodes: Vec<(String, String, usize)>,
+    doc_id: Option<String>,
+    reuse: bool,
 ) -> PyResult<PyDocumentInfo> {
     let raw_nodes: Vec<RawNodeInput> = nodes
         .into_iter()
@@ -37,11 +39,10 @@ async fn run_compile_raw(
             level,
         })
         .collect();
-    let input = IngestInput::PreParsed {
-        name,
-        nodes: raw_nodes,
-    };
-    let doc = engine.compile(input).await.map_err(to_py_err)?;
+    let doc = engine
+        .compile_pre_parsed(&raw_nodes, &name, doc_id.as_deref(), reuse)
+        .await
+        .map_err(to_py_err)?;
     Ok(PyDocumentInfo { inner: doc })
 }
 
@@ -203,14 +204,17 @@ impl PyEngine {
     ///
     /// Raises:
     ///     VectorlessError: If compilation fails.
+    #[pyo3(signature = (name, raw_nodes, doc_id=None, reuse=true))]
     fn compile_raw<'py>(
         &self,
         py: Python<'py>,
         name: String,
         raw_nodes: Vec<(String, String, usize)>,
+        doc_id: Option<String>,
+        reuse: bool,
     ) -> PyResult<Bound<'py, PyAny>> {
         let engine = Arc::clone(&self.inner);
-        future_into_py(py, run_compile_raw(engine, name, raw_nodes))
+        future_into_py(py, run_compile_raw(engine, name, raw_nodes, doc_id, reuse))
     }
 
     /// Remove a document by ID.

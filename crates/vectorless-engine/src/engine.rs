@@ -376,7 +376,7 @@ impl Engine {
     pub async fn compile(&self, input: IngestInput) -> Result<vectorless_document::DocumentInfo> {
         // Handle PreParsed input directly — bypass CompileSource routing
         if let IngestInput::PreParsed { nodes, name } = &input {
-            return self.compile_pre_parsed(nodes, name).await;
+            return self.compile_pre_parsed(nodes, name, None, false).await;
         }
 
         let ctx = match &input {
@@ -409,10 +409,17 @@ impl Engine {
     }
 
     /// Compile from pre-parsed raw nodes — skips the parse stage.
-    async fn compile_pre_parsed(
+    ///
+    /// When `reuse` is true and a `doc_id` is given, the previous version of that
+    /// document (if any) is loaded and passed to the pipeline as `existing_tree`,
+    /// so unchanged nodes reuse their LLM enrichment instead of being re-generated.
+    /// A stable `doc_id` also lets repeated compiles update the same document.
+    pub async fn compile_pre_parsed(
         &self,
         nodes: &[vectorless_document::RawNodeInput],
         name: &str,
+        doc_id: Option<&str>,
+        reuse: bool,
     ) -> Result<vectorless_document::DocumentInfo> {
         use vectorless_compiler::parse::RawNode;
         use vectorless_document::{CURRENT_SCHEMA_VERSION, DocumentMeta};
@@ -428,7 +435,16 @@ impl Engine {
 
         let compiler_input =
             vectorless_compiler::CompilerInput::pre_parsed(raw_nodes, name.to_string());
-        let pipeline_options = vectorless_compiler::PipelineOptions::default();
+        let mut pipeline_options = vectorless_compiler::PipelineOptions::default();
+
+        // Incremental: load the previous tree so unchanged nodes reuse enrichment.
+        if reuse {
+            if let Some(id) = doc_id {
+                if let Ok(Some(prev)) = self.workspace.load(id).await {
+                    pipeline_options.existing_tree = Some(prev.tree);
+                }
+            }
+        }
 
         let mut executor = (self.indexer.executor_factory)();
         let result = executor.execute(compiler_input, pipeline_options).await?;
@@ -438,7 +454,10 @@ impl Engine {
             .ok_or_else(|| Error::Parse("Document tree not generated".to_string()))?;
 
         let node_count = tree.node_count();
-        let doc_id = uuid::Uuid::new_v4().to_string();
+        let doc_id = match doc_id {
+            Some(id) => id.to_string(),
+            None => uuid::Uuid::new_v4().to_string(),
+        };
 
         let mut meta = DocumentMeta::new();
         meta.update_processing_stats(
