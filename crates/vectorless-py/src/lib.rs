@@ -16,8 +16,8 @@ use config::PyConfig;
 use document::{
     PyChainInfo, PyCollectedEvidence, PyConcept, PyConceptInfo, PyConceptRoute, PyDocCard,
     PyDocument, PyDocumentInfo, PyEvidenceScore, PyFindResult, PyMatchResult, PyNodeInfo,
-    PyNodeStats, PyOverlapInfo, PyRouteTarget, PySectionCard, PySectionSummary, PySimilarResult,
-    PyTocEntry, PyTopicEntry, PyWordCount,
+    PyNodeRouting, PyNodeStats, PyOverlapInfo, PyRouteTarget, PySectionCard, PySectionSummary,
+    PySimilarResult, PyTocEntry, PyTopicEntry, PyWordCount,
 };
 use engine::PyEngine;
 use graph::{PyDocumentGraph, PyDocumentGraphNode, PyEdgeEvidence, PyGraphEdge, PyWeightedKeyword};
@@ -61,6 +61,7 @@ fn _vectorless(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyChainInfo>()?;
     m.add_class::<PyOverlapInfo>()?;
     m.add_class::<PyEvidenceScore>()?;
+    m.add_class::<PyNodeRouting>()?;
     m.add_class::<PyDocumentGraphNode>()?;
     m.add_class::<PyDocumentGraph>()?;
     m.add_class::<PyGraphEdge>()?;

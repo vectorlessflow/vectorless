@@ -1,105 +1,70 @@
-"""Orchestrator agent — coordinates multi-document retrieval.
+"""Orchestrator — the lead agent for multi-document retrieval.
 
-The Orchestrator is always the entry point for retrieval:
-- User specified doc_ids → skip_analysis=True → spawn Workers directly
-- Workspace (unspecified) → analyze DocCards → select docs → spawn Workers
+A deliberately small lead + subagent design:
 
-Both paths produce the same Output type and share the same finalize logic.
+    run()
+      1. analyze   — pick relevant documents + per-doc sub-task (≤1 LLM call;
+                     skipped entirely when the user specified the documents)
+      2. dispatch  — run one Scout per document, in parallel
+      3. finalize  — dedup evidence (0 LLM) + ONE synthesis call that also
+                     verifies sufficiency and returns a confidence
+      4. (optional) one gap re-dispatch if the synthesis says evidence is
+                     insufficient, then finalize once more
 
-Flow:
-    Orchestrator.run()
-      Phase 1: analyze() → AnalyzeOutcome (dispatches or early return)
-      Phase 2: supervisor loop → dispatch Workers → verify → replan
-      Phase 3: finalize_output() → rerank → Output
+That's it. No blackboard, no nested replan, no multi-stage supervisor loop —
+the per-document reasoning lives in the Scout (see ``scout.py``), and answer
+grounding is folded into a single synthesis-verify step.
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
-from dataclasses import dataclass
 from typing import Any
+
+from pydantic import BaseModel, Field
 
 from vectorless.ask.protocols import DocLoader, EventCallback
 from vectorless.ask.events import AskEvent
-from vectorless.ask.errors import AskError, LLMFailureError, NavigationError
+from vectorless.ask.errors import LLMFailureError
 from vectorless.ask.utils import extract_keywords, format_evidence
 from vectorless.ask.types import (
     DispatchEntry,
     DocCard,
     Evidence,
-    EvalResult,
-    Metrics,
-    OrchestratorState,
     Output,
+    OrchestratorState,
     WorkerOutput,
 )
-from vectorless.ask.evaluate import evaluate
-from vectorless.ask.worker import Worker
+from vectorless.ask.scout import Scout
+from vectorless.ask.route_cache import RouteCache
 from vectorless.llm_client import LLMClient
-from vectorless.ask.reasoning.types import QueryAnalysis
-from vectorless.ask.reasoning.analyzer import QueryAnalyzer
-from vectorless.ask.verify import VerifyPipeline, VerificationResult
-from vectorless.ask.blackboard import SharedBlackboard, extract_discoveries, extract_llm_insights
+from vectorless.ask.reasoning.types import QueryAnalysis, QueryIntent
 from vectorless.ask.prompts import (
     OrchestratorAnalysisParams,
     orchestrator_analysis,
-    orchestrator_replan_prompt,
     parse_dispatch_plan,
-    parse_replan_response,
 )
-from vectorless.rerank.synthesize import RerankOutput, process as rerank_process
+from vectorless.rerank.synthesize import process as rerank_process
 
 logger = logging.getLogger(__name__)
 
-MAX_SUPERVISOR_ITERATIONS = 3
-MAX_VERIFICATION_ITERATIONS = 2
-
 
 # ---------------------------------------------------------------------------
-# Analyze outcome — mirrors Rust AnalyzeOutcome
+# Final synthesis-with-verify result (one structured LLM call)
 # ---------------------------------------------------------------------------
 
-@dataclass
-class _AnalyzeOutcome:
-    """Result of the analyze phase."""
-    dispatches: list[DispatchEntry]
-    llm_calls: int
+class _FinalAnswer(BaseModel):
+    """The lead's answer over the collected evidence, with a built-in sufficiency check."""
 
+    answer: str = Field(description="The answer to the question, grounded in and citing the evidence sections.")
+    sufficient: bool = Field(default=True, description="True if the evidence fully answers the question.")
+    missing: str = Field(default="", description="If not sufficient, what specific information is still missing.")
+    confidence: float = Field(default=0.7, description="Confidence in the answer, 0.0–1.0.")
 
-# ---------------------------------------------------------------------------
-# Supervisor outcome — mirrors Rust SupervisorOutcome
-# ---------------------------------------------------------------------------
-
-@dataclass
-class _SupervisorOutcome:
-    """Outcome of the supervisor loop."""
-    iteration: int
-    eval_sufficient: bool
-    llm_calls: int
-    verification_result: VerificationResult | None = None
-
-
-# ---------------------------------------------------------------------------
-# Orchestrator — mirrors Rust orchestrator/mod.rs
-# ---------------------------------------------------------------------------
 
 class Orchestrator:
-    """Coordinates multi-document retrieval with Workers.
-
-    Holds all execution context. Calling run() produces an Output.
-
-    Usage::
-
-        orch = Orchestrator(
-            query="Compare revenue across years",
-            doc_cards=[card1, card2],
-            doc_loader=load_fn,
-            llm_client=llm,
-            query_analysis=analysis,
-        )
-        output = await orch.run()
-    """
+    """Coordinates multi-document retrieval with Scouts. ``run()`` returns an Output."""
 
     def __init__(
         self,
@@ -109,7 +74,6 @@ class Orchestrator:
         llm_client: LLMClient,
         *,
         skip_analysis: bool = False,
-        query_plan: Any = None,      # Deprecated: kept for backward compat
         query_analysis: QueryAnalysis | None = None,
         max_rounds: int = 15,
         max_llm_calls: int = 0,
@@ -121,177 +85,109 @@ class Orchestrator:
         self._doc_loader = doc_loader
         self._llm = llm_client
         self._skip_analysis = skip_analysis
+        self._query_analysis = query_analysis
         self._max_rounds = max_rounds
         self._max_llm_calls = max_llm_calls
-        self._worker_semaphore = asyncio.Semaphore(max_concurrent_workers)
+        self._semaphore = asyncio.Semaphore(max_concurrent_workers)
         self._emit = event_callback or _noop_emit
 
-        # Accept both old QueryPlan and new QueryAnalysis
-        if query_analysis is not None:
-            self._query_analysis = query_analysis
-        elif query_plan is not None:
-            # Backward compat: convert QueryPlan to QueryAnalysis
-            self._query_analysis = query_plan.to_query_analysis()
-        else:
-            self._query_analysis = None
+    # -----------------------------------------------------------------------
 
     async def run(self) -> Output:
-        """Execute the Orchestrator: analyze → supervisor loop → finalize.
-
-        Returns the final Output with answer, evidence, metrics, and trace.
-        """
-        query = self._query
-        cards = self._doc_cards
-        llm = self._llm
         state = OrchestratorState()
-
-        intent_context = ""
-        if self._query_analysis:
-            intent_context = self._query_analysis.intent_context()
+        intent_context = self._query_analysis.intent_context() if self._query_analysis else ""
+        scout_context = self._scout_intent_context()
+        intent_value = self._query_analysis.intent.value if self._query_analysis else "factual"
+        route_cache = RouteCache.default()
 
         logger.info(
             "Orchestrator starting (docs=%d, skip_analysis=%s)",
-            len(cards), self._skip_analysis,
+            len(self._doc_cards), self._skip_analysis,
         )
 
-        # --- Phase 1: Analyze ---
-        analyze_result = await self._analyze(
-            query, cards, llm, state, self._skip_analysis, intent_context,
-        )
-
-        if analyze_result is None:
-            # No results or already answered
+        # 1. analyze — choose documents + per-doc sub-task
+        dispatches = await self._analyze(state, intent_context)
+        if not dispatches:
             await self._emit({"event": AskEvent.COMPLETED, "reason": "no_results"})
             return state.into_output("")
+        await self._emit({"event": AskEvent.QUERY_ANALYZED, "dispatches": len(dispatches)})
 
-        state.total_llm_calls += analyze_result.llm_calls
-        initial_dispatches = analyze_result.dispatches
-
+        # 2. dispatch — one Scout per document, in parallel
+        await self._dispatch(dispatches, state, scout_context, intent_value, route_cache, use_cache=True)
+        if not state.all_evidence:
+            await self._emit({"event": AskEvent.COMPLETED, "reason": "no_evidence"})
+            return state.into_output("")
         await self._emit({
-            "event": AskEvent.QUERY_ANALYZED,
-            "dispatches": len(initial_dispatches),
+            "event": AskEvent.EVIDENCE_COLLECTED,
+            "evidence_count": len(state.all_evidence),
         })
 
-        # --- Phase 2: Supervisor loop ---
-        outcome = await self._supervisor_loop(
-            query, initial_dispatches, cards, llm, state,
-        )
-        state.total_llm_calls += outcome.llm_calls
+        # 3. finalize — dedup + one synthesis-with-verify call
+        output, sufficient, missing = await self._finalize(state)
 
-        # Use verification confidence if available, otherwise compute from eval
-        if outcome.verification_result is not None:
-            confidence = outcome.verification_result.overall_confidence
-        else:
-            confidence = _compute_confidence(
-                eval_sufficient=outcome.eval_sufficient,
-                replan_rounds=outcome.iteration,
-                no_evidence=not state.all_evidence,
-            )
-
-        # --- Phase 3: Finalize — rerank + assemble Output ---
-        if state.all_evidence:
+        # 4. one bounded gap re-dispatch (workspace queries only)
+        if not sufficient and missing and not self._skip_analysis and state.dispatched:
             await self._emit({
-                "event": AskEvent.EVIDENCE_COLLECTED,
+                "event": AskEvent.REPLAN_TRIGGERED,
                 "evidence_count": len(state.all_evidence),
+                "gaps": [missing],
             })
-            output = await self._finalize_output(
-                state,
-                self._query_analysis.intent if self._query_analysis else None,
-                confidence,
+            redispatch = [
+                DispatchEntry(doc_idx=idx, reason="gap", task=missing)
+                for idx in list(state.dispatched)
+            ]
+            await self._dispatch(
+                redispatch, state, scout_context, intent_value, route_cache, use_cache=False,
             )
-            await self._emit({
-                "event": AskEvent.COMPLETED,
-                "confidence": output.confidence,
-                "evidence_count": len(output.evidence),
-            })
-            return output
+            output, _, _ = await self._finalize(state)
 
-        logger.info("No evidence collected — returning empty output")
-        await self._emit({"event": AskEvent.COMPLETED, "reason": "no_evidence"})
-        return state.into_output("")
+        await self._emit({
+            "event": AskEvent.COMPLETED,
+            "confidence": output.confidence,
+            "evidence_count": len(output.evidence),
+        })
+        return output
 
     # -----------------------------------------------------------------------
-    # Phase 1: Analyze — mirrors Rust orchestrator/analyze.rs
+    # 1. Analyze
     # -----------------------------------------------------------------------
 
     async def _analyze(
-        self,
-        query: str,
-        cards: list[DocCard],
-        llm: LLMClient,
-        state: OrchestratorState,
-        skip_analysis: bool,
-        intent_context: str,
-    ) -> _AnalyzeOutcome | None:
-        """Analyze documents and produce a dispatch plan.
+        self, state: OrchestratorState, intent_context: str,
+    ) -> list[DispatchEntry] | None:
+        """Select documents and write a per-doc sub-task. ≤1 LLM call."""
+        cards = self._doc_cards
 
-        Returns None if no results / already answered, or _AnalyzeOutcome.
-        """
-        if skip_analysis:
-            logger.debug("Phase 1: skipping (user-specified documents)")
-            return _AnalyzeOutcome(
-                dispatches=[
-                    DispatchEntry(
-                        doc_idx=i,
-                        reason="User-specified document",
-                        task=query,
-                    )
-                    for i in range(len(cards))
-                ],
-                llm_calls=0,
-            )
+        if self._skip_analysis:
+            return [
+                DispatchEntry(doc_idx=i, reason="User-specified document", task=self._query)
+                for i in range(len(cards))
+            ]
 
-        # Build doc cards text
-        doc_cards_text = _format_doc_cards(cards)
-
-        # Cross-document keyword search
-        keywords = extract_keywords(query)
-        find_text = await self._cross_doc_find(cards, keywords)
-
-        # Build analysis prompt with query understanding context
+        find_text = await self._cross_doc_find(cards, extract_keywords(self._query))
         system, user = orchestrator_analysis(OrchestratorAnalysisParams(
-            query=query,
-            doc_cards=doc_cards_text,
+            query=self._query,
+            doc_cards=_format_doc_cards(cards),
             find_results=find_text,
             intent_context=intent_context,
         ))
 
         try:
-            analysis_output = await llm.complete(system, user)
-        except LLMFailureError as e:
-            logger.error("Orchestrator analysis LLM call failed: %s", e)
-            return None
-        except Exception as e:
-            logger.error("Orchestrator analysis unexpected error: %s", e)
+            analysis_output = await self._llm.complete(system, user)
+        except Exception as e:  # noqa: BLE001
+            logger.error("Orchestrator analysis failed: %s", e)
             return None
 
-        logger.info(
-            "Phase 1: analysis complete (response_len=%d)", len(analysis_output),
-        )
-
+        state.total_llm_calls += 1
         dispatches = parse_dispatch_plan(analysis_output, len(cards))
-
-        if dispatches is None:
-            logger.info("Analysis indicates already answered")
-            return None
-
         if not dispatches:
-            logger.info("No relevant documents found")
+            logger.info("Analysis selected no documents (or already answered)")
             return None
-
         state.analyze_done = True
-        return _AnalyzeOutcome(dispatches=dispatches, llm_calls=1)
+        return dispatches
 
-    # -----------------------------------------------------------------------
-    # Cross-document search — mirrors Rust orchestrator cross-doc find
-    # -----------------------------------------------------------------------
-
-    async def _cross_doc_find(
-        self,
-        cards: list[DocCard],
-        keywords: list[str],
-    ) -> str:
-        """Search across documents for keywords using navigation index."""
+    async def _cross_doc_find(self, cards: list[DocCard], keywords: list[str]) -> str:
+        """Cheap cross-document title search via the navigation index (0 LLM)."""
         results: list[str] = []
         for card in cards:
             try:
@@ -301,252 +197,58 @@ class Orchestrator:
             for kw in keywords[:5]:
                 try:
                     hits = await doc.find(kw)
-                    if hits:
-                        for hit in hits[:3]:
-                            results.append(
-                                f"[{card.name}] '{kw}' → {hit.title} "
-                                f"(depth {hit.depth}, {hit.leaf_count} leaves)"
-                            )
                 except Exception:
-                    pass
+                    continue
+                for hit in (hits or [])[:3]:
+                    results.append(
+                        f"[{card.name}] '{kw}' → {hit.title} "
+                        f"(depth {hit.depth}, {hit.leaf_count} leaves)"
+                    )
         return "\n".join(results) if results else "(no cross-document matches)"
 
     # -----------------------------------------------------------------------
-    # Phase 2: Supervisor loop — mirrors Rust orchestrator/supervisor.rs
+    # 2. Dispatch — parallel Scouts
     # -----------------------------------------------------------------------
 
-    async def _supervisor_loop(
+    async def _dispatch(
         self,
-        query: str,
-        initial_dispatches: list[DispatchEntry],
-        cards: list[DocCard],
-        llm: LLMClient,
-        state: OrchestratorState,
-    ) -> _SupervisorOutcome:
-        """Run: dispatch → verify → re-analyze → replan loop.
-
-        Integrates SharedBlackboard for cross-Worker discovery sharing
-        and VerifyPipeline for multi-dimensional evidence verification.
-        """
-        current_dispatches = initial_dispatches
-        iteration = 0
-        eval_sufficient = False
-        llm_calls = 0
-        verification_result: VerificationResult | None = None
-
-        # Initialize shared blackboard for multi-doc coordination
-        blackboard = SharedBlackboard()
-        verify_pipeline = VerifyPipeline()
-
-        while iteration < MAX_SUPERVISOR_ITERATIONS:
-            # Dispatch current plan with adaptive strategy
-            if current_dispatches:
-                logger.info(
-                    "Dispatching %d Workers (iteration=%d)",
-                    len(current_dispatches), iteration,
-                )
-                await self._emit({
-                    "event": AskEvent.WORKERS_DISPATCHED,
-                    "worker_count": len(current_dispatches),
-                    "iteration": iteration,
-                })
-                await self._adaptive_dispatch(
-                    query, current_dispatches, cards, llm, state,
-                    blackboard, iteration,
-                )
-
-            # No evidence — nothing to verify
-            if not state.all_evidence:
-                logger.info("No evidence collected from any Worker")
-                break
-
-            # Skip verification for user-specified documents (no replan needed)
-            if self._skip_analysis:
-                eval_sufficient = bool(state.all_evidence)
-                break
-
-            # Verify evidence using multi-dimensional pipeline
-            query_intent = ""
-            if self._query_analysis:
-                query_intent = self._query_analysis.intent.value
-
-            try:
-                verification_result = await verify_pipeline.verify(
-                    query=query,
-                    evidence=state.all_evidence,
-                    query_intent=query_intent,
-                    iteration=iteration,
-                    llm=llm,
-                )
-                llm_calls += 1
-            except AskError as e:
-                logger.error("Verification failed (typed): %s", e)
-                break
-            except Exception as e:
-                logger.error("Verification unexpected error: %s", e)
-                break
-
-            logger.info(
-                "Verification result: passed=%s, confidence=%.2f, gaps=%d",
-                verification_result.passed,
-                verification_result.overall_confidence,
-                len(verification_result.gaps),
-            )
-
-            if verification_result.passed:
-                eval_sufficient = True
-                await self._emit({
-                    "event": AskEvent.VERIFICATION_PASSED,
-                    "confidence": verification_result.overall_confidence,
-                    "iteration": iteration,
-                })
-                break
-
-            # Verification failed — check iteration limit
-            await self._emit({
-                "event": AskEvent.VERIFICATION_FAILED,
-                "confidence": verification_result.overall_confidence,
-                "gaps": verification_result.gaps,
-                "iteration": iteration,
-            })
-            if iteration >= MAX_VERIFICATION_ITERATIONS - 1:
-                logger.info(
-                    "Max verification iterations reached — returning with current confidence"
-                )
-                break
-
-            # Re-analyze with gap context
-            if self._query_analysis and verification_result.gaps:
-                evidence_summary = format_evidence(state.all_evidence)
-                analyzer = QueryAnalyzer()
-                try:
-                    self._query_analysis = await analyzer.re_analyze(
-                        analysis=self._query_analysis,
-                        gaps=verification_result.gaps,
-                        evidence_summary=evidence_summary,
-                        llm=llm,
-                    )
-                    llm_calls += 1
-                except Exception as e:
-                    logger.warning("Re-analysis failed: %s", e)
-
-            # Replan with blackboard context
-            logger.info(
-                "Evidence insufficient (evidence=%d, iteration=%d) — replanning",
-                len(state.all_evidence), iteration,
-            )
-            await self._emit({
-                "event": AskEvent.REPLAN_TRIGGERED,
-                "evidence_count": len(state.all_evidence),
-                "gaps": verification_result.gaps if verification_result else [],
-                "iteration": iteration,
-            })
-
-            missing_info = "; ".join(verification_result.gaps) if verification_result.gaps else ""
-            try:
-                new_dispatches = await self._replan(
-                    query, missing_info, state, cards, llm, blackboard,
-                )
-            except Exception as e:
-                logger.error("Replan failed: %s", e)
-                break
-
-            if not new_dispatches:
-                logger.info("Replan produced no new dispatches — exiting")
-                break
-
-            current_dispatches = new_dispatches
-            iteration += 1
-
-        return _SupervisorOutcome(
-            iteration=iteration,
-            eval_sufficient=eval_sufficient,
-            llm_calls=llm_calls,
-            verification_result=verification_result,
-        )
-
-    # -----------------------------------------------------------------------
-    # Adaptive dispatch — sequential or parallel based on iteration and doc count
-    # -----------------------------------------------------------------------
-
-    async def _adaptive_dispatch(
-        self,
-        query: str,
         dispatches: list[DispatchEntry],
-        cards: list[DocCard],
-        llm: LLMClient,
         state: OrchestratorState,
-        blackboard: SharedBlackboard,
-        iteration: int,
+        scout_context: str,
+        intent_value: str,
+        route_cache: RouteCache | None,
+        use_cache: bool = True,
     ) -> None:
-        """Dispatch Workers with adaptive strategy.
+        cards = self._doc_cards
+        await self._emit({
+            "event": AskEvent.WORKERS_DISPATCHED,
+            "worker_count": len(dispatches),
+        })
 
-        - 1 document: parallel (no blackboard benefit)
-        - 2+ documents, first iteration: sequential (build blackboard)
-        - 2+ documents, subsequent iterations: parallel (blackboard pre-populated)
-        """
-        if len(dispatches) == 1:
-            # Single doc: parallel (no blackboard benefit)
-            await self._dispatch_parallel(
-                query, dispatches, cards, llm, state, blackboard, "",
-            )
-        elif iteration == 0:
-            # First iteration: sequential to build blackboard
-            await self._dispatch_sequential(
-                query, dispatches, cards, llm, state, blackboard,
-            )
-        else:
-            # Subsequent iterations: parallel with full blackboard
-            shared_context = blackboard.format_for_all()
-            await self._dispatch_parallel(
-                query, dispatches, cards, llm, state, blackboard, shared_context,
-            )
-
-    async def _dispatch_parallel(
-        self,
-        query: str,
-        dispatches: list[DispatchEntry],
-        cards: list[DocCard],
-        llm: LLMClient,
-        state: OrchestratorState,
-        blackboard: SharedBlackboard,
-        shared_context: str,
-    ) -> None:
-        """Dispatch Workers in parallel and collect results."""
-        intent_context = ""
-        if self._query_analysis:
-            intent_context = f"{self._query_analysis.intent.value} — {self._query_analysis.strategy.strategy_type}"
-
-        async def run_worker(dispatch: DispatchEntry) -> tuple[int, WorkerOutput]:
+        async def run_one(dispatch: DispatchEntry) -> tuple[int, WorkerOutput] | None:
             idx = dispatch.doc_idx
             if idx >= len(cards):
-                logger.warning("Document index %d out of range, skipping", idx)
-                return (idx, WorkerOutput())
-
+                return None
             card = cards[idx]
-
             try:
                 doc = await self._doc_loader(card.doc_id)
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 logger.warning("Failed to load document %s: %s", card.doc_id, e)
-                return (idx, WorkerOutput())
-
-            worker = Worker(
+                return None
+            scout = Scout(
                 document=doc,
-                query=query,
-                llm_client=llm,
+                query=self._query,
+                llm_client=self._llm,
                 max_rounds=self._max_rounds,
                 max_llm_calls=self._max_llm_calls,
                 task=dispatch.task,
-                intent_context=intent_context,
-                shared_context=shared_context,
+                intent_context=scout_context,
+                doc_id=card.doc_id,
+                intent=intent_value,
+                route_cache=route_cache,
+                use_cache=use_cache,
             )
-
-            result = await worker.run()
-            logger.info(
-                "Worker completed for doc %d (%s): evidence=%d, rounds=%d",
-                idx, card.name, len(result.evidence), result.metrics.rounds_used,
-            )
+            result = await scout.run()
             await self._emit({
                 "event": AskEvent.WORKER_COMPLETED,
                 "doc_idx": idx,
@@ -556,286 +258,103 @@ class Orchestrator:
             })
             return (idx, result)
 
-        # Use TaskGroup with per-task exception wrapping and a semaphore
-        # to bound concurrency (default 5 workers in parallel).
-        task_results: list[tuple[int, WorkerOutput] | Exception] = []
-        semaphore = self._worker_semaphore
-        emit = self._emit
+        collected: list[tuple[int, WorkerOutput]] = []
 
         async with asyncio.TaskGroup() as tg:
-            async def _safe_run(d: DispatchEntry) -> None:
-                async with semaphore:
+            async def guarded(d: DispatchEntry) -> None:
+                async with self._semaphore:
                     try:
-                        result = await run_worker(d)
-                        task_results.append(result)
-                    except Exception as e:
-                        task_results.append(e)
-                        logger.warning("Worker failed: %s", e)
+                        r = await run_one(d)
+                    except Exception as e:  # noqa: BLE001
+                        logger.warning("Scout failed: %s", e)
+                        return
+                    if r is not None:
+                        collected.append(r)
 
             for d in dispatches:
-                tg.create_task(_safe_run(d))
+                tg.create_task(guarded(d))
 
-        for item in task_results:
-            if isinstance(item, Exception):
-                continue
-            idx, output = item
+        for idx, output in collected:
             state.collect_result(idx, output)
-            # Extract discoveries to blackboard
-            card = cards[idx] if idx < len(cards) else None
-            if card:
-                discoveries = extract_discoveries(output, card.name)
-                for d in discoveries:
-                    blackboard.add_discovery(d)
-
-    async def _dispatch_sequential(
-        self,
-        query: str,
-        dispatches: list[DispatchEntry],
-        cards: list[DocCard],
-        llm: LLMClient,
-        state: OrchestratorState,
-        blackboard: SharedBlackboard,
-    ) -> None:
-        """Dispatch Workers sequentially to build blackboard context."""
-        intent_context = ""
-        if self._query_analysis:
-            intent_context = f"{self._query_analysis.intent.value} — {self._query_analysis.strategy.strategy_type}"
-
-        for dispatch in dispatches:
-            idx = dispatch.doc_idx
-            if idx >= len(cards):
-                logger.warning("Document index %d out of range, skipping", idx)
-                continue
-
-            card = cards[idx]
-
-            try:
-                doc = await self._doc_loader(card.doc_id)
-            except Exception as e:
-                logger.warning("Failed to load document %s: %s", card.doc_id, e)
-                continue
-
-            # Get context from blackboard for this Worker
-            shared_context = blackboard.format_for_worker(card.name)
-
-            worker = Worker(
-                document=doc,
-                query=query,
-                llm_client=llm,
-                max_rounds=self._max_rounds,
-                max_llm_calls=self._max_llm_calls,
-                task=dispatch.task,
-                intent_context=intent_context,
-                shared_context=shared_context,
-            )
-
-            result = await worker.run()
-            logger.info(
-                "Worker completed for doc %d (%s): evidence=%d, rounds=%d",
-                idx, card.name, len(result.evidence), result.metrics.rounds_used,
-            )
-            await self._emit({
-                "event": AskEvent.WORKER_COMPLETED,
-                "doc_idx": idx,
-                "doc_name": card.name,
-                "evidence_count": len(result.evidence),
-                "rounds_used": result.metrics.rounds_used,
-            })
-
-            state.collect_result(idx, result)
-
-            # Extract discoveries to blackboard for subsequent Workers
-            discoveries = extract_discoveries(result, card.name)
-            for d in discoveries:
-                blackboard.add_discovery(d)
-
-            # LLM-powered cross-document insight extraction (only for multi-doc)
-            if len(cards) > 1 and result.evidence:
-                try:
-                    llm_insights = await extract_llm_insights(
-                        result, card.name, query, llm,
-                    )
-                    for d in llm_insights:
-                        blackboard.add_discovery(d)
-                except Exception as e:
-                    logger.warning("LLM insight extraction failed for %s: %s", card.name, e)
 
     # -----------------------------------------------------------------------
-    # Replan — mirrors Rust orchestrator/replan.rs
+    # 3. Finalize — dedup + one synthesis-with-verify call
     # -----------------------------------------------------------------------
 
-    async def _replan(
-        self,
-        query: str,
-        missing_info: str,
-        state: OrchestratorState,
-        cards: list[DocCard],
-        llm: LLMClient,
-        blackboard: SharedBlackboard | None = None,
-    ) -> list[DispatchEntry]:
-        """Replan dispatch targets based on missing information."""
-        evidence_summary = format_evidence(state.all_evidence)
-        doc_cards_text = _format_doc_cards(cards)
-
-        # Include blackboard context in replan
-        keywords_text = ""
-        if blackboard and blackboard.active_leads:
-            keywords_text = "\n\nActive leads from other Workers:\n" + "\n".join(
-                f"- {lead}" for lead in blackboard.active_leads[:5]
-            )
-        if blackboard and blackboard.cross_references:
-            cross_refs = []
-            for src, targets in blackboard.cross_references.items():
-                cross_refs.append(f"  {src} → {', '.join(targets)}")
-            if cross_refs:
-                keywords_text += "\n\nCross-document references:\n" + "\n".join(cross_refs)
-
-        system, user = orchestrator_replan_prompt(
-            query=query,
-            missing_info=missing_info,
-            evidence_summary=evidence_summary,
-            dispatched_indices=state.dispatched,
-            doc_cards=doc_cards_text,
-            keywords_text=keywords_text,
-        )
-
-        try:
-            response = await llm.complete(system, user)
-        except Exception as e:
-            logger.error("Replan LLM call failed: %s", e)
-            return []
-
-        state.total_llm_calls += 1
-        return parse_replan_response(response, len(cards), state.dispatched)
-
-    # -----------------------------------------------------------------------
-    # Finalize — mirrors Rust orchestrator::finalize_output
-    # -----------------------------------------------------------------------
-
-    async def _finalize_output(
-        self,
-        state: OrchestratorState,
-        intent: Any,  # QueryIntent or None
-        confidence: float,
-    ) -> Output:
-        """Rerank evidence and assemble the final Output.
-
-        For non-factual/non-navigational intents with sufficient confidence,
-        runs an optional LLM synthesis step to produce a coherent answer
-        from the top evidence.
-        """
-        from vectorless.ask.plan import QueryIntent as PlanIntent
-        from vectorless.ask.reasoning.types import QueryIntent
-
-        # Map reasoning QueryIntent to plan QueryIntent for rerank compat
-        if intent is not None:
-            intent_value = intent.value if hasattr(intent, "value") else str(intent)
-            _plan_intent_map = {
-                "factual": PlanIntent.FACTUAL,
-                "analytical": PlanIntent.ANALYTICAL,
-                "navigational": PlanIntent.NAVIGATIONAL,
-                "summary": PlanIntent.SUMMARY,
-                "comparative": PlanIntent.ANALYTICAL,
-                "procedural": PlanIntent.FACTUAL,
-            }
-            effective_intent = _plan_intent_map.get(intent_value, PlanIntent.FACTUAL)
-        else:
-            effective_intent = PlanIntent.FACTUAL
-            intent_value = "factual"
-
+    async def _finalize(self, state: OrchestratorState) -> tuple[Output, bool, str]:
+        intent_enum = self._query_analysis.intent if self._query_analysis else QueryIntent.FACTUAL
+        intent_value = intent_enum.value
         reranked = rerank_process(
             evidence=state.all_evidence,
-            intent=effective_intent,
-            confidence=confidence,
+            intent=intent_enum,
+            confidence=0.0,
         )
+        if not reranked.evidence:
+            return state.into_output(""), True, ""
 
-        state.total_llm_calls += reranked.llm_calls
+        final = await self._synthesize(reranked.evidence[:8], intent_value)
+        state.total_llm_calls += 1
 
-        answer = reranked.answer
-
-        # Optional LLM synthesis for non-trivial intents
-        _synthesis_intents = {"analytical", "summary", "comparative"}
-        if intent_value in _synthesis_intents and confidence > 0.5 and reranked.evidence:
-            try:
-                answer = await self._synthesize_answer(
-                    query=self._query,
-                    evidence=reranked.evidence[:5],
-                    intent=intent_value,
-                    llm=self._llm,
-                )
-                state.total_llm_calls += 1
-            except Exception as e:
-                logger.warning("Answer synthesis failed, using reranked output: %s", e)
-
-        output = state.into_output(answer)
-        output.confidence = reranked.confidence
-
+        output = state.into_output(final.answer)
+        output.evidence = reranked.evidence
+        output.confidence = max(0.0, min(1.0, final.confidence))
         logger.info(
-            "Orchestrator complete (evidence=%d, llm_calls=%d, confidence=%.2f)",
-            len(output.evidence), output.metrics.llm_calls, output.confidence,
+            "Finalize: evidence=%d llm_calls=%d confidence=%.2f sufficient=%s",
+            len(output.evidence), output.metrics.llm_calls, output.confidence, final.sufficient,
         )
+        return output, final.sufficient, final.missing.strip()
 
-        return output
-
-    async def _synthesize_answer(
-        self,
-        query: str,
-        evidence: list[Evidence],
-        intent: str,
-        llm: LLMClient,
-    ) -> str:
-        """LLM-powered answer synthesis from top evidence.
-
-        Used for analytical, summary, and comparative intents where the
-        raw evidence formatting is not enough — the user expects a coherent
-        synthesized answer.
-        """
-        evidence_text = format_evidence(evidence)
+    async def _synthesize(self, evidence: list[Evidence], intent_value: str) -> _FinalAnswer:
+        """One structured LLM call: synthesize the answer and verify sufficiency."""
         system = (
-            "You are a document analysis assistant. Synthesize a clear, well-structured "
-            "answer from the provided evidence. Cite the source sections. Do not "
-            "hallucinate information not present in the evidence."
+            "You answer a question using ONLY the provided evidence from the user's documents. "
+            "Cite the source sections. Do not invent facts. If the evidence does not fully answer "
+            "the question, set sufficient=false and state precisely what is missing. Provide a "
+            "calibrated confidence in [0,1]."
         )
         user = (
-            f"Question: {query}\n\n"
-            f"Evidence:\n{evidence_text}\n\n"
-            f"Provide a comprehensive answer based on the evidence above."
+            f"Question: {self._query}\n"
+            f"Query type: {intent_value}\n\n"
+            f"Evidence:\n{format_evidence(evidence)}\n\n"
+            "Synthesize the answer, judge whether the evidence is sufficient, and rate your confidence."
         )
-        response = await llm.complete(system, user)
-        return response.strip()
+        try:
+            return await self._llm.complete_structured(system, user, _FinalAnswer)
+        except Exception as e:  # noqa: BLE001 — fall back to raw evidence as the answer
+            logger.warning("Synthesis failed, using formatted evidence: %s", e)
+            return _FinalAnswer(
+                answer=format_evidence(evidence),
+                sufficient=True,
+                missing="",
+                confidence=0.4,
+            )
+
+    # -----------------------------------------------------------------------
+    # Helpers
+    # -----------------------------------------------------------------------
+
+    def _scout_intent_context(self) -> str:
+        if not self._query_analysis:
+            return ""
+        try:
+            return f"{self._query_analysis.intent.value} — {self._query_analysis.strategy.strategy_type}"
+        except Exception:
+            return self._query_analysis.intent.value
 
 
 # ---------------------------------------------------------------------------
-# Helpers
+# Module helpers
 # ---------------------------------------------------------------------------
 
 async def _noop_emit(event: dict) -> None:
     """No-op event emitter."""
 
 
-def _compute_confidence(
-    eval_sufficient: bool,
-    replan_rounds: int,
-    no_evidence: bool,
-) -> float:
-    """Compute confidence from LLM evaluate() outcome.
-
-    Mirrors Rust compute_confidence.
-    """
-    if no_evidence:
-        return 0.0
-    if eval_sufficient:
-        return max(0.5, 0.95 - replan_rounds * 0.15)
-    return max(0.1, 0.4 - replan_rounds * 0.1)
-
-
 def _format_doc_cards(cards: list[DocCard]) -> str:
-    """Format document cards for the analysis prompt."""
     lines = []
     for i, card in enumerate(cards, 1):
         concepts = f" (concepts: {', '.join(card.concepts[:5])})" if card.concepts else ""
         lines.append(
-            f"[{i}] {card.name} — {card.summary} "
-            f"({card.section_count} sections){concepts}"
+            f"[{i}] {card.name} — {card.summary} ({card.section_count} sections){concepts}"
         )
     return "\n".join(lines)

@@ -6,6 +6,9 @@
 <p>Knowing by reasoning, not vectors.</p>
 <p>Deep and reliable. Vectorless plays nicely with your documents. Ask questions in plain language; Get answers by reasoning with Vectorless.</p>
 
+> [!WARNING]
+> **Experimental project — not production-ready.** Vectorless is under active, rapid development. Releases are cut on an irregular schedule and may introduce **breaking API changes without notice**. It is currently positioned as a research/experimental project and makes no stability or production-readiness guarantees. Pin a version and expect churn.
+
 ## Installation
 
 Install using `pip install -U vectorless`. For more details, see the [Installation](https://vectorless.dev/docs/installation) section in the documentation.

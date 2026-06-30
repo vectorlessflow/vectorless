@@ -250,3 +250,20 @@ pub struct EvidenceScoreInfo {
     /// Weighted composite score.
     pub composite: f64,
 }
+
+/// Compile-time routing signal for a single node.
+///
+/// Surfaces the per-node fields the enrich stage already produces — a section
+/// summary, routing keywords, and the questions this subtree can answer — so an
+/// agent's planner can judge "what can this section answer?" without reading it.
+#[derive(Debug, Clone)]
+pub struct NodeRoutingInfo {
+    /// Node ID.
+    pub node_id: u64,
+    /// Generated summary of this section.
+    pub summary: String,
+    /// Routing keywords (topic tags).
+    pub keywords: Vec<String>,
+    /// Typical questions this subtree can answer.
+    pub questions: Vec<String>,
+}

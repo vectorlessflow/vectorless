@@ -12,8 +12,9 @@ use tokio::sync::Mutex;
 
 use vectorless_primitives::{
     ChainInfo, CollectedEvidence, ConceptInfo, ConceptRouteInfo, DocCardInfo, DocumentNavigator,
-    EvidenceScoreInfo, FindResult, MatchResult, NodeInfo, NodeStats, OverlapInfo, RouteTargetInfo,
-    SectionCardInfo, SectionSummaryInfo, SimilarResult, TocEntry, TopicEntryInfo, WordCount,
+    EvidenceScoreInfo, FindResult, MatchResult, NodeInfo, NodeRoutingInfo, NodeStats, OverlapInfo,
+    RouteTargetInfo, SectionCardInfo, SectionSummaryInfo, SimilarResult, TocEntry, TopicEntryInfo,
+    WordCount,
 };
 
 // =========================================================================
@@ -423,6 +424,20 @@ impl PyDocument {
                 .map_err(|_| PyRuntimeError::new_err("Invalid NodeId"))?;
             let nav = nav.lock().await;
             Ok(nav.evidence_score_for(num).await.map(PyEvidenceScore::from))
+        })
+    }
+
+    /// Compile-time routing signal for a node (summary, keywords, question hints).
+    fn node_routing<'py>(&self, py: Python<'py>, node_id: String) -> PyResult<Bound<'py, PyAny>> {
+        let nav = Arc::clone(&self.inner);
+        future_into_py(py, async move {
+            let num = node_id
+                .strip_prefix('n')
+                .ok_or_else(|| PyRuntimeError::new_err("NodeId must start with 'n'"))?
+                .parse::<u64>()
+                .map_err(|_| PyRuntimeError::new_err("Invalid NodeId"))?;
+            let nav = nav.lock().await;
+            Ok(nav.node_routing(num).await.map(PyNodeRouting::from))
         })
     }
 
@@ -1151,6 +1166,31 @@ impl From<OverlapInfo> for PyOverlapInfo {
 }
 
 /// Evidence quality score for a node.
+/// Compile-time routing signal for a single node.
+#[pyclass(name = "NodeRouting", skip_from_py_object)]
+#[derive(Clone)]
+pub struct PyNodeRouting {
+    #[pyo3(get)]
+    pub node_id: String,
+    #[pyo3(get)]
+    pub summary: String,
+    #[pyo3(get)]
+    pub keywords: Vec<String>,
+    #[pyo3(get)]
+    pub questions: Vec<String>,
+}
+
+impl From<NodeRoutingInfo> for PyNodeRouting {
+    fn from(v: NodeRoutingInfo) -> Self {
+        Self {
+            node_id: format!("n{}", v.node_id),
+            summary: v.summary,
+            keywords: v.keywords,
+            questions: v.questions,
+        }
+    }
+}
+
 #[pyclass(name = "EvidenceScore", skip_from_py_object)]
 #[derive(Clone)]
 pub struct PyEvidenceScore {

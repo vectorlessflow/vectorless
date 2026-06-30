@@ -355,6 +355,20 @@ impl DocumentNavigator {
     }
 
     /// Get evidence quality score for a specific node.
+    /// Compile-time routing signal for a node: summary, routing keywords, and the
+    /// questions this subtree can answer (populated by the enrich stage). Lets an
+    /// agent's planner judge a section without reading its full content.
+    pub async fn node_routing(&self, node_id: u64) -> Option<NodeRoutingInfo> {
+        let nid = self.u64_to_id(node_id)?;
+        let node = self.doc.tree.get(nid)?;
+        Some(NodeRoutingInfo {
+            node_id,
+            summary: node.summary.clone(),
+            keywords: node.routing_keywords.clone(),
+            questions: node.question_hints.clone(),
+        })
+    }
+
     pub async fn evidence_score_for(&self, node_id: u64) -> Option<EvidenceScoreInfo> {
         let nid = self.u64_to_id(node_id)?;
         self.doc.evidence_scores.as_ref()?.get(nid).map(|s| EvidenceScoreInfo {

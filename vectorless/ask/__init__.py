@@ -1,15 +1,20 @@
-"""Ask pipeline — query reasoning, multi-agent retrieval, and answer synthesis."""
+"""Ask pipeline — query reasoning, plan-once retrieval, and answer synthesis."""
 
 from vectorless.ask.dispatcher import dispatch
-from vectorless.ask.errors import AskError, BudgetExceededError, LLMFailureError, NavigationError, ParseError, VerificationError
-from vectorless.ask.evaluate import evaluate
+from vectorless.ask.errors import (
+    AskError,
+    BudgetExceededError,
+    LLMFailureError,
+    NavigationError,
+    ParseError,
+    VerificationError,
+)
 from vectorless.ask.orchestrator import Orchestrator
 from vectorless.ask.protocols import NavigableDocument
-from vectorless.ask.plan import Complexity, QueryIntent, QueryPlan, SubQuery
+from vectorless.ask.scout import Scout
 from vectorless.ask.types import (
     DispatchEntry,
     DocCard,
-    EvalResult,
     Evidence,
     Metrics,
     OrchestratorState,
@@ -19,14 +24,8 @@ from vectorless.ask.types import (
     TraceStep,
     WorkerMetrics,
     WorkerOutput,
-    WorkerState,
     Workspace,
 )
-from vectorless.ask.understand import understand
-from vectorless.ask.worker import Worker
-
-# New modules
-from vectorless.ask.blackboard import Discovery, SharedBlackboard, extract_llm_insights
 from vectorless.ask.events import AskEvent
 from vectorless.ask.reasoning import (
     Ambiguity,
@@ -36,12 +35,6 @@ from vectorless.ask.reasoning import (
     QueryAnalyzer,
     RetrievalStrategy,
     TemporalConstraint,
-)
-from vectorless.ask.verify import (
-    DimensionScore,
-    VerificationDimension,
-    VerificationResult,
-    VerifyPipeline,
 )
 
 __all__ = [
@@ -57,27 +50,22 @@ __all__ = [
     "BudgetExceededError",
     "NavigationError",
     "VerificationError",
-    # Worker types
+    # Retrieval output types
     "WorkerOutput",
     "WorkerMetrics",
-    "WorkerState",
-    # Orchestrator types
+    # Orchestrator + agents
     "Orchestrator",
     "OrchestratorState",
+    "Scout",
     "NavigableDocument",
     "DispatchEntry",
     "DocCard",
-    "EvalResult",
+    "dispatch",
     # Scope types
     "Scope",
     "Specified",
     "Workspace",
-    # Query understanding (legacy)
-    "QueryIntent",
-    "QueryPlan",
-    "SubQuery",
-    "Complexity",
-    # Query reasoning (new)
+    # Query reasoning
     "QueryAnalysis",
     "QueryAnalyzer",
     "EntityRef",
@@ -85,20 +73,6 @@ __all__ = [
     "AmbiguityType",
     "TemporalConstraint",
     "RetrievalStrategy",
-    # Agents
-    "Worker",
-    "dispatch",
-    "evaluate",
-    "understand",
-    # Shared blackboard
-    "Discovery",
-    "SharedBlackboard",
-    "extract_llm_insights",
     # Events
     "AskEvent",
-    # Verification
-    "VerifyPipeline",
-    "VerificationDimension",
-    "VerificationResult",
-    "DimensionScore",
 ]

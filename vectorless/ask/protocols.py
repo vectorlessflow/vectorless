@@ -155,6 +155,10 @@ class NavigableDocument(Protocol):
         """Get all evidence scores ranked by composite score."""
         ...
 
+    async def node_routing(self, node_id: str) -> Any:
+        """Compile-time routing signal for a node: summary, keywords, question hints."""
+        ...
+
 
 # ---------------------------------------------------------------------------
 # Callable protocols
