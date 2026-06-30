@@ -24,15 +24,15 @@ async def main():
 
     # 3. Simple keyword query
     response = await engine.ask("revenue", doc_ids=[doc_id])
-    print(f"Result: {response.single().content[:200]}")
+    print(f"Result: {response.answer[:200]}")
 
     # 4. Complex reasoning query
     response = await engine.ask(
         "What are the main factors affecting performance?",
         doc_ids=[doc_id],
     )
-    print(f"Confidence: {response.single().confidence:.2f}")
-    print(f"Result: {response.single().content[:200]}")
+    print(f"Confidence: {response.confidence:.2f}")
+    print(f"Result: {response.answer[:200]}")
 
     # 5. Cleanup
     await engine.remove_document(doc_id)

@@ -20,15 +20,13 @@ import asyncio
 from vectorless import Engine
 
 async def main():
-    engine = Engine(api_key="sk-...", model="gpt-4o", endpoint="https://api.openai.com/v1")
+    async with Engine(api_key="sk-...", model="gpt-4o") as engine:
+        # Compile a document
+        doc = await engine.compile(path="./report.pdf")
 
-    # Compile a document
-    result = await engine.compile(path="./report.pdf")
-    doc_id = result.doc_id
-
-    # Ask a question
-    response = await engine.ask("What is the total revenue?", doc_ids=[doc_id])
-    print(response.single().content)
+        # Ask a question
+        response = await engine.ask("What is the total revenue?", doc_ids=[doc.doc_id])
+        print(response.answer)
 
 asyncio.run(main())
 ```

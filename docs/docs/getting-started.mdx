@@ -30,7 +30,7 @@ async def main():
 
     # Ask a question
     response = await engine.ask("What is the total revenue?", doc_ids=[doc_id])
-    print(response.single().content)
+    print(response.answer)
 
 asyncio.run(main())
 ```

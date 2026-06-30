@@ -34,23 +34,22 @@ async def main():
             for edge in neighbors:
                 print(f"  {doc_id[:8]}... → {edge.target_doc_id[:8]}... ({edge.weight:.2f})")
 
-    # Query across all documents
+    # Query across the selected documents
     response = await engine.ask(
         "Compare quarterly revenue trends",
         doc_ids=doc_ids,
     )
 
-    for item in response.items:
-        print(f"\n[{item.doc_id[:8]}...] Confidence: {item.confidence:.2f}")
-        print(item.content[:300])
+    print(f"\nConfidence: {response.confidence:.2f}")
+    print(response.answer)
+    for ev in response.evidence:                 # evidence carries source attribution
+        print(f"  [{ev.doc_name or '?'}] {ev.node_title} — {ev.content[:200]}")
 
-    # Or query entire workspace
-    response = await engine.ask(
-        "What documents discuss risk factors?",
-        workspace_scope=True,
-    )
+    # Or query the entire workspace (omit doc_ids to search all compiled docs)
+    response = await engine.ask("What documents discuss risk factors?")
 
-    print(f"\nFound in {len(response.items)} document(s)")
+    docs_found = {ev.doc_name for ev in response.evidence if ev.doc_name}
+    print(f"\nFound across {len(docs_found)} document(s)")
 
     # Cleanup
     for doc_id in doc_ids:
