@@ -292,6 +292,14 @@ class Orchestrator:
         if not consolidated.evidence:
             return state.into_output(""), True, ""
 
+        # Navigational queries want locations, not prose — the consolidated
+        # formatted answer IS the result; skip the synthesis LLM call.
+        if intent_enum == QueryIntent.NAVIGATIONAL:
+            output = state.into_output(consolidated.answer)
+            output.evidence = consolidated.evidence
+            output.confidence = 0.7
+            return output, True, ""
+
         final = await self._synthesize(consolidated.evidence[:8], intent_value)
         state.total_llm_calls += 1
 

@@ -31,6 +31,27 @@ async def main():
 asyncio.run(main())
 ```
 
+## Command Line
+
+Installing `vectorless` also provides a `vectorless` CLI for indexing and querying from your terminal:
+
+```bash
+vectorless init                      # create a .vectorless/ workspace
+vectorless add ./report.pdf          # index a file (or a directory with -r)
+vectorless query "total revenue?"    # ask a one-off question
+vectorless ask                       # interactive query REPL
+
+vectorless list                      # list indexed documents
+vectorless info <doc_id>             # show a document's details
+vectorless tree <doc_id>             # visualize the document tree
+vectorless stats                     # workspace statistics
+vectorless remove <doc_id>           # remove a document from the index
+
+vectorless config llm.model gpt-4o   # view / set configuration
+```
+
+Run `vectorless --help` (or `vectorless <command> --help`) for all commands and options.
+
 ## Help
 
 See [documentation](https://vectorless.dev/docs/getting-started) for more details.

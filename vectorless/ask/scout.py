@@ -154,6 +154,25 @@ class Scout:
         llm_calls = 0
         round_no = 0
 
+        # 0. Route cache (before any gathering): a verified route for a
+        #    near-identical past query → read directly, 0 LLM, and skip the whole
+        #    candidate search (BM25 over the tree + per-candidate lookups).
+        if self._use_cache:
+            cached = self._cache.lookup(self._doc_id, self._query, self._intent)
+            if cached:
+                for nid in cached:
+                    title = await _safe(doc.node_title(nid), "")
+                    if not title:
+                        continue
+                    await self._read(
+                        doc,
+                        _Cand(nid=nid, title=_clamp(title), score=1.0, why="cache"),
+                        evidence, trace, collected, round_no,
+                    )
+                if evidence:
+                    logger.info("Scout route-cache hit: doc=%s (0 LLM, no gather)", doc_name)
+                    return self._finish(evidence, trace, collected, round_no, llm_calls, doc_name)
+
         # 1. deterministic candidate gathering (0 LLM)
         pool: dict[str, _Cand] = {}
         await self._gather(doc, pool)
@@ -168,22 +187,6 @@ class Scout:
 
         def budget_left() -> bool:
             return not (self._max_llm_calls and llm_calls >= self._max_llm_calls)
-
-        # 0. Route cache: a verified route for a near-identical past query → 0 LLM.
-        if self._use_cache:
-            cached = self._cache.lookup(self._doc_id, self._query, self._intent)
-            if cached:
-                for nid in cached:
-                    cand = pool.get(nid)
-                    if cand is None:
-                        title = await _safe(doc.node_title(nid), "")
-                        if not title:
-                            continue
-                        cand = _Cand(nid=nid, title=_clamp(title), score=1.0, why="cache")
-                    await self._read(doc, cand, evidence, trace, collected, round_no)
-                if evidence:
-                    logger.info("Scout route-cache hit: doc=%s (0 LLM)", doc_name)
-                    return self._finish(evidence, trace, collected, round_no, llm_calls, doc_name)
 
         # 2. Fast path (adaptive depth): when a confident deterministic route exists
         #    for a simple/factual query, read it and confirm with ONE verify call.
