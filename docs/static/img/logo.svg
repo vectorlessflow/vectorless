@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <defs>
+    <linearGradient id="vl" x1="32" y1="9" x2="32" y2="55" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#E8A876"/>
+      <stop offset="0.5" stop-color="#C77B4A"/>
+      <stop offset="1" stop-color="#9C5A30"/>
+    </linearGradient>
+  </defs>
+  <!-- three stacked isometric strata = the compiled IR / document depth -->
+  <path d="M32 9 L52 16 L32 23 L12 16 Z" fill="url(#vl)"/>
+  <path d="M32 25 L52 32 L32 39 L12 32 Z" fill="url(#vl)" opacity="0.85"/>
+  <path d="M32 41 L52 48 L32 55 L12 48 Z" fill="url(#vl)" opacity="0.7"/>
+  <!-- focused node on the top stratum -->
+  <path d="M32 12 L40 16 L32 20 L24 16 Z" fill="#FFFFFF" opacity="0.92"/>
+</svg>

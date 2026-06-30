@@ -3,64 +3,70 @@
  * bundles Infira by default. Infima is a CSS framework designed to
  * work well for content-centric websites.
  *
- * Color scheme: rose accent.
+ * Color scheme: slate + copper.
  */
 
 :root {
-  --primary: #AF788B;
-  --primary-dark: #8B5E6F;
-  --primary-deeper: #6D4A58;
-  --primary-light: #C9A0AE;
-  --primary-soft: rgba(175, 120, 139, 0.12);
-  --accent-tech: #5E6AD2;
+  --primary: #B5613A;
+  --primary-dark: #9C5230;
+  --primary-deeper: #7E4226;
+  --primary-light: #C77B4A;
+  --primary-soft: rgba(181, 97, 58, 0.10);
+  --grad-from: #C77B4A;
+  --grad-to: #9C5A30;
+  --accent-tech: #C77B4A;
   --accent-green: #10B981;
-  --text: #1E293B;
-  --text-light: #5B6E8C;
+  --text: #1B2128;
+  --text-light: #5C6B7E;
   --bg: #FFFFFF;
-  --bg-secondary: #F6F8FA;
-  --bg-offset: #F6F8FA;
+  --bg-secondary: #F5F7FA;
+  --bg-offset: #F5F7FA;
   --card-bg: #FFFFFF;
   --border: #E2E8F0;
-  --code-bg: #0F172A;
-  --code-text: #E2E8F0;
-  --code-comment: #6272A4;
-  --code-keyword: #FF79C6;
+  --code-bg: #0B0D11;
+  --code-text: #ECEFF4;
+  --code-comment: #6B7689;
+  --code-keyword: #C77B4A;
 
-  --ifm-color-primary: #AF788B;
-  --ifm-color-primary-dark: #8B5E6F;
-  --ifm-color-primary-darker: #6D4A58;
-  --ifm-color-primary-darkest: #573D4A;
-  --ifm-color-primary-light: #C9A0AE;
-  --ifm-color-primary-lighter: #D4B3BF;
-  --ifm-color-primary-lightest: #E6CDD6;
+  --ifm-color-primary: #B5613A;
+  --ifm-color-primary-dark: #9C5230;
+  --ifm-color-primary-darker: #8A4929;
+  --ifm-color-primary-darkest: #7E4226;
+  --ifm-color-primary-light: #C77B4A;
+  --ifm-color-primary-lighter: #D48C5C;
+  --ifm-color-primary-lightest: #E0975E;
   --ifm-code-font-size: 95%;
   --ifm-background-color: #FFFFFF;
-  --docusaurus-highlighted-code-line-bg: rgba(175, 120, 139, 0.08);
+  --docusaurus-highlighted-code-line-bg: rgba(181, 97, 58, 0.08);
 }
 
 [data-theme='dark'] {
-  --text: #EEF2FF;
-  --text-light: #8B9AB0;
-  --bg: #0A0C10;
-  --bg-secondary: #11151A;
-  --bg-offset: #11151A;
-  --card-bg: #131720;
-  --border: #1E293B;
-  --primary-soft: rgba(201, 160, 174, 0.15);
-  --code-bg: #010409;
-  --code-text: #E2E8F0;
-  --code-comment: #6272A4;
-  --code-keyword: #FF79C6;
+  --text: #ECEFF4;
+  --text-light: #8A95A5;
+  --bg: #0B0D11;
+  --bg-secondary: #12151B;
+  --bg-offset: #12151B;
+  --card-bg: #12151B;
+  --border: #20262E;
+  --primary: #C77B4A;
+  --primary-light: #E0975E;
+  --primary-soft: rgba(199, 123, 74, 0.14);
+  --grad-from: #E0975E;
+  --grad-to: #B5613A;
+  --code-bg: #080A0D;
+  --code-text: #ECEFF4;
+  --code-comment: #6B7689;
+  --code-keyword: #E0975E;
 
-  --ifm-color-primary: #C9A0AE;
-  --ifm-color-primary-dark: #AF788B;
-  --ifm-color-primary-darker: #8B5E6F;
-  --ifm-color-primary-darkest: #6D4A58;
-  --ifm-color-primary-light: #D4B3BF;
-  --ifm-color-primary-lighter: #E0C5CE;
-  --ifm-color-primary-lightest: #E6CDD6;
-  --docusaurus-highlighted-code-line-bg: rgba(175, 120, 139, 0.15);
-  --ifm-background-color: #0A0C10;
+  --ifm-color-primary: #C77B4A;
+  --ifm-color-primary-dark: #B5613A;
+  --ifm-color-primary-darker: #9C5230;
+  --ifm-color-primary-darkest: #7E4226;
+  --ifm-color-primary-light: #E0975E;
+  --ifm-color-primary-lighter: #E8A876;
+  --ifm-color-primary-lightest: #EFBC93;
+  --docusaurus-highlighted-code-line-bg: rgba(199, 123, 74, 0.14);
+  --ifm-background-color: #0B0D11;
 }
 
 /* ===== Navbar ===== */

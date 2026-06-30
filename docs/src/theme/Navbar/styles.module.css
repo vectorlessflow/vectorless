@@ -33,12 +33,20 @@
 }
 
 .logo {
-  font-size: 1.3rem;
-  font-weight: 600;
+  font-size: 1.28rem;
+  font-weight: 800;
   font-family: 'Inter', 'Libre Franklin', -apple-system, BlinkMacSystemFont, sans-serif;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.035em;
   color: var(--text);
   line-height: 1;
+}
+
+.logoMuted {
+  font-weight: 800;
+  background: linear-gradient(90deg, var(--grad-from), var(--grad-to));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 
 /* Center: navigation links */

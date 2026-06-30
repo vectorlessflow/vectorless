@@ -7,7 +7,7 @@ import type * as Preset from '@docusaurus/preset-classic';
 const config: Config = {
   title: 'Vectorless',
   tagline: 'Document Understanding Engine for AI',
-  favicon: 'img/favicon.ico',
+  favicon: 'img/favicon.svg',
 
   future: {
     v4: true,
@@ -69,7 +69,7 @@ const config: Config = {
       title: 'Vectorless',
       logo: {
         alt: 'Vectorless Logo',
-        src: 'img/logo.png',
+        src: 'img/logo.svg',
         href: 'https://vectorless.dev',
         target: '_self' // This makes the logo click follow the link in the same window
       },

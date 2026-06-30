@@ -1,37 +1,37 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 370" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif">
   <defs>
     <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#fdf8f9"/>
+      <stop offset="0%" style="stop-color:#fbf6f0"/>
       <stop offset="100%" style="stop-color:#ffffff"/>
     </linearGradient>
     <linearGradient id="primary" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" style="stop-color:#AF788B"/>
-      <stop offset="100%" style="stop-color:#C4949F"/>
+      <stop offset="0%" style="stop-color:#C77B4A"/>
+      <stop offset="100%" style="stop-color:#D99A6C"/>
     </linearGradient>
     <linearGradient id="indexGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" style="stop-color:#AF788B"/>
-      <stop offset="100%" style="stop-color:#9B6578"/>
+      <stop offset="0%" style="stop-color:#C77B4A"/>
+      <stop offset="100%" style="stop-color:#B5613A"/>
     </linearGradient>
     <linearGradient id="treeGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" style="stop-color:#8B6F78"/>
-      <stop offset="100%" style="stop-color:#7A5E68"/>
+      <stop offset="0%" style="stop-color:#A56A4A"/>
+      <stop offset="100%" style="stop-color:#8A4929"/>
     </linearGradient>
     <linearGradient id="queryGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" style="stop-color:#AF788B"/>
-      <stop offset="100%" style="stop-color:#9B6578"/>
+      <stop offset="0%" style="stop-color:#C77B4A"/>
+      <stop offset="100%" style="stop-color:#B5613A"/>
     </linearGradient>
     <linearGradient id="answerGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" style="stop-color:#D4A5B0"/>
-      <stop offset="100%" style="stop-color:#C4949F"/>
+      <stop offset="0%" style="stop-color:#E0975E"/>
+      <stop offset="100%" style="stop-color:#D99A6C"/>
     </linearGradient>
     <filter id="shadow" x="-3%" y="-3%" width="106%" height="112%">
-      <feDropShadow dx="0" dy="1" stdDeviation="3" flood-color="#AF788B" flood-opacity="0.12"/>
+      <feDropShadow dx="0" dy="1" stdDeviation="3" flood-color="#C77B4A" flood-opacity="0.12"/>
     </filter>
     <filter id="shadowLight" x="-3%" y="-3%" width="106%" height="112%">
       <feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#000" flood-opacity="0.06"/>
     </filter>
     <marker id="arrow" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
-      <polygon points="0 0, 8 3, 0 6" fill="#AF788B"/>
+      <polygon points="0 0, 8 3, 0 6" fill="#C77B4A"/>
     </marker>
   </defs>
 
@@ -39,52 +39,52 @@
   <rect width="920" height="370" rx="12" fill="url(#bg)"/>
 
   <!-- Title -->
-  <text x="460" y="32" text-anchor="middle" fill="#7A5E68" font-size="11" font-weight="600" letter-spacing="2.5">HOW VECTORLESS WORKS</text>
+  <text x="460" y="32" text-anchor="middle" fill="#8A4929" font-size="11" font-weight="600" letter-spacing="2.5">HOW VECTORLESS WORKS</text>
 
   <!-- ==================== TOP ROW: INDEXING ==================== -->
 
   <!-- Step 1: File -->
   <g filter="url(#shadowLight)">
-    <rect x="30" y="60" width="130" height="88" rx="8" fill="#ffffff" stroke="#e8d5db" stroke-width="1"/>
+    <rect x="30" y="60" width="130" height="88" rx="8" fill="#ffffff" stroke="#ecdcc9" stroke-width="1"/>
     <!-- File icon -->
-    <rect x="75" y="76" width="30" height="38" rx="3" fill="none" stroke="#AF788B" stroke-width="1.5"/>
-    <polyline points="95,76 95,88 105,88" fill="none" stroke="#AF788B" stroke-width="1.5"/>
-    <line x1="83" y1="92" x2="100" y2="92" stroke="#d4b8c0" stroke-width="1"/>
-    <line x1="83" y1="97" x2="100" y2="97" stroke="#d4b8c0" stroke-width="1"/>
-    <line x1="83" y1="102" x2="96" y2="102" stroke="#d4b8c0" stroke-width="1"/>
+    <rect x="75" y="76" width="30" height="38" rx="3" fill="none" stroke="#C77B4A" stroke-width="1.5"/>
+    <polyline points="95,76 95,88 105,88" fill="none" stroke="#C77B4A" stroke-width="1.5"/>
+    <line x1="83" y1="92" x2="100" y2="92" stroke="#e0cbb2" stroke-width="1"/>
+    <line x1="83" y1="97" x2="100" y2="97" stroke="#e0cbb2" stroke-width="1"/>
+    <line x1="83" y1="102" x2="96" y2="102" stroke="#e0cbb2" stroke-width="1"/>
     <text x="95" y="135" text-anchor="middle" fill="#5a4049" font-size="12" font-weight="600">File</text>
   </g>
 
   <!-- Arrow 1→2 -->
-  <line x1="165" y1="104" x2="202" y2="104" stroke="#c4a0ab" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <line x1="165" y1="104" x2="202" y2="104" stroke="#d4a883" stroke-width="1.5" marker-end="url(#arrow)"/>
 
   <!-- Step 2: Indexing Pipeline -->
   <g filter="url(#shadowLight)">
-    <rect x="210" y="60" width="220" height="88" rx="8" fill="#ffffff" stroke="#e8d5db" stroke-width="1"/>
+    <rect x="210" y="60" width="220" height="88" rx="8" fill="#ffffff" stroke="#ecdcc9" stroke-width="1"/>
     <!-- Top accent bar -->
     <rect x="210" y="60" width="220" height="3" rx="1.5" fill="url(#indexGrad)"/>
 
-    <text x="320" y="82" text-anchor="middle" fill="#AF788B" font-size="9.5" font-weight="600" letter-spacing="1">INDEXING PIPELINE</text>
+    <text x="320" y="82" text-anchor="middle" fill="#C77B4A" font-size="9.5" font-weight="600" letter-spacing="1">INDEXING PIPELINE</text>
 
     <!-- Stage row 1 -->
     <g transform="translate(222, 90)">
-      <rect x="0" y="0" width="44" height="22" rx="4" fill="#fdf2f4" stroke="#e8d5db" stroke-width="0.5"/>
-      <text x="22" y="15" text-anchor="middle" fill="#9B6578" font-size="9" font-weight="500">Parse</text>
+      <rect x="0" y="0" width="44" height="22" rx="4" fill="#fbf3ea" stroke="#ecdcc9" stroke-width="0.5"/>
+      <text x="22" y="15" text-anchor="middle" fill="#B5613A" font-size="9" font-weight="500">Parse</text>
 
-      <text x="50" y="15" fill="#c4a0ab" font-size="10">→</text>
+      <text x="50" y="15" fill="#d4a883" font-size="10">→</text>
 
-      <rect x="60" y="0" width="40" height="22" rx="4" fill="#fdf2f4" stroke="#e8d5db" stroke-width="0.5"/>
-      <text x="80" y="15" text-anchor="middle" fill="#9B6578" font-size="9" font-weight="500">Split</text>
+      <rect x="60" y="0" width="40" height="22" rx="4" fill="#fbf3ea" stroke="#ecdcc9" stroke-width="0.5"/>
+      <text x="80" y="15" text-anchor="middle" fill="#B5613A" font-size="9" font-weight="500">Split</text>
 
-      <text x="106" y="15" fill="#c4a0ab" font-size="10">→</text>
+      <text x="106" y="15" fill="#d4a883" font-size="10">→</text>
 
-      <rect x="116" y="0" width="44" height="22" rx="4" fill="#fdf2f4" stroke="#e8d5db" stroke-width="0.5"/>
-      <text x="138" y="15" text-anchor="middle" fill="#9B6578" font-size="9" font-weight="500">Build</text>
+      <rect x="116" y="0" width="44" height="22" rx="4" fill="#fbf3ea" stroke="#ecdcc9" stroke-width="0.5"/>
+      <text x="138" y="15" text-anchor="middle" fill="#B5613A" font-size="9" font-weight="500">Build</text>
 
-      <text x="166" y="15" fill="#c4a0ab" font-size="10">→</text>
+      <text x="166" y="15" fill="#d4a883" font-size="10">→</text>
 
-      <rect x="176" y="0" width="14" height="22" rx="4" fill="#fdf2f4" stroke="#e8d5db" stroke-width="0.5"/>
-      <text x="183" y="15" text-anchor="middle" fill="#9B6578" font-size="9" font-weight="500">…</text>
+      <rect x="176" y="0" width="14" height="22" rx="4" fill="#fbf3ea" stroke="#ecdcc9" stroke-width="0.5"/>
+      <text x="183" y="15" text-anchor="middle" fill="#B5613A" font-size="9" font-weight="500">…</text>
     </g>
 
     <!-- Incremental + Checkpoint badges -->
@@ -101,29 +101,29 @@
   </g>
 
   <!-- Arrow 2→3 -->
-  <line x1="435" y1="104" x2="472" y2="104" stroke="#c4a0ab" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <line x1="435" y1="104" x2="472" y2="104" stroke="#d4a883" stroke-width="1.5" marker-end="url(#arrow)"/>
 
   <!-- Step 3: Semantic Tree -->
   <g filter="url(#shadowLight)">
-    <rect x="480" y="60" width="160" height="88" rx="8" fill="#ffffff" stroke="#e8d5db" stroke-width="1"/>
+    <rect x="480" y="60" width="160" height="88" rx="8" fill="#ffffff" stroke="#ecdcc9" stroke-width="1"/>
     <rect x="480" y="60" width="160" height="3" rx="1.5" fill="url(#treeGrad)"/>
 
     <!-- Tree visualization -->
-    <circle cx="560" cy="82" r="5.5" fill="#AF788B"/>
-    <line x1="560" y1="87.5" x2="530" y2="98" stroke="#c4a0ab" stroke-width="1"/>
-    <line x1="560" y1="87.5" x2="560" y2="98" stroke="#c4a0ab" stroke-width="1"/>
-    <line x1="560" y1="87.5" x2="590" y2="98" stroke="#c4a0ab" stroke-width="1"/>
-    <circle cx="530" cy="101" r="4.5" fill="#C4949F"/>
-    <circle cx="560" cy="101" r="4.5" fill="#C4949F"/>
-    <circle cx="590" cy="101" r="4.5" fill="#C4949F"/>
-    <line x1="530" y1="105.5" x2="518" y2="114" stroke="#d4b8c0" stroke-width="1"/>
-    <line x1="530" y1="105.5" x2="540" y2="114" stroke="#d4b8c0" stroke-width="1"/>
-    <line x1="590" y1="105.5" x2="580" y2="114" stroke="#d4b8c0" stroke-width="1"/>
-    <line x1="590" y1="105.5" x2="600" y2="114" stroke="#d4b8c0" stroke-width="1"/>
-    <circle cx="518" cy="117" r="3.5" fill="#D4A5B0"/>
-    <circle cx="540" cy="117" r="3.5" fill="#D4A5B0"/>
-    <circle cx="580" cy="117" r="3.5" fill="#D4A5B0"/>
-    <circle cx="600" cy="117" r="3.5" fill="#D4A5B0"/>
+    <circle cx="560" cy="82" r="5.5" fill="#C77B4A"/>
+    <line x1="560" y1="87.5" x2="530" y2="98" stroke="#d4a883" stroke-width="1"/>
+    <line x1="560" y1="87.5" x2="560" y2="98" stroke="#d4a883" stroke-width="1"/>
+    <line x1="560" y1="87.5" x2="590" y2="98" stroke="#d4a883" stroke-width="1"/>
+    <circle cx="530" cy="101" r="4.5" fill="#D99A6C"/>
+    <circle cx="560" cy="101" r="4.5" fill="#D99A6C"/>
+    <circle cx="590" cy="101" r="4.5" fill="#D99A6C"/>
+    <line x1="530" y1="105.5" x2="518" y2="114" stroke="#e0cbb2" stroke-width="1"/>
+    <line x1="530" y1="105.5" x2="540" y2="114" stroke="#e0cbb2" stroke-width="1"/>
+    <line x1="590" y1="105.5" x2="580" y2="114" stroke="#e0cbb2" stroke-width="1"/>
+    <line x1="590" y1="105.5" x2="600" y2="114" stroke="#e0cbb2" stroke-width="1"/>
+    <circle cx="518" cy="117" r="3.5" fill="#E0975E"/>
+    <circle cx="540" cy="117" r="3.5" fill="#E0975E"/>
+    <circle cx="580" cy="117" r="3.5" fill="#E0975E"/>
+    <circle cx="600" cy="117" r="3.5" fill="#E0975E"/>
 
     <text x="560" y="138" text-anchor="middle" fill="#5a4049" font-size="12" font-weight="600">Semantic Tree</text>
   </g>
@@ -135,80 +135,80 @@
   </g>
 
   <!-- Arrow 3→4 (down then left) -->
-  <path d="M 560 151 L 560 170 L 320 170 L 320 180" fill="none" stroke="#c4a0ab" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <path d="M 560 151 L 560 170 L 320 170 L 320 180" fill="none" stroke="#d4a883" stroke-width="1.5" marker-end="url(#arrow)"/>
 
   <!-- ==================== BOTTOM ROW: RETRIEVAL ==================== -->
 
   <!-- Step 4: Query -->
   <g filter="url(#shadowLight)">
-    <rect x="30" y="185" width="120" height="80" rx="8" fill="#ffffff" stroke="#e8d5db" stroke-width="1"/>
+    <rect x="30" y="185" width="120" height="80" rx="8" fill="#ffffff" stroke="#ecdcc9" stroke-width="1"/>
     <!-- Search icon -->
-    <circle cx="80" cy="215" r="10" fill="none" stroke="#AF788B" stroke-width="1.5"/>
-    <line x1="87" y1="222" x2="95" y2="230" stroke="#AF788B" stroke-width="1.5" stroke-linecap="round"/>
+    <circle cx="80" cy="215" r="10" fill="none" stroke="#C77B4A" stroke-width="1.5"/>
+    <line x1="87" y1="222" x2="95" y2="230" stroke="#C77B4A" stroke-width="1.5" stroke-linecap="round"/>
     <text x="90" y="250" text-anchor="middle" fill="#5a4049" font-size="12" font-weight="600">Query</text>
   </g>
 
   <!-- Arrow Query → Retrieval Pipeline -->
-  <line x1="155" y1="225" x2="192" y2="225" stroke="#c4a0ab" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <line x1="155" y1="225" x2="192" y2="225" stroke="#d4a883" stroke-width="1.5" marker-end="url(#arrow)"/>
 
   <!-- Step 5: Retrieval Pipeline -->
   <g filter="url(#shadowLight)">
-    <rect x="200" y="185" width="320" height="80" rx="8" fill="#ffffff" stroke="#e8d5db" stroke-width="1"/>
+    <rect x="200" y="185" width="320" height="80" rx="8" fill="#ffffff" stroke="#ecdcc9" stroke-width="1"/>
     <rect x="200" y="185" width="320" height="3" rx="1.5" fill="url(#queryGrad)"/>
 
-    <text x="360" y="207" text-anchor="middle" fill="#AF788B" font-size="9.5" font-weight="600" letter-spacing="1">RETRIEVAL PIPELINE</text>
+    <text x="360" y="207" text-anchor="middle" fill="#C77B4A" font-size="9.5" font-weight="600" letter-spacing="1">RETRIEVAL PIPELINE</text>
 
     <!-- Stage pills -->
     <g transform="translate(214, 214)">
-      <rect x="0" y="0" width="60" height="22" rx="4" fill="#fdf2f4" stroke="#e8d5db" stroke-width="0.5"/>
-      <text x="30" y="15" text-anchor="middle" fill="#9B6578" font-size="9" font-weight="500">Analyze</text>
+      <rect x="0" y="0" width="60" height="22" rx="4" fill="#fbf3ea" stroke="#ecdcc9" stroke-width="0.5"/>
+      <text x="30" y="15" text-anchor="middle" fill="#B5613A" font-size="9" font-weight="500">Analyze</text>
 
-      <text x="66" y="15" fill="#c4a0ab" font-size="10">→</text>
+      <text x="66" y="15" fill="#d4a883" font-size="10">→</text>
 
-      <rect x="76" y="0" width="44" height="22" rx="4" fill="#fdf2f4" stroke="#e8d5db" stroke-width="0.5"/>
-      <text x="98" y="15" text-anchor="middle" fill="#9B6578" font-size="9" font-weight="500">Plan</text>
+      <rect x="76" y="0" width="44" height="22" rx="4" fill="#fbf3ea" stroke="#ecdcc9" stroke-width="0.5"/>
+      <text x="98" y="15" text-anchor="middle" fill="#B5613A" font-size="9" font-weight="500">Plan</text>
 
-      <text x="126" y="15" fill="#c4a0ab" font-size="10">→</text>
+      <text x="126" y="15" fill="#d4a883" font-size="10">→</text>
 
-      <rect x="136" y="0" width="54" height="22" rx="4" fill="#fdf2f4" stroke="#e8d5db" stroke-width="0.5"/>
-      <text x="163" y="15" text-anchor="middle" fill="#9B6578" font-size="9" font-weight="500">Search</text>
+      <rect x="136" y="0" width="54" height="22" rx="4" fill="#fbf3ea" stroke="#ecdcc9" stroke-width="0.5"/>
+      <text x="163" y="15" text-anchor="middle" fill="#B5613A" font-size="9" font-weight="500">Search</text>
 
-      <text x="196" y="15" fill="#c4a0ab" font-size="10">→</text>
+      <text x="196" y="15" fill="#d4a883" font-size="10">→</text>
 
-      <rect x="206" y="0" width="64" height="22" rx="4" fill="#fdf2f4" stroke="#e8d5db" stroke-width="0.5"/>
-      <text x="238" y="15" text-anchor="middle" fill="#9B6578" font-size="9" font-weight="500">Evaluate</text>
+      <rect x="206" y="0" width="64" height="22" rx="4" fill="#fbf3ea" stroke="#ecdcc9" stroke-width="0.5"/>
+      <text x="238" y="15" text-anchor="middle" fill="#B5613A" font-size="9" font-weight="500">Evaluate</text>
     </g>
 
     <!-- Strategy badges -->
     <g transform="translate(230, 244)">
-      <rect x="0" y="0" width="60" height="16" rx="8" fill="#f8f4f6" stroke="#e0d0d6" stroke-width="0.5"/>
-      <text x="30" y="12" text-anchor="middle" fill="#9B6578" font-size="7.5" font-weight="500">Keyword</text>
-      <rect x="66" y="0" width="60" height="16" rx="8" fill="#f8f4f6" stroke="#e0d0d6" stroke-width="0.5"/>
-      <text x="96" y="12" text-anchor="middle" fill="#9B6578" font-size="7.5" font-weight="500">LLM</text>
-      <rect x="132" y="0" width="60" height="16" rx="8" fill="#fdf2f4" stroke="#d4b0bc" stroke-width="0.5"/>
-      <text x="162" y="12" text-anchor="middle" fill="#AF788B" font-size="7.5" font-weight="600">Hybrid ★</text>
-      <rect x="198" y="0" width="80" height="16" rx="8" fill="#f8f4f6" stroke="#e0d0d6" stroke-width="0.5"/>
-      <text x="238" y="12" text-anchor="middle" fill="#9B6578" font-size="7.5" font-weight="500">Cross-Doc</text>
+      <rect x="0" y="0" width="60" height="16" rx="8" fill="#faf4ec" stroke="#e4d3c0" stroke-width="0.5"/>
+      <text x="30" y="12" text-anchor="middle" fill="#B5613A" font-size="7.5" font-weight="500">Keyword</text>
+      <rect x="66" y="0" width="60" height="16" rx="8" fill="#faf4ec" stroke="#e4d3c0" stroke-width="0.5"/>
+      <text x="96" y="12" text-anchor="middle" fill="#B5613A" font-size="7.5" font-weight="500">LLM</text>
+      <rect x="132" y="0" width="60" height="16" rx="8" fill="#fbf3ea" stroke="#e0bb93" stroke-width="0.5"/>
+      <text x="162" y="12" text-anchor="middle" fill="#C77B4A" font-size="7.5" font-weight="600">Hybrid ★</text>
+      <rect x="198" y="0" width="80" height="16" rx="8" fill="#faf4ec" stroke="#e4d3c0" stroke-width="0.5"/>
+      <text x="238" y="12" text-anchor="middle" fill="#B5613A" font-size="7.5" font-weight="500">Cross-Doc</text>
     </g>
   </g>
 
   <!-- Arrow Retrieval → Answer -->
-  <line x1="525" y1="225" x2="562" y2="225" stroke="#c4a0ab" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <line x1="525" y1="225" x2="562" y2="225" stroke="#d4a883" stroke-width="1.5" marker-end="url(#arrow)"/>
 
   <!-- Step 6: Answer -->
   <g filter="url(#shadowLight)">
-    <rect x="570" y="185" width="160" height="80" rx="8" fill="#ffffff" stroke="#e8d5db" stroke-width="1"/>
+    <rect x="570" y="185" width="160" height="80" rx="8" fill="#ffffff" stroke="#ecdcc9" stroke-width="1"/>
     <rect x="570" y="185" width="160" height="3" rx="1.5" fill="url(#answerGrad)"/>
-    <text x="650" y="218" text-anchor="middle" fill="#AF788B" font-size="22">◆</text>
+    <text x="650" y="218" text-anchor="middle" fill="#C77B4A" font-size="22">◆</text>
     <text x="650" y="240" text-anchor="middle" fill="#5a4049" font-size="12" font-weight="600">Grounded Answer</text>
-    <text x="650" y="256" text-anchor="middle" fill="#9B6578" font-size="9">with source references</text>
+    <text x="650" y="256" text-anchor="middle" fill="#B5613A" font-size="9">with source references</text>
   </g>
 
   <!-- ==================== RIGHT SIDE: No Vectors ==================== -->
   <g transform="translate(760, 60)">
-    <rect x="0" y="0" width="140" height="200" rx="10" fill="#ffffff" stroke="#e8d5db" stroke-width="1" stroke-dasharray="5,3" filter="url(#shadowLight)"/>
-    <text x="70" y="24" text-anchor="middle" fill="#9B6578" font-size="9" font-weight="600" letter-spacing="1">NO VECTORS</text>
-    <line x1="15" y1="34" x2="125" y2="34" stroke="#f0e4e8" stroke-width="1"/>
+    <rect x="0" y="0" width="140" height="200" rx="10" fill="#ffffff" stroke="#ecdcc9" stroke-width="1" stroke-dasharray="5,3" filter="url(#shadowLight)"/>
+    <text x="70" y="24" text-anchor="middle" fill="#B5613A" font-size="9" font-weight="600" letter-spacing="1">NO VECTORS</text>
+    <line x1="15" y1="34" x2="125" y2="34" stroke="#efe4d6" stroke-width="1"/>
 
     <text x="24" y="58" fill="#c47070" font-size="12">✕</text>
     <text x="42" y="58" fill="#7a5e68" font-size="11">Vector DB</text>
@@ -222,29 +222,29 @@
     <text x="24" y="136" fill="#c47070" font-size="12">✕</text>
     <text x="42" y="136" fill="#7a5e68" font-size="11">Similarity</text>
 
-    <line x1="15" y1="150" x2="125" y2="150" stroke="#f0e4e8" stroke-width="1"/>
-    <text x="70" y="170" text-anchor="middle" fill="#AF788B" font-size="10" font-weight="600">Pure LLM</text>
-    <text x="70" y="185" text-anchor="middle" fill="#AF788B" font-size="10" font-weight="600">Guidance</text>
+    <line x1="15" y1="150" x2="125" y2="150" stroke="#efe4d6" stroke-width="1"/>
+    <text x="70" y="170" text-anchor="middle" fill="#C77B4A" font-size="10" font-weight="600">Pure LLM</text>
+    <text x="70" y="185" text-anchor="middle" fill="#C77B4A" font-size="10" font-weight="600">Guidance</text>
   </g>
 
   <!-- ==================== BOTTOM FLOW LABELS ==================== -->
   <g transform="translate(30, 295)">
     <!-- Flow step labels -->
-    <text x="55" y="14" text-anchor="middle" fill="#9B6578" font-size="8.5" font-weight="500">INPUT</text>
+    <text x="55" y="14" text-anchor="middle" fill="#B5613A" font-size="8.5" font-weight="500">INPUT</text>
 
-    <text x="320" y="14" text-anchor="middle" fill="#9B6578" font-size="8.5" font-weight="500">LLM-GUIDED INDEXING</text>
+    <text x="320" y="14" text-anchor="middle" fill="#B5613A" font-size="8.5" font-weight="500">LLM-GUIDED INDEXING</text>
 
-    <text x="560" y="14" text-anchor="middle" fill="#9B6578" font-size="8.5" font-weight="500">PERSISTENT STORAGE</text>
+    <text x="560" y="14" text-anchor="middle" fill="#B5613A" font-size="8.5" font-weight="500">PERSISTENT STORAGE</text>
   </g>
 
   <g transform="translate(30, 310)">
-    <text x="70" y="14" text-anchor="middle" fill="#9B6578" font-size="8.5" font-weight="500">QUERY</text>
+    <text x="70" y="14" text-anchor="middle" fill="#B5613A" font-size="8.5" font-weight="500">QUERY</text>
 
-    <text x="360" y="14" text-anchor="middle" fill="#9B6578" font-size="8.5" font-weight="500">MULTI-STRATEGY RETRIEVAL</text>
+    <text x="360" y="14" text-anchor="middle" fill="#B5613A" font-size="8.5" font-weight="500">MULTI-STRATEGY RETRIEVAL</text>
 
-    <text x="650" y="14" text-anchor="middle" fill="#9B6578" font-size="8.5" font-weight="500">RESULT</text>
+    <text x="650" y="14" text-anchor="middle" fill="#B5613A" font-size="8.5" font-weight="500">RESULT</text>
   </g>
 
   <!-- Bottom tagline -->
-  <text x="460" y="355" text-anchor="middle" fill="#b89aa5" font-size="10" letter-spacing="1.5">FILE → TREE INDEX → REASONING RETRIEVAL → ANSWER</text>
+  <text x="460" y="355" text-anchor="middle" fill="#c2a98e" font-size="10" letter-spacing="1.5">FILE → TREE INDEX → REASONING RETRIEVAL → ANSWER</text>
 </svg>
