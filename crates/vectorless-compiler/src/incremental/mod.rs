@@ -205,3 +205,64 @@ pub fn apply_enrichment_index(
     }
     applied
 }
+
+#[cfg(test)]
+mod reuse_tests {
+    use super::*;
+    use vectorless_document::DocumentTree;
+
+    #[test]
+    fn unchanged_nodes_reuse_full_enrichment_changed_ones_dont() {
+        let mut old = DocumentTree::new("root", "r");
+        let a = old.add_child(old.root(), "fn: foo", "fn foo() {}");
+        let b = old.add_child(old.root(), "fn: bar", "fn bar() {}");
+        old.set_summary(a, "summary A");
+        old.set_summary(b, "summary B");
+        if let Some(n) = old.get_mut(a) {
+            n.routing_keywords = vec!["foo".to_string()];
+            n.question_hints = vec!["what does foo do?".to_string()];
+        }
+
+        let index = build_enrichment_index(&old);
+
+        let mut new = DocumentTree::new("root", "r");
+        let na = new.add_child(new.root(), "fn: foo", "fn foo() {}"); // unchanged
+        let nb = new.add_child(new.root(), "fn: bar", "fn bar() { changed }"); // changed
+        let _nc = new.add_child(new.root(), "fn: baz", "fn baz() {}"); // new
+
+        let applied = apply_enrichment_index(&mut new, &index);
+
+        assert_eq!(applied, 1, "only the unchanged node should reuse");
+        assert_eq!(new.get(na).unwrap().summary, "summary A");
+        assert_eq!(new.get(na).unwrap().routing_keywords, vec!["foo".to_string()]);
+        assert_eq!(new.get(na).unwrap().question_hints, vec!["what does foo do?".to_string()]);
+        assert!(new.get(nb).unwrap().summary.is_empty(), "changed node must be re-enriched");
+    }
+
+    #[test]
+    fn duplicate_titles_match_by_content_not_title() {
+        // Two methods share a title but differ in body — title-based reuse would
+        // mismatch; content-addressed reuse must pick the right one.
+        let mut old = DocumentTree::new("root", "r");
+        let a = old.add_child(old.root(), "fn: __init__", "self.a = 1");
+        let b = old.add_child(old.root(), "fn: __init__", "self.b = 2");
+        old.set_summary(a, "init A");
+        old.set_summary(b, "init B");
+
+        let index = build_enrichment_index(&old);
+
+        let mut new = DocumentTree::new("root", "r");
+        let nb = new.add_child(new.root(), "fn: __init__", "self.b = 2"); // matches B by content
+
+        apply_enrichment_index(&mut new, &index);
+        assert_eq!(new.get(nb).unwrap().summary, "init B");
+    }
+
+    #[test]
+    fn empty_index_applies_nothing() {
+        let index = build_enrichment_index(&DocumentTree::new("root", "r")); // nothing enriched
+        let mut new = DocumentTree::new("root", "r");
+        new.add_child(new.root(), "fn: foo", "fn foo() {}");
+        assert_eq!(apply_enrichment_index(&mut new, &index), 0);
+    }
+}

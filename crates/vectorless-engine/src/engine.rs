@@ -437,11 +437,27 @@ impl Engine {
             vectorless_compiler::CompilerInput::pre_parsed(raw_nodes, name.to_string());
         let mut pipeline_options = vectorless_compiler::PipelineOptions::default();
 
-        // Incremental: load the previous tree so unchanged nodes reuse enrichment.
+        // Reuse key = pipeline logic + model. Changing either invalidates the
+        // previous enrichment, forcing a full re-generation.
+        let reuse_key = format!(
+            "{}|{}",
+            pipeline_options.logic_fingerprint().to_base64(),
+            self.config.llm.model
+        );
+
+        // Incremental: reuse the previous tree's enrichment only when it was
+        // produced with the same logic + model.
         if reuse {
             if let Some(id) = doc_id {
                 if let Ok(Some(prev)) = self.workspace.load(id).await {
-                    pipeline_options.existing_tree = Some(prev.tree);
+                    let prev_key = prev
+                        .meta
+                        .as_ref()
+                        .map(|m| m.logic_fingerprint.as_str())
+                        .unwrap_or("");
+                    if prev_key == reuse_key.as_str() {
+                        pipeline_options.existing_tree = Some(prev.tree);
+                    }
                 }
             }
         }
@@ -465,6 +481,8 @@ impl Engine {
             result.metrics.total_tokens_generated,
             result.metrics.total_time_ms(),
         );
+        // Persist the reuse key so the next compile can decide whether to reuse.
+        meta.logic_fingerprint = reuse_key;
 
         let doc = vectorless_document::Document {
             schema_version: CURRENT_SCHEMA_VERSION,
