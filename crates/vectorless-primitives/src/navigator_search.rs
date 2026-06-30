@@ -84,6 +84,168 @@ impl DocumentNavigator {
             .collect()
     }
 
+    /// Ranked full-text search across the whole document (BM25).
+    ///
+    /// Returns the top `limit` nodes by relevance to the multi-term query, each
+    /// with a snippet. This is the lexical-recall counterpart to keyword/route
+    /// lookups: the agent understands the question, then `search` ranks where to
+    /// read. Pure compute — no LLM, no precomputed index required.
+    pub async fn search(&self, query: &str, limit: usize) -> Vec<SearchHit> {
+        // De-duplicated query terms, original order preserved.
+        let mut q_terms: Vec<String> = Vec::new();
+        for t in Self::bm25_tokenize(query) {
+            if !q_terms.contains(&t) {
+                q_terms.push(t);
+            }
+        }
+        if q_terms.is_empty() {
+            return Vec::new();
+        }
+        let limit = if limit == 0 { 10 } else { limit };
+
+        // Per-node: length + term frequencies (query terms only).
+        let mut nodes: Vec<(NodeId, usize, Vec<u32>)> = Vec::new();
+        let mut df = vec![0usize; q_terms.len()];
+        let mut total_len = 0usize;
+
+        for id in self.doc.tree.traverse() {
+            let node = match self.doc.tree.get(id) {
+                Some(n) => n,
+                None => continue,
+            };
+            let mut len = 0usize;
+            let mut tf = vec![0u32; q_terms.len()];
+            for field in [
+                node.title.as_str(),
+                node.summary.as_str(),
+                node.content.as_str(),
+            ] {
+                for tok in Self::bm25_tokenize(field) {
+                    len += 1;
+                    if let Some(i) = q_terms.iter().position(|t| t == &tok) {
+                        tf[i] += 1;
+                    }
+                }
+            }
+            if len == 0 {
+                continue;
+            }
+            for (i, &c) in tf.iter().enumerate() {
+                if c > 0 {
+                    df[i] += 1;
+                }
+            }
+            total_len += len;
+            nodes.push((id, len, tf));
+        }
+
+        let n = nodes.len();
+        if n == 0 {
+            return Vec::new();
+        }
+        let avgdl = total_len as f64 / n as f64;
+        let k1 = 1.5_f64;
+        let b = 0.75_f64;
+        let idf: Vec<f64> = df
+            .iter()
+            .map(|&d| ((n as f64 - d as f64 + 0.5) / (d as f64 + 0.5) + 1.0).ln())
+            .collect();
+
+        let mut scored: Vec<(NodeId, f64)> = Vec::new();
+        for (id, len, tf) in &nodes {
+            let mut score = 0.0_f64;
+            for i in 0..q_terms.len() {
+                let f = tf[i] as f64;
+                if f == 0.0 {
+                    continue;
+                }
+                let denom = f + k1 * (1.0 - b + b * (*len as f64 / avgdl));
+                score += idf[i] * (f * (k1 + 1.0)) / denom;
+            }
+            if score > 0.0 {
+                scored.push((*id, score));
+            }
+        }
+
+        scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+        scored.truncate(limit);
+
+        scored
+            .into_iter()
+            .filter_map(|(id, score)| {
+                let node = self.doc.tree.get(id)?;
+                Some(SearchHit {
+                    node_id: self.id_to_u64(id),
+                    title: node.title.clone(),
+                    score,
+                    snippet: Self::bm25_snippet(&node.content, &q_terms),
+                })
+            })
+            .collect()
+    }
+
+    fn bm25_tokenize(text: &str) -> Vec<String> {
+        let mut out = Vec::new();
+        let mut cur = String::new();
+        for ch in text.chars() {
+            if ch.is_alphanumeric() {
+                for c in ch.to_lowercase() {
+                    cur.push(c);
+                }
+            } else if !cur.is_empty() {
+                if cur.len() >= 2 && !Self::bm25_is_stopword(&cur) {
+                    out.push(std::mem::take(&mut cur));
+                } else {
+                    cur.clear();
+                }
+            }
+        }
+        if cur.len() >= 2 && !Self::bm25_is_stopword(&cur) {
+            out.push(cur);
+        }
+        out
+    }
+
+    fn bm25_is_stopword(w: &str) -> bool {
+        matches!(
+            w,
+            "the" | "and" | "for" | "are" | "with" | "that" | "this" | "from"
+                | "what" | "how" | "was" | "were" | "has" | "have" | "had"
+                | "you" | "your" | "all" | "any" | "can" | "will" | "its"
+                | "into" | "than" | "then" | "there" | "their" | "which"
+        )
+    }
+
+    fn bm25_snippet(content: &str, terms: &[String]) -> String {
+        let trimmed = content.trim();
+        if trimmed.is_empty() {
+            return String::new();
+        }
+        let lower = trimmed.to_lowercase();
+        let mut byte_pos: Option<usize> = None;
+        for t in terms {
+            if let Some(p) = lower.find(t.as_str()) {
+                byte_pos = Some(byte_pos.map_or(p, |x| x.min(p)));
+            }
+        }
+        let char_start = match byte_pos {
+            Some(p) => lower[..p].chars().count(),
+            None => 0,
+        };
+        let chars: Vec<char> = trimmed.chars().collect();
+        let start = char_start.saturating_sub(50);
+        let end = (start + 200).min(chars.len());
+        let mut snip: String = chars[start..end].iter().collect();
+        snip = snip.split_whitespace().collect::<Vec<_>>().join(" ");
+        if start > 0 {
+            snip = format!("…{snip}");
+        }
+        if end < chars.len() {
+            snip.push('…');
+        }
+        snip
+    }
+
     /// Search within a specific node's content without moving the cursor.
     pub async fn grep_node(
         &self,

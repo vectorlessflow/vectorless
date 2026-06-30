@@ -1,9 +1,10 @@
-"""Evidence deduplication and answer formatting.
+"""Consolidate collected evidence into a deduplicated, formatted result.
 
-Dedup is pure compute (no LLM). Answer formatting is intent-aware.
+Pure compute — no LLM, no reranking-by-model. Three-stage dedup (quality filter
+→ source dedup → near-duplicate removal) followed by intent-aware formatting.
 
-The Rust rerank principle: "Find what you find, return what you find."
-No LLM synthesis — the evidence IS the answer.
+Principle: "Find what you find, return what you find." The orchestrator does the
+final LLM synthesis; this step only consolidates the evidence.
 """
 
 from __future__ import annotations
@@ -15,7 +16,7 @@ from vectorless.ask.reasoning.types import QueryIntent
 
 
 # ---------------------------------------------------------------------------
-# Deduplication (compute — mirrors vectorless-rerank/src/dedup.rs)
+# Deduplication (pure compute, no LLM)
 # ---------------------------------------------------------------------------
 
 MIN_EVIDENCE_CHARS = 50
@@ -31,7 +32,7 @@ def dedup(evidence: list[Evidence]) -> list[Evidence]:
     # Stage 1: quality filter
     filtered = [e for e in evidence if len(e.content.strip()) >= MIN_EVIDENCE_CHARS]
 
-    # Stage 2: source dedup — mirrors Rust dedup key = "doc_name:source_path"
+    # Stage 2: source dedup — key = "doc_name:source_path"
     seen_keys: set[str] = set()
     stage2: list[Evidence] = []
     for e in filtered:
@@ -69,17 +70,14 @@ def _jaccard_similarity(a: str, b: str) -> float:
 
 
 # ---------------------------------------------------------------------------
-# Formatting (intent-aware — mirrors rerank/src/lib.rs)
+# Formatting (intent-aware)
 # ---------------------------------------------------------------------------
 
 def format_answer(
     evidence: list[Evidence],
     intent: QueryIntent = QueryIntent.FACTUAL,
 ) -> str:
-    """Format evidence into an answer string based on query intent.
-
-    Mirrors Rust rerank process() — no LLM, just formatting.
-    """
+    """Format evidence into an answer string based on query intent. No LLM."""
     if not evidence:
         return ""
 
@@ -90,27 +88,19 @@ def format_answer(
 
 
 def _format_evidence_as_answer(evidence: list[Evidence]) -> str:
-    """Format collected evidence directly as the answer.
-
-    Mirrors Rust format_evidence_as_answer — includes doc_name attribution.
-    """
+    """Format collected evidence directly as the answer (with doc_name attribution)."""
     parts: list[str] = []
-
     for e in evidence:
         doc = e.doc_name or ""
         if doc:
             parts.append(f"[{e.node_title} — {doc}]\n{e.content}")
         else:
             parts.append(f"[{e.node_title}]\n{e.content}")
-
     return "\n\n".join(parts)
 
 
 def _format_locations(evidence: list[Evidence]) -> str:
-    """Format evidence as location references (for navigational queries).
-
-    Mirrors Rust format_locations.
-    """
+    """Format evidence as location references (for navigational queries)."""
     if not evidence:
         return "No matching locations found."
     result = "Found at:\n"
@@ -121,42 +111,35 @@ def _format_locations(evidence: list[Evidence]) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Rerank output — mirrors rerank::types::RerankOutput
+# Output
 # ---------------------------------------------------------------------------
 
 @dataclass
-class RerankOutput:
-    """Output from the rerank pipeline.
+class ConsolidatedOutput:
+    """Result of consolidation: answer + evidence + confidence + llm_calls.
 
-    Mirrors Rust RerankOutput: answer + llm_calls + confidence.
-    Evidence is also included for the Python Orchestrator to assemble Output.
+    Evidence is included so the orchestrator can assemble the final Output.
     """
 
     answer: str
     evidence: list[Evidence]
     confidence: float
-    llm_calls: int = 0  # Always 0 for rerank — no LLM calls
+    llm_calls: int = 0  # Always 0 — pure compute, no LLM
 
 
-def process(
+def consolidate(
     evidence: list[Evidence],
     intent: QueryIntent = QueryIntent.FACTUAL,
     confidence: float = 0.0,
-) -> RerankOutput:
-    """Run the rerank pipeline: dedup → format.
-
-    No LLM calls — pure compute and formatting.
-    Mirrors Rust rerank::process().
-    """
+) -> ConsolidatedOutput:
+    """Consolidate evidence: dedup → format. No LLM calls — pure compute."""
     deduped = dedup(evidence)
 
     if not deduped:
-        return RerankOutput(answer="", evidence=[], confidence=0.0, llm_calls=0)
+        return ConsolidatedOutput(answer="", evidence=[], confidence=0.0, llm_calls=0)
 
-    answer = format_answer(deduped, intent)
-
-    return RerankOutput(
-        answer=answer,
+    return ConsolidatedOutput(
+        answer=format_answer(deduped, intent),
         evidence=deduped,
         confidence=confidence,
         llm_calls=0,

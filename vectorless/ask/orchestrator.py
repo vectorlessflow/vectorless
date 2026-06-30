@@ -45,7 +45,7 @@ from vectorless.ask.prompts import (
     orchestrator_analysis,
     parse_dispatch_plan,
 )
-from vectorless.rerank.synthesize import process as rerank_process
+from vectorless.consolidate import consolidate
 
 logger = logging.getLogger(__name__)
 
@@ -284,19 +284,19 @@ class Orchestrator:
     async def _finalize(self, state: OrchestratorState) -> tuple[Output, bool, str]:
         intent_enum = self._query_analysis.intent if self._query_analysis else QueryIntent.FACTUAL
         intent_value = intent_enum.value
-        reranked = rerank_process(
+        consolidated = consolidate(
             evidence=state.all_evidence,
             intent=intent_enum,
             confidence=0.0,
         )
-        if not reranked.evidence:
+        if not consolidated.evidence:
             return state.into_output(""), True, ""
 
-        final = await self._synthesize(reranked.evidence[:8], intent_value)
+        final = await self._synthesize(consolidated.evidence[:8], intent_value)
         state.total_llm_calls += 1
 
         output = state.into_output(final.answer)
-        output.evidence = reranked.evidence
+        output.evidence = consolidated.evidence
         output.confidence = max(0.0, min(1.0, final.confidence))
         logger.info(
             "Finalize: evidence=%d llm_calls=%d confidence=%.2f sufficient=%s",

@@ -28,11 +28,10 @@ async def dispatch(
     doc_loader: DocLoader,
     event_callback: EventCallback | None = None,
 ) -> Output:
-    """Unified entry point — mirrors Rust dispatcher::dispatch().
+    """Unified entry point for retrieval.
 
-    All queries go through Orchestrator:
-    - Specified -> skip_analysis=True -> spawn Workers directly
-    - Workspace -> skip_analysis=False -> analyze -> dispatch -> evaluate -> replan
+    - Specified docs -> skip analysis, dispatch Scouts directly
+    - Workspace -> analyze (select docs) -> dispatch Scouts -> synthesize
     """
     # Step 1: Query reasoning (multi-stage analysis)
     logger.info("dispatch: query reasoning started")

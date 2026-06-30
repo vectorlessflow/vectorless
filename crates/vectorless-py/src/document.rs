@@ -13,8 +13,8 @@ use tokio::sync::Mutex;
 use vectorless_primitives::{
     ChainInfo, CollectedEvidence, ConceptInfo, ConceptRouteInfo, DocCardInfo, DocumentNavigator,
     EvidenceScoreInfo, FindResult, MatchResult, NodeInfo, NodeRoutingInfo, NodeStats, OverlapInfo,
-    RouteTargetInfo, SectionCardInfo, SectionSummaryInfo, SimilarResult, TocEntry, TopicEntryInfo,
-    WordCount,
+    RouteTargetInfo, SearchHit, SectionCardInfo, SectionSummaryInfo, SimilarResult, TocEntry,
+    TopicEntryInfo, WordCount,
 };
 
 // =========================================================================
@@ -438,6 +438,21 @@ impl PyDocument {
                 .map_err(|_| PyRuntimeError::new_err("Invalid NodeId"))?;
             let nav = nav.lock().await;
             Ok(nav.node_routing(num).await.map(PyNodeRouting::from))
+        })
+    }
+
+    /// Ranked full-text (BM25) search across the document; returns top hits.
+    #[pyo3(signature = (query, limit=10))]
+    fn search<'py>(&self, py: Python<'py>, query: String, limit: usize) -> PyResult<Bound<'py, PyAny>> {
+        let nav = Arc::clone(&self.inner);
+        future_into_py(py, async move {
+            let nav = nav.lock().await;
+            Ok(nav
+                .search(&query, limit)
+                .await
+                .into_iter()
+                .map(PySearchHit::from)
+                .collect::<Vec<_>>())
         })
     }
 
@@ -1166,6 +1181,31 @@ impl From<OverlapInfo> for PyOverlapInfo {
 }
 
 /// Evidence quality score for a node.
+/// A ranked full-text search hit.
+#[pyclass(name = "SearchHit", skip_from_py_object)]
+#[derive(Clone)]
+pub struct PySearchHit {
+    #[pyo3(get)]
+    pub node_id: String,
+    #[pyo3(get)]
+    pub title: String,
+    #[pyo3(get)]
+    pub score: f64,
+    #[pyo3(get)]
+    pub snippet: String,
+}
+
+impl From<SearchHit> for PySearchHit {
+    fn from(v: SearchHit) -> Self {
+        Self {
+            node_id: format!("n{}", v.node_id),
+            title: v.title,
+            score: v.score,
+            snippet: v.snippet,
+        }
+    }
+}
+
 /// Compile-time routing signal for a single node.
 #[pyclass(name = "NodeRouting", skip_from_py_object)]
 #[derive(Clone)]

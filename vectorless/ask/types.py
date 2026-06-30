@@ -74,7 +74,7 @@ class WorkerMetrics:
 class WorkerOutput:
     """Output from a single document's retrieval — pure evidence, no answer.
 
-    Answer synthesis happens at the orchestrator (rerank + synthesis).
+    Answer synthesis happens at the orchestrator (consolidate + synthesis).
     """
 
     evidence: list[Evidence] = field(default_factory=list)

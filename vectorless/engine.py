@@ -300,7 +300,7 @@ class Engine:
     ) -> Output:
         """Ask a question and get results with source attribution.
 
-        Uses the Python strategy layer: query understanding → orchestrator → workers → rerank.
+        Uses the Python strategy layer: query analysis → orchestrator → scouts → consolidate.
 
         Args:
             question: Natural language query.
@@ -369,7 +369,7 @@ class Engine:
         """Run the full Python strategy: dispatch → Output.
 
         Uses dispatcher as the unified entry point. The dispatcher handles
-        query understanding, orchestrator execution, and rerank internally.
+        query analysis, orchestrator execution, and consolidation internally.
         """
         emit = event_queue.put if event_queue else lambda _: asyncio.ensure_future(asyncio.sleep(0))
 
@@ -415,7 +415,7 @@ class Engine:
         else:
             scope = Workspace(docs=doc_cards)
 
-        # 4. Dispatch (understand + orchestrator + rerank)
+        # 4. Dispatch (analyze + orchestrator + consolidate)
         return await dispatch(
             query=question,
             scope=scope,

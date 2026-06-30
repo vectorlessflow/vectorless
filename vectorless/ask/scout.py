@@ -338,6 +338,10 @@ class Scout:
                     existing.score = score
                     existing.why = why
 
+        # ranked full-text search (BM25) — the locate-after-understanding signal
+        for i, h in enumerate(await _safe(doc.search(self._query, 12), []) or []):
+            await add(getattr(h, "node_id", None), 0.9 - i * 0.03, "search")
+
         # intent routes (whole-doc precomputed shortcuts)
         for r in await _safe(doc.intent_routes(), []) or []:
             for t in (getattr(r, "targets", []) or [])[:3]:

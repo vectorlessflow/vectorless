@@ -267,3 +267,16 @@ pub struct NodeRoutingInfo {
     /// Typical questions this subtree can answer.
     pub questions: Vec<String>,
 }
+
+/// A ranked full-text (BM25) search hit.
+#[derive(Debug, Clone)]
+pub struct SearchHit {
+    /// Node ID.
+    pub node_id: u64,
+    /// Section title.
+    pub title: String,
+    /// BM25 relevance score (higher is better).
+    pub score: f64,
+    /// A short snippet around the best matching term.
+    pub snippet: String,
+}

@@ -159,6 +159,10 @@ class NavigableDocument(Protocol):
         """Compile-time routing signal for a node: summary, keywords, question hints."""
         ...
 
+    async def search(self, query: str, limit: int = 10) -> list[Any]:
+        """Ranked full-text (BM25) search across the document; returns top hits."""
+        ...
+
 
 # ---------------------------------------------------------------------------
 # Callable protocols
